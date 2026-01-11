@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-01-11
+
+### Added
+- **Rashmi Calculator:** Free spell probabilities for "Rashmi, Eternities Crafter"
+- **Mulligan Strategy Calculator:** Advanced mulligan decision optimizer
+  - Sequential deadline probability calculations
+  - Multi-type card requirements
+  - Configurable confidence thresholds
+- **Deck Import:** Moxfield and Archidekt integration with Cloudflare Worker proxy
+- **Sample Generators:** Visual sample reveal generators for Rashmi and Vortex
+- **Share Functionality:** Generate unique URLs to share calculator configurations
+
 ## [0.2.0] - 2026-01-11
 
 ### Added
