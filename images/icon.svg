@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  
+  <!-- Hexagon Border (Purple/Portent) -->
+  <path d="M256 40 L460 145 V367 L256 472 L52 367 V145 Z" 
+        fill="none" 
+        stroke="#a855f7" 
+        stroke-width="32" 
+        stroke-linejoin="round"
+        filter="url(#glow)"/>
+        
+  <!-- Bars -->
+  <!-- Bar 1: Green/Surge -->
+  <rect x="140" y="280" width="60" height="100" rx="8" fill="#22c55e" opacity="0.9"/>
+  
+  <!-- Bar 2: Blue/Wave -->
+  <rect x="226" y="200" width="60" height="180" rx="8" fill="#0ea5e9" opacity="0.9"/>
+  
+  <!-- Bar 3: Orange/Vortex -->
+  <rect x="312" y="120" width="60" height="260" rx="8" fill="#f97316" opacity="0.9"/>
+  
+</svg>
