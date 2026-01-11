@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-01-11
+
+### Added
+- **Land Drop Calculator:** Analyze opening hand land counts and expected turns until missing land drops
+  - Probability distributions for land counts in opening hand
+  - Expected turn calculation for missed land drops
+  - Interactive charts
+
 ## [0.1.0] - 2026-01-11
 
 ### Added
