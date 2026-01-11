@@ -1,0 +1,437 @@
+/* ==================== MOBILE & RESPONSIVE STYLES ==================== */
+
+/* Tablet and below */
+@media (max-width: 900px) {
+    .container {
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+
+    .main-grid {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-lg);
+        width: 100%;
+    }
+
+    .panel {
+        padding: var(--spacing-lg);
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    h1 {
+        font-size: 1.5rem;
+    }
+
+    /* Prevent overflow on charts and tables */
+    .chart-container,
+    .table-wrapper {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+    body {
+        padding: var(--spacing-md);
+        font-size: 16px; /* Prevent iOS zoom on input focus */
+    }
+
+    h1 {
+        font-size: 1.25rem;
+        letter-spacing: 1px;
+        margin-bottom: var(--spacing-md);
+    }
+
+    h2 {
+        font-size: 1rem;
+        margin-bottom: var(--spacing-md);
+    }
+
+    .card-text {
+        font-size: 0.85rem;
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .selector-button {
+        font-size: 1rem;
+        padding: var(--spacing-md) var(--spacing-lg);
+    }
+
+    .selector-icon {
+        font-size: 1.25rem;
+    }
+
+    .selector-option {
+        padding: var(--spacing-md) var(--spacing-lg);
+        font-size: 0.95rem;
+    }
+
+    .selector-option-icon {
+        font-size: 1.25rem;
+    }
+
+    .panel {
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
+        border-radius: var(--radius-lg);
+    }
+
+    /* Make inputs more touch-friendly */
+    .input-group input,
+    .input-group textarea,
+    .type-input input,
+    .import-btn {
+        min-height: 44px; /* iOS recommended touch target */
+        font-size: 16px; /* Prevent iOS zoom */
+    }
+
+    .input-group textarea {
+        min-height: 100px;
+    }
+
+    .input-group input[type="number"],
+    .type-input input[type="number"] {
+        -moz-appearance: textfield;
+    }
+
+    .input-group input[type="number"]::-webkit-outer-spin-button,
+    .input-group input[type="number"]::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    .type-grid {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-sm);
+    }
+
+    /* Larger slider thumb for mobile */
+    .x-slider-row input[type="range"]::-webkit-slider-thumb {
+        width: 24px;
+        height: 24px;
+    }
+
+    .x-slider-row input[type="range"]::-moz-range-thumb {
+        width: 24px;
+        height: 24px;
+    }
+
+    /* Stack import row on very small screens */
+    .import-row {
+        flex-direction: column;
+    }
+
+    .import-row input,
+    .import-btn {
+        width: 100%;
+    }
+
+    /* Adjust chart containers for mobile */
+    .chart-container {
+        height: 260px;
+        margin-bottom: var(--spacing-md);
+        position: relative;
+    }
+
+    .chart-container canvas {
+        max-width: 100%;
+        height: auto !important;
+    }
+
+    .chart-legend {
+        gap: var(--spacing-md);
+        font-size: 0.8rem;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .legend-item {
+        gap: var(--spacing-xs);
+        font-size: 0.75rem;
+    }
+
+    .legend-color {
+        width: 10px;
+        height: 10px;
+        flex-shrink: 0;
+    }
+
+    /* Table scrolling for mobile */
+    .table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 calc(var(--spacing-md) * -1);
+        padding: 0 var(--spacing-md);
+    }
+
+    .comparison-table {
+        font-size: 0.8rem;
+        min-width: 100%;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+        padding: var(--spacing-sm);
+        white-space: nowrap;
+        min-width: 60px;
+    }
+
+    .comparison-table th:first-child,
+    .comparison-table td:first-child {
+        position: sticky;
+        left: 0;
+        background: var(--panel-bg);
+        z-index: 1;
+    }
+    
+    /* Hide less important columns on mobile */
+    .mobile-hide {
+        display: none;
+    }
+    
+    /* URL Import Row Stacking */
+    .import-url-row {
+        flex-direction: column;
+    }
+    
+    .import-url-row input,
+    .import-url-row .import-btn {
+        width: 100%;
+        margin-right: 0;
+    }
+    
+    .import-url-row .import-btn {
+        margin-top: 8px;
+    }
+    
+    /* Fix Distribution Chart Overflow */
+    pre {
+        white-space: pre;            /* Do not wrap */
+        overflow-x: auto;            /* Allow horizontal scrolling */
+        max-width: 100%;             /* Ensure it doesn't exceed container */
+        font-size: 0.7em;            /* Smaller font for mobile */
+        scrollbar-width: thin;       /* Thin scrollbar for Firefox */
+    }
+}
+
+/* Small mobile */
+@media (max-width: 375px) {
+    body {
+        padding: var(--spacing-sm);
+    }
+
+    .panel {
+        padding: var(--spacing-sm);
+    }
+
+    .type-input {
+        padding: 6px var(--spacing-sm);
+    }
+
+    .type-input label {
+        font-size: 0.8rem;
+    }
+
+    .type-input input {
+        width: 45px;
+        font-size: 0.85rem;
+    }
+
+    .comparison-table {
+        font-size: 0.75rem;
+        min-width: 450px;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+        padding: 6px 4px;
+        min-width: 50px;
+    }
+
+    .chart-container {
+        height: 220px;
+    }
+
+    h1 {
+        font-size: 1.1rem;
+    }
+
+    .card-text {
+        font-size: 0.8rem;
+    }
+}
+
+/* Landscape mobile - optimize horizontal space */
+@media (max-width: 900px) and (orientation: landscape) {
+    body {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    h1 {
+        font-size: 1.25rem;
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .card-text {
+        margin-bottom: var(--spacing-md);
+    }
+
+    .tab-nav {
+        margin-bottom: var(--spacing-md);
+    }
+
+    .panel {
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .chart-container {
+        height: 200px;
+    }
+
+    .main-grid {
+        gap: var(--spacing-md);
+    }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+}
+
+/* Dark mode support (respects system preference) */
+@media (prefers-color-scheme: dark) {
+    /* Already dark by default, but can adjust if needed */
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    html {
+        scroll-behavior: auto;
+    }
+}
+
+/* Print styles */
+@media print {
+    body {
+        background: white;
+        color: black;
+    }
+
+    .tab-nav,
+    .import-section {
+        display: none;
+    }
+
+    .panel {
+        break-inside: avoid;
+        border: 1px solid #ccc;
+        box-shadow: none;
+    }
+
+    .chart-container {
+        page-break-inside: avoid;
+    }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+    /* Increase touch targets */
+    .import-btn,
+    input[type="number"],
+    input[type="text"] {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Better slider thumb for touch */
+    .x-slider-row input[type="range"]::-webkit-slider-thumb {
+        width: 28px;
+        height: 28px;
+    }
+
+    .x-slider-row input[type="range"]::-moz-range-thumb {
+        width: 28px;
+        height: 28px;
+    }
+
+    /* Remove hover effects on touch devices */
+    .import-btn:hover {
+        transform: none;
+        box-shadow: none;
+    }
+
+    .x-slider-row input[type="range"]::-webkit-slider-thumb:hover {
+        transform: none;
+    }
+
+    /* Better touch feedback */
+    .import-btn:active {
+        opacity: 0.8;
+        transform: scale(0.98);
+    }
+
+    /* Prevent text selection on UI elements */
+    .import-btn,
+    .panel h2,
+    .legend-item,
+    .collapse-btn {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Smooth scrolling for touch */
+    .table-wrapper,
+    .chart-container {
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+    }
+}
+
+/* iPad Pro and larger tablets */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .main-grid {
+        grid-template-columns: 320px 1fr;
+    }
+
+    .container {
+        max-width: 100%;
+        padding: 0 var(--spacing-md);
+    }
+}
+
+/* Safe area insets for modern mobile devices (notch support) */
+@supports (padding: max(0px)) {
+    body {
+        padding-left: max(var(--spacing-xl), env(safe-area-inset-left));
+        padding-right: max(var(--spacing-xl), env(safe-area-inset-right));
+        padding-top: max(var(--spacing-xl), env(safe-area-inset-top));
+        padding-bottom: max(var(--spacing-xl), env(safe-area-inset-bottom));
+    }
+}
+
+/* Optimize for foldable devices */
+@media (min-width: 600px) and (max-width: 900px) and (min-height: 600px) {
+    .main-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Stack panels vertically on narrow but tall screens */
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+}

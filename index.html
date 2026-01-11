@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="Advanced Magic: The Gathering (MTG) probability calculator for Portent of Calamity, Primal Surge, Genesis Wave, Monstrous Vortex, Rashmi, Mulligan strategies, and Land drops. Analyze deck consistency and expected values.">
+    <meta name="theme-color" content="#0a0a12">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="images/icon.svg" type="image/svg+xml">
+    <link rel="shortcut icon" href="images/icon.svg" type="image/svg+xml">
+    <title>MTG Probability Calculator</title>
+
+    <!-- Preconnect to external resources -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+
+    <!-- Fonts - preload for performance -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/mobile.css">
+    <link rel="stylesheet" href="css/ux-enhancements.css">
+</head>
+<body class="theme-portent">
+    <div class="container">
+        <!-- SHARED DECK CONFIGURATION -->
+        <section class="panel collapsible-panel expanded" id="deck-config" aria-label="Deck configuration">
+            <div class="panel-header">
+                <h2>📚 Deck Configuration</h2>
+                <button class="collapse-btn" aria-label="Toggle section">
+                    <span class="collapse-icon">▼</span>
+                </button>
+            </div>
+
+            <div class="panel-content">
+                <div class="input-group import-section">
+                    <label for="moxfield-input">Import from Moxfield or Archidekt (URL or ID)</label>
+                    <div class="import-url-row" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <input type="text" id="moxfield-input" placeholder="https://moxfield.com/decks/..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color);">
+                        <button id="moxfield-import-btn" class="import-btn" aria-label="Import from Archidekt or  Moxfield">
+                            ☁️ Import
+                        </button>
+                    </div>
+                    <div class="example-deck-row" style="margin-bottom: 12px; font-size: 0.85em;">
+                        <span style="color: var(--text-dim);">Example: </span>
+                        <a href="#" id="load-example-btn" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent);">Load a real example deck</a>
+                    </div>
+                    <div style="text-align: center; margin-bottom: 12px; color: var(--text-dim); font-size: 0.9em; position: relative;">
+                        <span style="background: var(--panel-bg); padding: 0 10px; position: relative; z-index: 1;">OR PASTE TEXT</span>
+                        <div style="position: absolute; top: 50%; left: 0; right: 0; border-top: 1px solid var(--border-color); z-index: 0;"></div>
+                    </div>
+
+                    <label for="decklist-input">Import Decklist (paste text)</label>
+                    <textarea
+                        id="decklist-input"
+                        placeholder="Paste your decklist here...&#10;Format: 4 Lightning Bolt&#10;1 Jace, the Mind Sculptor&#10;etc.. Or export>plain text from your deck builder."
+                        rows="4"
+                        aria-label="Decklist input"></textarea>
+                    <button id="import-btn" class="import-btn" aria-label="Import decklist">
+                        🔍 Import & Analyze
+                    </button>
+                    <div class="import-progress" id="import-progress">
+                        <div class="import-progress-bar" id="import-progress-bar"></div>
+                    </div>
+                    <div id="import-status" class="import-status" role="status" aria-live="polite"></div>
+                </div>
+
+                <div class="collapsible-panel" id="manual-counts-section" style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
+                    <div class="panel-header" style="padding: 8px 0; margin: 0; margin-bottom: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: none;">
+                        <h3 style="margin: 0; font-size: 1em; color: var(--text-light);">⌨️ Manual Type Counts</h3>
+                        <span class="collapse-icon" style="font-size: 0.8em;">▶</span>
+                    </div>
+                    <div class="panel-content">
+                        <div class="type-grid">
+                            <div class="type-input">
+                                <label for="deck-creatures">Creature</label>
+                                <input type="number" id="deck-creatures" value="25" min="0" aria-label="Creatures">
+                            </div>
+                            <div class="type-input">
+                                <label for="deck-instants">Instant</label>
+                                <input type="number" id="deck-instants" value="8" min="0" aria-label="Instants">
+                            </div>
+                            <div class="type-input">
+                                <label for="deck-sorceries">Sorcery</label>
+                                <input type="number" id="deck-sorceries" value="6" min="0" aria-label="Sorceries">
+                            </div>
+                            <div class="type-input">
+                                <label for="deck-artifacts">Artifact</label>
+                                <input type="number" id="deck-artifacts" value="4" min="0" aria-label="Artifacts">
+                            </div>
+                            <div class="type-input">
+                                <label for="deck-enchantments">Enchant</label>
+                                <input type="number" id="deck-enchantments" value="3" min="0" aria-label="Enchantments">
+                            </div>
+                            <div class="type-input">
+                                <label for="deck-planeswalkers">Planeswalker</label>
+                                <input type="number" id="deck-planeswalkers" value="2" min="0" aria-label="Planeswalkers">
+                            </div>
+                            <div class="type-input">
+                                <label for="deck-lands">Land</label>
+                                <input type="number" id="deck-lands" value="32" min="0" aria-label="Lands">
+                            </div>
+                            <div class="type-input">
+                                <label for="deck-battles">Battle</label>
+                                <input type="number" id="deck-battles" value="0" min="0" aria-label="Battles">
+                            </div>
+                        </div>
+                        <div class="deck-total" style="margin-top: 12px;">
+                            Total cards in library: <span id="deck-total">80</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Calculator Selector & Share (Unified Header) -->
+        <div class="header-row" style="display: flex; gap: 12px; align-items: center; justify-content: center; margin-bottom: 24px; position: relative; z-index: 100;">
+            <div class="calculator-selector" id="calculator-selector" role="navigation" aria-label="Calculator selection" style="margin-bottom: 0;">
+                <button class="selector-button" id="selector-button" aria-haspopup="true" aria-expanded="false">
+                    <div class="selector-current">
+                        <span class="selector-icon">⚡</span>
+                        <span class="selector-name">Portent of Calamity</span>
+                    </div>
+                    <span class="selector-arrow">▼</span>
+                </button>
+                <div class="selector-dropdown" id="selector-dropdown" role="menu">
+                    <div class="selector-option active" data-tab="portent" role="menuitem">
+                        <span class="selector-option-icon">⚡</span>
+                        <span>Portent of Calamity</span>
+                    </div>
+                    <div class="selector-option" data-tab="surge" role="menuitem">
+                        <span class="selector-option-icon">🌿</span>
+                        <span>Primal Surge</span>
+                    </div>
+                    <div class="selector-option" data-tab="wave" role="menuitem">
+                        <span class="selector-option-icon">🌊</span>
+                        <span>Genesis Wave</span>
+                    </div>
+                    <div class="selector-option" data-tab="vortex" role="menuitem">
+                        <span class="selector-option-icon">🌀</span>
+                        <span>Monstrous Vortex</span>
+                    </div>
+                    <div class="selector-option" data-tab="rashmi" role="menuitem">
+                        <span class="selector-option-icon">🌌</span>
+                        <span>Rashmi</span>
+                    </div>
+                    <div class="selector-option" data-tab="lands" role="menuitem">
+                        <span class="selector-option-icon">🏔️</span>
+                        <span>Land Drops</span>
+                    </div>
+                    <div class="selector-option" data-tab="mulligan" role="menuitem">
+                        <span class="selector-option-icon">🃏</span>
+                        <span>Mulligan Strategy</span>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="share-button" aria-label="Copy Share Link" title="Copy Share Link" style="height: 54px; width: 54px; border-radius: 12px; background: var(--panel-bg); border: 1px solid var(--border-color); color: var(--accent); font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;">
+                🔗
+            </button>
+        </div>
+
+        <!-- PORTENT TAB -->
+        <div id="portent-tab" class="tab-content active" role="tabpanel" aria-labelledby="portent">
+            <h1>⚡ Portent of Calamity Calculator</h1>
+            <p class="card-text">"A 9 mana draw 3, nice!"</p>
+
+            <div class="main-grid single-column">
+                <section class="panel" aria-label="Configuration">
+                    <h2>⚙️ Calculation Settings</h2>
+                    <div class="input-group">
+                        <label for="portent-xValue">X value (cards to reveal)</label>
+                        <div class="x-slider-row">
+                            <input type="range" id="portent-xSlider" value="7" min="1" max="20" step="1" aria-label="X value slider">
+                            <input type="number" id="portent-xValue" value="7" min="1" max="50" class="x-number" aria-label="X value number input">
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel" aria-label="Probability chart">
+                    <h2>📈 Probability & Expected Cards vs X Value</h2>
+                    <div class="chart-container" style="height: 320px;">
+                        <canvas id="portent-combinedChart" role="img" aria-label="Portent probability chart"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="legend-color" style="background: #c084fc;"></span> P(Free Spell) %</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #dc2626;"></span> Expected Cards to Hand</span>
+                    </div>
+                </section>
+
+                <section class="panel" id="portent-stats" aria-label="Current X analysis">
+                    <!-- Analysis content will be inserted here -->
+                </section>
+
+                <section class="panel" id="portent-sample-reveals" aria-label="Sample reveals">
+                </section>
+
+                <section class="panel" aria-label="X value comparison">
+                    <h2>🔍 X Value Comparison</h2>
+                    <div class="table-wrapper">
+                        <table class="comparison-table" id="portent-comparisonTable">
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- PRIMAL SURGE TAB -->
+        <div id="surge-tab" class="tab-content" role="tabpanel" aria-labelledby="surge">
+            <h1>🌿 Primal Surge Calculator</h1>
+            <p class="card-text">"So do you win here or...?"</p>
+
+            <div class="main-grid single-column">
+                <section class="panel" aria-label="Expected permanents chart">
+                    <h2>📈 Expected Permanents & Deck Percentage</h2>
+                    <div class="chart-container" style="height: 320px;">
+                        <canvas id="surge-chart" role="img" aria-label="Primal Surge chart"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="legend-color" style="background: #4ade80;"></span> Expected Permanents</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #dc2626;"></span> % of Deck Played</span>
+                    </div>
+                </section>
+
+                <section class="panel" aria-label="Simulation results">
+                    <h2>🔍 Simulation Results</h2>
+                    <div class="table-wrapper">
+                        <table class="comparison-table" id="surge-statsTable">
+                        </table>
+                    </div>
+                </section>
+
+                <section class="panel" id="surge-sample-reveals" aria-label="Sample reveals">
+                </section>
+            </div>
+        </div>
+
+        <!-- GENESIS WAVE TAB -->
+        <div id="wave-tab" class="tab-content" role="tabpanel" aria-labelledby="wave">
+            <h1>🌊 Genesis Wave Calculator</h1>
+            <p class="card-text">"Best green mill spell in the game"</p>
+
+            <div class="main-grid single-column">
+                <section class="panel" aria-label="Configuration">
+                    <h2>⚙️ Calculation Settings</h2>
+                    <div class="input-group">
+                        <label for="wave-xValue">X value (cards to reveal)</label>
+                        <div class="x-slider-row">
+                            <input type="range" id="wave-xSlider" value="6" min="1" max="30" step="1" aria-label="X value slider">
+                            <input type="number" id="wave-xValue" value="6" min="1" max="50" class="x-number" aria-label="X value number input">
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel" aria-label="Expected permanents chart">
+                    <h2>📈 Expected Permanents vs X Value</h2>
+                    <div class="chart-container" style="height: 320px;">
+                        <canvas id="wave-chart" role="img" aria-label="Genesis Wave chart"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="legend-color" style="background: #38bdf8;"></span> Expected Permanents Played</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #22c55e;"></span> Total Cards Revealed</span>
+                    </div>
+                </section>
+
+                <section class="panel" id="wave-stats" aria-label="Current X analysis">
+                    <!-- Analysis content will be inserted here -->
+                </section>
+
+                <section class="panel" aria-label="X value comparison">
+                    <h2>🔍 X Value Comparison</h2>
+                    <div class="table-wrapper">
+                        <table class="comparison-table" id="wave-comparisonTable">
+                        </table>
+                    </div>
+                </section>
+
+                <section class="panel" id="wave-sample-reveals" aria-label="Sample reveals">
+                </section>
+            </div>
+        </div>
+
+        <!-- VORTEX TAB -->
+        <div id="vortex-tab" class="tab-content" role="tabpanel" aria-labelledby="vortex">
+            <h1>🌀 Monstrous Vortex Calculator</h1>
+            <p class="card-text">"Big Creature, Big Value"</p>
+
+            <div class="main-grid single-column">
+                <section class="panel" id="vortex-import-warning" aria-label="Import required notice">
+                    <h2>⚠️ Import Required</h2>
+                    <p style="color: var(--text-secondary); margin: 0;">
+                        This calculator requires decklist import to work. Please use the
+                        <strong style="color: var(--text-light);">📚 Deck Configuration</strong> panel above to import your decklist.
+                        The import will automatically detect creatures with power 5+ and CMC distribution.
+                    </p>
+                </section>
+
+                <section class="panel" aria-label="Configuration">
+                    <h2>⚙️ Calculation Settings</h2>
+                    <div class="input-group">
+                        <label for="vortex-cmcValue">CMC of power 5+ creature being cast</label>
+                        <div class="x-slider-row">
+                            <input type="range" id="vortex-cmcSlider" value="6" min="3" max="10" step="1" aria-label="Creature CMC slider">
+                            <input type="number" id="vortex-cmcValue" value="6" min="3" max="15" class="x-number" aria-label="Creature CMC number input">
+                        </div>
+                    </div>
+                    <div class="input-group" style="margin-top: var(--spacing-md);">
+                        <label style="display: flex; align-items: center; gap: var(--spacing-sm); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="vortex-star-power" style="width: auto; cursor: pointer;" checked>
+                            <span>Treat */* creatures (X/X) as Power 5+</span>
+                        </label>
+                        <small style="color: var(--text-dim); display: block; margin-top: 4px; margin-left: 24px;">
+                            Assume dynamic power creatures (like Lumra, Ashaya) are big enough to chain
+                        </small>
+                    </div>
+                </section>
+
+
+                <section class="panel" aria-label="Expected spells chart">
+                    <h2>📈 Discover Value by Creature CMC</h2>
+                    <div class="chart-container" style="height: 320px;">
+                        <canvas id="vortex-chart" role="img" aria-label="Vortex discover chart"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="legend-color" style="background: #f97316;"></span> Avg Free Mana Value</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #22c55e;"></span> Avg Spell CMC Found</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #c084fc;"></span> Avg Spells Cast</span>
+                    </div>
+                </section>
+
+                <section class="panel" aria-label="Discover analysis">
+                    <div id="vortex-stats"></div>
+                </section>
+
+                <section class="panel" id="vortex-sample-reveals" aria-label="Sample reveals">
+                </section>
+
+                <section class="panel" aria-label="Creature comparison">
+                    <h2>🔍 CMC Comparison</h2>
+                    <div class="table-wrapper">
+                        <table class="comparison-table" id="vortex-comparisonTable">
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- LAND DROPS TAB -->
+        <div id="lands-tab" class="tab-content" role="tabpanel" aria-labelledby="lands">
+            <h1>🏔️ Land Drop Calculator</h1>
+            <p class="card-text">"Will I make my land drops?"</p>
+
+            <div class="main-grid single-column">
+                <section class="panel" aria-label="Opening hand distribution">
+                    <h2>📊 Opening Hand Land Distribution</h2>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="lands-opening-chart" role="img" aria-label="Opening hand lands chart"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="legend-color" style="background: #4ade80;"></span> Probability of Drawing X Lands</span>
+                    </div>
+                </section>
+
+                <section class="panel" aria-label="Land drop probability">
+                    <h2>📈 Land Drop Probability by Turn</h2>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="lands-landdrop-chart" role="img" aria-label="Land drop probability chart"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="legend-color" style="background: #4ade80;"></span> Make Land Drop</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #dc2626;"></span> Miss Land Drop</span>
+                    </div>
+                </section>
+
+                <section class="panel" aria-label="Statistics">
+                    <h2>🔍 Land Drop Statistics</h2>
+                    <div class="table-wrapper" id="lands-stats-container">
+                        <table class="comparison-table" id="lands-statsTable">
+                        </table>
+                    </div>
+                </section>
+
+                <section class="panel" id="lands-sample-reveals" aria-label="Sample reveals">
+                </section>
+            </div>
+        </div>
+
+        <!-- RASHMI TAB -->
+        <div id="rashmi-tab" class="tab-content" role="tabpanel" aria-labelledby="rashmi">
+            <h1>🌌 Rashmi, Eternities Crafter Calculator</h1>
+            <p class="card-text">"The simic phyrexian arena"</p>
+
+            <div class="main-grid single-column">
+                <section class="panel" id="rashmi-import-warning" aria-label="Import required notice">
+                    <h2>⚠️ Import Required</h2>
+                    <p style="color: var(--text-secondary); margin: 0;">
+                        This calculator requires decklist import to work. Please use the
+                        <strong style="color: var(--text-light);">📚 Deck Configuration</strong> panel above to import your decklist.
+                        The import will automatically detect CMC distribution for your non-land spells.
+                    </p>
+                </section>
+
+                <section class="panel" id="rashmi-stats" aria-label="Configuration">
+                    <h2>⚙️ Calculation Settings</h2>
+                    <div class="input-group">
+                        <label for="rashmi-cmcValue">CMC of spell you're casting</label>
+                        <div class="x-slider-row">
+                            <input type="range" id="rashmi-cmcSlider" value="5" min="1" max="10" step="1" aria-label="Cast CMC slider">
+                            <input type="number" id="rashmi-cmcValue" value="5" min="1" max="15" class="x-number" aria-label="Cast CMC number input">
+                        </div>
+                    </div>
+                    <div class="input-group" style="margin-top: var(--spacing-md);">
+                        <label style="display: flex; align-items: center; gap: var(--spacing-sm); cursor: pointer; user-select: none;">
+                            <input type="checkbox" id="rashmi-exclude-x" style="width: auto; cursor: pointer;">
+                            <span>Exclude X spells from "free spell" calculation</span>
+                        </label>
+                        <small style="color: var(--text-dim); display: block; margin-top: 4px; margin-left: 24px;">
+                            When revealed from library, X=0, so X spells can't be cast for free with Rashmi
+                        </small>
+                    </div>
+                </section>
+                
+                <section class="panel" aria-label="Probability chart">
+                    <h2>📈 Free Spell Probability vs Cast CMC</h2>
+                    <div class="chart-container" style="height: 320px;">
+                        <canvas id="rashmi-chart" role="img" aria-label="Rashmi probability chart"></canvas>
+                    </div>
+                    <div class="chart-legend">
+                        <span class="legend-item"><span class="legend-color" style="background: #22c55e;"></span> P(Free Spell) %</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #3b82f6;"></span> Expected Free CMC</span>
+                    </div>
+                </section>
+
+                <section class="panel" id="rashmi-breakdown" aria-label="CMC distribution">
+                </section>
+
+                <section class="panel" id="rashmi-sample-reveals" aria-label="Sample reveals">
+                </section>
+
+
+                <section class="panel" aria-label="CMC comparison">
+                    <h2>🔍 Cast CMC Comparison</h2>
+                    <div class="table-wrapper">
+                        <table class="comparison-table" id="rashmi-comparisonTable">
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- MULLIGAN TAB -->
+        <div id="mulligan-tab" class="tab-content" role="tabpanel" aria-labelledby="mulligan">
+            <h1>🃏 Mulligan Strategy Calculator</h1>
+            <p class="card-text">"Should I keep this hand?"</p>
+
+            <div class="main-grid single-column">
+                <section class="panel" aria-label="Configuration">
+                    <h2>⚙️ Card Type Requirements</h2>
+                    <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 16px;">
+                        Define what you need in your opening hand. Add card types (e.g. Lands, Creatures) and set your requirements.
+                    </p>
+                    
+                    <div style="margin-bottom: 16px; padding: 10px; background: var(--panel-bg-alt); border-radius: 6px; display: flex; align-items: center; gap: 12px;">
+                        <label for="mull-deck-size" style="white-space: nowrap;">Deck Size:</label>
+                        <input type="number" id="mull-deck-size" value="99" min="1" max="200" style="width: 80px; padding: 6px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color);">
+                        <small style="color: var(--text-dim);">(Overrides global deck config)</small>
+                    </div>
+
+                    <div id="mull-types-container">
+                        <!-- Dynamic type rows will be inserted here -->
+                    </div>
+
+                    <button id="mull-add-type" class="import-btn" style="margin-top: 12px; width: 100%;">
+                        + Add Another Card Type
+                    </button>
+
+                    <div style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                         <h3 style="margin-bottom: 12px; font-size: 1.1em; color: var(--text-light);">Strategy Settings</h3>
+                         
+                         <div class="input-group">
+                            <label>Mulligan Strategy Preset</label>
+                            <div class="preset-buttons" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <button class="preset-btn" data-preset="casual" style="flex:1; padding:8px; border:1px solid var(--border-color); border-radius:6px; background:var(--input-bg); color:var(--text-dim); cursor:pointer;">Casual</button>
+                                <button class="preset-btn active" data-preset="balanced" style="flex:1; padding:8px; border:1px solid var(--accent); border-radius:6px; background:rgba(192,132,252,0.1); color:var(--text-light); cursor:pointer;">Balanced</button>
+                                <button class="preset-btn" data-preset="competitive" style="flex:1; padding:8px; border:1px solid var(--border-color); border-radius:6px; background:var(--input-bg); color:var(--text-dim); cursor:pointer;">Competitive</button>
+                            </div>
+                        </div>
+
+                        <div class="input-group" style="margin-top: 16px;">
+                            <label for="mull-penalty">Mulligan Penalty (Risk Tolerance)</label>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <input type="range" id="mull-penalty" value="20" min="0" max="100" step="1" style="flex: 1;">
+                                <span id="mull-penalty-display" style="min-width: 40px; text-align: right; color: var(--text-light);">20%</span>
+                            </div>
+                            <small id="mull-penalty-desc" style="color: var(--text-dim);">Standard penalty. Going down a card is bad.</small>
+                        </div>
+
+                        <div class="input-group" style="margin-top: 16px;">
+                            <label for="mull-threshold">Confidence Threshold</label>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <input type="range" id="mull-threshold" value="75" min="0" max="100" step="1" style="flex: 1;">
+                                <span id="mull-threshold-display" style="min-width: 40px; text-align: right; color: var(--text-light);">75%</span>
+                            </div>
+                            <small id="mull-threshold-desc" style="color: var(--text-dim);">You want a high chance to find your cards.</small>
+                        </div>
+
+                        <div class="input-group" style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 24px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="mull-free" checked>
+                                <span>First Mulligan is Free</span>
+                            </label>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel" aria-label="Strategy Summary">
+                    <h2>📊 Strategy Summary</h2>
+                    <div id="mull-summary">
+                        <!-- Summary stats will be inserted here -->
+                    </div>
+                </section>
+
+                <section class="panel" id="mulligan-sample-reveals" aria-label="Sample reveals">
+                </section>
+
+                <section class="panel" aria-label="Turn-by-Turn Probability">
+                    <h2>📅 Probability by Turn</h2>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="mull-turn-chart" role="img" aria-label="Turn probability chart"></canvas>
+                    </div>
+                </section>
+
+                <section class="panel" aria-label="Strategy Table">
+                    <h2>📝 Hand Decision Table</h2>
+                    <div class="table-wrapper">
+                        <table class="comparison-table" id="mull-strategyTable">
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>        <!-- Footer -->
+        <footer style="margin-top: 48px; padding: 24px 0; border-top: 1px solid var(--border-color); text-align: center; color: var(--text-secondary);">
+            <div style="margin-bottom: 16px;">
+                <p style="margin-bottom: 8px;">MTG Probability Calculator is a tool for Magic: The Gathering players to analyze deck consistency and expected values for various spells and strategies.</p>
+                <p style="font-size: 0.9em;">
+                    View source on <a href="https://github.com/KyleOps/mtgcalcs" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent);">GitHub</a>
+                </p>
+            </div>
+            
+            <button id="install-button" class="import-btn" style="display: none; margin: 0 auto; width: auto; padding: 8px 16px; background: var(--panel-bg); border: 1px solid var(--accent);">
+                ⬇️ Install App (PWA)
+            </button>
+            
+            <p style="margin-top: 24px; font-size: 0.8em; color: var(--text-dim);">
+                Magic: The Gathering is a trademark of Wizards of the Coast LLC. This site is not affiliated with Wizards of the Coast.
+            </p>
+        </footer>
+
+    </div>
+
+    <!-- Load Chart.js on demand -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Main application - use modules -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

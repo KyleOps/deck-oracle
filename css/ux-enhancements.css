@@ -1,0 +1,431 @@
+/* ==================== UX ENHANCEMENTS ==================== */
+
+/* Collapsible Sections */
+.collapsible-section {
+    margin-bottom: var(--spacing-lg);
+    overflow: hidden;
+}
+
+.collapsible-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+    padding: var(--spacing-md);
+    margin: calc(var(--spacing-md) * -1) calc(var(--spacing-md) * -1) var(--spacing-md);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    transition: background var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.collapsible-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.collapsible-header:active {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.collapsible-header h2 {
+    margin: 0;
+    padding: 0;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.collapsible-toggle {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: transform var(--transition-normal), background var(--transition-fast);
+    font-size: 1.2rem;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--theme-primary);
+}
+
+.collapsible-section.expanded .collapsible-toggle {
+    transform: rotate(180deg);
+}
+
+.collapsible-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height var(--transition-slow) ease-in-out;
+}
+
+.collapsible-section.expanded .collapsible-content {
+    max-height: 5000px; /* Large enough for content */
+}
+
+/* Floating Action Button (Mobile) */
+.fab {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    z-index: 100;
+    opacity: 0;
+    transform: scale(0);
+    pointer-events: none;
+}
+
+.fab.visible {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: all;
+}
+
+/* Unified FAB style */
+.fab {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);
+}
+
+.fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+.fab:active {
+    transform: scale(0.95);
+}
+
+@media (min-width: 901px) {
+    .fab {
+        display: none;
+    }
+}
+
+/* Import Overlay (Mobile) */
+.import-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-normal);
+}
+
+.import-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.import-sheet {
+    background: var(--panel-bg);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    width: 100%;
+    max-width: 600px;
+    padding: var(--spacing-2xl);
+    transform: translateY(100%);
+    transition: transform var(--transition-slow) cubic-bezier(0.4, 0, 0.2, 1);
+    max-height: 80vh;
+    overflow-y: auto;
+    border: 1px solid var(--theme-border);
+    border-bottom: none;
+}
+
+.import-overlay.active .import-sheet {
+    transform: translateY(0);
+}
+
+.import-sheet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.import-sheet-header h3 {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    margin: 0;
+    color: var(--theme-primary);
+}
+
+.close-overlay {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: var(--text-light);
+    transition: background var(--transition-fast);
+}
+
+.close-overlay:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Quick Presets */
+.preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+}
+
+.preset-btn {
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    border: 1px solid;
+    background: var(--overlay-bg);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-align: center;
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    position: relative;
+    overflow: hidden;
+    border-color: var(--theme-border);
+    color: var(--theme-secondary);
+}
+
+.preset-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--theme-primary);
+}
+
+.preset-btn .preset-icon {
+    font-size: 1.5rem;
+    display: block;
+    margin-bottom: var(--spacing-xs);
+}
+
+.preset-btn .preset-name {
+    font-weight: 600;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.preset-btn .preset-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: block;
+}
+
+/* Toast Notifications */
+.toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: var(--spacing-md) var(--spacing-xl);
+    border-radius: 50px;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    z-index: 2000;
+    transition: transform var(--transition-normal);
+    max-width: 90%;
+    text-align: center;
+}
+
+.toast.show {
+    transform: translateX(-50%) translateY(0);
+}
+
+.toast.toast-success {
+    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+}
+
+.toast.toast-error {
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+}
+
+.toast.toast-info {
+    background: linear-gradient(135deg, #0284c7 0%, #0c4a6e 100%);
+}
+
+/* Ripple Effect */
+.ripple {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: scale(0);
+    animation: ripple-animation 0.6s ease-out;
+    pointer-events: none;
+}
+
+@keyframes ripple-animation {
+    to {
+        transform: scale(4);
+        opacity: 0;
+    }
+}
+
+/* Section Badges */
+.section-badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    margin-left: var(--spacing-sm);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--theme-secondary);
+    border: 1px solid var(--theme-border);
+}
+
+/* Smooth State Transitions */
+.panel {
+    transition: all var(--transition-normal);
+}
+
+.panel.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.panel.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 24px;
+    height: 24px;
+    margin: -12px 0 0 -12px;
+    border: 2px solid var(--theme-primary);
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spinner 0.8s linear infinite;
+}
+
+@keyframes spinner {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Mobile-Specific Improvements */
+@media (max-width: 900px) {
+    /* Expand config by default on desktop, collapsed on mobile */
+    .collapsible-section.deck-config .collapsible-content {
+        max-height: 0;
+    }
+
+    .collapsible-section.results .collapsible-content {
+        max-height: 5000px;
+    }
+
+    .collapsible-section.results.expanded {
+        margin-bottom: 80px; /* Space for FAB */
+    }
+
+    /* Make import easier to tap */
+    .quick-import-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-sm);
+        width: 100%;
+        padding: var(--spacing-lg);
+        margin: var(--spacing-md) 0;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    /* Sticky tab navigation */
+    .tab-nav {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(10, 10, 18, 0.95);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        padding: var(--spacing-sm);
+        margin: calc(var(--spacing-md) * -1) calc(var(--spacing-md) * -1) var(--spacing-md);
+        border-radius: 0;
+    }
+}
+
+/* Desktop keeps traditional layout */
+@media (min-width: 901px) {
+    .collapsible-header {
+        cursor: default;
+        pointer-events: none;
+    }
+
+    .collapsible-toggle {
+        display: none;
+    }
+
+    .collapsible-content {
+        max-height: none !important;
+    }
+
+    .quick-import-btn {
+        display: none;
+    }
+
+    .import-overlay {
+        display: none;
+    }
+}
+
+/* Pull-to-refresh indicator (visual only) */
+@media (max-width: 900px) {
+    .pull-indicator {
+        position: fixed;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%) translateY(-60px);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--theme-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform var(--transition-normal);
+        z-index: 1001;
+        opacity: 0;
+    }
+
+    .pull-indicator.show {
+        transform: translateX(-50%) translateY(20px);
+        opacity: 1;
+    }
+}
+
+/* Fix Mulligan Theme Button Contrast */
+body.theme-mulligan .import-btn {
+    background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%); /* Purple 500 to Purple 700 */
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+body.theme-mulligan .import-btn:hover {
+    background: linear-gradient(135deg, #c084fc 0%, #9333ea 100%);
+}

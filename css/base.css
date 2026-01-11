@@ -1,0 +1,401 @@
+/* ==================== BASE STYLES & THEME VARIABLES ==================== */
+
+:root {
+    /* Theme colors - Portent (Purple/Dark Red) */
+    --portent-primary: #a855f7;
+    --portent-secondary: #c084fc;
+    --portent-accent: rgba(168, 85, 247, 0.5);
+    --portent-bg-start: #0a0a12;
+    --portent-bg-mid: #1a1a2e;
+    --portent-bg-end: #120a0a;
+    --portent-border: rgba(139, 0, 0, 0.3);
+
+    /* Theme colors - Surge (Green) */
+    --surge-primary: #22c55e;
+    --surge-secondary: #4ade80;
+    --surge-accent: rgba(34, 197, 94, 0.5);
+    --surge-bg-start: #0a120a;
+    --surge-bg-mid: #1a2e1a;
+    --surge-bg-end: #0a120a;
+    --surge-border: rgba(34, 197, 94, 0.3);
+
+    /* Theme colors - Wave (Blue) */
+    --wave-primary: #0ea5e9;
+    --wave-secondary: #38bdf8;
+    --wave-accent: rgba(14, 165, 233, 0.5);
+    --wave-bg-start: #0a0a12;
+    --wave-bg-mid: #1a2a2e;
+    --wave-bg-end: #0a1012;
+    --wave-border: rgba(14, 165, 233, 0.3);
+
+    /* Theme colors - Vortex (Orange/Red) */
+    --vortex-primary: #f97316;
+    --vortex-secondary: #fb923c;
+    --vortex-accent: rgba(249, 115, 22, 0.5);
+    --vortex-bg-start: #120a0a;
+    --vortex-bg-mid: #2e1a1a;
+    --vortex-bg-end: #120a0a;
+    --vortex-border: rgba(249, 115, 22, 0.3);
+
+    /* Theme colors - Lands (Earth/Brown) */
+    --lands-primary: #84cc16;
+    --lands-secondary: #a3e635;
+    --lands-accent: rgba(132, 204, 22, 0.5);
+    --lands-bg-start: #0a100a;
+    --lands-bg-mid: #1a251a;
+    --lands-bg-end: #0a120a;
+    --lands-border: rgba(132, 204, 22, 0.3);
+
+    /* Theme colors - Mulligan (Gray/Neutral) */
+    --mulligan-primary: #c084fc;
+    --mulligan-secondary: #e9d5ff;
+    --mulligan-accent: rgba(192, 132, 252, 0.5);
+    --mulligan-bg-start: #0a0a12;
+    --mulligan-bg-mid: #1a1a2e;
+    --mulligan-bg-end: #0f0a12;
+    --mulligan-border: rgba(192, 132, 252, 0.3);
+
+    /* Theme colors - Rashmi (Teal/Cyan) */
+    --rashmi-primary: #06b6d4;
+    --rashmi-secondary: #22d3ee;
+    --rashmi-accent: rgba(6, 182, 212, 0.5);
+    --rashmi-bg-start: #0a1214;
+    --rashmi-bg-mid: #1a2a2e;
+    --rashmi-bg-end: #0a1418;
+    --rashmi-border: rgba(6, 182, 212, 0.3);
+
+    /* Base colors */
+    --text-primary: #c4b8b8;
+    --text-secondary: #a09090;
+    --text-muted: #8a7a7a;
+    --text-dim: #6a5a5a;
+    --text-light: #e0d0d0;
+
+    /* UI colors */
+    --danger: #dc2626;
+    --panel-bg: linear-gradient(145deg, rgba(20, 15, 25, 0.9) 0%, rgba(15, 10, 15, 0.95) 100%);
+    --panel-bg-alt: rgba(0, 0, 0, 0.3);
+    --input-bg: rgba(0, 0, 0, 0.4);
+    --overlay-bg: rgba(0, 0, 0, 0.3);
+
+    /* Spacing */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 20px;
+    --spacing-2xl: 24px;
+
+    /* Border radius */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+
+    /* Transitions */
+    --transition-fast: 0.2s ease;
+    --transition-normal: 0.3s ease;
+    --transition-slow: 0.4s ease;
+
+    /* Fonts */
+    --font-display: 'Cinzel', serif;
+    --font-body: 'Crimson Text', Georgia, serif;
+
+    /* Z-index layers */
+    --z-base: 1;
+    --z-dropdown: 100;
+    --z-modal: 1000;
+}
+
+/* ==================== RESET & BASE ==================== */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-body);
+    min-height: 100vh;
+    color: var(--text-primary);
+    --accent: var(--portent-primary);
+    padding: var(--spacing-xl);
+    transition: background var(--transition-slow);
+    overflow-x: hidden;
+}
+
+/* ==================== THEME BACKGROUNDS & VARIABLES ==================== */
+
+body.theme-portent {
+    background: linear-gradient(135deg, var(--portent-bg-start) 0%, var(--portent-bg-mid) 40%, var(--portent-bg-end) 100%);
+    --accent: var(--portent-primary);
+    --theme-primary: var(--portent-primary);
+    --theme-secondary: var(--portent-secondary);
+    --theme-accent: var(--portent-accent);
+    --theme-border: var(--portent-border);
+}
+
+body.theme-surge {
+    background: linear-gradient(135deg, var(--surge-bg-start) 0%, var(--surge-bg-mid) 40%, var(--surge-bg-end) 100%);
+    --accent: var(--surge-primary);
+    --theme-primary: var(--surge-primary);
+    --theme-secondary: var(--surge-secondary);
+    --theme-accent: var(--surge-accent);
+    --theme-border: var(--surge-border);
+}
+
+body.theme-wave {
+    background: linear-gradient(135deg, var(--wave-bg-start) 0%, var(--wave-bg-mid) 40%, var(--wave-bg-end) 100%);
+    --accent: var(--wave-primary);
+    --theme-primary: var(--wave-primary);
+    --theme-secondary: var(--wave-secondary);
+    --theme-accent: var(--wave-accent);
+    --theme-border: var(--wave-border);
+}
+
+body.theme-vortex {
+    background: linear-gradient(135deg, var(--vortex-bg-start) 0%, var(--vortex-bg-mid) 40%, var(--vortex-bg-end) 100%);
+    --accent: var(--vortex-primary);
+    --theme-primary: var(--vortex-primary);
+    --theme-secondary: var(--vortex-secondary);
+    --theme-accent: var(--vortex-accent);
+    --theme-border: var(--vortex-border);
+}
+
+body.theme-lands {
+    background: linear-gradient(135deg, var(--lands-bg-start) 0%, var(--lands-bg-mid) 40%, var(--lands-bg-end) 100%);
+    --accent: var(--lands-primary);
+    --theme-primary: var(--lands-primary);
+    --theme-secondary: var(--lands-secondary);
+    --theme-accent: var(--lands-accent);
+    --theme-border: var(--lands-border);
+}
+
+body.theme-mulligan {
+    background: linear-gradient(135deg, var(--mulligan-bg-start) 0%, var(--mulligan-bg-mid) 40%, var(--mulligan-bg-end) 100%);
+    --accent: var(--mulligan-primary);
+    --theme-primary: var(--mulligan-primary);
+    --theme-secondary: var(--mulligan-secondary);
+    --theme-accent: var(--mulligan-accent);
+    --theme-border: var(--mulligan-border);
+}
+
+body.theme-rashmi {
+    background: linear-gradient(135deg, var(--rashmi-bg-start) 0%, var(--rashmi-bg-mid) 40%, var(--rashmi-bg-end) 100%);
+    --accent: var(--rashmi-primary);
+    --theme-primary: var(--rashmi-primary);
+    --theme-secondary: var(--rashmi-secondary);
+    --theme-accent: var(--rashmi-accent);
+    --theme-border: var(--rashmi-border);
+}
+
+/* ==================== TYPOGRAPHY ==================== */
+
+h1 {
+    font-family: var(--font-display);
+    text-align: center;
+    margin-bottom: var(--spacing-sm);
+    font-size: clamp(1.5rem, 4vw, 2rem);
+    letter-spacing: 2px;
+    transition: all var(--transition-slow);
+}
+
+.theme-portent h1 {
+    color: var(--portent-primary);
+    text-shadow: 0 2px 10px var(--portent-accent), 0 0 30px rgba(139, 0, 0, 0.3);
+}
+
+.theme-surge h1 {
+    color: var(--surge-primary);
+    text-shadow: 0 2px 10px var(--surge-accent), 0 0 30px rgba(0, 139, 0, 0.3);
+}
+
+.theme-wave h1 {
+    color: var(--wave-primary);
+    text-shadow: 0 2px 10px var(--wave-accent), 0 0 30px rgba(0, 100, 139, 0.3);
+}
+
+.theme-vortex h1 {
+    color: var(--vortex-primary);
+    text-shadow: 0 2px 10px var(--vortex-accent), 0 0 30px rgba(249, 115, 22, 0.3);
+}
+
+.theme-lands h1 {
+    color: var(--lands-primary);
+    text-shadow: 0 2px 10px var(--lands-accent), 0 0 30px rgba(132, 204, 22, 0.3);
+}
+
+.theme-mulligan h1 {
+    color: var(--mulligan-primary);
+    text-shadow: 0 2px 10px var(--mulligan-accent), 0 0 30px rgba(192, 132, 252, 0.3);
+}
+
+.theme-rashmi h1 {
+    color: var(--rashmi-primary);
+    text-shadow: 0 2px 10px var(--rashmi-accent), 0 0 30px rgba(6, 182, 212, 0.3);
+}
+
+h2 {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-sm);
+    letter-spacing: 1px;
+    transition: color var(--transition-slow), border-color var(--transition-slow);
+}
+
+.theme-portent h2 {
+    color: var(--portent-primary);
+    border-bottom: 1px solid var(--portent-border);
+}
+
+.theme-surge h2 {
+    color: var(--surge-primary);
+    border-bottom: 1px solid var(--surge-border);
+}
+
+.theme-wave h2 {
+    color: var(--wave-primary);
+    border-bottom: 1px solid var(--wave-border);
+}
+
+.theme-vortex h2 {
+    color: var(--vortex-primary);
+    border-bottom: 1px solid var(--vortex-border);
+}
+
+.theme-lands h2 {
+    color: var(--lands-primary);
+    border-bottom: 1px solid var(--lands-border);
+}
+
+.theme-mulligan h2 {
+    color: var(--mulligan-primary);
+    border-bottom: 1px solid var(--mulligan-border);
+}
+
+.theme-rashmi h2 {
+    color: var(--rashmi-primary);
+    border-bottom: 1px solid var(--rashmi-border);
+}
+
+.card-text {
+    text-align: center;
+    font-style: italic;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-2xl);
+    font-size: 0.95rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* ==================== LAYOUT ==================== */
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+
+.main-grid {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: var(--spacing-2xl);
+    width: 100%;
+}
+
+.main-grid.single-column {
+    grid-template-columns: 1fr;
+    max-width: 100%;
+}
+
+/* ==================== TAB CONTENT ==================== */
+
+.tab-content {
+    display: none;
+    animation: fadeIn var(--transition-normal);
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==================== UTILITY CLASSES ==================== */
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Focus styles for accessibility */
+*:focus-visible {
+    outline: 2px solid var(--portent-primary);
+    outline-offset: 2px;
+}
+
+.theme-surge *:focus-visible {
+    outline-color: var(--surge-primary);
+}
+
+.theme-wave *:focus-visible {
+    outline-color: var(--wave-primary);
+}
+
+.theme-vortex *:focus-visible {
+    outline-color: var(--vortex-primary);
+}
+
+.theme-lands *:focus-visible {
+    outline-color: var(--lands-primary);
+}
+
+.theme-mulligan *:focus-visible {
+    outline-color: var(--mulligan-primary);
+}
+
+.theme-rashmi *:focus-visible {
+    outline-color: var(--rashmi-primary);
+}
+
+/* Loading state */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+    cursor: wait;
+}
+
+/* Smooth scrolling */
+html {
+    scroll-behavior: smooth;
+}
