@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-01-11
+
+### Added
+- **Testing Infrastructure:** Comprehensive test suite
+  - Custom test runner with 60 tests across 28 test suites
+  - Hypergeometric math verification tests
+  - Calculator-specific test suites
+  - Performance benchmarks
+  - 100% pass rate
+- **Math Improvements:**
+  - Exact hypergeometric calculations
+  - Correct sequential deadline handling
+
 ## [0.3.0] - 2026-01-11
 
 ### Added

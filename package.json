@@ -1,0 +1,32 @@
+{
+  "name": "mtgcalcs",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Magic: The Gathering probability calculators",
+  "main": "index.html",
+  "scripts": {
+    "test": "node --test tests/**/*.node.test.js",
+    "test:legacy": "node tests/run-tests.js",
+    "test:node": "node --test tests/**/*.node.test.js",
+    "test:node:watch": "node --test --watch tests/**/*.node.test.js",
+    "test:perf": "node --test tests/performance/benchmarks.node.test.js",
+    "test:watch": "nodemon --watch js --watch tests --exec npm run test:legacy",
+    "dev": "npx live-server --port=8080 --no-browser",
+    "serve": "npx http-server -p 8080 -c-1"
+  },
+  "keywords": [
+    "mtg",
+    "magic",
+    "calculator",
+    "probability",
+    "hypergeometric"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
