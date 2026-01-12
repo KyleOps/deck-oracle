@@ -1,4 +1,4 @@
-# MTG Probability Calculator
+# Deck Oracle
 
 A comprehensive suite of probability calculators for **Magic: The Gathering**, designed to help deck builders analyze consistency, optimize land counts, and evaluate the potential value of specific spells and mechanics.
 
@@ -20,8 +20,8 @@ This is a static web application.
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/yourusername/mtgcalcs.git
-    cd mtgcalcs
+    git clone https://github.com/yourusername/deck-oracle.git
+    cd deck-oracle
     ```
 2.  **Run the application:**
     *   Simply open `index.html` in your modern web browser.

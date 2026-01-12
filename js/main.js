@@ -184,8 +184,8 @@ function initServiceWorker() {
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             // Get the correct path for service worker based on deployment
-            const swPath = window.location.pathname.includes('/mtgcalcs/')
-                ? '/mtgcalcs/sw.js'
+            const swPath = window.location.pathname.includes('/deck-oracle/')
+                ? '/deck-oracle/sw.js'
                 : '/sw.js';
 
             navigator.serviceWorker.register(swPath)
@@ -316,7 +316,7 @@ function init() {
         localStorage.setItem('visited', 'true');
     }
 
-    console.log('MTG Calculator initialized');
+    console.log('Deck Oracle initialized');
 }
 
 // Start the app when DOM is ready

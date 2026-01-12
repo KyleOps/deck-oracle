@@ -1,11 +1,11 @@
 {
-  "name": "MTG Probability Calculator",
-  "short_name": "MTG Calc",
+  "name": "Deck Oracle",
+  "short_name": "Deck Oracle",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0a0a12",
   "theme_color": "#0a0a12",
-  "description": "Advanced MTG probability calculators for Portent of Calamity, Primal Surge, Genesis Wave, and more.",
+  "description": "Advanced MTG probability calculators for mulligan strategy, land drops, and card-specific probabilities.",
   "icons": [
     {
       "src": "images/icon.svg",
