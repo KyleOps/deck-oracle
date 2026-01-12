@@ -20,7 +20,7 @@ This is a static web application.
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/yourusername/deck-oracle.git
+    git clone https://github.com/kyleops/deck-oracle.git
     cd deck-oracle
     ```
 2.  **Run the application:**
