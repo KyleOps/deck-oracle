@@ -73,6 +73,15 @@
     --rashmi-bg-end: #0a1418;
     --rashmi-border: rgba(6, 182, 212, 0.3);
 
+    /* Theme colors - Lumra (Forest/Bear) */
+    --lumra-primary: #65a30d;
+    --lumra-secondary: #84cc16;
+    --lumra-accent: rgba(101, 163, 13, 0.5);
+    --lumra-bg-start: #0f120a;
+    --lumra-bg-mid: #1a2010;
+    --lumra-bg-end: #0f120a;
+    --lumra-border: rgba(101, 163, 13, 0.3);
+
     /* Base colors */
     --text-primary: #c4b8b8;
     --text-secondary: #a09090;
@@ -217,6 +226,15 @@ body.theme-rashmi {
     --theme-border: var(--rashmi-border);
 }
 
+body.theme-lumra {
+    background: linear-gradient(135deg, var(--lumra-bg-start) 0%, var(--lumra-bg-mid) 40%, var(--lumra-bg-end) 100%);
+    --accent: var(--lumra-primary);
+    --theme-primary: var(--lumra-primary);
+    --theme-secondary: var(--lumra-secondary);
+    --theme-accent: var(--lumra-accent);
+    --theme-border: var(--lumra-border);
+}
+
 /* ==================== TYPOGRAPHY ==================== */
 
 h1 {
@@ -268,6 +286,11 @@ h1 {
     text-shadow: 0 2px 10px var(--rashmi-accent), 0 0 30px rgba(6, 182, 212, 0.3);
 }
 
+.theme-lumra h1 {
+    color: var(--lumra-primary);
+    text-shadow: 0 2px 10px var(--lumra-accent), 0 0 30px rgba(101, 163, 13, 0.3);
+}
+
 h2 {
     font-family: var(--font-display);
     font-size: 1.1rem;
@@ -315,6 +338,11 @@ h2 {
 .theme-rashmi h2 {
     color: var(--rashmi-primary);
     border-bottom: 1px solid var(--rashmi-border);
+}
+
+.theme-lumra h2 {
+    color: var(--lumra-primary);
+    border-bottom: 1px solid var(--lumra-border);
 }
 
 .card-text {
@@ -418,6 +446,10 @@ h2 {
 
 .theme-rashmi *:focus-visible {
     outline-color: var(--rashmi-primary);
+}
+
+.theme-lumra *:focus-visible {
+    outline-color: var(--lumra-primary);
 }
 
 /* Loading state */

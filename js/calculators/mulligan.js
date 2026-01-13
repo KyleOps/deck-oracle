@@ -284,7 +284,8 @@ function mullStratMultiType(deckSize, types, penalty, freeMulligan, confidenceTh
 }
 
 /**
- * Calculate marginal benefit of adding one more card of each type
+ * Calculate marginal benefit of replacing one "other" card with each type
+ * This simulates real deck tuning: swapping a card rather than increasing deck size
  */
 function calculateMarginalBenefits(deckSize, types, penalty, freeMulligan, confidenceThreshold) {
     const baseResult = mullStratMultiType(deckSize, types, penalty, freeMulligan, confidenceThreshold);
@@ -293,12 +294,14 @@ function calculateMarginalBenefits(deckSize, types, penalty, freeMulligan, confi
     const benefits = [];
 
     types.forEach((type, index) => {
+        // Simulate replacing one "other" card with this type
+        // Deck size stays the same, only the type count increases by 1
         const modifiedTypes = types.map((t, i) =>
             i === index ? { ...t, count: t.count + 1 } : t
         );
-        const modifiedResult = mullStratMultiType(deckSize + 1, modifiedTypes, penalty, freeMulligan, confidenceThreshold);
-        const modifiedBaseline = calculateNoMulliganSuccess(deckSize + 1, modifiedTypes);
-        
+        const modifiedResult = mullStratMultiType(deckSize, modifiedTypes, penalty, freeMulligan, confidenceThreshold);
+        const modifiedBaseline = calculateNoMulliganSuccess(deckSize, modifiedTypes);
+
         benefits.push({
             overall: modifiedResult.expectedSuccess - baseResult.expectedSuccess,
             baseline: modifiedBaseline - baseBaseline
@@ -1169,7 +1172,19 @@ function updateSummary(config, result, sharedData) {
         }
 
         const [label, color] = getImpact(benefitPct);
-        return `<li style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="color:var(--text-light);font-weight:600">+1 ${config.types[i].name}</span><span style="font-size:0.85em;font-weight:bold;color:${color};background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:4px">${label}</span></div><div style="font-size:0.9em;color:var(--text-secondary)">Increases consistency by <strong style="color:${color}">${formatPercentage(Math.max(0, b.overall), 2)}</strong><span style="font-size:0.9em;color:var(--text-dim)"> (Natural: +${formatPercentage(Math.max(0, b.baseline), 2)})</span></div></li>`;
+        const baselinePct = b.baseline * 100;
+        return `<li style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                <span style="color:var(--text-light);font-weight:600">+1 ${config.types[i].name}</span>
+                <span style="font-size:0.85em;font-weight:bold;color:${color};background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:4px">${label}</span>
+            </div>
+            <div style="font-size:0.9em;color:var(--text-secondary)">
+                Improves win rate by <strong style="color:${color}">${formatPercentage(Math.max(0, b.overall), 2)}</strong>
+                <div style="font-size:0.85em;color:var(--text-dim);margin-top:4px;font-style:italic;">
+                    (God hand rate: +${formatPercentage(Math.max(0, b.baseline), 2)} if you never mulligan)
+                </div>
+            </div>
+        </li>`;
     }).join('');
 
     // Strategy Breakdown List

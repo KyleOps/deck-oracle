@@ -183,7 +183,9 @@ describe('Share URL - Security & Validation', () => {
                 'waveX': { min: 0, max: 30 },
                 'vortexCMC': { min: 5, max: 15 },
                 'rashmiCMC': { min: 0, max: 15 },
-                'lands': { min: 0, max: 60 }
+                'lands': { min: 0, max: 60 },
+                'lumraGY': { min: 0, max: 30 },
+                'lumraMult': { min: 1, max: 10 }
             };
 
             Object.entries(sliderMap).forEach(([param, config]) => {
@@ -302,7 +304,6 @@ describe('Share URL - Security & Validation', () => {
         });
 
         it('should reject tab values not in whitelist', () => {
-            const VALID_TABS = ['portent', 'surge', 'wave', 'vortex', 'rashmi', 'lands', 'mulligan'];
             const xssTabs = [
                 '<script>alert(1)</script>',
                 '../../../etc/passwd',
@@ -311,6 +312,7 @@ describe('Share URL - Security & Validation', () => {
             ];
 
             xssTabs.forEach(tab => {
+                const VALID_TABS = ['portent', 'surge', 'wave', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra'];
                 assert.ok(!VALID_TABS.includes(tab), `XSS tab "${tab}" should not be in whitelist`);
             });
         });
@@ -378,7 +380,7 @@ describe('Share URL - Security & Validation', () => {
             assert.strictEqual(tab, '<script>', 'Should decode URL-encoded characters');
 
             // But this should still not be in the whitelist
-            const VALID_TABS = ['portent', 'surge', 'wave', 'vortex', 'rashmi', 'lands', 'mulligan'];
+            const VALID_TABS = ['portent', 'surge', 'wave', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra'];
             assert.ok(!VALID_TABS.includes(tab), 'Decoded XSS should not be valid');
         });
 
@@ -389,7 +391,7 @@ describe('Share URL - Security & Validation', () => {
 
             assert.strictEqual(tab.length, 10000);
             // But it shouldn't be in the whitelist
-            const VALID_TABS = ['portent', 'surge', 'wave', 'vortex', 'rashmi', 'lands', 'mulligan'];
+            const VALID_TABS = ['portent', 'surge', 'wave', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra'];
             assert.ok(!VALID_TABS.includes(tab));
         });
     });
@@ -420,7 +422,9 @@ describe('Share URL - Integration Tests', () => {
                 waveX: '15',
                 vortexCMC: '8',
                 rashmiCMC: '5',
-                lands: '40'
+                lands: '40',
+                lumraGY: '3',
+                lumraMult: '2'
             });
 
             const sliderMap = {
@@ -428,7 +432,9 @@ describe('Share URL - Integration Tests', () => {
                 'waveX': { min: 0, max: 30 },
                 'vortexCMC': { min: 5, max: 15 },
                 'rashmiCMC': { min: 0, max: 15 },
-                'lands': { min: 0, max: 60 }
+                'lands': { min: 0, max: 60 },
+                'lumraGY': { min: 0, max: 30 },
+                'lumraMult': { min: 1, max: 10 }
             };
 
             // Validate each slider is within bounds

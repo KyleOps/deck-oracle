@@ -7,7 +7,7 @@ import * as DeckConfig from './deckConfig.js';
 import * as Mulligan from '../calculators/mulligan.js';
 
 // Valid tab names whitelist
-const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan'];
+const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra'];
 
 // Allowed deck import domains
 const ALLOWED_DECK_HOSTS = ['moxfield.com', 'www.moxfield.com', 'archidekt.com', 'www.archidekt.com'];
@@ -119,7 +119,9 @@ export async function parseShareUrl() {
         'vowX': { id: 'vow-xSlider', min: 0, max: 30 },
         'vortexCMC': { id: 'vortex-cmcSlider', min: 5, max: 15 },
         'rashmiCMC': { id: 'rashmi-cmcSlider', min: 0, max: 15 },
-        'lands': { id: 'lands-opening-slider', min: 0, max: 60 }
+        'lands': { id: 'lands-opening-slider', min: 0, max: 60 },
+        'lumraGY': { id: 'lumra-gySlider', min: 0, max: 30 },
+        'lumraMult': { id: 'lumra-multSlider', min: 1, max: 10 }
     };
 
     Object.entries(sliderMap).forEach(([param, config]) => {
@@ -190,7 +192,9 @@ export function getShareUrl() {
         { id: 'wave-xSlider', param: 'waveX' },
         { id: 'vow-xSlider', param: 'vowX' },
         { id: 'vortex-cmcSlider', param: 'vortexCMC' },
-        { id: 'rashmi-cmcSlider', param: 'rashmiCMC' }
+        { id: 'rashmi-cmcSlider', param: 'rashmiCMC' },
+        { id: 'lumra-gySlider', param: 'lumraGY' },
+        { id: 'lumra-multSlider', param: 'lumraMult' }
     ];
 
     sliders.forEach(({ id, param }) => {

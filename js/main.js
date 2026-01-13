@@ -10,6 +10,7 @@ import * as Vow from './calculators/vow.js';
 import * as Vortex from './calculators/vortex.js';
 import * as Lands from './calculators/lands.js';
 import * as Rashmi from './calculators/rashmi.js';
+import * as Lumra from './calculators/lumra.js';
 import * as Mulligan from './calculators/mulligan.js';
 import * as Share from './utils/share.js';
 import { debounce } from './utils/simulation.js';
@@ -27,6 +28,7 @@ const calculators = {
     vow: { icon: '🌱', name: 'Kamahl\'s Druidic Vow' },
     vortex: { icon: '🌀', name: 'Monstrous Vortex' },
     rashmi: { icon: '🌌', name: 'Rashmi' },
+    lumra: { icon: '🐻', name: 'Lumra' },
     lands: { icon: '🏔️', name: 'Land Drops' },
     mulligan: { icon: '🃏', name: 'Mulligan Strategy' }
 };
@@ -82,6 +84,8 @@ function switchTab(tab) {
         Lands.updateUI();
     } else if (tab === 'rashmi') {
         Rashmi.updateUI();
+    } else if (tab === 'lumra') {
+        Lumra.updateUI();
     } else if (tab === 'mulligan') {
         Mulligan.updateUI();
     }
@@ -178,6 +182,13 @@ function initLandsInputs() {
  */
 function initRashmiInputs() {
     Rashmi.init();
+}
+
+/**
+ * Initialize Lumra calculator inputs
+ */
+function initLumraInputs() {
+    Lumra.init();
 }
 
 /**
@@ -280,6 +291,7 @@ function init() {
     initVortexInputs();
     initLandsInputs();
     initRashmiInputs();
+    initLumraInputs();
     initMulliganInputs();
     initServiceWorker();
     initUXEnhancements();
@@ -321,6 +333,7 @@ function init() {
             else if (e.key === '5') switchTab('vortex');
             else if (e.key === '6') switchTab('lands');
             else if (e.key === '7') switchTab('rashmi');
+            else if (e.key === '8') switchTab('lumra');
         }
     });
 

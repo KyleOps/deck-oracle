@@ -5,9 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] - 2026-01-13 (Lumra Calculator)
 
 ### Added
+- **Lumra, Bellow of the Woods Calculator:** Added new calculator for the Element Bear.
+  - **Mill Simulation:** Calculates expected lands milled from the "Mill 4" ETB trigger.
+  - **Value Analysis:** Computes total lands returned (GY + Milled) and effective ramp.
+  - **Multiplier:** Added support for panharmonicon effects (2x, 3x triggers).
+  - **Visuals:** Added probability distribution chart for land hits.
+  - **Sampler Chart:** Added a bar chart to the "Sample Reveals" section showing the actual distribution of lands milled in the simulations.
+  - **Sample Reveals:** Visual simulation of the mill effect.
 - **Big Spell Comparison:** New cross-calculator comparison feature for Genesis Wave, Kamahl's Druidic Vow, Primal Surge, and Portent of Calamity
   - Automatically compares all four spells normalized by **Total Mana Cost** (instead of just X value)
   - Ensures a fair apples-to-apples comparison (e.g., Wave X=7 vs Portent X=9 for 10 total mana)
@@ -25,8 +32,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Monstrous Vortex: 10 → 500
   - Rashmi, Eternities Crafter: 20 → 500
 - **Vow Calculator:** Removed "← MAX" indicator from hit distribution chart (redundant visual clutter)
+- **Lumra Calculator:** Optimized sample rendering performance
+  - Eliminated redundant array creation in `renderBatch` function
+  - Now counts lands directly without intermediate `.filter()` call
+  - Reduces memory allocation during batch rendering
+
 
 ### Fixed
+- **Mulligan Calculator:** Fixed deck tuning tips showing incorrectly low impact percentages
+  - Marginal benefit calculation now simulates **replacing** a card rather than increasing deck size
+  - Previously: Adding a land increased deck size from 99→100, diluting probabilities
+  - Now: Adding a land replaces an "other" card, keeping deck size constant at 99
+  - Impact percentages now accurately reflect real deck-building decisions
+- **Mulligan Calculator:** Improved deck tuning tips clarity
+  - Changed primary metric from confusing "Increases consistency by X%" to clear "Improves win rate by X%"
+  - Added clarifying note: "God hand rate" shown in italics explains the baseline impact (if you never mulligan)
 - **Big Spell Comparison:** Fixed TypeError when accessing undefined properties by adding null-safe operators and defensive checks
 - **Big Spell Comparison:** Fixed Genesis Wave showing 0.00 by correcting property name from `expected` to `expectedPermanents`
 - **Big Spell Comparison:** Corrected Portent of Calamity CMC calculation to `X + 1` (Cost {X}{U}) instead of `X + 3`
