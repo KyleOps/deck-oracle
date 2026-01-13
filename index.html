@@ -76,7 +76,7 @@
                     <div class="panel-content">
                         <div class="type-grid">
                             <div class="type-input">
-                                <label for="deck-creatures">Creature</label>
+                                <label for="deck-creatures">Creatures</label>
                                 <input type="number" id="deck-creatures" value="25" min="0" aria-label="Creatures">
                             </div>
                             <div class="type-input">
@@ -116,59 +116,127 @@
             </div>
         </section>
 
-        <!-- Calculator Selector & Share (Unified Header) -->
-        <div class="header-row" style="display: flex; gap: 12px; align-items: center; justify-content: center; margin-bottom: 24px; position: relative; z-index: 100;">
-            <div class="calculator-selector" id="calculator-selector" role="navigation" aria-label="Calculator selection" style="margin-bottom: 0;">
-                <button class="selector-button" id="selector-button" aria-haspopup="true" aria-expanded="false">
-                    <div class="selector-current">
-                        <span class="selector-icon">⚡</span>
-                        <span class="selector-name">Portent of Calamity</span>
+        <!-- Navigation Controls Row -->
+        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 8px;">
+            <button id="nav-layout-toggle" class="icon-btn" aria-label="Toggle navigation layout" title="Switch navigation style">
+                <span class="nav-icon">☰</span>
+            </button>
+            <button id="share-button" class="icon-btn" aria-label="Copy Share Link" title="Copy Share Link" style="margin-left: auto;">
+                🔗
+            </button>
+        </div>
+
+        <!-- Tab Group Navigation -->
+        <div class="header-row" id="tab-group-nav" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; position: relative; z-index: 100;">
+            <!-- Main Category Tabs -->
+            <div class="tab-groups" role="navigation" aria-label="Calculator categories">
+                <div class="tab-group-header">
+                    <button class="tab-group-btn active" data-group="spells" role="tab" aria-selected="true">
+                        <span class="tab-icon">⚡</span>
+                        <span>Spells</span>
+                    </button>
+                    <button class="tab-group-btn" data-group="Creatures" role="tab" aria-selected="false">
+                        <span class="tab-icon">👑</span>
+                        <span>Creatures</span>
+                    </button>
+                    <button class="tab-group-btn" data-group="deck-tools" role="tab" aria-selected="false">
+                        <span class="tab-icon">📊</span>
+                        <span>Tools</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sub-navigation Pills (full width) -->
+            <div class="tab-sub-nav">
+                    <!-- Spells Group -->
+                    <div class="sub-nav-group active" data-group="spells">
+                        <button class="sub-nav-pill active" data-tab="portent">
+                            <span>⚡</span> Portent
+                        </button>
+                        <button class="sub-nav-pill" data-tab="wave">
+                            <span>🌊</span> Wave
+                        </button>
+                        <button class="sub-nav-pill" data-tab="vow">
+                            <span>🌱</span> Vow
+                        </button>
+                        <button class="sub-nav-pill" data-tab="surge">
+                            <span>🌿</span> Surge
+                        </button>
+                        <button class="sub-nav-pill" data-tab="vortex">
+                            <span>🌀</span> Vortex
+                        </button>
                     </div>
-                    <span class="selector-arrow">▼</span>
-                </button>
-                <div class="selector-dropdown" id="selector-dropdown" role="menu">
-                    <div class="selector-option active" data-tab="portent" role="menuitem">
-                        <span class="selector-option-icon">⚡</span>
-                        <span>Portent of Calamity</span>
+
+                    <!-- Creature Group -->
+                    <div class="sub-nav-group" data-group="Creatures">
+                        <button class="sub-nav-pill" data-tab="rashmi">
+                            <span>🌌</span> Rashmi
+                        </button>
+                        <button class="sub-nav-pill" data-tab="lumra">
+                            <span>🐻</span> Lumra
+                        </button>
                     </div>
-                    <div class="selector-option" data-tab="surge" role="menuitem">
-                        <span class="selector-option-icon">🌿</span>
-                        <span>Primal Surge</span>
-                    </div>
-                    <div class="selector-option" data-tab="wave" role="menuitem">
-                        <span class="selector-option-icon">🌊</span>
-                        <span>Genesis Wave</span>
-                    </div>
-                    <div class="selector-option" data-tab="vow" role="menuitem">
-                        <span class="selector-option-icon">🌱</span>
-                        <span>Kamahl's Druidic Vow</span>
-                    </div>
-                    <div class="selector-option" data-tab="vortex" role="menuitem">
-                        <span class="selector-option-icon">🌀</span>
-                        <span>Monstrous Vortex</span>
-                    </div>
-                    <div class="selector-option" data-tab="rashmi" role="menuitem">
-                        <span class="selector-option-icon">🌌</span>
-                        <span>Rashmi</span>
-                    </div>
-                    <div class="selector-option" data-tab="lumra" role="menuitem">
-                        <span class="selector-option-icon">🐻</span>
-                        <span>Lumra</span>
-                    </div>
-                    <div class="selector-option" data-tab="lands" role="menuitem">
-                        <span class="selector-option-icon">🏔️</span>
-                        <span>Land Drops</span>
-                    </div>
-                    <div class="selector-option" data-tab="mulligan" role="menuitem">
-                        <span class="selector-option-icon">🃏</span>
-                        <span>Mulligan Strategy</span>
+
+                    <!-- Tools Group -->
+                    <div class="sub-nav-group" data-group="deck-tools">
+                        <button class="sub-nav-pill" data-tab="mulligan">
+                            <span>🃏</span> Mulligan
+                        </button>
+                        <button class="sub-nav-pill" data-tab="lands">
+                            <span>🏔️</span> Lands
+                        </button>
                     </div>
                 </div>
             </div>
-            
-            <button id="share-button" aria-label="Copy Share Link" title="Copy Share Link" style="height: 54px; width: 54px; border-radius: 12px; background: var(--panel-bg); border: 1px solid var(--border-color); color: var(--accent); font-size: 1.2em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;">
-                🔗
+        </div>
+
+        <!-- Legacy Dropdown Selector (hidden by default) -->
+        <div class="calculator-selector" id="calculator-selector" role="navigation" aria-label="Calculator selection" style="margin-bottom: 16px;">
+            <button class="selector-button" id="selector-button" aria-haspopup="true" aria-expanded="false">
+                <div class="selector-current">
+                    <span class="selector-icon">⚡</span>
+                    <span class="selector-name">Portent of Calamity</span>
+                </div>
+                <span class="selector-arrow">▼</span>
             </button>
+            <div class="selector-dropdown" id="selector-dropdown" role="menu">
+                <div class="selector-option active" data-tab="portent" role="menuitem">
+                    <span class="selector-option-icon">⚡</span>
+                    <span>Portent of Calamity</span>
+                </div>
+                <div class="selector-option" data-tab="surge" role="menuitem">
+                    <span class="selector-option-icon">🌿</span>
+                    <span>Primal Surge</span>
+                </div>
+                <div class="selector-option" data-tab="wave" role="menuitem">
+                    <span class="selector-option-icon">🌊</span>
+                    <span>Genesis Wave</span>
+                </div>
+                <div class="selector-option" data-tab="vow" role="menuitem">
+                    <span class="selector-option-icon">🌱</span>
+                    <span>Kamahl's Druidic Vow</span>
+                </div>
+                <div class="selector-option" data-tab="vortex" role="menuitem">
+                    <span class="selector-option-icon">🌀</span>
+                    <span>Monstrous Vortex</span>
+                </div>
+                <div class="selector-option" data-tab="rashmi" role="menuitem">
+                    <span class="selector-option-icon">🌌</span>
+                    <span>Rashmi</span>
+                </div>
+                <div class="selector-option" data-tab="lumra" role="menuitem">
+                    <span class="selector-option-icon">🐻</span>
+                    <span>Lumra</span>
+                </div>
+                <div class="selector-option" data-tab="lands" role="menuitem">
+                    <span class="selector-option-icon">🏔️</span>
+                    <span>Land Drops</span>
+                </div>
+                <div class="selector-option" data-tab="mulligan" role="menuitem">
+                    <span class="selector-option-icon">🃏</span>
+                    <span>Mulligan Strategy</span>
+                </div>
+            </div>
         </div>
 
         <!-- PORTENT TAB -->

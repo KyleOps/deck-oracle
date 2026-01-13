@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Visuals:** Added probability distribution chart for land hits.
   - **Sampler Chart:** Added a bar chart to the "Sample Reveals" section showing the actual distribution of lands milled in the simulations.
   - **Sample Reveals:** Visual simulation of the mill effect.
+- **Tab Group Navigation:** Redesigned calculator navigation for better scalability
+  - Replaced dropdown selector with organized tab group system
+  - Three main categories: **Big Spells**, **Commanders**, **Deck Tools**
+  - Sub-navigation pills for quick switching within each category
+  - **Mobile-Optimized:** Horizontal scrolling, icon-only mode on small screens
+  - Smooth transitions and visual feedback with gradient highlights
+  - Maintains URL hash system for deep linking and share functionality
 - **Big Spell Comparison:** New cross-calculator comparison feature for Genesis Wave, Kamahl's Druidic Vow, Primal Surge, and Portent of Calamity
   - Automatically compares all four spells normalized by **Total Mana Cost** (instead of just X value)
   - Ensures a fair apples-to-apples comparison (e.g., Wave X=7 vs Portent X=9 for 10 total mana)

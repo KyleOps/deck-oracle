@@ -49,6 +49,64 @@
         margin-bottom: var(--spacing-md);
     }
 
+    /* Tab Group Navigation - Mobile Optimizations */
+    .tab-group-header {
+        padding: 6px;
+        gap: 6px;
+    }
+
+    .tab-group-btn {
+        padding: 10px 12px;
+        font-size: 0.85rem;
+        min-width: 80px;
+        flex: 1; /* Equal width for all tab group buttons */
+    }
+
+    .tab-icon {
+        font-size: 1rem;
+    }
+
+    .share-btn-inline {
+        width: 42px;
+        height: 42px;
+        font-size: 1.1rem;
+    }
+
+    /* Sub-navigation - Ensure horizontal scroll works smoothly */
+    .tab-sub-nav {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .tab-sub-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .sub-nav-group {
+        padding: 6px;
+        gap: 6px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; /* Hide scrollbar on mobile */
+        justify-content: flex-start; /* Left-align on mobile for scrolling */
+        touch-action: pan-x; /* Enable horizontal touch dragging */
+    }
+
+    .sub-nav-group::-webkit-scrollbar {
+        display: none; /* Hide scrollbar on mobile */
+    }
+
+    .sub-nav-pill {
+        padding: 8px 12px;
+        font-size: 0.85rem;
+        flex-shrink: 0; /* Prevent pills from shrinking */
+        white-space: nowrap; /* Prevent text wrapping */
+    }
+
+    .sub-nav-pill span {
+        font-size: 1rem;
+    }
+
     .card-text {
         font-size: 0.85rem;
         margin-bottom: var(--spacing-lg);

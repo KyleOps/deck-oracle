@@ -17,39 +17,67 @@ import { debounce } from './utils/simulation.js';
 import * as Components from './utils/components.js';
 import * as DeckConfig from './utils/deckConfig.js';
 
-// Current active tab
+// Current active tab and group
 let currentTab = 'portent';
+let currentGroup = 'spells';
 
-// Calculator metadata
+// Calculator metadata with groupings
 const calculators = {
-    portent: { icon: '⚡', name: 'Portent of Calamity' },
-    surge: { icon: '🌿', name: 'Primal Surge' },
-    wave: { icon: '🌊', name: 'Genesis Wave' },
-    vow: { icon: '🌱', name: 'Kamahl\'s Druidic Vow' },
-    vortex: { icon: '🌀', name: 'Monstrous Vortex' },
-    rashmi: { icon: '🌌', name: 'Rashmi' },
-    lumra: { icon: '🐻', name: 'Lumra' },
-    lands: { icon: '🏔️', name: 'Land Drops' },
-    mulligan: { icon: '🃏', name: 'Mulligan Strategy' }
+    portent: { icon: '⚡', name: 'Portent of Calamity', group: 'spells' },
+    surge: { icon: '🌿', name: 'Primal Surge', group: 'spells' },
+    wave: { icon: '🌊', name: 'Genesis Wave', group: 'spells' },
+    vow: { icon: '🌱', name: 'Kamahl\'s Druidic Vow', group: 'spells' },
+    vortex: { icon: '🌀', name: 'Monstrous Vortex', group: 'spells' },
+    rashmi: { icon: '🌌', name: 'Rashmi', group: 'Creatures' },
+    lumra: { icon: '🐻', name: 'Lumra', group: 'Creatures' },
+    lands: { icon: '🏔️', name: 'Land Drops', group: 'deck-tools' },
+    mulligan: { icon: '🃏', name: 'Mulligan Strategy', group: 'deck-tools' }
 };
 
 /**
+ * Switch between tab groups
+ * @param {string} group - Group name (spells, Creature, deck-tools)
+ */
+function switchGroup(group) {
+    currentGroup = group;
+
+    // Update group buttons
+    document.querySelectorAll('.tab-group-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.group === group);
+        btn.setAttribute('aria-selected', btn.dataset.group === group);
+    });
+
+    // Show corresponding sub-navigation
+    document.querySelectorAll('.sub-nav-group').forEach(nav => {
+        nav.classList.toggle('active', nav.dataset.group === group);
+    });
+}
+
+/**
  * Switch between calculator tabs
- * @param {string} tab - Tab name (portent, surge, wave, vortex, lands, rashmi)
+ * @param {string} tab - Tab name (portent, surge, wave, vortex, lands, rashmi, lumra, mulligan)
  */
 function switchTab(tab) {
     // Update body theme
     document.body.className = 'theme-' + tab;
 
-    // Update dropdown selector (Unified)
+    // Update the calculator group if needed
+    if (calculators[tab] && calculators[tab].group !== currentGroup) {
+        switchGroup(calculators[tab].group);
+    }
+
+    // Update ALL sub-navigation pills across all groups (not just current group)
+    document.querySelectorAll('.sub-nav-pill').forEach(pill => {
+        pill.classList.toggle('active', pill.dataset.tab === tab);
+    });
+
+    // Update dropdown selector button and options
     const selectorIcon = document.querySelector('.selector-icon');
     const selectorName = document.querySelector('.selector-name');
     if (selectorIcon && selectorName && calculators[tab]) {
         selectorIcon.textContent = calculators[tab].icon;
         selectorName.textContent = calculators[tab].name;
     }
-
-    // Update dropdown options
     document.querySelectorAll('.selector-option').forEach(option => {
         option.classList.toggle('active', option.dataset.tab === tab);
     });
@@ -61,13 +89,6 @@ function switchTab(tab) {
     document.getElementById(`${tab}-tab`).classList.add('active');
 
     currentTab = tab;
-
-    // Close dropdown if open
-    const selector = document.getElementById('calculator-selector');
-    if (selector && selector.classList.contains('open')) {
-        selector.classList.remove('open');
-        document.getElementById('selector-button').setAttribute('aria-expanded', 'false');
-    }
 
     // Update the respective calculator
     if (tab === 'portent') {
@@ -95,7 +116,21 @@ function switchTab(tab) {
  * Initialize tab navigation
  */
 function initTabNavigation() {
-    // Unified dropdown selector
+    // Tab group buttons
+    document.querySelectorAll('.tab-group-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            switchGroup(btn.dataset.group);
+        });
+    });
+
+    // Sub-navigation pills
+    document.querySelectorAll('.sub-nav-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+            switchTab(pill.dataset.tab);
+        });
+    });
+
+    // Legacy dropdown selector (keep for backwards compatibility)
     const selectorButton = document.getElementById('selector-button');
     const selector = document.getElementById('calculator-selector');
     const dropdown = document.getElementById('selector-dropdown');
@@ -112,6 +147,9 @@ function initTabNavigation() {
         document.querySelectorAll('.selector-option').forEach(option => {
             option.addEventListener('click', () => {
                 switchTab(option.dataset.tab);
+                // Auto-close dropdown after selection
+                selector.classList.remove('open');
+                selectorButton.setAttribute('aria-expanded', 'false');
             });
         });
 
@@ -200,6 +238,45 @@ function initMulliganInputs() {
 
 
 /**
+ * Initialize navigation layout toggle
+ */
+function initNavLayoutToggle() {
+    const navToggle = document.getElementById('nav-layout-toggle');
+    const navIcon = navToggle?.querySelector('.nav-icon');
+    const tabGroupNav = document.getElementById('tab-group-nav');
+    const dropdownNav = document.querySelector('.calculator-selector');
+
+    // Load saved layout preference
+    const savedLayout = localStorage.getItem('navLayout') || 'tabs';
+    if (savedLayout === 'dropdown') {
+        tabGroupNav?.classList.add('hidden');
+        dropdownNav?.classList.add('shown');
+        if (navIcon) navIcon.textContent = '📑';
+    }
+
+    // Toggle layout on click
+    if (navToggle) {
+        navToggle.addEventListener('click', () => {
+            const isTabs = !tabGroupNav?.classList.contains('hidden');
+
+            if (isTabs) {
+                // Switch to dropdown
+                tabGroupNav?.classList.add('hidden');
+                dropdownNav?.classList.add('shown');
+                if (navIcon) navIcon.textContent = '📑';
+                localStorage.setItem('navLayout', 'dropdown');
+            } else {
+                // Switch to tabs
+                tabGroupNav?.classList.remove('hidden');
+                dropdownNav?.classList.remove('shown');
+                if (navIcon) navIcon.textContent = '☰';
+                localStorage.setItem('navLayout', 'tabs');
+            }
+        });
+    }
+}
+
+/**
  * Initialize service worker for offline support
  */
 function initServiceWorker() {
@@ -284,6 +361,7 @@ function init() {
 
     // Initialize all components
     initTabNavigation();
+    initNavLayoutToggle();
     initPortentInputs();
     initSurgeInputs();
     initWaveInputs();

@@ -125,6 +125,10 @@ export function restorePanelStates() {
 export function initCollapsiblePanels() {
     document.querySelectorAll('.panel-header').forEach(header => {
         header.addEventListener('click', (e) => {
+            // Don't toggle if clicking on icon buttons (theme, nav, share toggles)
+            if (e.target.closest('.icon-btn') && !e.target.closest('.collapse-btn')) {
+                return;
+            }
             const panel = header.closest('.collapsible-panel');
             if (panel) {
                 togglePanel(panel);
