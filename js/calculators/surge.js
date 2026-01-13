@@ -9,6 +9,7 @@ import { createOrUpdateChart } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
 import {
     buildDeckFromCardData, shuffleDeck, renderCardBadge, renderDistributionChart,
     createCollapsibleSection, extractCardTypes
@@ -520,13 +521,21 @@ export function updateUI() {
 
     if (config.deckSize === 0 || !result) {
         if (chart) chart.destroy();
-        // Clear content if needed
+        const surgeComparisonContainer = document.getElementById('big-spell-comparison-surge');
+        if (surgeComparisonContainer) surgeComparisonContainer.innerHTML = '';
         return;
     }
 
     updateChart(config, result);
     updateStatsPanel(config, result);
     updateComparison(config, result);
+
+    // Update big spell comparison (use X=10 as reference since Primal Surge is fixed cost)
+    const surgeComparisonContainer = document.getElementById('big-spell-comparison-surge');
+    if (surgeComparisonContainer) {
+        const comparison = compareBigSpells(10, 'surge');
+        surgeComparisonContainer.innerHTML = renderComparison(comparison);
+    }
 
     // Draw initial sample reveals if we have card data
     if (config.cardData && config.cardData.cardsByName && Object.keys(config.cardData.cardsByName).length > 0) {

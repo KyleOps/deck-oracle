@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Big Spell Comparison:** New cross-calculator comparison feature for Genesis Wave, Kamahl's Druidic Vow, Primal Surge, and Portent of Calamity
+  - Automatically compares all four spells normalized by **Total Mana Cost** (instead of just X value)
+  - Ensures a fair apples-to-apples comparison (e.g., Wave X=7 vs Portent X=9 for 10 total mana)
+  - Shows expected value, mana cost, and efficiency metrics for each spell
+  - Separate metrics: Permanents for green spells, Card Types for Portent
+  - Provides intelligent recommendations based on deck composition
+  - **Responsive UI:** Comparison table now adapts to screen size, switching to a 2x2 grid on mobile devices and adjusting text sizing/padding for optimal readability on small screens.
+
+### Changed
+- **All Calculators:** Increased default simulation count from 10-20 to 500 for more accurate statistical sampling
+  - Portent of Calamity: 10 → 500
+  - Primal Surge: 10 → 500
+  - Genesis Wave: 10 → 500
+  - Kamahl's Druidic Vow: 10 → 500
+  - Monstrous Vortex: 10 → 500
+  - Rashmi, Eternities Crafter: 20 → 500
+- **Vow Calculator:** Removed "← MAX" indicator from hit distribution chart (redundant visual clutter)
+
+### Fixed
+- **Big Spell Comparison:** Fixed TypeError when accessing undefined properties by adding null-safe operators and defensive checks
+- **Big Spell Comparison:** Fixed Genesis Wave showing 0.00 by correcting property name from `expected` to `expectedPermanents`
+- **Big Spell Comparison:** Corrected Portent of Calamity CMC calculation to `X + 1` (Cost {X}{U}) instead of `X + 3`
+- **Deck Import:** Fixed ReferenceError for undefined `BATCH_SIZE` constant (should be `SCRYFALL_BATCH_SIZE`)
+- **Commander Detection:** Fixed a bug where commander name was being lost during deck configuration updates, ensuring that "The Sixth Doctor" correctly enables the double-cast bonus in the Big Spell Comparison.
+
 ## [1.3.1] - 2026-01-13 (Vow Enhancements & Optimizations)
 
 ### Added

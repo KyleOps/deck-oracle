@@ -214,6 +214,32 @@
         font-size: 0.7em;            /* Smaller font for mobile */
         scrollbar-width: thin;       /* Thin scrollbar for Firefox */
     }
+
+    /* Big Spell Comparison Responsive Grid */
+    .big-spell-grid {
+        grid-template-columns: repeat(2, 1fr) !important; /* 2x2 grid on mobile */
+        gap: 8px;
+    }
+
+    .big-spell-card {
+        padding: 10px; /* Reduced padding */
+    }
+
+    .big-spell-title {
+        font-size: 0.8em;
+    }
+
+    .big-spell-value {
+        font-size: 1.5em; /* Smaller value text */
+    }
+
+    .big-spell-x-value {
+        font-size: 1em;
+    }
+
+    .big-spell-details, .big-spell-metric {
+        font-size: 0.75em;
+    }
 }
 
 /* Small mobile */
@@ -260,6 +286,15 @@
 
     .card-text {
         font-size: 0.8rem;
+    }
+
+    /* Even tighter Big Spell Grid for very small screens */
+    .big-spell-grid {
+        gap: 6px;
+    }
+    
+    .big-spell-card {
+        padding: 8px;
     }
 }
 

@@ -588,7 +588,7 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
 
         // Update progress: 10% to 80% range for fetching
         if (progressCallback) {
-            const processedCount = Math.min(i + BATCH_SIZE, uniqueCards.length);
+            const processedCount = Math.min(i + SCRYFALL_BATCH_SIZE, uniqueCards.length);
             const fetchProgress = (processedCount / uniqueCards.length) * 70; // 70% of total progress
             const totalProgress = 10 + fetchProgress; // Start at 10%
 
@@ -994,6 +994,15 @@ async function importFromMoxfieldInternal(deckId, progressCallback) {
     const cardsByName = {};
     const cardsToFetch = [];
     let actualCardCount = 0;
+    let commanderName = null;
+
+    // Capture commander from commanders board
+    if (data.boards?.commanders?.cards) {
+        const commanderCards = Object.values(data.boards.commanders.cards);
+        if (commanderCards.length > 0 && commanderCards[0].card) {
+            commanderName = commanderCards[0].card.name;
+        }
+    }
 
     // Process mainboard
     if (data.boards?.mainboard?.cards) {
@@ -1025,7 +1034,7 @@ async function importFromMoxfieldInternal(deckId, progressCallback) {
         });
     }
 
-    return { typeCounts, actualCardCount, cardDetails, cardsByName, deckName: data.name };
+    return { typeCounts, actualCardCount, cardDetails, cardsByName, deckName: data.name, commanderName };
 }
 
 /**
@@ -1044,11 +1053,22 @@ async function importFromArchidektInternal(deckId, progressCallback) {
     const cardsByName = {};
     const cardsToFetch = [];
     let actualCardCount = 0;
+    let commanderName = null;
 
     if (data.cards) {
         data.cards.forEach(entry => {
             const categories = entry.categories || [];
-            if (categories.includes('Sideboard') || categories.includes('Maybeboard') || categories.includes('Commander')) {
+
+            // Capture commander name before skipping
+            if (categories.includes('Commander')) {
+                const cardData = entry.card ? (entry.card.oracleCard || entry.card) : null;
+                if (cardData && !commanderName) {
+                    commanderName = cardData.name;
+                }
+                return;
+            }
+
+            if (categories.includes('Sideboard') || categories.includes('Maybeboard')) {
                 return;
             }
 
@@ -1083,7 +1103,7 @@ async function importFromArchidektInternal(deckId, progressCallback) {
         });
     }
 
-    return { typeCounts, actualCardCount, cardDetails, cardsByName, deckName: data.name };
+    return { typeCounts, actualCardCount, cardDetails, cardsByName, deckName: data.name, commanderName };
 }
 
 /**
@@ -1117,8 +1137,9 @@ export async function importDeckFromUrl(input, progressCallback = null) {
         cardDetails: result.cardDetails,
         cardsByName: result.cardsByName,
         creaturesPower5Plus,
+        commanderName: result.commanderName,
         importMetadata: {
-            hasSideboard: false, 
+            hasSideboard: false,
             sideboardCount: 0,
             missingCardCount: 0,
             totalCardsAttempted: result.actualCardCount,

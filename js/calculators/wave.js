@@ -9,6 +9,7 @@ import { createOrUpdateChart } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
 
 import {
     buildDeckFromCardData, shuffleDeck, renderCardBadge, renderDistributionChart,
@@ -631,6 +632,8 @@ export function updateUI() {
     if (config.deckSize === 0 || Object.keys(results).length === 0) {
         if (chart) chart.destroy();
         document.getElementById('wave-comparisonTable').innerHTML = '';
+        const waveComparisonContainer = document.getElementById('big-spell-comparison-wave');
+        if (waveComparisonContainer) waveComparisonContainer.innerHTML = '';
         return;
     }
 
@@ -638,6 +641,13 @@ export function updateUI() {
     updateStats(config, results);
     updateTable(config, results);
     updateComparison(config, results);
+
+    // Update big spell comparison
+    const waveComparisonContainer = document.getElementById('big-spell-comparison-wave');
+    if (waveComparisonContainer) {
+        const comparison = compareBigSpells(config.x, 'wave');
+        waveComparisonContainer.innerHTML = renderComparison(comparison);
+    }
 
     // Draw initial sample reveals if we have card data
     if (config.cardData && config.cardData.cardsByName && Object.keys(config.cardData.cardsByName).length > 0) {

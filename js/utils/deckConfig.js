@@ -40,6 +40,9 @@ let deckState = {
     // Imported card data by name (for detailed lookups)
     cardsByName: {},
 
+    // Commander name (for auto-configuration)
+    commanderName: null,
+
     // Import Source URL (for sharing)
     importUrl: null,
 
@@ -82,6 +85,14 @@ export function getImportedCardData() {
         cardDetails: deckState.cardDetails,
         cardsByName: deckState.cardsByName
     };
+}
+
+/**
+ * Get commander name
+ * @returns {string|null} - Commander name or null
+ */
+export function getCommanderName() {
+    return deckState.commanderName;
 }
 
 /**
@@ -133,6 +144,8 @@ export function updateDeck(config) {
         if (key in deckState) {
             // Handle arrays and objects (like cardDetails, cardsByName) directly without parsing
             if (Array.isArray(config[key]) || typeof config[key] === 'object' && config[key] !== null && !(config[key] instanceof Number)) {
+                deckState[key] = config[key];
+            } else if (key === 'commanderName' || key === 'importUrl') {
                 deckState[key] = config[key];
             } else {
                 deckState[key] = Math.max(0, parseInt(config[key]) || 0);

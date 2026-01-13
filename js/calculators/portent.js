@@ -10,6 +10,7 @@ import * as DeckConfig from '../utils/deckConfig.js';
 import { renderDistributionChart, buildDeckFromCardData, shuffleDeck, createCollapsibleSection, extractCardTypes } from '../utils/sampleSimulator.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
 
 const CONFIG = {
     ITERATIONS: 25000,
@@ -566,6 +567,13 @@ export function updateUI() {
 
     if (config.cardData && config.cardData.cardsByName && Object.keys(config.cardData.cardsByName).length > 0) {
         runSampleReveals();
+    }
+
+    // Render big spell comparison
+    const comparisonContainer = document.getElementById('big-spell-comparison-portent');
+    if (comparisonContainer) {
+        const comparison = compareBigSpells(config.x, 'portent');
+        comparisonContainer.innerHTML = renderComparison(comparison);
     }
 }
 

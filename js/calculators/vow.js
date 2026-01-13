@@ -10,6 +10,7 @@ import { createOrUpdateChart } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
 
 import {
     buildDeckFromCardData, shuffleDeck, renderDistributionChart,
@@ -335,7 +336,12 @@ export function getDeckConfig() {
         xSlider.max = Math.min(deckSize, 30);
     }
 
+    // Auto-check double cast for "The Sixth Doctor" commander
+    const commanderName = DeckConfig.getCommanderName();
     const doubleCastCheckbox = document.getElementById('vow-doubleCast');
+    if (doubleCastCheckbox && commanderName === 'The Sixth Doctor') {
+        doubleCastCheckbox.checked = true;
+    }
     const doubleCast = doubleCastCheckbox ? doubleCastCheckbox.checked : false;
 
     return {
@@ -754,12 +760,20 @@ export function updateUI() {
     if (config.deckSize === 0 || Object.keys(results).length === 0) {
         if (chart) chart.destroy();
         document.getElementById('vow-comparisonTable').innerHTML = '';
+        document.getElementById('big-spell-comparison').innerHTML = '';
         return;
     }
 
     updateChart(config, results);
     updateStats(config, results);
     updateTable(config, results);
+
+    // Update big spell comparison
+    const comparisonContainer = document.getElementById('big-spell-comparison');
+    if (comparisonContainer) {
+        const comparison = compareBigSpells(config.x, 'vow');
+        comparisonContainer.innerHTML = renderComparison(comparison);
+    }
 
     if (config.cardData && config.cardData.cardsByName && Object.keys(config.cardData.cardsByName).length > 0) {
         runSampleReveals();
