@@ -28,6 +28,15 @@
     --wave-bg-end: #0a1012;
     --wave-border: rgba(14, 165, 233, 0.3);
 
+    /* Theme colors - Druidic Vow (Forest Green/Gold) */
+    --vow-primary: #10b981;
+    --vow-secondary: #34d399;
+    --vow-accent: rgba(16, 185, 129, 0.5);
+    --vow-bg-start: #0a120a;
+    --vow-bg-mid: #1a2e1a;
+    --vow-bg-end: #0a100a;
+    --vow-border: rgba(16, 185, 129, 0.3);
+
     /* Theme colors - Vortex (Orange/Red) */
     --vortex-primary: #f97316;
     --vortex-secondary: #fb923c;
@@ -163,6 +172,15 @@ body.theme-wave {
     --theme-border: var(--wave-border);
 }
 
+body.theme-vow {
+    background: linear-gradient(135deg, var(--vow-bg-start) 0%, var(--vow-bg-mid) 40%, var(--vow-bg-end) 100%);
+    --accent: var(--vow-primary);
+    --theme-primary: var(--vow-primary);
+    --theme-secondary: var(--vow-secondary);
+    --theme-accent: var(--vow-accent);
+    --theme-border: var(--vow-border);
+}
+
 body.theme-vortex {
     background: linear-gradient(135deg, var(--vortex-bg-start) 0%, var(--vortex-bg-mid) 40%, var(--vortex-bg-end) 100%);
     --accent: var(--vortex-primary);
@@ -225,6 +243,11 @@ h1 {
     text-shadow: 0 2px 10px var(--wave-accent), 0 0 30px rgba(0, 100, 139, 0.3);
 }
 
+.theme-vow h1 {
+    color: var(--vow-primary);
+    text-shadow: 0 2px 10px var(--vow-accent), 0 0 30px rgba(16, 185, 129, 0.3);
+}
+
 .theme-vortex h1 {
     color: var(--vortex-primary);
     text-shadow: 0 2px 10px var(--vortex-accent), 0 0 30px rgba(249, 115, 22, 0.3);
@@ -267,6 +290,11 @@ h2 {
 .theme-wave h2 {
     color: var(--wave-primary);
     border-bottom: 1px solid var(--wave-border);
+}
+
+.theme-vow h2 {
+    color: var(--vow-primary);
+    border-bottom: 1px solid var(--vow-border);
 }
 
 .theme-vortex h2 {
@@ -370,6 +398,10 @@ h2 {
 
 .theme-wave *:focus-visible {
     outline-color: var(--wave-primary);
+}
+
+.theme-vow *:focus-visible {
+    outline-color: var(--vow-primary);
 }
 
 .theme-vortex *:focus-visible {

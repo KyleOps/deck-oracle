@@ -210,7 +210,7 @@ export function generateSampleRevealsHTML(prefix, title, options = {}) {
         <h2>🎴 ${title}</h2>
         <div style="display: flex; gap: var(--spacing-md); align-items: center; margin-bottom: var(--spacing-md); flex-wrap: wrap;">
             <label for="${prefix}-sample-count" style="color: var(--text-secondary);">Simulations:</label>
-            <input type="number" id="${prefix}-sample-count" min="1" max="10000" value="10"
+            <input type="number" id="${prefix}-sample-count" min="1" max="10000" value="500"
                    style="width: 100px; padding: 8px; background: var(--panel-bg-alt); border: 1px solid var(--accent); border-radius: var(--radius-md); color: var(--text-light); text-align: center;">
             <button id="${prefix}-draw-reveals-btn" class="import-btn run-sim-btn" ${requiresImport ? 'disabled' : ''}>Run Simulations</button>
             ${requiresImport ? `<span class="sim-import-note" style="color: var(--text-dim); font-size: 0.85em; margin-left: 8px;">(Import deck to enable)</span>` : ''}

@@ -36,7 +36,7 @@ function isCreaturePower5Plus(powerStr, treatStarAs5Plus) {
 
 const CONFIG = {
     CMC_RANGE: [3, 4, 5, 6, 7, 8, 9, 10], // Test different CMCs for creatures cast
-    DEFAULT_SAMPLE_SIZE: 10
+    DEFAULT_SAMPLE_SIZE: 500
 };
 
 let simulationCache = createCache(50);

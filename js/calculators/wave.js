@@ -19,7 +19,7 @@ const CONFIG = {
     // ITERATIONS removed, using math formula
     X_RANGE_BEFORE: 4,
     X_RANGE_AFTER: 4,
-    DEFAULT_SAMPLE_SIZE: 10
+    DEFAULT_SAMPLE_SIZE: 500
 };
 
 let simulationCache = createCache(50);

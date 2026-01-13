@@ -16,7 +16,7 @@ import {
 
 const CONFIG = {
     // Legacy iterations removed, using formula now
-    DEFAULT_SAMPLE_SIZE: 10
+    DEFAULT_SAMPLE_SIZE: 500
 };
 
 let simulationCache = createCache(50);

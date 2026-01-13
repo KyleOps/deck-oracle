@@ -6,14 +6,181 @@
 const SCRYFALL_API = 'https://api.scryfall.com';
 const RATE_LIMIT_DELAY = 100; // Scryfall requests 50-100ms between requests
 
+// Cache configuration
+const CACHE_MAX_SIZE = 1000;
+const CACHE_TTL_MS = 3600000; // 1 hour
+
+// Decklist parsing limits
+const MAX_DECKLIST_LENGTH = 50000; // ~50KB
+const MAX_DECKLIST_LINES = 500;
+const MAX_CARD_COUNT = 100;
+const MIN_CARD_COUNT = 1;
+const MAX_CARD_NAME_LENGTH = 100;
+
+// Batch processing configuration
+const SCRYFALL_BATCH_SIZE = 50;
+const FUZZY_SEARCH_BATCH_SIZE = 5;
+
+// URL validation
+const MAX_URL_INPUT_LENGTH = 200;
+
 // Card name corrections for common issues (typos, ambiguous names, etc.)
 // Note: Don't add full double-faced names here - they're handled automatically
 const CARD_NAME_CORRECTIONS = {
     'Vorinclex': 'Vorinclex, Monstrous Raider', // Disambiguate multiple printings
 };
 
+/**
+ * Normalize card name for cache keys and matching
+ * Extracts front face of double-faced cards and converts to lowercase
+ * @param {string} cardName - Card name (may include // for double-faced cards)
+ * @returns {string} - Normalized name for cache/matching
+ */
+function normalizeCardName(cardName) {
+    if (!cardName || typeof cardName !== 'string') return '';
+    return cardName.split('//')[0].trim().toLowerCase();
+}
+
+/**
+ * Parse creature power value to integer
+ * Handles special cases like *, X, 1+*, etc.
+ * @param {string|number} power - Power value from card data
+ * @returns {number|null} - Parsed power as integer, or null if not parseable
+ */
+function parsePowerValue(power) {
+    if (power === undefined || power === null) return null;
+    const pStr = String(power);
+    if (!pStr.includes('*') && !pStr.includes('X') && !isNaN(parseInt(pStr, 10))) {
+        return parseInt(pStr, 10);
+    }
+    return null;
+}
+
+/**
+ * LRU Cache with TTL for card data
+ * Uses an access order array for O(1) eviction instead of sorting
+ */
+class CardCache {
+    constructor(maxSize = CACHE_MAX_SIZE, ttlMs = CACHE_TTL_MS) {
+        this.cache = new Map();
+        this.accessOrder = []; // Track access order for O(1) LRU eviction
+        this.maxSize = maxSize;
+        this.ttlMs = ttlMs;
+    }
+
+    get(key) {
+        const normalizedKey = normalizeCardName(key);
+        const entry = this.cache.get(normalizedKey);
+        if (!entry) return null;
+
+        // Check TTL
+        if (Date.now() - entry.timestamp > this.ttlMs) {
+            this.cache.delete(normalizedKey);
+            // Remove from access order
+            const index = this.accessOrder.indexOf(normalizedKey);
+            if (index !== -1) {
+                this.accessOrder.splice(index, 1);
+            }
+            return null;
+        }
+
+        // Update access order - move to end (most recent)
+        const index = this.accessOrder.indexOf(normalizedKey);
+        if (index !== -1) {
+            this.accessOrder.splice(index, 1);
+        }
+        this.accessOrder.push(normalizedKey);
+
+        return entry.data;
+    }
+
+    set(key, data) {
+        const normalizedKey = normalizeCardName(key);
+
+        // If key already exists, remove from old position in access order
+        if (this.cache.has(normalizedKey)) {
+            const index = this.accessOrder.indexOf(normalizedKey);
+            if (index !== -1) {
+                this.accessOrder.splice(index, 1);
+            }
+        }
+
+        // Evict oldest (first in access order) if at capacity
+        if (this.cache.size >= this.maxSize && !this.cache.has(normalizedKey)) {
+            const oldestKey = this.accessOrder.shift(); // O(1) removal from front
+            if (oldestKey) {
+                this.cache.delete(oldestKey);
+            }
+        }
+
+        this.cache.set(normalizedKey, {
+            data,
+            timestamp: Date.now()
+        });
+
+        // Add to end of access order (most recent)
+        this.accessOrder.push(normalizedKey);
+    }
+
+    has(key) {
+        const entry = this.get(key);
+        return entry !== null;
+    }
+
+    clear() {
+        this.cache.clear();
+        this.accessOrder = [];
+    }
+}
+
 // Simple in-memory cache for card data (persists during session)
-const cardCache = new Map();
+const cardCache = new CardCache();
+
+/**
+ * Rate Limiter for API requests
+ * Scryfall allows ~10 requests/second, we'll be conservative with bursts
+ * Batch API calls use batches of 50, so burst limit must accommodate
+ */
+const requestTracker = {
+    requests: [],
+    maxRequestsPerMinute: 200, // Allow ~3.3 requests/sec average
+    maxBurstRequests: 60, // Allow bursts of 60 requests (> batch size of 50)
+    burstWindowMs: 10000, // Within 10 second window
+
+    canMakeRequest() {
+        const now = Date.now();
+
+        // Check burst limit (short term)
+        const recentRequests = this.requests.filter(t => now - t < this.burstWindowMs);
+        if (recentRequests.length >= this.maxBurstRequests) {
+            return false;
+        }
+
+        // Check sustained limit (long term)
+        this.requests = this.requests.filter(t => now - t < 60000);
+        return this.requests.length < this.maxRequestsPerMinute;
+    },
+
+    recordRequest() {
+        this.requests.push(Date.now());
+    },
+
+    waitTime() {
+        if (this.canMakeRequest()) return 0;
+        const now = Date.now();
+
+        // Check if burst limited
+        const recentRequests = this.requests.filter(t => now - t < this.burstWindowMs);
+        if (recentRequests.length >= this.maxBurstRequests) {
+            const oldest = Math.min(...recentRequests);
+            return Math.max(0, this.burstWindowMs - (now - oldest));
+        }
+
+        // Otherwise minute limit
+        const oldest = Math.min(...this.requests);
+        return Math.max(0, 60000 - (now - oldest));
+    }
+};
 
 /**
  * Clear the card cache (useful for testing or if data becomes stale)
@@ -35,6 +202,26 @@ export function clearCardCache() {
  * @returns {Object} - {cards: Array, hasSideboard: boolean, sideboardCount: number}
  */
 export function parseDecklistText(decklistText) {
+    // Input validation - limit size to prevent DoS
+    if (!decklistText || typeof decklistText !== 'string') {
+        throw new Error('Invalid decklist: must be a string');
+    }
+
+    if (decklistText.length > MAX_DECKLIST_LENGTH) {
+        throw new Error(`Decklist too large. Maximum ${MAX_DECKLIST_LENGTH} characters.`);
+    }
+
+    const allLines = decklistText.split('\n');
+    if (allLines.length > MAX_DECKLIST_LINES) {
+        throw new Error(`Decklist has too many lines. Maximum ${MAX_DECKLIST_LINES} lines.`);
+    }
+
+    // Pre-compile regex patterns outside loops for performance
+    const SIDEBOARD_REGEX = /^SIDEBOARD:?$/i;
+    const SECTION_HEADER_REGEX = /^(creatures?|lands?|spells?|artifacts?|enchantments?|planeswalkers?|battles?|commander|sideboard):?$/i;
+    const CARD_COUNT_REGEX = /^(\d+)x?\s+(.+)$/;
+    const CARD_COUNT_ONLY_REGEX = /^(\d+)x?\s+/;
+
     // Detect sideboard marker
     const sideboardIndex = decklistText.search(/^SIDEBOARD:?$/im);
     const hasSideboard = sideboardIndex >= 0;
@@ -46,10 +233,10 @@ export function parseDecklistText(decklistText) {
     if (hasSideboard) {
         const sideboardLines = sideboardText.split('\n');
         for (const line of sideboardLines) {
-            const match = line.match(/^(\d+)x?\s+/);
+            const match = line.match(CARD_COUNT_ONLY_REGEX);
             if (match) {
-                sideboardCount += parseInt(match[1]);
-            } else if (line.trim().length > 0 && !line.match(/^SIDEBOARD:?$/i)) {
+                sideboardCount += parseInt(match[1], 10);
+            } else if (line.trim().length > 0 && !SIDEBOARD_REGEX.test(line)) {
                 sideboardCount += 1;
             }
         }
@@ -60,7 +247,7 @@ export function parseDecklistText(decklistText) {
 
     for (const line of lines) {
         // Skip section headers like "Creatures:", "Lands:", "SIDEBOARD:", etc.
-        if (line.match(/^(creatures?|lands?|spells?|artifacts?|enchantments?|planeswalkers?|battles?|commander|sideboard):?$/i)) {
+        if (SECTION_HEADER_REGEX.test(line)) {
             continue;
         }
 
@@ -70,16 +257,30 @@ export function parseDecklistText(decklistText) {
         }
 
         // Match formats: "4 Card Name" or "4x Card Name"
-        const match = line.match(/^(\d+)x?\s+(.+)$/);
+        const match = line.match(CARD_COUNT_REGEX);
 
         if (match) {
-            const count = parseInt(match[1]);
+            const count = parseInt(match[1], 10);
             const name = match[2].trim();
+
+            // Validate count and name
+            if (isNaN(count) || count < MIN_CARD_COUNT || count > MAX_CARD_COUNT) {
+                console.warn(`Invalid card count: ${count} for ${name} (skipping)`);
+                continue;
+            }
+
+            if (name.length === 0 || name.length > MAX_CARD_NAME_LENGTH) {
+                console.warn(`Invalid card name length: "${name}" (skipping)`);
+                continue;
+            }
+
             cards.push({ count, name });
         } else {
             // If no count, assume 1 copy
-            if (line.length > 0) {
+            if (line.length > 0 && line.length <= MAX_CARD_NAME_LENGTH) {
                 cards.push({ count: 1, name: line });
+            } else if (line.length > MAX_CARD_NAME_LENGTH) {
+                console.warn(`Card name too long: "${line.substring(0, 50)}..." (skipping)`);
             }
         }
     }
@@ -88,12 +289,20 @@ export function parseDecklistText(decklistText) {
 }
 
 /**
- * Fetch card data from Scryfall API
+ * Fetch card data from Scryfall API with rate limiting
  * @param {string} cardName - Card name to search
  * @returns {Promise<Object|null>} - Card data or null if not found
  */
 async function fetchCardData(cardName) {
+    // Check rate limit
+    if (!requestTracker.canMakeRequest()) {
+        const waitMs = requestTracker.waitTime();
+        throw new Error(`Rate limit exceeded. Please wait ${Math.ceil(waitMs / 1000)} seconds.`);
+    }
+
     try {
+        requestTracker.recordRequest();
+
         // Use fuzzy search endpoint for better matching
         const url = `${SCRYFALL_API}/cards/named?fuzzy=${encodeURIComponent(cardName)}`;
         const response = await fetch(url);
@@ -227,13 +436,11 @@ export async function batchFetchCards(cardNames) {
     const foundCards = [];
     const cardsToFetch = [];
 
-    // Check cache first
+    // Check cache first - use single get() instead of has() + get()
     for (const name of cardNames) {
-        const frontFace = name.split('//')[0].trim();
-        const cacheKey = frontFace.toLowerCase();
-
-        if (cardCache.has(cacheKey)) {
-            foundCards.push(cardCache.get(cacheKey));
+        const cached = cardCache.get(name);
+        if (cached !== null) {
+            foundCards.push(cached);
         } else {
             cardsToFetch.push(name);
         }
@@ -269,29 +476,47 @@ export async function batchFetchCards(cardNames) {
 
         const data = await response.json();
 
+        // Validate response structure
+        if (!data || typeof data !== 'object') {
+            console.warn('Invalid batch response format');
+            return foundCards;
+        }
+
         // Cache and add found cards
         const fetchedCards = data.data || [];
         for (const card of fetchedCards) {
-            const cacheKey = card.name.split('//')[0].trim().toLowerCase();
-            cardCache.set(cacheKey, card);
-            foundCards.push(card);
+            if (card && card.name) {
+                cardCache.set(card.name, card);
+                foundCards.push(card);
+            }
         }
 
-        // Handle not_found cards - retry with fuzzy search
+        // Handle not_found cards - retry with fuzzy search in parallel batches
         const notFoundIdentifiers = data.not_found || [];
 
         if (notFoundIdentifiers.length > 0) {
             console.log(`Retrying ${notFoundIdentifiers.length} cards with fuzzy search...`);
-            // Retry failed cards one at a time with fuzzy search (with rate limiting)
-            for (const identifier of notFoundIdentifiers) {
-                const fuzzyCard = await fetchCardData(identifier.name);
-                if (fuzzyCard) {
-                    const cacheKey = fuzzyCard.name.split('//')[0].trim().toLowerCase();
-                    cardCache.set(cacheKey, fuzzyCard);
-                    foundCards.push(fuzzyCard);
+
+            // Process in batches for parallel fetching (faster than sequential)
+            for (let i = 0; i < notFoundIdentifiers.length; i += FUZZY_SEARCH_BATCH_SIZE) {
+                const batch = notFoundIdentifiers.slice(i, i + FUZZY_SEARCH_BATCH_SIZE);
+
+                // Fetch batch in parallel
+                const batchPromises = batch.map(identifier => fetchCardData(identifier.name));
+                const batchResults = await Promise.all(batchPromises);
+
+                // Cache and add successful results
+                batchResults.forEach(fuzzyCard => {
+                    if (fuzzyCard) {
+                        cardCache.set(fuzzyCard.name, fuzzyCard);
+                        foundCards.push(fuzzyCard);
+                    }
+                });
+
+                // Rate limit between batches (not between individual cards in batch)
+                if (i + FUZZY_SEARCH_BATCH_SIZE < notFoundIdentifiers.length) {
+                    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
                 }
-                // Rate limit fuzzy searches
-                await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
             }
         }
 
@@ -351,13 +576,12 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
     }
 
     // Stage 2: Fetching from Scryfall (10-80%)
-    const BATCH_SIZE = 50;
     const allCardData = [];
-    const totalBatches = Math.ceil(uniqueCards.length / BATCH_SIZE);
+    const totalBatches = Math.ceil(uniqueCards.length / SCRYFALL_BATCH_SIZE);
 
-    for (let i = 0; i < uniqueCards.length; i += BATCH_SIZE) {
-        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-        const chunk = uniqueCards.slice(i, Math.min(i + BATCH_SIZE, uniqueCards.length));
+    for (let i = 0; i < uniqueCards.length; i += SCRYFALL_BATCH_SIZE) {
+        const batchNum = Math.floor(i / SCRYFALL_BATCH_SIZE) + 1;
+        const chunk = uniqueCards.slice(i, Math.min(i + SCRYFALL_BATCH_SIZE, uniqueCards.length));
 
         const chunkData = await batchFetchCards(chunk);
         allCardData.push(...chunkData);
@@ -377,7 +601,7 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
         }
 
         // Rate limiting between batches (only if there are more batches)
-        if (i + BATCH_SIZE < uniqueCards.length) {
+        if (i + SCRYFALL_BATCH_SIZE < uniqueCards.length) {
             await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
         }
     }
@@ -416,28 +640,33 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
     // Track actual card count (for deck size calculation with dual-typed cards)
     let actualCardCount = 0;
 
+    // Pre-compute normalized lookup map for O(1) matching instead of O(n²)
+    const normalizedCardMap = new Map();
+    for (const [key, value] of cardMap.entries()) {
+        const normalizedKey = normalizeCardName(key);
+        normalizedCardMap.set(normalizedKey, { originalKey: key, count: value });
+        // Also store the original key directly for exact matches
+        normalizedCardMap.set(key, { originalKey: key, count: value });
+    }
+
     allCardData.forEach(cardData => {
         if (cardData && cardData.name && cardData.type_line) {
-            // Try to match the card by front face name
-            const frontFace = cardData.name.split('//')[0].trim();
-
-            // Look for the card in our map by trying different name variations
+            // Try to match the card using normalized name for O(1) lookup
             let count = 0;
             let matchedKey = null;
 
             // Try exact match first
-            if (cardMap.has(cardData.name)) {
-                count = cardMap.get(cardData.name);
-                matchedKey = cardData.name;
+            const exactMatch = normalizedCardMap.get(cardData.name);
+            if (exactMatch) {
+                count = exactMatch.count;
+                matchedKey = exactMatch.originalKey;
             } else {
-                // Try to find by front face name
-                for (const [key, value] of cardMap.entries()) {
-                    const keyFrontFace = key.split('//')[0].trim();
-                    if (keyFrontFace === frontFace || key === frontFace) {
-                        count = value;
-                        matchedKey = key;
-                        break;
-                    }
+                // Try normalized front face match
+                const normalizedName = normalizeCardName(cardData.name);
+                const normalizedMatch = normalizedCardMap.get(normalizedName);
+                if (normalizedMatch) {
+                    count = normalizedMatch.count;
+                    matchedKey = normalizedMatch.originalKey;
                 }
             }
 
@@ -486,14 +715,8 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
 
                 // Store detailed card info for non-lands
                 if (primaryCategory !== 'lands' && cmc !== undefined) {
-                    // Parse power (handle *, 1+*, X, etc.) for legacy/simple check, but store raw too
-                    let powerNum = null;
-                    if (allCategories.includes('creatures') && power !== undefined && power !== null) {
-                        const pStr = String(power);
-                        if (!pStr.includes('*') && !pStr.includes('X') && !isNaN(parseInt(pStr))) {
-                            powerNum = parseInt(pStr);
-                        }
-                    }
+                    // Parse power using helper function
+                    const powerNum = allCategories.includes('creatures') ? parsePowerValue(power) : null;
 
                     // Add one entry for each copy of the card
                     for (let i = 0; i < count; i++) {
@@ -578,83 +801,102 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
 // Example: 'https://deck-oracle-proxy.yourname.workers.dev'
 const CUSTOM_PROXY_URL = 'https://hidden-river-b602.kylepettigrew.workers.dev';
 
-const CORS_PROXIES = [
+// SECURITY: Public CORS proxies removed - only use trusted custom proxy
+// Public proxies can log data, inject malicious content, or MITM attacks
+const USE_PUBLIC_PROXIES = false; // Set to true only for development/testing
+
+const CORS_PROXIES = USE_PUBLIC_PROXIES ? [
     'https://corsproxy.io/?',
     'https://api.allorigins.win/raw?url=',
     'https://api.codetabs.com/v1/proxy?quest='
-];
+] : [];
 
 /**
- * Identify URL type and extract ID
+ * Identify URL type and extract ID with strict validation
  * @param {string} input - URL or ID
  * @returns {Object} - { type: 'moxfield'|'archidekt'|null, id: string }
  */
 function parseImportInput(input) {
-    const trimmed = input.trim();
-
-    // Moxfield Patterns
-    const moxfieldPatterns = [
-        /moxfield\.com\/decks\/([a-zA-Z0-9_-]+)/,
-        /^([a-zA-Z0-9_-]{10,})$/ // Assume generic long ID is Moxfield for now, or check length
-    ];
-
-    for (const pattern of moxfieldPatterns) {
-        const match = trimmed.match(pattern);
-        if (match) return { type: 'moxfield', id: match[1] };
+    if (!input || typeof input !== 'string') {
+        return { type: null, id: null };
     }
 
-    // Archidekt Patterns
-    // https://archidekt.com/decks/123456/name
-    // https://archidekt.com/decks/123456
-    const archidektPatterns = [
-        /archidekt\.com\/decks\/(\d+)/
-    ];
+    const trimmed = input.trim();
 
-    for (const pattern of archidektPatterns) {
-        const match = trimmed.match(pattern);
-        if (match) return { type: 'archidekt', id: match[1] };
+    // Limit input length to prevent abuse
+    if (trimmed.length > MAX_URL_INPUT_LENGTH) {
+        console.warn('Input too long');
+        return { type: null, id: null };
+    }
+
+    // Moxfield - stricter pattern matching
+    // Full URL: https://www.moxfield.com/decks/ABC123xyz_-
+    const moxfieldUrlMatch = trimmed.match(/^(?:https?:\/\/)?(?:www\.)?moxfield\.com\/decks\/([a-zA-Z0-9_-]{8,32})(?:\/|$)/);
+    if (moxfieldUrlMatch) {
+        return { type: 'moxfield', id: moxfieldUrlMatch[1] };
+    }
+
+    // Archidekt - only numeric IDs, limit to reasonable length
+    // Full URL: https://archidekt.com/decks/123456
+    const archidektUrlMatch = trimmed.match(/^(?:https?:\/\/)?(?:www\.)?archidekt\.com\/decks\/(\d{1,10})(?:\/|$)/);
+    if (archidektUrlMatch) {
+        return { type: 'archidekt', id: archidektUrlMatch[1] };
+    }
+
+    // Direct ID input - be conservative (only for Moxfield)
+    if (/^[a-zA-Z0-9_-]{8,32}$/.test(trimmed)) {
+        return { type: 'moxfield', id: trimmed };
     }
 
     return { type: null, id: null };
 }
 
 /**
- * Fetch URL using CORS proxies with fallback
+ * Fetch URL using secure custom proxy only
  */
 async function fetchWithProxy(url, proxyIndex = 0) {
-    // Priority: Use secure custom proxy if configured
-    if (CUSTOM_PROXY_URL) {
-        try {
-            const proxyUrl = `${CUSTOM_PROXY_URL}?url=${encodeURIComponent(url)}`;
-            const response = await fetch(proxyUrl);
-            if (!response.ok) {
-                // If custom proxy fails, fall back to public ones (though they might not work for Moxfield)
-                console.warn('Custom proxy failed, trying public proxies...');
-                throw new Error(`HTTP ${response.status}`);
-            }
-            return await response.json();
-        } catch (error) {
-            console.error('Custom proxy error:', error);
-            // Fall through to public proxies
-        }
+    // SECURITY: Only use custom proxy - public proxies are security risks
+    if (!CUSTOM_PROXY_URL) {
+        throw new Error('Proxy not configured. Deck import is currently unavailable.');
     }
 
-    if (proxyIndex >= CORS_PROXIES.length) {
-        throw new Error('All CORS proxies failed. Please try again later or check your connection.');
-    }
-
-    const proxyBase = CORS_PROXIES[proxyIndex];
-    const proxyUrl = proxyBase + encodeURIComponent(url);
-
+    // Use secure custom proxy
     try {
+        const proxyUrl = `${CUSTOM_PROXY_URL}?url=${encodeURIComponent(url)}`;
         const response = await fetch(proxyUrl);
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error(`Proxy error: HTTP ${response.status}`);
         }
+
         return await response.json();
     } catch (error) {
-        console.warn(`Proxy ${proxyIndex} (${proxyBase}) failed:`, error);
-        return fetchWithProxy(url, proxyIndex + 1);
+        console.error('Proxy error:', error);
+
+        // Only fall back to public proxies if explicitly enabled (dev/test only)
+        if (USE_PUBLIC_PROXIES && CORS_PROXIES.length > 0) {
+            console.warn('Falling back to public proxy (INSECURE - dev mode only)');
+
+            if (proxyIndex >= CORS_PROXIES.length) {
+                throw new Error('All CORS proxies failed. Please try again later.');
+            }
+
+            const proxyBase = CORS_PROXIES[proxyIndex];
+            const fallbackProxyUrl = proxyBase + encodeURIComponent(url);
+
+            try {
+                const response = await fetch(fallbackProxyUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return await response.json();
+            } catch (fallbackError) {
+                console.warn(`Proxy ${proxyIndex} (${proxyBase}) failed:`, fallbackError);
+                return fetchWithProxy(url, proxyIndex + 1);
+            }
+        }
+
+        throw new Error('Failed to fetch deck data. Please try again later.');
     }
 }
 
@@ -718,18 +960,13 @@ function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName)
 
     // Detailed info for non-lands
     if (primaryCategory !== 'lands' && cmc !== undefined) {
-        let powerNum = null;
-        if (allCategories.includes('creatures') && power !== undefined && power !== null) {
-            const pStr = String(power);
-            if (!pStr.includes('*') && !pStr.includes('X') && !isNaN(parseInt(pStr))) {
-                powerNum = parseInt(pStr);
-            }
-        }
+        // Parse power using helper function
+        const powerNum = allCategories.includes('creatures') ? parsePowerValue(power) : null;
 
         for (let i = 0; i < count; i++) {
             cardDetails.push({
                 name: name,
-                cmc: Math.floor(cmc),
+                cmc: Math.floor(cmc), // Floor for consistency with Scryfall data
                 type: primaryCategory,
                 allTypes: allCategories,
                 power: power, // Store raw power

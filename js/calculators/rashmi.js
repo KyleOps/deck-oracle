@@ -18,7 +18,7 @@ const CONFIG = {
     CMC_RANGE_BEFORE: 2,
     CMC_RANGE_AFTER: 4,
     MAX_TRACKED_CMC: 20,
-    DEFAULT_SAMPLE_SIZE: 20
+    DEFAULT_SAMPLE_SIZE: 500
 };
 
 // Simulation state

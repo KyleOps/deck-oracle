@@ -1,14 +1,33 @@
 export default {
   async fetch(request, env) {
+    // Allowed origins for CORS
+    const allowedOrigins = [
+      "https://kyleops.github.io",
+      "http://localhost:3000", // For local development
+      "http://127.0.0.1:3000"  // Alternative localhost
+    ];
+
+    const origin = request.headers.get("Origin");
+    const isOriginAllowed = allowedOrigins.some(allowed => origin?.startsWith(allowed));
+
     // Handle CORS preflight requests
     if (request.method === "OPTIONS") {
+      if (!isOriginAllowed) {
+        return new Response("Origin not allowed", { status: 403 });
+      }
+
       return new Response(null, {
         headers: {
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": origin,
           "Access-Control-Allow-Methods": "GET, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type",
         },
       });
+    }
+
+    // Validate origin for all requests
+    if (!isOriginAllowed) {
+      return new Response("Origin not allowed", { status: 403 });
     }
 
     const url = new URL(request.url);
@@ -18,9 +37,12 @@ export default {
       return new Response("Missing 'url' query parameter", { status: 400 });
     }
 
-    // Only allow Moxfield URLs for security
-    if (!targetUrl.includes("moxfield.com")) {
-      return new Response("Only Moxfield URLs are allowed", { status: 403 });
+    // Only allow Moxfield and Archidekt URLs for security
+    const allowedDomains = ["moxfield.com", "archidekt.com"];
+    const isAllowed = allowedDomains.some(domain => targetUrl.includes(domain));
+
+    if (!isAllowed) {
+      return new Response("Only Moxfield and Archidekt URLs are allowed", { status: 403 });
     }
 
     try {
@@ -40,7 +62,7 @@ export default {
       return new Response(data, {
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*", // Allow your GitHub Pages site to access this
+          "Access-Control-Allow-Origin": origin, // Allow only the requesting origin
         },
       });
     } catch (error) {
@@ -48,7 +70,7 @@ export default {
         status: 500,
         headers: {
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": origin,
         },
       });
     }

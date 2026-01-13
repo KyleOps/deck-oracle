@@ -6,6 +6,7 @@
 import * as Portent from './calculators/portent.js';
 import * as Surge from './calculators/surge.js';
 import * as Wave from './calculators/wave.js';
+import * as Vow from './calculators/vow.js';
 import * as Vortex from './calculators/vortex.js';
 import * as Lands from './calculators/lands.js';
 import * as Rashmi from './calculators/rashmi.js';
@@ -23,6 +24,7 @@ const calculators = {
     portent: { icon: '⚡', name: 'Portent of Calamity' },
     surge: { icon: '🌿', name: 'Primal Surge' },
     wave: { icon: '🌊', name: 'Genesis Wave' },
+    vow: { icon: '🌱', name: 'Kamahl\'s Druidic Vow' },
     vortex: { icon: '🌀', name: 'Monstrous Vortex' },
     rashmi: { icon: '🌌', name: 'Rashmi' },
     lands: { icon: '🏔️', name: 'Land Drops' },
@@ -72,6 +74,8 @@ function switchTab(tab) {
         Surge.updateUI();
     } else if (tab === 'wave') {
         Wave.updateUI();
+    } else if (tab === 'vow') {
+        Vow.updateUI();
     } else if (tab === 'vortex') {
         Vortex.updateUI();
     } else if (tab === 'lands') {
@@ -146,6 +150,13 @@ function initSurgeInputs() {
  */
 function initWaveInputs() {
     Wave.init();
+}
+
+/**
+ * Initialize Vow calculator inputs
+ */
+function initVowInputs() {
+    Vow.init();
 }
 
 /**
@@ -265,6 +276,7 @@ function init() {
     initPortentInputs();
     initSurgeInputs();
     initWaveInputs();
+    initVowInputs();
     initVortexInputs();
     initLandsInputs();
     initRashmiInputs();
@@ -305,9 +317,10 @@ function init() {
             if (e.key === '1') switchTab('portent');
             else if (e.key === '2') switchTab('surge');
             else if (e.key === '3') switchTab('wave');
-            else if (e.key === '4') switchTab('vortex');
-            else if (e.key === '5') switchTab('lands');
-            else if (e.key === '6') switchTab('rashmi');
+            else if (e.key === '4') switchTab('vow');
+            else if (e.key === '5') switchTab('vortex');
+            else if (e.key === '6') switchTab('lands');
+            else if (e.key === '7') switchTab('rashmi');
         }
     });
 
