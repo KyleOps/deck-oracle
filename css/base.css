@@ -1,128 +1,167 @@
-/* ==================== BASE STYLES & THEME VARIABLES ==================== */
+/* ==================== GLASSMORPHISM UI - BASE STYLES ==================== */
 
 :root {
-    /* Theme colors - Portent (Purple/Dark Red) */
-    --portent-primary: #a855f7;
-    --portent-secondary: #c084fc;
-    --portent-accent: rgba(168, 85, 247, 0.5);
-    --portent-bg-start: #0a0a12;
-    --portent-bg-mid: #1a1a2e;
-    --portent-bg-end: #120a0a;
-    --portent-border: rgba(139, 0, 0, 0.3);
+    /* ==================== PRIMARY COLOR PALETTE ==================== */
+    --primary: #8b5cf6;
+    --primary-light: #a78bfa;
+    --primary-dark: #7c3aed;
+    --primary-glow: rgba(139, 92, 246, 0.4);
 
-    /* Theme colors - Surge (Green) */
-    --surge-primary: #22c55e;
-    --surge-secondary: #4ade80;
-    --surge-accent: rgba(34, 197, 94, 0.5);
-    --surge-bg-start: #0a120a;
-    --surge-bg-mid: #1a2e1a;
-    --surge-bg-end: #0a120a;
-    --surge-border: rgba(34, 197, 94, 0.3);
+    --secondary: #06b6d4;
+    --secondary-light: #22d3ee;
+    --secondary-dark: #0891b2;
+    --secondary-glow: rgba(6, 182, 212, 0.4);
 
-    /* Theme colors - Wave (Blue) */
-    --wave-primary: #0ea5e9;
-    --wave-secondary: #38bdf8;
-    --wave-accent: rgba(14, 165, 233, 0.5);
-    --wave-bg-start: #0a0a12;
-    --wave-bg-mid: #1a2a2e;
-    --wave-bg-end: #0a1012;
-    --wave-border: rgba(14, 165, 233, 0.3);
+    /* ==================== BACKGROUND COLORS ==================== */
+    --bg-dark: #0f0f1a;
+    --bg-gradient-1: #1a1a2e;
+    --bg-gradient-2: #16213e;
+    --bg-gradient-3: #0f3460;
 
-    /* Theme colors - Druidic Vow (Forest Green/Gold) */
-    --vow-primary: #10b981;
-    --vow-secondary: #34d399;
-    --vow-accent: rgba(16, 185, 129, 0.5);
-    --vow-bg-start: #0a120a;
-    --vow-bg-mid: #1a2e1a;
-    --vow-bg-end: #0a100a;
-    --vow-border: rgba(16, 185, 129, 0.3);
+    /* ==================== GLASS EFFECT COLORS ==================== */
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-bg-hover: rgba(255, 255, 255, 0.06);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-border-hover: rgba(255, 255, 255, 0.15);
+    --glass-highlight: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --glass-blur: 10px;
 
-    /* Theme colors - Vortex (Orange/Red) */
-    --vortex-primary: #f97316;
-    --vortex-secondary: #fb923c;
-    --vortex-accent: rgba(249, 115, 22, 0.5);
-    --vortex-bg-start: #120a0a;
-    --vortex-bg-mid: #2e1a1a;
-    --vortex-bg-end: #120a0a;
-    --vortex-border: rgba(249, 115, 22, 0.3);
+    /* ==================== TEXT COLORS ==================== */
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-dim: #475569;
+    --text-light: #f1f5f9;
 
-    /* Theme colors - Lands (Earth/Brown) */
-    --lands-primary: #84cc16;
-    --lands-secondary: #a3e635;
-    --lands-accent: rgba(132, 204, 22, 0.5);
-    --lands-bg-start: #0a100a;
-    --lands-bg-mid: #1a251a;
-    --lands-bg-end: #0a120a;
-    --lands-border: rgba(132, 204, 22, 0.3);
+    /* ==================== SEMANTIC COLORS ==================== */
+    --success: #22c55e;
+    --success-light: #4ade80;
+    --warning: #f59e0b;
+    --warning-light: #fbbf24;
+    --danger: #ef4444;
+    --danger-light: #f87171;
 
-    /* Theme colors - Mulligan (Gray/Neutral) */
-    --mulligan-primary: #c084fc;
-    --mulligan-secondary: #e9d5ff;
-    --mulligan-accent: rgba(192, 132, 252, 0.5);
-    --mulligan-bg-start: #0a0a12;
-    --mulligan-bg-mid: #1a1a2e;
-    --mulligan-bg-end: #0f0a12;
-    --mulligan-border: rgba(192, 132, 252, 0.3);
+    /* ==================== TYPE COLORS (MTG Card Types) ==================== */
+    --type-creature: #22c55e;
+    --type-sorcery: #ef4444;
+    --type-instant: #3b82f6;
+    --type-artifact: #a8a29e;
+    --type-enchantment: #a855f7;
+    --type-planeswalker: #f59e0b;
+    --type-battle: #ec4899;
+    --type-land: #78716c;
 
-    /* Theme colors - Rashmi (Teal/Cyan) */
-    --rashmi-primary: #06b6d4;
-    --rashmi-secondary: #22d3ee;
-    --rashmi-accent: rgba(6, 182, 212, 0.5);
-    --rashmi-bg-start: #0a1214;
-    --rashmi-bg-mid: #1a2a2e;
-    --rashmi-bg-end: #0a1418;
-    --rashmi-border: rgba(6, 182, 212, 0.3);
+    /* ==================== UI COLORS ==================== */
+    --input-bg: rgba(0, 0, 0, 0.3);
+    --overlay-bg: rgba(0, 0, 0, 0.5);
+    --panel-bg-alt: rgba(0, 0, 0, 0.2);
 
-    /* Theme colors - Lumra (Forest/Bear) */
-    --lumra-primary: #65a30d;
-    --lumra-secondary: #84cc16;
-    --lumra-accent: rgba(101, 163, 13, 0.5);
-    --lumra-bg-start: #0f120a;
-    --lumra-bg-mid: #1a2010;
-    --lumra-bg-end: #0f120a;
-    --lumra-border: rgba(101, 163, 13, 0.3);
-
-    /* Base colors */
-    --text-primary: #c4b8b8;
-    --text-secondary: #a09090;
-    --text-muted: #8a7a7a;
-    --text-dim: #6a5a5a;
-    --text-light: #e0d0d0;
-
-    /* UI colors */
-    --danger: #dc2626;
-    --panel-bg: linear-gradient(145deg, rgba(20, 15, 25, 0.9) 0%, rgba(15, 10, 15, 0.95) 100%);
-    --panel-bg-alt: rgba(0, 0, 0, 0.3);
-    --input-bg: rgba(0, 0, 0, 0.4);
-    --overlay-bg: rgba(0, 0, 0, 0.3);
-
-    /* Spacing */
+    /* ==================== SPACING ==================== */
     --spacing-xs: 4px;
     --spacing-sm: 8px;
     --spacing-md: 12px;
     --spacing-lg: 16px;
     --spacing-xl: 20px;
     --spacing-2xl: 24px;
+    --spacing-3xl: 32px;
 
-    /* Border radius */
-    --radius-sm: 4px;
-    --radius-md: 6px;
-    --radius-lg: 8px;
-    --radius-xl: 12px;
+    /* ==================== BORDER RADIUS ==================== */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+    --radius-2xl: 24px;
+    --radius-full: 9999px;
 
-    /* Transitions */
-    --transition-fast: 0.2s ease;
-    --transition-normal: 0.3s ease;
+    /* ==================== TRANSITIONS ==================== */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.25s ease;
     --transition-slow: 0.4s ease;
+    --transition-bounce: 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 
-    /* Fonts */
+    /* ==================== FONTS ==================== */
     --font-display: 'Cinzel', serif;
-    --font-body: 'Crimson Text', Georgia, serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
 
-    /* Z-index layers */
+    /* ==================== Z-INDEX LAYERS ==================== */
     --z-base: 1;
     --z-dropdown: 100;
+    --z-sticky: 200;
     --z-modal: 1000;
+    --z-toast: 2000;
+
+    /* ==================== THEME VARIABLES (set by body class) ==================== */
+    --accent: var(--primary);
+    --accent-light: var(--primary-light);
+    --accent-glow: var(--primary-glow);
+    --theme-tint: rgba(139, 92, 246, 0.1);
+}
+
+/* ==================== CALCULATOR ACCENT THEMES ==================== */
+
+body.theme-portent {
+    --accent: #8b5cf6;
+    --accent-light: #a78bfa;
+    --accent-glow: rgba(139, 92, 246, 0.4);
+    --theme-tint: rgba(139, 92, 246, 0.08);
+}
+
+body.theme-surge {
+    --accent: #22c55e;
+    --accent-light: #4ade80;
+    --accent-glow: rgba(34, 197, 94, 0.4);
+    --theme-tint: rgba(34, 197, 94, 0.08);
+}
+
+body.theme-wave {
+    --accent: #0ea5e9;
+    --accent-light: #38bdf8;
+    --accent-glow: rgba(14, 165, 233, 0.4);
+    --theme-tint: rgba(14, 165, 233, 0.08);
+}
+
+body.theme-vow {
+    --accent: #10b981;
+    --accent-light: #34d399;
+    --accent-glow: rgba(16, 185, 129, 0.4);
+    --theme-tint: rgba(16, 185, 129, 0.08);
+}
+
+body.theme-vortex {
+    --accent: #f97316;
+    --accent-light: #fb923c;
+    --accent-glow: rgba(249, 115, 22, 0.4);
+    --theme-tint: rgba(249, 115, 22, 0.08);
+}
+
+body.theme-lands {
+    --accent: #84cc16;
+    --accent-light: #a3e635;
+    --accent-glow: rgba(132, 204, 22, 0.4);
+    --theme-tint: rgba(132, 204, 22, 0.08);
+}
+
+body.theme-mulligan {
+    --accent: #c084fc;
+    --accent-light: #d8b4fe;
+    --accent-glow: rgba(192, 132, 252, 0.4);
+    --theme-tint: rgba(192, 132, 252, 0.08);
+}
+
+body.theme-rashmi {
+    --accent: #06b6d4;
+    --accent-light: #22d3ee;
+    --accent-glow: rgba(6, 182, 212, 0.4);
+    --theme-tint: rgba(6, 182, 212, 0.08);
+}
+
+body.theme-lumra {
+    --accent: #65a30d;
+    --accent-light: #84cc16;
+    --accent-glow: rgba(101, 163, 13, 0.4);
+    --theme-tint: rgba(101, 163, 13, 0.08);
 }
 
 /* ==================== RESET & BASE ==================== */
@@ -142,97 +181,53 @@ html {
     scroll-behavior: smooth;
 }
 
+/* ==================== ANIMATED BACKGROUND ==================== */
+
+@keyframes gradientShift {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    25% {
+        background-position: 50% 100%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    75% {
+        background-position: 50% 0%;
+    }
+}
+
 body {
     font-family: var(--font-body);
     min-height: 100vh;
     color: var(--text-primary);
-    --accent: var(--portent-primary);
     padding: var(--spacing-lg);
-    transition: background var(--transition-slow);
     overflow-x: hidden;
+
+    /* Animated gradient background */
+    background: linear-gradient(
+        -45deg,
+        var(--bg-dark),
+        var(--bg-gradient-1),
+        var(--bg-gradient-2),
+        var(--bg-gradient-1),
+        var(--bg-dark)
+    );
+    background-size: 400% 400%;
+    animation: gradientShift 25s ease infinite;
+
+    /* Fallback for reduced motion */
+    background-attachment: fixed;
 }
 
-/* ==================== THEME BACKGROUNDS & VARIABLES ==================== */
-
-body.theme-portent {
-    background: linear-gradient(135deg, var(--portent-bg-start) 0%, var(--portent-bg-mid) 40%, var(--portent-bg-end) 100%);
-    --accent: var(--portent-primary);
-    --theme-primary: var(--portent-primary);
-    --theme-secondary: var(--portent-secondary);
-    --theme-accent: var(--portent-accent);
-    --theme-border: var(--portent-border);
-}
-
-body.theme-surge {
-    background: linear-gradient(135deg, var(--surge-bg-start) 0%, var(--surge-bg-mid) 40%, var(--surge-bg-end) 100%);
-    --accent: var(--surge-primary);
-    --theme-primary: var(--surge-primary);
-    --theme-secondary: var(--surge-secondary);
-    --theme-accent: var(--surge-accent);
-    --theme-border: var(--surge-border);
-}
-
-body.theme-wave {
-    background: linear-gradient(135deg, var(--wave-bg-start) 0%, var(--wave-bg-mid) 40%, var(--wave-bg-end) 100%);
-    --accent: var(--wave-primary);
-    --theme-primary: var(--wave-primary);
-    --theme-secondary: var(--wave-secondary);
-    --theme-accent: var(--wave-accent);
-    --theme-border: var(--wave-border);
-}
-
-body.theme-vow {
-    background: linear-gradient(135deg, var(--vow-bg-start) 0%, var(--vow-bg-mid) 40%, var(--vow-bg-end) 100%);
-    --accent: var(--vow-primary);
-    --theme-primary: var(--vow-primary);
-    --theme-secondary: var(--vow-secondary);
-    --theme-accent: var(--vow-accent);
-    --theme-border: var(--vow-border);
-}
-
-body.theme-vortex {
-    background: linear-gradient(135deg, var(--vortex-bg-start) 0%, var(--vortex-bg-mid) 40%, var(--vortex-bg-end) 100%);
-    --accent: var(--vortex-primary);
-    --theme-primary: var(--vortex-primary);
-    --theme-secondary: var(--vortex-secondary);
-    --theme-accent: var(--vortex-accent);
-    --theme-border: var(--vortex-border);
-}
-
-body.theme-lands {
-    background: linear-gradient(135deg, var(--lands-bg-start) 0%, var(--lands-bg-mid) 40%, var(--lands-bg-end) 100%);
-    --accent: var(--lands-primary);
-    --theme-primary: var(--lands-primary);
-    --theme-secondary: var(--lands-secondary);
-    --theme-accent: var(--lands-accent);
-    --theme-border: var(--lands-border);
-}
-
-body.theme-mulligan {
-    background: linear-gradient(135deg, var(--mulligan-bg-start) 0%, var(--mulligan-bg-mid) 40%, var(--mulligan-bg-end) 100%);
-    --accent: var(--mulligan-primary);
-    --theme-primary: var(--mulligan-primary);
-    --theme-secondary: var(--mulligan-secondary);
-    --theme-accent: var(--mulligan-accent);
-    --theme-border: var(--mulligan-border);
-}
-
-body.theme-rashmi {
-    background: linear-gradient(135deg, var(--rashmi-bg-start) 0%, var(--rashmi-bg-mid) 40%, var(--rashmi-bg-end) 100%);
-    --accent: var(--rashmi-primary);
-    --theme-primary: var(--rashmi-primary);
-    --theme-secondary: var(--rashmi-secondary);
-    --theme-accent: var(--rashmi-accent);
-    --theme-border: var(--rashmi-border);
-}
-
-body.theme-lumra {
-    background: linear-gradient(135deg, var(--lumra-bg-start) 0%, var(--lumra-bg-mid) 40%, var(--lumra-bg-end) 100%);
-    --accent: var(--lumra-primary);
-    --theme-primary: var(--lumra-primary);
-    --theme-secondary: var(--lumra-secondary);
-    --theme-accent: var(--lumra-accent);
-    --theme-border: var(--lumra-border);
+/* Performance: Reduce animation on battery saver or reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    body {
+        animation: none;
+        background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-gradient-1) 50%, var(--bg-gradient-2) 100%);
+        background-size: 100% 100%;
+    }
 }
 
 /* ==================== TYPOGRAPHY ==================== */
@@ -243,52 +238,9 @@ h1 {
     margin-bottom: var(--spacing-sm);
     font-size: clamp(1.5rem, 4vw, 2rem);
     letter-spacing: 2px;
-    transition: all var(--transition-slow);
-}
-
-.theme-portent h1 {
-    color: var(--portent-primary);
-    text-shadow: 0 2px 10px var(--portent-accent), 0 0 30px rgba(139, 0, 0, 0.3);
-}
-
-.theme-surge h1 {
-    color: var(--surge-primary);
-    text-shadow: 0 2px 10px var(--surge-accent), 0 0 30px rgba(0, 139, 0, 0.3);
-}
-
-.theme-wave h1 {
-    color: var(--wave-primary);
-    text-shadow: 0 2px 10px var(--wave-accent), 0 0 30px rgba(0, 100, 139, 0.3);
-}
-
-.theme-vow h1 {
-    color: var(--vow-primary);
-    text-shadow: 0 2px 10px var(--vow-accent), 0 0 30px rgba(16, 185, 129, 0.3);
-}
-
-.theme-vortex h1 {
-    color: var(--vortex-primary);
-    text-shadow: 0 2px 10px var(--vortex-accent), 0 0 30px rgba(249, 115, 22, 0.3);
-}
-
-.theme-lands h1 {
-    color: var(--lands-primary);
-    text-shadow: 0 2px 10px var(--lands-accent), 0 0 30px rgba(132, 204, 22, 0.3);
-}
-
-.theme-mulligan h1 {
-    color: var(--mulligan-primary);
-    text-shadow: 0 2px 10px var(--mulligan-accent), 0 0 30px rgba(192, 132, 252, 0.3);
-}
-
-.theme-rashmi h1 {
-    color: var(--rashmi-primary);
-    text-shadow: 0 2px 10px var(--rashmi-accent), 0 0 30px rgba(6, 182, 212, 0.3);
-}
-
-.theme-lumra h1 {
-    color: var(--lumra-primary);
-    text-shadow: 0 2px 10px var(--lumra-accent), 0 0 30px rgba(101, 163, 13, 0.3);
+    color: var(--accent-light);
+    text-shadow: 0 0 30px var(--accent-glow), 0 0 60px var(--accent-glow);
+    transition: color var(--transition-slow), text-shadow var(--transition-slow);
 }
 
 h2 {
@@ -297,52 +249,21 @@ h2 {
     margin-bottom: var(--spacing-lg);
     padding-bottom: var(--spacing-sm);
     letter-spacing: 1px;
+    color: var(--accent);
+    border-bottom: 1px solid var(--glass-border);
     transition: color var(--transition-slow), border-color var(--transition-slow);
 }
 
-.theme-portent h2 {
-    color: var(--portent-primary);
-    border-bottom: 1px solid var(--portent-border);
+h3 {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    color: var(--text-light);
+    margin-bottom: var(--spacing-md);
 }
 
-.theme-surge h2 {
-    color: var(--surge-primary);
-    border-bottom: 1px solid var(--surge-border);
-}
-
-.theme-wave h2 {
-    color: var(--wave-primary);
-    border-bottom: 1px solid var(--wave-border);
-}
-
-.theme-vow h2 {
-    color: var(--vow-primary);
-    border-bottom: 1px solid var(--vow-border);
-}
-
-.theme-vortex h2 {
-    color: var(--vortex-primary);
-    border-bottom: 1px solid var(--vortex-border);
-}
-
-.theme-lands h2 {
-    color: var(--lands-primary);
-    border-bottom: 1px solid var(--lands-border);
-}
-
-.theme-mulligan h2 {
-    color: var(--mulligan-primary);
-    border-bottom: 1px solid var(--mulligan-border);
-}
-
-.theme-rashmi h2 {
-    color: var(--rashmi-primary);
-    border-bottom: 1px solid var(--rashmi-border);
-}
-
-.theme-lumra h2 {
-    color: var(--lumra-primary);
-    border-bottom: 1px solid var(--lumra-border);
+p {
+    line-height: 1.6;
+    color: var(--text-secondary);
 }
 
 .card-text {
@@ -367,7 +288,7 @@ h2 {
 
 .main-grid {
     display: grid;
-    grid-template-columns: 350px 1fr;
+    grid-template-columns: 1fr;
     gap: var(--spacing-2xl);
     width: 100%;
 }
@@ -381,17 +302,17 @@ h2 {
 
 .tab-content {
     display: none;
-    animation: fadeIn var(--transition-normal);
+    animation: fadeSlideIn var(--transition-normal) ease-out;
 }
 
 .tab-content.active {
     display: block;
 }
 
-@keyframes fadeIn {
+@keyframes fadeSlideIn {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(12px);
     }
     to {
         opacity: 1;
@@ -415,40 +336,8 @@ h2 {
 
 /* Focus styles for accessibility */
 *:focus-visible {
-    outline: 2px solid var(--portent-primary);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
-}
-
-.theme-surge *:focus-visible {
-    outline-color: var(--surge-primary);
-}
-
-.theme-wave *:focus-visible {
-    outline-color: var(--wave-primary);
-}
-
-.theme-vow *:focus-visible {
-    outline-color: var(--vow-primary);
-}
-
-.theme-vortex *:focus-visible {
-    outline-color: var(--vortex-primary);
-}
-
-.theme-lands *:focus-visible {
-    outline-color: var(--lands-primary);
-}
-
-.theme-mulligan *:focus-visible {
-    outline-color: var(--mulligan-primary);
-}
-
-.theme-rashmi *:focus-visible {
-    outline-color: var(--rashmi-primary);
-}
-
-.theme-lumra *:focus-visible {
-    outline-color: var(--lumra-primary);
 }
 
 /* Loading state */
@@ -458,7 +347,42 @@ h2 {
     cursor: wait;
 }
 
-/* Smooth scrolling */
-html {
-    scroll-behavior: smooth;
+/* ==================== SCROLLBAR STYLING ==================== */
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--glass-bg);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--glass-border-hover);
+    border-radius: var(--radius-full);
+    transition: background var(--transition-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+}
+
+/* Firefox scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--glass-border-hover) var(--glass-bg);
+}
+
+/* ==================== SELECTION ==================== */
+
+::selection {
+    background: var(--accent);
+    color: var(--bg-dark);
+}
+
+::-moz-selection {
+    background: var(--accent);
+    color: var(--bg-dark);
 }

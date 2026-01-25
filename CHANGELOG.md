@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-01-26 (Glassmorphism UI Redesign)
+
+### Changed
+- **Complete UI Overhaul:** Redesigned the entire interface with a modern glassmorphism aesthetic
+  - **Animated Background:** Subtle shifting gradient animation (dark navy/purple/blue)
+  - **Glass Panels:** Frosted glass effect with backdrop blur, luminous borders, and soft shadows
+  - **Unified Color Palette:** Consistent violet/cyan primary colors with calculator-specific accent tints
+  - **Modern Typography:** System font stack for body text, Cinzel display font for headings
+  - **Enhanced Interactions:** Smooth hover states, micro-animations, and glow effects
+
+- **Navigation Restyling:**
+  - Glass-effect tab group containers with gradient active states
+  - Pill-style sub-navigation with accent color highlights
+  - Improved visual hierarchy and spacing
+
+- **Component Updates:**
+  - Redesigned input fields with glass-style backgrounds and focus glow
+  - Modern gradient-filled buttons with hover lift effects
+  - Refined slider controls with gradient thumb and track
+  - Glass-effect comparison tables with hover highlights
+  - Updated stat cards with accent-colored borders and animations
+
+- **Performance Optimizations:**
+  - Reduced blur intensity on mobile devices for better battery life
+  - Slower animation on mobile (40s vs 25s) to reduce GPU load
+  - `prefers-reduced-motion` support disables all animations
+  - Print styles optimized for clean output
+
+- **Theme System Simplification:**
+  - Consolidated from per-calculator full themes to unified palette with accent variations
+  - Each calculator retains unique accent color (Portent: violet, Surge: green, Wave: blue, etc.)
+  - Reduced CSS complexity while maintaining visual identity per calculator
+
+### Fixed
+- Updated inline styles in `index.html` to use new CSS variable names
+- Fixed meta theme-color to match new background color (#0f0f1a)
+
 ## [1.4.1] - 2026-01-25 (Primal Surge Calculator Fix)
 
 ### Fixed
