@@ -189,13 +189,13 @@
 
     /* Larger slider thumb for mobile */
     .x-slider-row input[type="range"]::-webkit-slider-thumb {
-        width: 26px;
-        height: 26px;
+        width: 28px;
+        height: 28px;
     }
 
     .x-slider-row input[type="range"]::-moz-range-thumb {
-        width: 26px;
-        height: 26px;
+        width: 28px;
+        height: 28px;
     }
 
     .x-number {
@@ -248,8 +248,8 @@
     }
 
     .legend-color {
-        width: 10px;
-        height: 10px;
+        width: 12px;
+        height: 12px;
         flex-shrink: 0;
     }
 
@@ -375,7 +375,7 @@
     }
 
     .type-input input {
-        width: 45px;
+        width: 44px;
         font-size: 0.85rem;
     }
 

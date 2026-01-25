@@ -417,8 +417,8 @@
 
 /* Checkbox styling */
 .input-group input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     accent-color: var(--accent);
     cursor: pointer;
 }
@@ -468,7 +468,7 @@
 }
 
 .type-input input {
-    width: 55px;
+    width: 56px;
     padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--radius-sm);
     background: rgba(0, 0, 0, 0.3);
@@ -532,8 +532,8 @@
 .x-slider-row input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     cursor: pointer;
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
@@ -548,8 +548,8 @@
 }
 
 .x-slider-row input[type="range"]::-moz-range-thumb {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     cursor: pointer;
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
@@ -559,9 +559,9 @@
 }
 
 .x-number {
-    width: 70px !important;
-    min-width: 70px;
-    max-width: 70px;
+    width: 72px !important;
+    min-width: 72px;
+    max-width: 72px;
     text-align: center;
     flex-shrink: 0;
     padding: var(--spacing-sm) !important;
@@ -859,6 +859,7 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-md);
+    margin-top: var(--spacing-md);
     margin-bottom: var(--spacing-lg);
 }
 
@@ -1052,6 +1053,11 @@
     transform: rotate(-90deg);
 }
 
+.collapsible-panel:not(.expanded) .panel-header {
+    margin-bottom: calc(var(--spacing-xl) * -1);
+    border-radius: var(--radius-xl);
+}
+
 /* ==================== SAMPLE REVEALS ==================== */
 
 .sample-reveal {
@@ -1153,7 +1159,7 @@
 }
 
 .dist-value {
-    width: 50px;
+    width: 52px;
     text-align: right;
     font-weight: 600;
     color: var(--text-light);

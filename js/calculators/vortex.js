@@ -799,14 +799,13 @@ function updateStats(config, results) {
         `;
 
         const customStatsGrid = `
-            <div class="stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+            <div class="stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; margin-bottom: 16px;">
                 ${cardsHTML.join('')}
             </div>
         `;
 
         statsPanel.innerHTML = `
             ${renderInsightBox(`🌀 Discover ${config.creatureCMC} Analysis`, excludedCreatureNote, '')}
-            <div style="margin-top: 16px;"></div> 
             ${customStatsGrid}
             ${secondRow}
             ${renderInsightBox('', interpretation, `• Average discovered spell costs ${formatNumber(currentResult.avgSpellCMC, 1)} mana`, color)}

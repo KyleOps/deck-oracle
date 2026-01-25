@@ -28,7 +28,7 @@ export function renderStatCard(label, value, subtext, color = 'var(--text-light)
  */
 export function renderStatsGrid(cardsHTML) {
     return `
-        <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px;">
+        <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; margin-bottom: 16px;">
             ${cardsHTML.join('')}
         </div>
     `;

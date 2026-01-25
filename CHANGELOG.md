@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-01-26 (Design System Alignment)
+
+### Changed
+- **Spacing Grid Alignment:** Adjusted component sizes to conform to 4px spacing grid
+  - Slider thumb: 22px → 24px (desktop), 26px → 28px (mobile touch targets)
+  - Type input width: 55px → 56px
+  - X-number input width: 70px → 72px
+  - Distribution value width: 50px → 52px
+  - Checkbox: 18px → 16px
+  - Legend color (mobile): 10px → 12px
+  - Type input (small mobile): 45px → 44px
+
+### Fixed
+- **Collapsible Panel:** Fixed dead click zone at bottom of collapsed panels - header now fills entire panel when collapsed
+- **Stats Grid Spacing:** Added margin-top to stats-grid to prevent visual overlap with preceding insight boxes in analysis panels
+
+### Added
+- **Design System Documentation:** Created `.interface-design/system.md` documenting:
+  - Spacing tokens (4px base grid)
+  - Border radius scale (6/10/14/18/24px)
+  - Color palette and glass effect values
+  - Component patterns (panels, buttons, inputs, cards)
+  - Calculator theme accent colors
+  - Responsive breakpoints and accessibility guidelines
+
 ## [1.5.0] - 2026-01-26 (Glassmorphism UI Redesign)
 
 ### Changed
