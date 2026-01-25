@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-01-25 (Primal Surge Calculator Fix)
+
+### Fixed
+- **Primal Surge Calculator:** Fixed simulation statistics not matching the mathematical expected value
+  - The sampler was only using the first N samples (where N = display count, default 10) for statistics calculation
+  - Now uses all 500 generated samples for accurate statistical averages
+  - Distribution chart and averages now correctly converge to the mathematical expectation
+- **Primal Surge Calculator:** Fixed stats panel not updating when importing a new deck
+  - The stats panel container was getting replaced after first render, causing subsequent updates to silently fail
+  - Added stable container ID (`surge-stats-container`) that persists across updates
+
+### Changed
+- **Primal Surge Calculator:** Code optimizations and cleanup
+  - Replaced dynamic `import()` with static import for Genesis Wave comparison (faster execution)
+  - Removed unused imports (`debounce`, `renderMultiColumnTable`, `renderDistributionChart`, `extractCardTypes`)
+  - Simplified deck change detection and cache invalidation logic
+  - Cleaner separation between sample generation and statistics calculation
+- **Primal Surge Calculator:** Replaced distribution histogram with more actionable statistics
+  - Removed the permanent count distribution chart (wasn't providing useful insights)
+  - Added outcome probability thresholds: Full deck %, 20+ permanents %, 10+ permanents %, Whiff (<5) %
+  - Added min/max range from simulations
+  - Cleaner grid layout showing averages (permanents, lands, mana value) at a glance
+- **Big Spell Comparison:** Simplified recommendations to a single contextual deck insight
+  - Removed redundant/confusing multi-recommendation section that restated what the table already showed
+  - Now shows one actionable insight based on which spell is best and why (deck composition context)
+  - Cleaner UI with less visual clutter
+- **Genesis Wave Calculator:** Improved chart visualization
+  - Removed redundant "Cards Revealed" line (was just X=X, same as axis labels)
+  - Added "Hit Rate %" on secondary Y-axis showing percentage of revealed cards that are valid permanents
+  - Dual-axis chart now shows both expected permanents and efficiency at a glance
+- **Primal Surge Calculator:** Improved chart visualization
+  - Replaced "Expected Total Mana Value" line (perfectly correlated with permanents, redundant)
+  - Added "Whiff Risk (<5 perms)" on secondary Y-axis showing probability of a bad outcome
+  - Red risk line provides useful counterpoint to green expected value - shows variance/downside at each non-perm count
+  - Better tooltips with formatted values
+- **Primal Surge Calculator:** Fixed "Chance to play entire deck" calculation
+  - Previous formula was incorrect for multiple non-permanents
+  - Now correctly calculates probability of hitting all permanents before any non-permanent
+  - Changed label to "Chance to hit all X permanents" for clarity (you never "play" the non-permanents)
+- **Primal Surge Calculator:** Now models library state after casting Surge
+  - Primal Surge is on the stack when it resolves, not in your library
+  - Deck with only Surge as non-permanent now correctly shows 100% to play entire library
+  - Stats label changed from "Deck Played" to "Library Played" for accuracy
+  - Non-permanent count shows "other non-perms in library" (excluding Surge itself)
+  - Sample reveals now also exclude Surge from the simulated library
+- **Big Spell Comparison:** Primal Surge now correctly modeled
+  - Surge expected value calculation now excludes Surge from the library (it's on the stack)
+  - Insights for Surge now show "other non-permanents in library" instead of total deck count
+  - A deck with only Surge as non-permanent now correctly shows 100% guaranteed outcome
+
 ## [1.4.0] - 2026-01-13 (Lumra Calculator)
 
 ### Added

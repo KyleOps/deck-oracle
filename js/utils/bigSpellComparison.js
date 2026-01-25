@@ -84,7 +84,14 @@ export function compareBigSpells(inputX, sourceSpell = 'generic') {
     // Calculate expected values for each spell using their specific X
     const waveResult = simulateGenesisWave(deckSize, waveDistribution, waveX);
     const vowResult = simulateVow(deckSize, vowDistribution, vowX, false, cardData);
-    const surgeResult = simulatePrimalSurge(deckSize, nonPermanentCount, permanentCount);
+
+    // For Primal Surge: model library state after casting (Surge is on stack, not in library)
+    // If deck has at least 1 non-permanent, subtract 1 from both deck size and non-perm count
+    const surgeOnStack = nonPermanentCount >= 1;
+    const surgeLibrarySize = surgeOnStack ? deckSize - 1 : deckSize;
+    const surgeNonPerms = surgeOnStack ? nonPermanentCount - 1 : nonPermanentCount;
+    const surgePerms = surgeLibrarySize - surgeNonPerms;
+    const surgeResult = simulatePrimalSurge(surgeLibrarySize, surgeNonPerms, surgePerms);
     
     const portentData = calculatePortent(); 
     const portentResult = portentData?.results?.[portentX];
@@ -166,94 +173,87 @@ export function compareBigSpells(inputX, sourceSpell = 'generic') {
         nonPermanentCount,
         legendaryPermanentCount,
         landCount,
-        recommendations: generateRecommendations(spells, totalMana, {
+        insight: generateDeckInsight(spells, {
             permanentCount,
             nonPermanentCount,
             legendaryPermanentCount,
             landCount,
-            deckSize
+            deckSize,
+            // Pass Surge-specific values for accurate insights
+            surgeNonPerms,
+            surgePerms
         })
     };
 }
 
 /**
- * Generate recommendations based on deck composition
+ * Generate a single deck insight based on composition
+ * Focus on actionable deck-building advice rather than restating the comparison table
  */
-function generateRecommendations(spells, totalMana, deckStats) {
-    const recommendations = [];
-    const { permanentCount, nonPermanentCount, legendaryPermanentCount, landCount, deckSize } = deckStats;
+function generateDeckInsight(spells, deckStats) {
+    const { permanentCount, nonPermanentCount, legendaryPermanentCount, deckSize, surgeNonPerms, surgePerms } = deckStats;
+    const legendaryRatio = permanentCount > 0 ? legendaryPermanentCount / permanentCount : 0;
 
-    const permanentRatio = permanentCount / deckSize;
-    const legendaryRatio = legendaryPermanentCount / permanentCount;
+    // Find best spell
+    const best = spells[0];
 
-    // Primal Surge recommendation
-    if (nonPermanentCount === 0) {
-        recommendations.push({
-            spell: 'Primal Surge',
-            reason: '🏆 **Perfect!** Your deck has 0 non-permanents. Primal Surge will flip your entire deck!',
-            priority: 'critical'
-        });
-    } else if (nonPermanentCount <= 3) {
-        recommendations.push({
-            spell: 'Primal Surge',
-            reason: `✅ **Excellent!** Only ${nonPermanentCount} non-permanent${nonPermanentCount > 1 ? 's' : ''}. Primal Surge will flip most of your deck.`, 
-            priority: 'high'
-        });
-    } else if (nonPermanentCount <= 10 && permanentRatio >= 0.85) {
-        recommendations.push({
-            spell: 'Primal Surge',
-            reason: `⚠️ **Good.** ${nonPermanentCount} non-permanents (${((nonPermanentCount/deckSize)*100).toFixed(1)}%). Consider cutting to maximize Primal Surge.`, 
-            priority: 'medium'
-        });
-    }
-
-    // Genesis Wave vs Vow comparison
-    const wave = spells.find(s => s.name === 'Genesis Wave');
-    const vow = spells.find(s => s.name.includes('Kamahl\'s Druidic Vow'));
-
-    if (wave && vow && wave.expected !== undefined && vow.expected !== undefined) {
-        const waveBetter = wave.expected > vow.expected;
-        const diff = Math.abs(wave.expected - vow.expected);
-        const maxExpected = Math.max(wave.expected, vow.expected);
-        const percentDiff = maxExpected > 0 ? (diff / maxExpected) * 100 : 0;
-
-        if (percentDiff < 5) {
-            recommendations.push({
-                spell: 'Genesis Wave / Kamahl\'s Druidic Vow',
-                reason: `⚖️ **Roughly equal** at ${totalMana} mana. Wave: ${wave.expected.toFixed(2)}, Vow: ${vow.expected.toFixed(2)} hits.`, 
-                priority: 'info'
-            });
-        } else if (waveBetter) {
-            recommendations.push({
-                spell: 'Genesis Wave',
-                reason: `💪 **Better output** (${wave.expected.toFixed(2)} vs ${vow.expected.toFixed(2)} hits).`, 
-                priority: 'high'
-            });
+    // Primal Surge specific insights - use surgeNonPerms (excluding Surge itself from library)
+    if (best.name === 'Primal Surge') {
+        if (surgeNonPerms === 0) {
+            return {
+                icon: '🏆',
+                text: `All permanents! Primal Surge guarantees your entire library (${surgePerms} cards).`
+            };
+        } else if (surgeNonPerms <= 2) {
+            return {
+                icon: '✅',
+                text: `Only ${surgeNonPerms} other non-permanent${surgeNonPerms > 1 ? 's' : ''} in library — excellent for Primal Surge.`
+            };
         } else {
-            recommendations.push({
-                spell: 'Kamahl\'s Druidic Vow',
-                reason: `💰 **More efficient** (${vow.expected.toFixed(2)} vs ${wave.expected.toFixed(2)} hits). Synergizes with legendary tribal.`, 
-                priority: 'high'
-            });
+            return {
+                icon: '💡',
+                text: `${surgeNonPerms} other non-permanents in library. Cutting ${Math.min(surgeNonPerms, 5)} could significantly boost Primal Surge.`
+            };
         }
     }
 
-    // Legendary density check for Vow
-    if (legendaryRatio < 0.15 && vow) {
-        recommendations.push({
-            spell: 'Kamahl\'s Druidic Vow',
-            reason: `⚠️ **Low legendary density** (${(legendaryRatio * 100).toFixed(1)}% of permanents). Vow will mostly just hit lands.`, 
-            priority: 'warning'
-        });
-    } else if (legendaryRatio >= 0.40 && vow) {
-        recommendations.push({
-            spell: 'Kamahl\'s Druidic Vow',
-            reason: `🌟 **High legendary density** (${(legendaryRatio * 100).toFixed(1)}% of permanents). Excellent synergy!`, 
-            priority: 'high'
-        });
+    // Genesis Wave insights
+    if (best.name === 'Genesis Wave') {
+        if (legendaryRatio < 0.15) {
+            return {
+                icon: '💡',
+                text: `Low legendary count (${(legendaryRatio * 100).toFixed(0)}%) makes Genesis Wave outperform Vow here.`
+            };
+        }
+        return {
+            icon: '🌊',
+            text: `Wave hits any permanent — strong with your diverse card types.`
+        };
     }
 
-    return recommendations;
+    // Vow insights
+    if (best.name.includes('Druidic Vow')) {
+        if (legendaryRatio >= 0.40) {
+            return {
+                icon: '🌟',
+                text: `High legendary density (${(legendaryRatio * 100).toFixed(0)}%) — perfect for Kamahl's Druidic Vow!`
+            };
+        }
+        return {
+            icon: '⚔️',
+            text: `Legendary tribal synergy makes Vow efficient for your deck.`
+        };
+    }
+
+    // Portent insights
+    if (best.name === 'Portent of Calamity') {
+        return {
+            icon: '🔮',
+            text: `Portent excels with diverse card types in your deck.`
+        };
+    }
+
+    return null;
 }
 
 /**
@@ -264,30 +264,27 @@ export function renderComparison(comparison) {
         return '<p style="color: var(--text-dim);">Import a deck to see spell comparison</p>';
     }
 
-    const { spells, recommendations, totalMana } = comparison;
+    const { spells, insight, totalMana } = comparison;
 
     let html = '<div class="big-spell-comparison-container">';
-    html += `<h3 style="margin-top: 0;">🎯 Big Spell Comparison (Equivalent Total Mana: ${totalMana})</h3>`;
+    html += `<h3 style="margin-top: 0;">🎯 Big Spell Comparison (${totalMana} Mana)</h3>`;
 
-    // Spell comparison table using CSS classes
+    // Spell comparison grid
     const numSpells = spells.length;
-    // We add inline style for grid columns only because it depends on numSpells, though typically it's 4
-    // If numSpells is always 4, we could put it in CSS. For robustness, let's keep inline variable.
-    // However, CSS classes will handle the rest.
     html += `<div class="big-spell-grid" style="grid-template-columns: repeat(${numSpells}, 1fr);">`;
 
     spells.forEach((spell, idx) => {
         const isWinner = idx === 0;
         const xDisplay = spell.x !== null ? `X=${spell.x}` : 'Fixed';
         const borderColor = isWinner ? spell.color : 'transparent';
-        
+
         html += `<div class="big-spell-card" style="border-color: ${borderColor};">`;
         html += `<h4 class="big-spell-title" style="color: ${spell.color};" title="${spell.name}">${isWinner ? '👑 ' : ''}${spell.name}</h4>`;
-        
+
         html += `<div class="big-spell-x-value">${xDisplay}</div>`;
         html += `<div class="big-spell-value" style="color: ${spell.color};">${spell.expected.toFixed(2)}</div>`;
         html += `<div class="big-spell-metric">${spell.metric}</div>`;
-        
+
         html += `<div class="big-spell-details">`;
         html += `<div>CMC: ${spell.cmc}</div>`;
         html += `<div>Eff: ${spell.efficiency.toFixed(3)}</div>`;
@@ -297,24 +294,11 @@ export function renderComparison(comparison) {
 
     html += '</div>';
 
-    // Recommendations
-    if (recommendations.length > 0) {
-        html += '<div class="big-spell-recommendations">';
-        html += '<h4 style="margin-top: 0;">💡 Recommendations:</h4>';
-
-        recommendations.forEach(rec => {
-            const bgColor = rec.priority === 'critical' ? 'rgba(34, 197, 94, 0.1)' :
-                           rec.priority === 'high' ? 'rgba(59, 130, 246, 0.1)' :
-                           rec.priority === 'warning' ? 'rgba(245, 158, 11, 0.1)' :
-                           'rgba(107, 114, 128, 0.1)';
-
-            html += `<div class="big-spell-recommendation-item" style="background: ${bgColor};">`;
-            html += `<div style="font-weight: bold; margin-bottom: 4px;">${rec.spell}</div>`;
-            html += `<div style="font-size: 0.9em;">${rec.reason}</div>`;
-            html += `</div>`;
-        });
-
-        html += '</div>';
+    // Single deck insight (if available)
+    if (insight) {
+        html += `<div style="margin-top: var(--spacing-sm); padding: var(--spacing-sm); background: var(--panel-bg-alt); border-radius: var(--radius-sm); font-size: 0.9em;">`;
+        html += `<span style="margin-right: 6px;">${insight.icon}</span>${insight.text}`;
+        html += `</div>`;
     }
 
     html += '</div>';

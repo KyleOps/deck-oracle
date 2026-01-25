@@ -246,34 +246,35 @@ export function calculate() {
 function updateChart(config, results) {
     const xValues = Object.keys(results).map(Number).sort((a, b) => a - b);
     const expectedPermsData = xValues.map(x => results[x].expectedPermanents);
-    const cardsRevealedData = xValues.map(x => results[x].cardsRevealed);
+    const efficiencyData = xValues.map(x => (results[x].expectedPermanents / x) * 100);
 
     chart = createOrUpdateChart(chart, 'wave-chart', {
         type: 'line',
         data: {
-            labels: xValues.map(x => 'X=' + x),
+            labels: xValues.map(x => `X=${x}`),
             datasets: [
                 {
                     label: 'Expected Permanents',
                     data: expectedPermsData,
                     borderColor: '#38bdf8',
-                    backgroundColor: 'rgba(56, 189, 248, 0.1)',
-                    fill: false,
+                    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                    fill: true,
                     tension: 0.3,
                     pointRadius: xValues.map(x => x === config.x ? 8 : 4),
                     pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#38bdf8'),
                     yAxisID: 'y'
                 },
                 {
-                    label: 'Cards Revealed',
-                    data: cardsRevealedData,
+                    label: 'Hit Rate %',
+                    data: efficiencyData,
                     borderColor: '#22c55e',
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    backgroundColor: 'transparent',
+                    borderDash: [5, 5],
                     fill: false,
                     tension: 0.3,
-                    pointRadius: xValues.map(x => x === config.x ? 8 : 4),
+                    pointRadius: xValues.map(x => x === config.x ? 6 : 3),
                     pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#22c55e'),
-                    yAxisID: 'y'
+                    yAxisID: 'y2'
                 }
             ]
         },
@@ -281,10 +282,23 @@ function updateChart(config, results) {
             scales: {
                 y: {
                     type: 'linear',
+                    position: 'left',
                     beginAtZero: true,
-                    title: { display: true, text: 'Count', color: '#38bdf8' },
+                    title: { display: true, text: 'Expected Permanents', color: '#38bdf8' },
                     grid: { color: 'rgba(14, 165, 233, 0.2)' },
-                    ticks: { color: '#38bdf8', stepSize: 1 }
+                    ticks: { color: '#38bdf8' }
+                },
+                y2: {
+                    type: 'linear',
+                    position: 'right',
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Hit Rate %', color: '#22c55e' },
+                    grid: { drawOnChartArea: false },
+                    ticks: {
+                        color: '#22c55e',
+                        callback: value => value + '%'
+                    }
                 },
                 x: {
                     grid: { color: 'rgba(14, 165, 233, 0.2)' },
@@ -294,7 +308,13 @@ function updateChart(config, results) {
             plugins: {
                 tooltip: {
                     callbacks: {
-                        label: ctx => ctx.datasetIndex === 0 ? `Permanents: ${ctx.parsed.y.toFixed(2)}` : `Cards: ${ctx.parsed.y}`
+                        label: ctx => {
+                            if (ctx.datasetIndex === 0) {
+                                return `Expected: ${ctx.parsed.y.toFixed(2)} permanents`;
+                            } else {
+                                return `Hit Rate: ${ctx.parsed.y.toFixed(1)}%`;
+                            }
+                        }
                     }
                 }
             }
