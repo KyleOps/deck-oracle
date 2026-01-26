@@ -3,7 +3,7 @@
  * Provides offline support and faster loading through caching
  */
 
-const CACHE_NAME = 'mtg-calc-v2';
+const CACHE_NAME = 'mtg-calc-v4';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -12,12 +12,33 @@ const STATIC_ASSETS = [
     '/css/base.css',
     '/css/components.css',
     '/css/mobile.css',
+    '/css/ux-enhancements.css',
     '/js/main.js',
+    // Calculators
+    '/js/calculators/lands.js',
+    '/js/calculators/lumra.js',
+    '/js/calculators/mulligan.js',
     '/js/calculators/portent.js',
+    '/js/calculators/rashmi.js',
     '/js/calculators/surge.js',
+    '/js/calculators/vortex.js',
+    '/js/calculators/vow.js',
     '/js/calculators/wave.js',
-    '/js/utils/moxfield.js',
+    // Utils
+    '/js/utils/bigSpellComparison.js',
+    '/js/utils/calculatorBase.js',
+    '/js/utils/chartHelpers.js',
+    '/js/utils/components.js',
+    '/js/utils/deckConfig.js',
+    '/js/utils/decklistImport.js',
+    '/js/utils/defaultDeckData.js',
+    '/js/utils/hypergeometric.js',
+    '/js/utils/sampleSimulator.js',
+    '/js/utils/share.js',
     '/js/utils/simulation.js',
+    '/js/utils/tableUtils.js',
+    '/js/utils/ui.js',
+    // External CDN
     'https://cdn.jsdelivr.net/npm/chart.js',
     'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap'
 ];
@@ -30,9 +51,21 @@ self.addEventListener('install', (event) => {
         caches.open(CACHE_NAME)
             .then((cache) => {
                 console.log('[SW] Caching static assets');
-                return cache.addAll(STATIC_ASSETS);
+                // Cache assets individually so one failure doesn't break all
+                return Promise.allSettled(
+                    STATIC_ASSETS.map(url =>
+                        cache.add(url).catch(err => {
+                            console.warn(`[SW] Failed to cache: ${url}`, err.message);
+                            return null;
+                        })
+                    )
+                );
             })
-            .then(() => {
+            .then((results) => {
+                const failed = results.filter(r => r.status === 'rejected' || r.value === null).length;
+                if (failed > 0) {
+                    console.warn(`[SW] ${failed}/${STATIC_ASSETS.length} assets failed to cache`);
+                }
                 console.log('[SW] Skip waiting');
                 return self.skipWaiting();
             })
@@ -68,6 +101,12 @@ self.addEventListener('activate', (event) => {
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
     const { request } = event;
+    const url = new URL(request.url);
+
+    // Bypass cache for development (add ?nocache to URL)
+    if (url.searchParams.has('nocache')) {
+        return;
+    }
 
     // Skip cross-origin requests
     if (!request.url.startsWith(self.location.origin) &&

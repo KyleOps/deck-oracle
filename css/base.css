@@ -2,10 +2,10 @@
 
 :root {
     /* ==================== PRIMARY COLOR PALETTE ==================== */
-    --primary: #8b5cf6;
-    --primary-light: #a78bfa;
-    --primary-dark: #7c3aed;
-    --primary-glow: rgba(139, 92, 246, 0.4);
+    --primary: #3b82f6;
+    --primary-light: #60a5fa;
+    --primary-dark: #2563eb;
+    --primary-glow: rgba(59, 130, 246, 0.4);
 
     --secondary: #06b6d4;
     --secondary-light: #22d3ee;
@@ -96,7 +96,7 @@
     --accent: var(--primary);
     --accent-light: var(--primary-light);
     --accent-glow: var(--primary-glow);
-    --theme-tint: rgba(139, 92, 246, 0.1);
+    --theme-tint: rgba(59, 130, 246, 0.1);
 }
 
 /* ==================== CALCULATOR ACCENT THEMES ==================== */
@@ -144,10 +144,10 @@ body.theme-lands {
 }
 
 body.theme-mulligan {
-    --accent: #c084fc;
-    --accent-light: #d8b4fe;
-    --accent-glow: rgba(192, 132, 252, 0.4);
-    --theme-tint: rgba(192, 132, 252, 0.08);
+    --accent: #3b82f6;
+    --accent-light: #60a5fa;
+    --accent-glow: rgba(59, 130, 246, 0.4);
+    --theme-tint: rgba(59, 130, 246, 0.08);
 }
 
 body.theme-rashmi {

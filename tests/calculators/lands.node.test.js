@@ -14,6 +14,7 @@ describe('Land Drop Calculator', () => {
         enchantments: 0,
         planeswalkers: 0,
         battles: 0,
+        actualCardCount: 60, // 24 lands + 36 instants
         cardsByName: {
             'Land': { name: 'Land', cmc: 0, count: 24, type_line: 'Land', mana_cost: '' },
             'Spell': { name: 'Spell', cmc: 1, count: 36, type_line: 'Instant', mana_cost: '{1}' }

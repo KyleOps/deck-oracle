@@ -18,8 +18,8 @@ import * as Components from './utils/components.js';
 import * as DeckConfig from './utils/deckConfig.js';
 
 // Current active tab and group
-let currentTab = 'portent';
-let currentGroup = 'spells';
+let currentTab = 'mulligan';
+let currentGroup = 'deck-tools';
 
 // Calculator metadata with groupings
 const calculators = {
@@ -398,7 +398,7 @@ function init() {
     Share.parseShareUrl();
 
     // Initial render
-    Portent.updateUI();
+    Mulligan.updateUI();
 
     // Add keyboard navigation
     document.addEventListener('keydown', (e) => {

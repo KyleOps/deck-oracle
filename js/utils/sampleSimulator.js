@@ -172,7 +172,7 @@ export function renderDistributionChart(distribution, totalSims, labelFn, marker
             <div class="dist-row">
                 <div class="dist-label">${row.label}</div>
                 <div class="dist-bar-container">
-                    <div class="dist-bar" style="width: ${row.pct}%; background: ${row.marker ? 'var(--accent)' : 'var(--accent)'}; opacity: ${row.marker ? '1' : '0.7'};"></div>
+                    <div class="dist-bar" style="width: ${row.pct}%;"></div>
                 </div>
                 <div class="dist-value">${pctStr}</div>
                 ${markerHTML}

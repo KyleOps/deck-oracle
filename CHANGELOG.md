@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2026-01-26
+
+### Changed
+- **Default Landing Page:** Mulligan Strategy calculator now loads by default (completed HTML active states)
+- **Pre-loaded Example Deck:** Site now loads with a real 99-card Commander deck pre-configured (Doctor Whostoric - The Sixth Doctor)
+  - No more "import your deck" warning on first visit
+  - All calculators work immediately with realistic data
+  - Users can still import their own decks to replace the default
+
+### Added
+- **Default Deck Data Module:** New `js/utils/defaultDeckData.js` stores pre-processed deck data
+- **Deck Generation Script:** New `scripts/generateDefaultDeck.js` to regenerate default deck from Moxfield API response
+
+## [1.6.1] - 2026-01-26
+
+### Fixed
+- **Service Worker Installation:** SW no longer fails completely if a single cached asset is unavailable - assets now cache individually with graceful fallback
+- **Service Worker Cache List:** Updated STATIC_ASSETS to include all calculators and utilities (was missing 15+ files)
+
+### Added
+- **Development Cache Bypass:** Add `?nocache` query parameter to bypass service worker caching during local development
+
+## [1.6.0] - 2026-01-26 (Deep Blue Refresh)
+
+### Changed
+- **Default Landing Page:** Changed from Portent to Mulligan Strategy calculator
+- **Mulligan Theme:** Updated to deep blue to match new primary
+
+### Fixed
+- **Distribution Chart Bars:** Fixed missing colored bars in sample simulation distribution charts (removed incorrect inline styles)
+
 ## [1.5.1] - 2026-01-26 (Design System Alignment)
 
 ### Changed

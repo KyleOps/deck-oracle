@@ -5,22 +5,24 @@
 
 import { importDecklistBatch, importFromMoxfield } from './decklistImport.js';
 import { enableSimulationButtons } from './ui.js';
+import { DEFAULT_DECK_DATA } from './defaultDeckData.js';
 
 // Global deck state (99-card Commander deck)
+// Initialize with default deck data if available, otherwise use fallback values
 let deckState = {
     // Card types
-    creatures: 30,
-    instants: 10,
-    sorceries: 8,
-    artifacts: 8,
-    enchantments: 5,
-    planeswalkers: 2,
-    lands: 36,
-    battles: 0,
+    creatures: DEFAULT_DECK_DATA?.creatures ?? 30,
+    instants: DEFAULT_DECK_DATA?.instants ?? 10,
+    sorceries: DEFAULT_DECK_DATA?.sorceries ?? 8,
+    artifacts: DEFAULT_DECK_DATA?.artifacts ?? 8,
+    enchantments: DEFAULT_DECK_DATA?.enchantments ?? 5,
+    planeswalkers: DEFAULT_DECK_DATA?.planeswalkers ?? 2,
+    lands: DEFAULT_DECK_DATA?.lands ?? 36,
+    battles: DEFAULT_DECK_DATA?.battles ?? 0,
 
     // Actual card count (for dual-typed cards like "Artifact Creature")
     // If not set, falls back to sum of type counts
-    actualCardCount: null,
+    actualCardCount: DEFAULT_DECK_DATA?.actualCardCount ?? null,
 
     // CMC breakdown (for Wave and Vortex calculators)
     cmc0: 10,
@@ -32,19 +34,19 @@ let deckState = {
     cmc6: 8,
 
     // Vortex-specific
-    creaturesPower5Plus: 12,
+    creaturesPower5Plus: DEFAULT_DECK_DATA?.creaturesPower5Plus ?? 12,
 
     // Card-level data (new format for Vortex)
-    cardDetails: [],
+    cardDetails: DEFAULT_DECK_DATA?.cardDetails ?? [],
 
     // Imported card data by name (for detailed lookups)
-    cardsByName: {},
+    cardsByName: DEFAULT_DECK_DATA?.cardsByName ?? {},
 
     // Commander name (for auto-configuration)
-    commanderName: null,
+    commanderName: DEFAULT_DECK_DATA?.commanderName ?? null,
 
     // Import Source URL (for sharing)
-    importUrl: null,
+    importUrl: DEFAULT_DECK_DATA?.importUrl ?? null,
 
     // Power 5+ creatures by CMC (for Vortex discover chains - deprecated, use cardDetails)
     power5PlusCMC3: 0,
