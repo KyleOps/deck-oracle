@@ -63,6 +63,8 @@
 
 .tab-group-header {
     display: flex;
+    width: 100%;
+    box-sizing: border-box;
     gap: var(--spacing-sm);
     align-items: center;
     padding: var(--spacing-sm);
@@ -123,6 +125,8 @@
 
 .sub-nav-group {
     display: none;
+    width: 100%;
+    box-sizing: border-box;
     gap: var(--spacing-sm);
     padding: var(--spacing-sm);
     background: var(--glass-bg);
@@ -312,7 +316,7 @@
                 opacity var(--transition-normal),
                 transform var(--transition-normal);
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-8px);
 }
 
 .calculator-selector.open .selector-dropdown {
@@ -719,7 +723,7 @@
     color: var(--text-muted);
     font-size: 0.8rem;
     display: block;
-    margin-bottom: 2px;
+    margin-bottom: var(--spacing-xs);
 }
 
 /* ==================== CHARTS ==================== */
@@ -1082,7 +1086,7 @@
 .reveal-card {
     display: inline-block;
     padding: var(--spacing-xs) var(--spacing-sm);
-    margin: 3px;
+    margin: var(--spacing-xs);
     border-radius: var(--radius-sm);
     font-size: 0.75rem;
     font-weight: 600;

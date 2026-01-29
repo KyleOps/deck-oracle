@@ -24,9 +24,140 @@
     <link rel="stylesheet" href="css/mobile.css">
     <link rel="stylesheet" href="css/ux-enhancements.css">
 </head>
-<body class="theme-portent">
+<body class="theme-mulligan">
     <div class="container">
-        <!-- SHARED DECK CONFIGURATION -->
+        <!-- Tab Group Navigation (TOP OF PAGE) -->
+        <nav class="header-row" id="tab-group-nav" aria-label="Calculator navigation">
+            <!-- Main Category Tabs -->
+            <div class="tab-groups" role="navigation" aria-label="Calculator categories">
+                <div class="tab-group-header">
+                    <button class="tab-group-btn" data-group="spells" role="tab" aria-selected="false">
+                        <span class="tab-icon">⚡</span>
+                        <span>Spells</span>
+                    </button>
+                    <button class="tab-group-btn" data-group="Creatures" role="tab" aria-selected="false">
+                        <span class="tab-icon">👑</span>
+                        <span>Creatures</span>
+                    </button>
+                    <button class="tab-group-btn active" data-group="deck-tools" role="tab" aria-selected="true">
+                        <span class="tab-icon">📊</span>
+                        <span>Tools</span>
+                    </button>
+                    <button class="tab-group-btn" data-group="multiplayer" role="tab" aria-selected="false">
+                        <span class="tab-icon">👥</span>
+                        <span>Multiplayer</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sub-navigation Pills (full width) -->
+            <div class="tab-sub-nav">
+                    <!-- Spells Group -->
+                    <div class="sub-nav-group" data-group="spells">
+                        <button class="sub-nav-pill" data-tab="portent">
+                            <span>⚡</span> Portent
+                        </button>
+                        <button class="sub-nav-pill" data-tab="wave">
+                            <span>🌊</span> Wave
+                        </button>
+                        <button class="sub-nav-pill" data-tab="vow">
+                            <span>🌱</span> Vow
+                        </button>
+                        <button class="sub-nav-pill" data-tab="surge">
+                            <span>🌿</span> Surge
+                        </button>
+                        <button class="sub-nav-pill" data-tab="vortex">
+                            <span>🌀</span> Vortex
+                        </button>
+                    </div>
+
+                    <!-- Creature Group -->
+                    <div class="sub-nav-group" data-group="Creatures">
+                        <button class="sub-nav-pill" data-tab="rashmi">
+                            <span>🌌</span> Rashmi
+                        </button>
+                        <button class="sub-nav-pill" data-tab="lumra">
+                            <span>🐻</span> Lumra
+                        </button>
+                    </div>
+
+                    <!-- Tools Group -->
+                    <div class="sub-nav-group active" data-group="deck-tools">
+                        <button class="sub-nav-pill active" data-tab="mulligan">
+                            <span>🃏</span> Mulligan
+                        </button>
+                        <button class="sub-nav-pill" data-tab="lands">
+                            <span>🏔️</span> Lands
+                        </button>
+                    </div>
+
+                    <!-- Multiplayer Group -->
+                    <div class="sub-nav-group" data-group="multiplayer">
+                        <button class="sub-nav-pill" data-tab="mara">
+                            <span>🎭</span> Mara
+                        </button>
+                        <button class="sub-nav-pill" data-tab="dreamharvest">
+                            <span>🌙</span> Dream Harvest
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Legacy Dropdown Selector (hidden by default) -->
+        <div class="calculator-selector" id="calculator-selector" role="navigation" aria-label="Calculator selection" style="margin-bottom: 16px;">
+            <button class="selector-button" id="selector-button" aria-haspopup="true" aria-expanded="false">
+                <div class="selector-current">
+                    <span class="selector-icon">🃏</span>
+                    <span class="selector-name">Mulligan Strategy</span>
+                </div>
+                <span class="selector-arrow">▼</span>
+            </button>
+            <div class="selector-dropdown" id="selector-dropdown" role="menu">
+                <div class="selector-option" data-tab="portent" role="menuitem">
+                    <span class="selector-option-icon">⚡</span>
+                    <span>Portent of Calamity</span>
+                </div>
+                <div class="selector-option" data-tab="surge" role="menuitem">
+                    <span class="selector-option-icon">🌿</span>
+                    <span>Primal Surge</span>
+                </div>
+                <div class="selector-option" data-tab="wave" role="menuitem">
+                    <span class="selector-option-icon">🌊</span>
+                    <span>Genesis Wave</span>
+                </div>
+                <div class="selector-option" data-tab="vow" role="menuitem">
+                    <span class="selector-option-icon">🌱</span>
+                    <span>Kamahl's Druidic Vow</span>
+                </div>
+                <div class="selector-option" data-tab="vortex" role="menuitem">
+                    <span class="selector-option-icon">🌀</span>
+                    <span>Monstrous Vortex</span>
+                </div>
+                <div class="selector-option" data-tab="rashmi" role="menuitem">
+                    <span class="selector-option-icon">🌌</span>
+                    <span>Rashmi</span>
+                </div>
+                <div class="selector-option" data-tab="lumra" role="menuitem">
+                    <span class="selector-option-icon">🐻</span>
+                    <span>Lumra</span>
+                </div>
+                <div class="selector-option" data-tab="lands" role="menuitem">
+                    <span class="selector-option-icon">🏔️</span>
+                    <span>Land Drops</span>
+                </div>
+                <div class="selector-option active" data-tab="mulligan" role="menuitem">
+                    <span class="selector-option-icon">🃏</span>
+                    <span>Mulligan Strategy</span>
+                </div>
+                <div class="selector-option" data-tab="mara" role="menuitem">
+                    <span class="selector-option-icon">🎭</span>
+                    <span>Ensnared by the Mara</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SHARED DECK CONFIGURATION (for Spells, Creatures, Tools) -->
         <section class="panel collapsible-panel expanded" id="deck-config" aria-label="Deck configuration">
             <div class="panel-header">
                 <h2>📚 Deck Configuration</h2>
@@ -38,18 +169,18 @@
             <div class="panel-content">
                 <div class="input-group import-section">
                     <label for="moxfield-input">Import from Moxfield or Archidekt (URL or ID)</label>
-                    <div class="import-url-row" style="display: flex; gap: 8px; margin-bottom: 8px;">
-                        <input type="text" id="moxfield-input" placeholder="https://moxfield.com/decks/..." style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid var(--glass-border); background: var(--input-bg); color: var(--text-light);">
-                        <button id="moxfield-import-btn" class="import-btn" aria-label="Import from Archidekt or  Moxfield">
+                    <div class="import-url-row" style="display: flex; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
+                        <input type="text" id="moxfield-input" placeholder="https://moxfield.com/decks/..." style="flex: 1; padding: var(--spacing-md); border-radius: var(--radius-sm); border: 1px solid var(--glass-border); background: var(--input-bg); color: var(--text-light);">
+                        <button id="moxfield-import-btn" class="import-btn" aria-label="Import from Archidekt or Moxfield">
                             ☁️ Import
                         </button>
                     </div>
-                    <div class="example-deck-row" style="margin-bottom: 12px; font-size: 0.85em;">
+                    <div class="example-deck-row" style="margin-bottom: var(--spacing-md); font-size: 0.85em;">
                         <span style="color: var(--text-dim);">Example: </span>
                         <a href="#" id="load-example-btn" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent);">Load a real example deck</a>
                     </div>
-                    <div style="text-align: center; margin-bottom: 12px; color: var(--text-dim); font-size: 0.9em; position: relative;">
-                        <span style="background: var(--bg-gradient-1); padding: 0 10px; position: relative; z-index: 1;">OR PASTE TEXT</span>
+                    <div style="text-align: center; margin-bottom: var(--spacing-md); color: var(--text-dim); font-size: 0.9em; position: relative;">
+                        <span style="background: var(--bg-gradient-1); padding: 0 var(--spacing-md); position: relative; z-index: 1;">OR PASTE TEXT</span>
                         <div style="position: absolute; top: 50%; left: 0; right: 0; border-top: 1px solid var(--glass-border); z-index: 0;"></div>
                     </div>
 
@@ -68,8 +199,8 @@
                     <div id="import-status" class="import-status" role="status" aria-live="polite"></div>
                 </div>
 
-                <div class="collapsible-panel" id="manual-counts-section" style="border-top: 1px solid var(--glass-border); padding-top: 16px; margin-top: 16px;">
-                    <div class="panel-header" style="padding: 8px 0; margin: 0; margin-bottom: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: none;">
+                <div class="collapsible-panel" id="manual-counts-section" style="border-top: 1px solid var(--glass-border); padding-top: var(--spacing-lg); margin-top: var(--spacing-lg);">
+                    <div class="panel-header" style="padding: var(--spacing-sm) 0; margin: 0; margin-bottom: var(--spacing-md); cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: none;">
                         <h3 style="margin: 0; font-size: 1em; color: var(--text-light);">⌨️ Manual Type Counts</h3>
                         <span class="collapse-icon" style="font-size: 0.8em;">▶</span>
                     </div>
@@ -108,7 +239,7 @@
                                 <input type="number" id="deck-battles" value="0" min="0" aria-label="Battles">
                             </div>
                         </div>
-                        <div class="deck-total" style="margin-top: 12px;">
+                        <div class="deck-total" style="margin-top: var(--spacing-md);">
                             Total cards in library: <span id="deck-total">80</span>
                         </div>
                     </div>
@@ -116,131 +247,32 @@
             </div>
         </section>
 
-        <!-- Navigation Controls Row -->
-        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 8px;">
-            <button id="nav-layout-toggle" class="icon-btn" aria-label="Toggle navigation layout" title="Switch navigation style">
-                <span class="nav-icon">☰</span>
-            </button>
-            <button id="share-button" class="icon-btn" aria-label="Copy Share Link" title="Copy Share Link" style="margin-left: auto;">
-                🔗
-            </button>
-        </div>
-
-        <!-- Tab Group Navigation -->
-        <div class="header-row" id="tab-group-nav" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; position: relative; z-index: 100;">
-            <!-- Main Category Tabs -->
-            <div class="tab-groups" role="navigation" aria-label="Calculator categories">
-                <div class="tab-group-header">
-                    <button class="tab-group-btn active" data-group="spells" role="tab" aria-selected="true">
-                        <span class="tab-icon">⚡</span>
-                        <span>Spells</span>
-                    </button>
-                    <button class="tab-group-btn" data-group="Creatures" role="tab" aria-selected="false">
-                        <span class="tab-icon">👑</span>
-                        <span>Creatures</span>
-                    </button>
-                    <button class="tab-group-btn" data-group="deck-tools" role="tab" aria-selected="false">
-                        <span class="tab-icon">📊</span>
-                        <span>Tools</span>
-                    </button>
+        <!-- SHARED OPPONENTS CONFIGURATION (for Multiplayer) -->
+        <section class="panel collapsible-panel expanded" id="opponents-config" aria-label="Opponent configuration" style="display: none;">
+            <div class="panel-header">
+                <h2>👥 Opponent Decklists</h2>
+                <button class="collapse-btn" aria-label="Toggle section">
+                    <span class="collapse-icon">▼</span>
+                </button>
+            </div>
+            <div class="panel-content">
+                <p style="color: var(--text-dim); margin-bottom: var(--spacing-lg); font-size: 0.9em;">
+                    Import opponent decklists to analyze their deck composition.
+                </p>
+                <div id="shared-opponent-tabs" class="opponent-tabs">
+                    <!-- Opponent tabs rendered by JS -->
+                </div>
+                <div id="shared-opponent-import">
+                    <!-- Import panels rendered by JS -->
                 </div>
             </div>
+        </section>
 
-            <!-- Sub-navigation Pills (full width) -->
-            <div class="tab-sub-nav">
-                    <!-- Spells Group -->
-                    <div class="sub-nav-group active" data-group="spells">
-                        <button class="sub-nav-pill active" data-tab="portent">
-                            <span>⚡</span> Portent
-                        </button>
-                        <button class="sub-nav-pill" data-tab="wave">
-                            <span>🌊</span> Wave
-                        </button>
-                        <button class="sub-nav-pill" data-tab="vow">
-                            <span>🌱</span> Vow
-                        </button>
-                        <button class="sub-nav-pill" data-tab="surge">
-                            <span>🌿</span> Surge
-                        </button>
-                        <button class="sub-nav-pill" data-tab="vortex">
-                            <span>🌀</span> Vortex
-                        </button>
-                    </div>
-
-                    <!-- Creature Group -->
-                    <div class="sub-nav-group" data-group="Creatures">
-                        <button class="sub-nav-pill" data-tab="rashmi">
-                            <span>🌌</span> Rashmi
-                        </button>
-                        <button class="sub-nav-pill" data-tab="lumra">
-                            <span>🐻</span> Lumra
-                        </button>
-                    </div>
-
-                    <!-- Tools Group -->
-                    <div class="sub-nav-group" data-group="deck-tools">
-                        <button class="sub-nav-pill" data-tab="mulligan">
-                            <span>🃏</span> Mulligan
-                        </button>
-                        <button class="sub-nav-pill" data-tab="lands">
-                            <span>🏔️</span> Lands
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Legacy Dropdown Selector (hidden by default) -->
-        <div class="calculator-selector" id="calculator-selector" role="navigation" aria-label="Calculator selection" style="margin-bottom: 16px;">
-            <button class="selector-button" id="selector-button" aria-haspopup="true" aria-expanded="false">
-                <div class="selector-current">
-                    <span class="selector-icon">⚡</span>
-                    <span class="selector-name">Portent of Calamity</span>
-                </div>
-                <span class="selector-arrow">▼</span>
-            </button>
-            <div class="selector-dropdown" id="selector-dropdown" role="menu">
-                <div class="selector-option active" data-tab="portent" role="menuitem">
-                    <span class="selector-option-icon">⚡</span>
-                    <span>Portent of Calamity</span>
-                </div>
-                <div class="selector-option" data-tab="surge" role="menuitem">
-                    <span class="selector-option-icon">🌿</span>
-                    <span>Primal Surge</span>
-                </div>
-                <div class="selector-option" data-tab="wave" role="menuitem">
-                    <span class="selector-option-icon">🌊</span>
-                    <span>Genesis Wave</span>
-                </div>
-                <div class="selector-option" data-tab="vow" role="menuitem">
-                    <span class="selector-option-icon">🌱</span>
-                    <span>Kamahl's Druidic Vow</span>
-                </div>
-                <div class="selector-option" data-tab="vortex" role="menuitem">
-                    <span class="selector-option-icon">🌀</span>
-                    <span>Monstrous Vortex</span>
-                </div>
-                <div class="selector-option" data-tab="rashmi" role="menuitem">
-                    <span class="selector-option-icon">🌌</span>
-                    <span>Rashmi</span>
-                </div>
-                <div class="selector-option" data-tab="lumra" role="menuitem">
-                    <span class="selector-option-icon">🐻</span>
-                    <span>Lumra</span>
-                </div>
-                <div class="selector-option" data-tab="lands" role="menuitem">
-                    <span class="selector-option-icon">🏔️</span>
-                    <span>Land Drops</span>
-                </div>
-                <div class="selector-option" data-tab="mulligan" role="menuitem">
-                    <span class="selector-option-icon">🃏</span>
-                    <span>Mulligan Strategy</span>
-                </div>
-            </div>
-        </div>
+        <!-- Calculator Content Wrapper -->
+        <div class="calculator-content">
 
         <!-- PORTENT TAB -->
-        <div id="portent-tab" class="tab-content active" role="tabpanel" aria-labelledby="portent">
+        <div id="portent-tab" class="tab-content" role="tabpanel" aria-labelledby="portent">
             <h1>⚡ Portent of Calamity Calculator</h1>
             <p class="card-text">"A 9 mana draw 3, nice!"</p>
 
@@ -646,7 +678,7 @@
         </div>
 
         <!-- MULLIGAN TAB -->
-        <div id="mulligan-tab" class="tab-content" role="tabpanel" aria-labelledby="mulligan">
+        <div id="mulligan-tab" class="tab-content active" role="tabpanel" aria-labelledby="mulligan">
             <h1>🃏 Mulligan Strategy Calculator</h1>
             <p class="card-text">"Should I keep this hand?"</p>
 
@@ -735,8 +767,56 @@
                     </div>
                 </section>
             </div>
-        </div>        <!-- Footer -->
-        <footer style="margin-top: 48px; padding: 24px 0; border-top: 1px solid var(--glass-border); text-align: center; color: var(--text-secondary);">
+        </div>
+
+        <!-- MARA TAB -->
+        <div id="mara-tab" class="tab-content" role="tabpanel" aria-labelledby="mara">
+            <h1>🎭 Ensnared by the Mara Calculator</h1>
+            <p class="card-text">"Each opponent faces a villainous choice..."</p>
+
+            <div class="main-grid single-column">
+                <section class="panel" id="mara-results" aria-label="Choice analysis">
+                    <h2>📊 Results</h2>
+                    <p style="color: var(--text-dim); text-align: center; padding: 20px;">
+                        Import at least one opponent's decklist to see analysis.
+                    </p>
+                </section>
+
+                <section class="panel" id="mara-sample-reveals" aria-label="Sample reveals">
+                    <h2>🎴 Sample Reveals</h2>
+                    <p style="color: var(--text-dim); text-align: center; padding: 20px;">
+                        Import opponent decklists to see sample simulations.
+                    </p>
+                </section>
+            </div>
+        </div>
+
+        <!-- DREAM HARVEST TAB -->
+        <div id="dreamharvest-tab" class="tab-content" role="tabpanel" aria-labelledby="dreamharvest">
+            <h1>🌙 Dream Harvest Calculator</h1>
+            <p class="card-text">"Each opponent exiles until total MV reaches 5 or greater..."</p>
+
+            <div class="main-grid single-column">
+                <section class="panel" id="dreamharvest-results" aria-label="Dream Harvest analysis">
+                    <h2>📊 Results</h2>
+                    <p style="color: var(--text-dim); text-align: center; padding: 20px;">
+                        Import at least one opponent's decklist to see analysis.
+                    </p>
+                </section>
+
+                <section class="panel" id="dreamharvest-sample-reveals" aria-label="Sample reveals">
+                    <h2>🎴 Sample Reveals</h2>
+                    <p style="color: var(--text-dim); text-align: center; padding: 20px;">
+                        Import opponent decklists to see sample simulations.
+                    </p>
+                </section>
+            </div>
+        </div>
+
+        </div><!-- End calculator-content -->
+
+        <!-- Footer -->
+        <footer style="margin-top: var(--spacing-3xl); padding: var(--spacing-2xl) 0; border-top: 1px solid var(--glass-border); text-align: center; color: var(--text-secondary);">
             <div style="margin-bottom: 16px;">
                 <p style="margin-bottom: 8px;">Deck Oracle is a tool for Magic: The Gathering players to analyze deck consistency and expected values for various spells and strategies.</p>
                 <p style="font-size: 0.9em;">
@@ -744,9 +824,18 @@
                 </p>
             </div>
             
-            <button id="install-button" class="import-btn" style="display: none; margin: 0 auto; width: auto; padding: 8px 16px; background: var(--glass-bg); border: 1px solid var(--accent);">
-                ⬇️ Install App (PWA)
-            </button>
+            <!-- Footer Action Buttons -->
+            <div class="footer-actions">
+                <button id="nav-layout-toggle" class="icon-btn" aria-label="Toggle navigation layout" title="Switch navigation style">
+                    <span class="nav-icon">☰</span>
+                </button>
+                <button id="share-button" class="icon-btn" aria-label="Copy Share Link" title="Copy Share Link">
+                    🔗
+                </button>
+                <button id="install-button" class="icon-btn" style="display: none;" aria-label="Install App" title="Install App (PWA)">
+                    ⬇️
+                </button>
+            </div>
             
             <p style="margin-top: 24px; font-size: 0.8em; color: var(--text-dim);">
                 Magic: The Gathering is a trademark of Wizards of the Coast LLC. This site is not affiliated with Wizards of the Coast.

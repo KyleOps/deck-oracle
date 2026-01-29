@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-01-29
+
+### Added
+- **New Calculator: Ensnared by the Mara** - Simulates villainous choice outcomes for the card "Ensnared by the Mara"
+  - Import up to 3 opponent decklists (Moxfield/Archidekt URL or paste text)
+  - Analyzes both choice outcomes for each opponent:
+    - Choice 1: Exile cards until nonland (expected CMC, cards exiled, P(CMC 5+))
+    - Choice 2: Exile top 4 cards as damage (expected damage, min/max range)
+  - Sample simulations with HTML-based distribution charts
+  - Batch rendering with "Load More" for large sample counts
+  - Collapsible sample sections per opponent
+- **New Calculator: Dream Harvest** - Simulates Dream Harvest outcomes for opponent decks
+  - Each opponent exiles cards until total mana value >= 5
+  - Tracks: cards exiled, total MV, castable spells, value gained
+  - Distribution charts for cards exiled
+  - Sample simulations showing exiled cards and free casts
+- **New Tab Group: Multiplayer** - New navigation category for multiplayer-focused calculators
+
+### Changed
+- **Mara Results**: Replaced Chart.js chart with inline horizontal bar distributions; added summary section showing total CMC value vs total damage across all opponents
+- **Mara Theme**: Changed from purple to red theme (matching the red card)
+- **Mara Choice Colors**: Choice 1 (Free Cast) now uses purple, Choice 2 (Damage) uses red for better visual distinction
+- **Dream Harvest Theme**: Changed from green to dark blue theme (matching the blue/black card)
+- **Dream Harvest Results**: Added summary section showing total free spells and total value gained across all opponents
+
+### Added
+- **Share URL Support for Opponent Decklists**: Mara and Dream Harvest opponent deck URLs are now included in share links (maraOpp1-3, dhOpp1-3 parameters)
+
+### Fixed
+- **Share URL Default Deck Exclusion**: Default example deck URL is no longer included in share links (it loads automatically anyway)
+
 ## [1.6.2] - 2026-01-26
 
 ### Changed

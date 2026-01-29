@@ -5,6 +5,7 @@
 @media (max-width: 900px) {
     .container {
         max-width: 100vw;
+        padding: 0 var(--spacing-md);
         overflow-x: hidden;
     }
 
@@ -413,7 +414,7 @@
     .tab-group-btn {
         padding: var(--spacing-xs) var(--spacing-sm);
         font-size: 0.75rem;
-        min-width: 70px;
+        min-width: 72px;
     }
 
     .sub-nav-pill {

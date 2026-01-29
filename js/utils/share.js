@@ -5,12 +5,17 @@
 
 import * as DeckConfig from './deckConfig.js';
 import * as Mulligan from '../calculators/mulligan.js';
+import * as Mara from '../calculators/mara.js';
+import * as DreamHarvest from '../calculators/dreamharvest.js';
 
 // Valid tab names whitelist
-const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra'];
+const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra', 'mara', 'dreamharvest'];
 
 // Allowed deck import domains
 const ALLOWED_DECK_HOSTS = ['moxfield.com', 'www.moxfield.com', 'archidekt.com', 'www.archidekt.com'];
+
+// Default example deck URL - excluded from share links since it loads automatically
+const DEFAULT_DECK_URL = 'https://moxfield.com/decks/BdgPCOK4IUyNd2287K2mvg';
 
 /**
  * Parse URL parameters and apply settings
@@ -138,6 +143,44 @@ export async function parseShareUrl() {
             }
         }
     });
+
+    // 5. Mara Opponent Decklists
+    const maraOpponentParams = ['maraOpp1', 'maraOpp2', 'maraOpp3'];
+    for (let i = 0; i < maraOpponentParams.length; i++) {
+        const paramName = maraOpponentParams[i];
+        const oppUrl = params.get(paramName);
+        if (oppUrl) {
+            try {
+                const url = new URL(oppUrl);
+                if (ALLOWED_DECK_HOSTS.includes(url.hostname)) {
+                    await Mara.setOpponentUrl(`opponent${i + 1}`, oppUrl);
+                } else {
+                    console.warn(`Mara opponent URL from untrusted domain: ${url.hostname}`);
+                }
+            } catch (e) {
+                console.error(`Failed to load Mara opponent ${i + 1} deck`, e);
+            }
+        }
+    }
+
+    // 6. Dream Harvest Opponent Decklists
+    const dhOpponentParams = ['dhOpp1', 'dhOpp2', 'dhOpp3'];
+    for (let i = 0; i < dhOpponentParams.length; i++) {
+        const paramName = dhOpponentParams[i];
+        const oppUrl = params.get(paramName);
+        if (oppUrl) {
+            try {
+                const url = new URL(oppUrl);
+                if (ALLOWED_DECK_HOSTS.includes(url.hostname)) {
+                    await DreamHarvest.setOpponentUrl(`opponent${i + 1}`, oppUrl);
+                } else {
+                    console.warn(`Dream Harvest opponent URL from untrusted domain: ${url.hostname}`);
+                }
+            } catch (e) {
+                console.error(`Failed to load Dream Harvest opponent ${i + 1} deck`, e);
+            }
+        }
+    }
 }
 
 /**
@@ -154,9 +197,9 @@ export function getShareUrl() {
         params.set('tab', tabId);
     }
 
-    // Deck URL
+    // Deck URL - exclude default example deck since it loads automatically
     const deckConfig = DeckConfig.getDeckConfig();
-    if (deckConfig.importUrl) {
+    if (deckConfig.importUrl && deckConfig.importUrl !== DEFAULT_DECK_URL) {
         params.set('deck', deckConfig.importUrl);
     }
 
@@ -199,12 +242,24 @@ export function getShareUrl() {
 
     sliders.forEach(({ id, param }) => {
         const input = document.getElementById(id);
-        if (input && input.offsetParent !== null) { // Only if visible? Or just save all? 
+        if (input && input.offsetParent !== null) { // Only if visible? Or just save all?
             // Better to save all relevant ones or just the active one?
             // Saving all allows switching tabs and keeping state.
             params.set(param, input.value);
         }
     });
+
+    // Mara Opponent Decklists
+    const maraUrls = Mara.getOpponentUrls();
+    if (maraUrls.opponent1) params.set('maraOpp1', maraUrls.opponent1);
+    if (maraUrls.opponent2) params.set('maraOpp2', maraUrls.opponent2);
+    if (maraUrls.opponent3) params.set('maraOpp3', maraUrls.opponent3);
+
+    // Dream Harvest Opponent Decklists
+    const dhUrls = DreamHarvest.getOpponentUrls();
+    if (dhUrls.opponent1) params.set('dhOpp1', dhUrls.opponent1);
+    if (dhUrls.opponent2) params.set('dhOpp2', dhUrls.opponent2);
+    if (dhUrls.opponent3) params.set('dhOpp3', dhUrls.opponent3);
 
     url.search = params.toString();
     return url.toString();

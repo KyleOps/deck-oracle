@@ -37,10 +37,14 @@
     /* ==================== SEMANTIC COLORS ==================== */
     --success: #22c55e;
     --success-light: #4ade80;
+    --success-dark: #15803d;
     --warning: #f59e0b;
     --warning-light: #fbbf24;
     --danger: #ef4444;
     --danger-light: #f87171;
+    --danger-dark: #991b1b;
+    --info: #0ea5e9;
+    --info-dark: #0c4a6e;
 
     /* ==================== TYPE COLORS (MTG Card Types) ==================== */
     --type-creature: #22c55e;
@@ -164,6 +168,322 @@ body.theme-lumra {
     --theme-tint: rgba(101, 163, 13, 0.08);
 }
 
+body.theme-mara {
+    --accent: #dc2626;
+    --accent-light: #ef4444;
+    --accent-glow: rgba(220, 38, 38, 0.4);
+    --theme-tint: rgba(220, 38, 38, 0.08);
+    --mara-primary: #dc2626;
+    --mara-secondary: #ef4444;
+}
+
+body.theme-dreamharvest {
+    --accent: #1e40af;
+    --accent-light: #3b82f6;
+    --accent-glow: rgba(30, 64, 175, 0.4);
+    --theme-tint: rgba(30, 64, 175, 0.08);
+    --dreamharvest-primary: #1e40af;
+    --dreamharvest-secondary: #3b82f6;
+}
+
+/* ==================== MULTIPLAYER CALCULATORS - OPPONENT UI ==================== */
+
+/* Opponent Tab Container */
+.opponent-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+/* Opponent Tab Button */
+.opponent-tab {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-light);
+    cursor: pointer;
+    font-size: 0.85em;
+    font-family: var(--font-body);
+    position: relative;
+    transition: all var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.opponent-tab:hover {
+    background: var(--theme-tint);
+    border-color: var(--accent);
+}
+
+.opponent-tab.active {
+    background: var(--accent);
+    color: var(--bg-dark);
+    border-color: var(--accent);
+    font-weight: 600;
+}
+
+.opponent-tab.add-opponent {
+    background: transparent;
+    border-style: dashed;
+    color: var(--text-dim);
+}
+
+.opponent-tab.add-opponent:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+}
+
+/* Opponent Remove Button */
+.opponent-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: var(--spacing-xs);
+    width: 16px;
+    height: 16px;
+    line-height: 1;
+    text-align: center;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--danger);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.opponent-remove:hover {
+    background: var(--danger);
+    color: var(--text-light);
+}
+
+/* Import Success Indicator */
+.import-indicator {
+    color: var(--success);
+    margin-left: var(--spacing-xs);
+}
+
+/* Opponent Import Panel */
+.opponent-import-panel {
+    margin-bottom: var(--spacing-md);
+}
+
+/* Opponent Deck Status Bar */
+.opponent-deck-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: rgba(34, 197, 94, 0.1);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.opponent-deck-status .deck-info {
+    color: var(--success);
+}
+
+.opponent-deck-status .clear-btn {
+    background: transparent;
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.8em;
+    transition: all var(--transition-fast);
+}
+
+.opponent-deck-status .clear-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+/* Opponent Results Card */
+.opponent-results {
+    margin-bottom: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--glass-bg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+}
+
+.opponent-results h3 {
+    margin: 0 0 var(--spacing-sm) 0;
+    font-size: 1em;
+}
+
+/* Choice/Stat Grid (for Mara, Dream Harvest) */
+.choice-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+}
+
+.choice-card {
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--accent);
+}
+
+.choice-card.choice-purple {
+    background: rgba(168, 85, 247, 0.1);
+    border-left-color: var(--type-enchantment);
+}
+
+.choice-card.choice-red {
+    background: rgba(239, 68, 68, 0.1);
+    border-left-color: var(--danger);
+}
+
+.choice-card.choice-blue {
+    background: rgba(59, 130, 246, 0.1);
+    border-left-color: #3b82f6;
+}
+
+.choice-card .choice-label {
+    font-size: 0.8em;
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+}
+
+.choice-card.choice-purple .choice-label {
+    color: #a855f7;
+}
+
+.choice-card.choice-red .choice-label {
+    color: #f87171;
+}
+
+.choice-card.choice-blue .choice-label {
+    color: #3b82f6;
+}
+
+/* Summary Stats Box */
+.summary-stats-box {
+    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: var(--glass-bg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--glass-border);
+}
+
+.summary-stats-box h3 {
+    margin: 0 0 var(--spacing-md) 0;
+    color: var(--text-light);
+    font-size: 1em;
+}
+
+.summary-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+}
+
+.summary-stat {
+    padding: var(--spacing-md);
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+
+.summary-stat.purple {
+    background: rgba(168, 85, 247, 0.15);
+}
+
+.summary-stat.red {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.summary-stat.blue {
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.summary-stat.dark-blue {
+    background: rgba(30, 64, 175, 0.15);
+}
+
+.summary-stat .stat-label {
+    font-size: 0.85em;
+    margin-bottom: var(--spacing-xs);
+}
+
+.summary-stat.purple .stat-label { color: #a855f7; }
+.summary-stat.red .stat-label { color: #f87171; }
+.summary-stat.blue .stat-label { color: #3b82f6; }
+.summary-stat.dark-blue .stat-label { color: #60a5fa; }
+
+.summary-stat .stat-value {
+    font-size: 1.8em;
+    font-weight: 700;
+}
+
+.summary-stat.purple .stat-value { color: #a855f7; }
+.summary-stat.red .stat-value { color: var(--danger); }
+.summary-stat.blue .stat-value { color: #3b82f6; }
+.summary-stat.dark-blue .stat-value { color: #1e40af; }
+
+.summary-stat .stat-unit {
+    font-size: 0.75em;
+    color: var(--text-dim);
+}
+
+/* Compact Distribution Chart */
+.compact-dist-chart {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.compact-dist-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.8em;
+}
+
+.compact-dist-label {
+    min-width: 28px;
+    text-align: right;
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+
+.compact-dist-bar-bg {
+    flex: 1;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+.compact-dist-bar {
+    height: 100%;
+    border-radius: var(--radius-sm);
+    transition: width var(--transition-normal);
+}
+
+.compact-dist-value {
+    min-width: 44px;
+    text-align: right;
+    color: var(--text-secondary);
+}
+
+/* CMC Badge (for damage/CMC displays) */
+.cmc-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    font-size: 0.75em;
+    font-weight: 700;
+    color: var(--text-light);
+    background: var(--accent);
+}
+
 /* ==================== RESET & BASE ==================== */
 
 * {
@@ -283,7 +603,43 @@ p {
     max-width: 1200px;
     margin: 0 auto;
     width: 100%;
+    padding: 0 var(--spacing-xl);
+    box-sizing: border-box;
     overflow-x: hidden;
+}
+
+/* Footer Action Buttons */
+.footer-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+/* Header Row (Tab Navigation) */
+.header-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+    position: relative;
+    z-index: var(--z-dropdown);
+}
+
+/* Calculator Content - constrain width to match header elements */
+.calculator-content {
+    max-width: 100%;
+    padding: 0 var(--spacing-xl);
+    box-sizing: border-box;
+}
+
+.calculator-content .tab-content {
+    max-width: 100%;
+}
+
+.calculator-content .main-grid {
+    max-width: 100%;
 }
 
 .main-grid {

@@ -12,7 +12,10 @@ import * as Lands from './calculators/lands.js';
 import * as Rashmi from './calculators/rashmi.js';
 import * as Lumra from './calculators/lumra.js';
 import * as Mulligan from './calculators/mulligan.js';
+import * as Mara from './calculators/mara.js';
+import * as DreamHarvest from './calculators/dreamharvest.js';
 import * as Share from './utils/share.js';
+import * as OpponentState from './utils/opponentState.js';
 import { debounce } from './utils/simulation.js';
 import * as Components from './utils/components.js';
 import * as DeckConfig from './utils/deckConfig.js';
@@ -31,12 +34,14 @@ const calculators = {
     rashmi: { icon: '🌌', name: 'Rashmi', group: 'Creatures' },
     lumra: { icon: '🐻', name: 'Lumra', group: 'Creatures' },
     lands: { icon: '🏔️', name: 'Land Drops', group: 'deck-tools' },
-    mulligan: { icon: '🃏', name: 'Mulligan Strategy', group: 'deck-tools' }
+    mulligan: { icon: '🃏', name: 'Mulligan Strategy', group: 'deck-tools' },
+    mara: { icon: '🎭', name: 'Ensnared by the Mara', group: 'multiplayer' },
+    dreamharvest: { icon: '🌙', name: 'Dream Harvest', group: 'multiplayer' }
 };
 
 /**
  * Switch between tab groups
- * @param {string} group - Group name (spells, Creature, deck-tools)
+ * @param {string} group - Group name (spells, Creatures, deck-tools, multiplayer)
  */
 function switchGroup(group) {
     currentGroup = group;
@@ -90,6 +95,21 @@ function switchTab(tab) {
 
     currentTab = tab;
 
+    // Show/hide config panels based on calculator's group
+    const deckConfig = document.getElementById('deck-config');
+    const opponentsConfig = document.getElementById('opponents-config');
+    const calcGroup = calculators[tab]?.group;
+
+    if (calcGroup === 'multiplayer') {
+        // Multiplayer: hide deck config, show opponents config
+        if (deckConfig) deckConfig.style.display = 'none';
+        if (opponentsConfig) opponentsConfig.style.display = 'block';
+    } else {
+        // Spells, Creatures, Tools: show deck config, hide opponents config
+        if (deckConfig) deckConfig.style.display = 'block';
+        if (opponentsConfig) opponentsConfig.style.display = 'none';
+    }
+
     // Update the respective calculator
     if (tab === 'portent') {
         Portent.updateUI();
@@ -109,6 +129,10 @@ function switchTab(tab) {
         Lumra.updateUI();
     } else if (tab === 'mulligan') {
         Mulligan.updateUI();
+    } else if (tab === 'mara') {
+        Mara.updateUI();
+    } else if (tab === 'dreamharvest') {
+        DreamHarvest.updateUI();
     }
 }
 
@@ -236,6 +260,19 @@ function initMulliganInputs() {
     Mulligan.init();
 }
 
+/**
+ * Initialize Mara calculator inputs
+ */
+function initMaraInputs() {
+    Mara.init();
+}
+
+/**
+ * Initialize Dream Harvest calculator inputs
+ */
+function initDreamHarvestInputs() {
+    DreamHarvest.init();
+}
 
 /**
  * Initialize navigation layout toggle
@@ -359,6 +396,9 @@ function init() {
     // Initialize shared deck configuration first
     DeckConfig.initDeckConfig();
 
+    // Initialize shared opponent state for multiplayer calculators
+    OpponentState.init();
+
     // Initialize all components
     initTabNavigation();
     initNavLayoutToggle();
@@ -371,6 +411,8 @@ function init() {
     initRashmiInputs();
     initLumraInputs();
     initMulliganInputs();
+    initMaraInputs();
+    initDreamHarvestInputs();
     initServiceWorker();
     initUXEnhancements();
     initPWAInstall();
