@@ -11,61 +11,44 @@ import * as DreamHarvest from '../calculators/dreamharvest.js';
 // Valid tab names whitelist
 const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra', 'mara', 'dreamharvest'];
 
+// LZ-String is loaded globally via CDN
+const LZString = window.LZString;
+
 /**
- * Encode mulligan types to compact format: "id|name|count|required|byTurn|color~..."
- * Color stored without # prefix to save a character per type
+ * Compress mulligan types using LZ-String
+ * Returns URL-safe compressed string
  */
-function encodeMullTypes(types) {
-    return types.map(t =>
-        `${t.id}|${t.name}|${t.count}|${t.required}|${t.byTurn}|${(t.color || '').replace('#', '')}`
-    ).join('~');
+function compressMullTypes(types) {
+    // Minify: use short keys and strip # from colors
+    const minified = types.map(t => [t.id, t.name, t.count, t.required, t.byTurn, (t.color || '').replace('#', '')]);
+    return LZString.compressToEncodedURIComponent(JSON.stringify(minified));
 }
 
 /**
- * Decode mulligan types from compact format or legacy JSON
+ * Decompress mulligan types from LZ-String format
  * Returns null if parsing fails
  */
-function decodeMullTypes(str) {
-    // Try compact format first (contains ~ or | separators)
-    if (str.includes('|')) {
-        try {
-            const types = str.split('~').map(typeStr => {
-                const [id, name, count, required, byTurn, color] = typeStr.split('|');
-                return {
-                    id: parseInt(id, 10),
-                    name: name,
-                    count: parseInt(count, 10),
-                    required: parseInt(required, 10),
-                    byTurn: parseInt(byTurn, 10),
-                    color: color ? `#${color}` : '#888888'
-                };
-            });
-
-            // Validate parsed data
-            if (types.every(t =>
-                !isNaN(t.id) && typeof t.name === 'string' &&
-                !isNaN(t.count) && !isNaN(t.required) && !isNaN(t.byTurn) &&
-                t.count >= 0 && t.count <= 100 &&
-                t.required >= 0 && t.required <= 100 &&
-                t.byTurn >= 0 && t.byTurn <= 20
-            )) {
-                return types;
-            }
-        } catch (e) {
-            console.warn('Failed to parse compact mullTypes format', e);
-        }
-    }
-
-    // Fall back to legacy JSON format for backward compatibility
+function decompressMullTypes(str) {
     try {
-        const types = JSON.parse(decodeURIComponent(str));
-        if (Array.isArray(types) && types.every(t =>
-            t &&
-            typeof t.id === 'number' &&
-            typeof t.name === 'string' &&
-            typeof t.count === 'number' &&
-            typeof t.required === 'number' &&
-            typeof t.byTurn === 'number' &&
+        const decompressed = LZString.decompressFromEncodedURIComponent(str);
+        if (!decompressed) return null;
+
+        const minified = JSON.parse(decompressed);
+        if (!Array.isArray(minified)) return null;
+
+        const types = minified.map(arr => ({
+            id: arr[0],
+            name: arr[1],
+            count: arr[2],
+            required: arr[3],
+            byTurn: arr[4],
+            color: arr[5] ? `#${arr[5]}` : '#888888'
+        }));
+
+        // Validate
+        if (types.every(t =>
+            typeof t.id === 'number' && typeof t.name === 'string' &&
+            typeof t.count === 'number' && typeof t.required === 'number' && typeof t.byTurn === 'number' &&
             t.count >= 0 && t.count <= 100 &&
             t.required >= 0 && t.required <= 100 &&
             t.byTurn >= 0 && t.byTurn <= 20
@@ -73,9 +56,8 @@ function decodeMullTypes(str) {
             return types;
         }
     } catch (e) {
-        console.warn('Failed to parse JSON mullTypes format', e);
+        console.warn('Failed to decompress mullTypes', e);
     }
-
     return null;
 }
 
@@ -135,7 +117,7 @@ export async function parseShareUrl() {
 
     const mullTypes = params.get('mullTypes');
     if (mullTypes) {
-        const types = decodeMullTypes(mullTypes);
+        const types = decompressMullTypes(mullTypes);
         if (types) {
             Mulligan.setCardTypes(types);
         } else {
@@ -259,8 +241,8 @@ export function getShareUrl() {
     if (activeTab && activeTab.id === 'mulligan-tab') {
         const mullState = Mulligan.getState();
         if (mullState && mullState.types && mullState.types.length > 0) {
-            // Use compact format: "id|name|count|required|byTurn|color~..."
-            params.set('mullTypes', encodeMullTypes(mullState.types));
+            // Use LZ-String compression for compact URLs
+            params.set('mullTypes', compressMullTypes(mullState.types));
         }
         
         const penalty = document.getElementById('mull-penalty');

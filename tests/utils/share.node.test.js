@@ -7,6 +7,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
+import LZString from 'lz-string';
 
 // Mock DOM globals for Node.js testing
 global.window = {
@@ -203,39 +204,44 @@ describe('Share URL - Security & Validation', () => {
         });
     });
 
-    describe('Mulligan Types - Compact Format', () => {
-        it('should encode types to compact format', () => {
+    describe('Mulligan Types - LZ-String Compression', () => {
+        // Helper functions matching share.js implementation
+        function compressMullTypes(types) {
+            const minified = types.map(t => [t.id, t.name, t.count, t.required, t.byTurn, (t.color || '').replace('#', '')]);
+            return LZString.compressToEncodedURIComponent(JSON.stringify(minified));
+        }
+
+        function decompressMullTypes(str) {
+            try {
+                const decompressed = LZString.decompressFromEncodedURIComponent(str);
+                if (!decompressed) return null;
+                const minified = JSON.parse(decompressed);
+                if (!Array.isArray(minified)) return null;
+                return minified.map(arr => ({
+                    id: arr[0],
+                    name: arr[1],
+                    count: arr[2],
+                    required: arr[3],
+                    byTurn: arr[4],
+                    color: arr[5] ? `#${arr[5]}` : '#888888'
+                }));
+            } catch (e) {
+                return null;
+            }
+        }
+
+        it('should compress and decompress types correctly', () => {
             const types = [
                 { id: 1, name: 'Lands', count: 40, required: 2, byTurn: 2, color: '#22c55e' },
                 { id: 2, name: 'Ramp', count: 14, required: 1, byTurn: 1, color: '#3b82f6' }
             ];
 
-            // Encode: id|name|count|required|byTurn|color (no #)
-            const encoded = types.map(t =>
-                `${t.id}|${t.name}|${t.count}|${t.required}|${t.byTurn}|${t.color.replace('#', '')}`
-            ).join('~');
+            const compressed = compressMullTypes(types);
+            const decompressed = decompressMullTypes(compressed);
 
-            assert.strictEqual(encoded, '1|Lands|40|2|2|22c55e~2|Ramp|14|1|1|3b82f6');
-        });
-
-        it('should decode compact format correctly', () => {
-            const compact = '1|Lands|40|2|2|22c55e~2|Ramp|14|1|1|3b82f6';
-
-            const types = compact.split('~').map(typeStr => {
-                const [id, name, count, required, byTurn, color] = typeStr.split('|');
-                return {
-                    id: parseInt(id, 10),
-                    name: name,
-                    count: parseInt(count, 10),
-                    required: parseInt(required, 10),
-                    byTurn: parseInt(byTurn, 10),
-                    color: `#${color}`
-                };
-            });
-
-            assert.strictEqual(types.length, 2);
-            assert.deepStrictEqual(types[0], { id: 1, name: 'Lands', count: 40, required: 2, byTurn: 2, color: '#22c55e' });
-            assert.deepStrictEqual(types[1], { id: 2, name: 'Ramp', count: 14, required: 1, byTurn: 1, color: '#3b82f6' });
+            assert.strictEqual(decompressed.length, 2);
+            assert.deepStrictEqual(decompressed[0], types[0]);
+            assert.deepStrictEqual(decompressed[1], types[1]);
         });
 
         it('should produce shorter URLs than JSON format', () => {
@@ -245,117 +251,45 @@ describe('Share URL - Security & Validation', () => {
             ];
 
             const jsonEncoded = encodeURIComponent(JSON.stringify(types));
-            const compactEncoded = types.map(t =>
-                `${t.id}|${t.name}|${t.count}|${t.required}|${t.byTurn}|${t.color.replace('#', '')}`
-            ).join('~');
+            const lzCompressed = compressMullTypes(types);
 
-            // Compact should be significantly shorter
-            assert.ok(compactEncoded.length < jsonEncoded.length,
-                `Compact (${compactEncoded.length}) should be shorter than JSON (${jsonEncoded.length})`);
+            assert.ok(lzCompressed.length < jsonEncoded.length,
+                `LZ-String (${lzCompressed.length}) should be shorter than JSON (${jsonEncoded.length})`);
         });
 
         it('should handle single type correctly', () => {
-            const compact = '1|Lands|40|2|2|22c55e';
-            const parts = compact.split('|');
+            const types = [{ id: 1, name: 'Lands', count: 40, required: 2, byTurn: 2, color: '#22c55e' }];
 
-            assert.strictEqual(parts.length, 6);
-            assert.strictEqual(parts[0], '1');
-            assert.strictEqual(parts[1], 'Lands');
+            const compressed = compressMullTypes(types);
+            const decompressed = decompressMullTypes(compressed);
+
+            assert.strictEqual(decompressed.length, 1);
+            assert.deepStrictEqual(decompressed[0], types[0]);
         });
 
-        it('should validate decoded compact format values', () => {
-            const validCompact = '1|Lands|40|2|2|22c55e';
-            const [id, name, count, required, byTurn] = validCompact.split('|');
+        it('should handle missing color gracefully', () => {
+            const types = [{ id: 1, name: 'Test', count: 10, required: 1, byTurn: 1 }];
 
-            const parsedCount = parseInt(count, 10);
-            const parsedRequired = parseInt(required, 10);
-            const parsedByTurn = parseInt(byTurn, 10);
+            const compressed = compressMullTypes(types);
+            const decompressed = decompressMullTypes(compressed);
 
-            assert.ok(parsedCount >= 0 && parsedCount <= 100, 'Count should be valid');
-            assert.ok(parsedRequired >= 0 && parsedRequired <= 100, 'Required should be valid');
-            assert.ok(parsedByTurn >= 0 && parsedByTurn <= 20, 'ByTurn should be valid');
-        });
-    });
-
-    describe('Mulligan Types - Legacy JSON Format (Backward Compatibility)', () => {
-        it('should accept valid mulligan types structure with numeric IDs', () => {
-            const validTypes = JSON.stringify([
-                { id: 1, name: 'Lands', count: 24, required: 2, byTurn: 1, color: '#ff0000' },
-                { id: 2, name: 'Ramp', count: 10, required: 1, byTurn: 2, color: '#00ff00' }
-            ]);
-
-            const parsed = JSON.parse(validTypes);
-
-            const isValid = Array.isArray(parsed) && parsed.every(t =>
-                t &&
-                typeof t.id === 'number' &&
-                typeof t.name === 'string' &&
-                typeof t.count === 'number' &&
-                typeof t.required === 'number' &&
-                typeof t.byTurn === 'number' &&
-                t.count >= 0 && t.count <= 100 &&
-                t.required >= 0 && t.required <= 100 &&
-                t.byTurn >= 0 && t.byTurn <= 20
-            );
-
-            assert.ok(isValid, 'Valid mulligan types should pass validation');
+            assert.strictEqual(decompressed[0].color, '#888888');
         });
 
-        it('should reject invalid mulligan types structure', () => {
-            const invalidCases = [
-                { json: '{}', desc: 'Not an array' },
-                { json: '[{"id": 1}]', desc: 'Missing required fields' },
-                { json: '[{"id": 1, "name": "Test", "count": 101, "required": 1, "byTurn": 1}]', desc: 'Count out of bounds' },
-                { json: '[{"id": 1, "name": "Test", "count": 50, "required": 101, "byTurn": 1}]', desc: 'Required out of bounds' },
-                { json: '[{"id": 1, "name": "Test", "count": 50, "required": 1, "byTurn": 21}]', desc: 'ByTurn out of bounds' },
+        it('should return null for invalid compressed data', () => {
+            const result = decompressMullTypes('invalid-data');
+            assert.strictEqual(result, null);
+        });
+
+        it('should produce URL-safe output', () => {
+            const types = [
+                { id: 1, name: 'Lands & Ramp', count: 40, required: 2, byTurn: 2, color: '#22c55e' }
             ];
 
-            invalidCases.forEach(({ json, desc }) => {
-                const parsed = JSON.parse(json);
+            const compressed = compressMullTypes(types);
 
-                const isValid = Array.isArray(parsed) && parsed.every(t =>
-                    t &&
-                    typeof t.id === 'number' &&
-                    typeof t.name === 'string' &&
-                    typeof t.count === 'number' &&
-                    typeof t.required === 'number' &&
-                    typeof t.byTurn === 'number' &&
-                    t.count >= 0 && t.count <= 100 &&
-                    t.required >= 0 && t.required <= 100 &&
-                    t.byTurn >= 0 && t.byTurn <= 20
-                );
-
-                assert.ok(!isValid, `${desc} should fail validation`);
-            });
-        });
-
-        it('should handle prototype pollution attempts', () => {
-            const maliciousJSON = '{"__proto__":{"admin":true}}';
-            const parsed = JSON.parse(maliciousJSON);
-
-            // Validation should reject non-array
-            const isValid = Array.isArray(parsed);
-            assert.ok(!isValid, 'Prototype pollution attempt should be rejected');
-        });
-
-        it('should handle JSON with extra properties safely', () => {
-            const jsonWithExtra = JSON.stringify([
-                { id: 1, name: 'Test', count: 10, required: 1, byTurn: 1, malicious: '<script>alert(1)</script>' }
-            ]);
-
-            const parsed = JSON.parse(jsonWithExtra);
-
-            // Validation should still work, extra properties are ignored
-            const isValid = Array.isArray(parsed) && parsed.every(t =>
-                t &&
-                typeof t.id === 'number' &&
-                typeof t.name === 'string' &&
-                typeof t.count === 'number' &&
-                typeof t.required === 'number' &&
-                typeof t.byTurn === 'number'
-            );
-
-            assert.ok(isValid, 'Extra properties should not break validation');
+            // Should not contain characters that need URL encoding
+            assert.strictEqual(compressed, encodeURIComponent(compressed).replace(/%2B/g, '+'));
         });
     });
 
