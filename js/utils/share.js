@@ -73,7 +73,7 @@ export async function parseShareUrl() {
             // Validate structure before using
             if (Array.isArray(types) && types.every(t =>
                 t &&
-                typeof t.id === 'string' &&
+                typeof t.id === 'number' &&
                 typeof t.name === 'string' &&
                 typeof t.count === 'number' &&
                 typeof t.required === 'number' &&
@@ -93,27 +93,27 @@ export async function parseShareUrl() {
 
     if (params.has('mullPenalty')) {
         const value = parseFloat(params.get('mullPenalty'));
-        if (!isNaN(value) && value >= 0 && value <= 1) {
+        if (!isNaN(value) && value >= 0 && value <= 100) {
             const input = document.getElementById('mull-penalty');
             if (input) {
                 input.value = value;
                 input.dispatchEvent(new Event('input'));
             }
         } else {
-            console.warn('Invalid mullPenalty value, must be between 0 and 1');
+            console.warn('Invalid mullPenalty value, must be between 0 and 100');
         }
     }
 
     if (params.has('mullThreshold')) {
         const value = parseFloat(params.get('mullThreshold'));
-        if (!isNaN(value) && value >= 0 && value <= 1) {
+        if (!isNaN(value) && value >= 0 && value <= 100) {
             const input = document.getElementById('mull-threshold');
             if (input) {
                 input.value = value;
                 input.dispatchEvent(new Event('input'));
             }
         } else {
-            console.warn('Invalid mullThreshold value, must be between 0 and 1');
+            console.warn('Invalid mullThreshold value, must be between 0 and 100');
         }
     }
 

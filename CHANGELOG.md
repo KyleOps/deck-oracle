@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-02-03
+
+### Fixed
+- **Mulligan Calculator Share URL**: Fixed bug where shared URLs did not restore card type settings correctly. The validation was checking for string IDs instead of numeric IDs, causing the URL parameters to be silently rejected and default values to be used instead.
+- **Mulligan Penalty/Threshold Share URL**: Fixed bug where Mulligan Penalty and Confidence Threshold values were not restored from share URLs. The validation expected decimal values (0-1) but the URL contained percentage values (0-100).
+
 ## [1.7.0] - 2026-01-29
 
 ### Added
