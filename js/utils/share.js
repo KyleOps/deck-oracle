@@ -11,6 +11,74 @@ import * as DreamHarvest from '../calculators/dreamharvest.js';
 // Valid tab names whitelist
 const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra', 'mara', 'dreamharvest'];
 
+/**
+ * Encode mulligan types to compact format: "id|name|count|required|byTurn|color~..."
+ * Color stored without # prefix to save a character per type
+ */
+function encodeMullTypes(types) {
+    return types.map(t =>
+        `${t.id}|${t.name}|${t.count}|${t.required}|${t.byTurn}|${(t.color || '').replace('#', '')}`
+    ).join('~');
+}
+
+/**
+ * Decode mulligan types from compact format or legacy JSON
+ * Returns null if parsing fails
+ */
+function decodeMullTypes(str) {
+    // Try compact format first (contains ~ or | separators)
+    if (str.includes('|')) {
+        try {
+            const types = str.split('~').map(typeStr => {
+                const [id, name, count, required, byTurn, color] = typeStr.split('|');
+                return {
+                    id: parseInt(id, 10),
+                    name: name,
+                    count: parseInt(count, 10),
+                    required: parseInt(required, 10),
+                    byTurn: parseInt(byTurn, 10),
+                    color: color ? `#${color}` : '#888888'
+                };
+            });
+
+            // Validate parsed data
+            if (types.every(t =>
+                !isNaN(t.id) && typeof t.name === 'string' &&
+                !isNaN(t.count) && !isNaN(t.required) && !isNaN(t.byTurn) &&
+                t.count >= 0 && t.count <= 100 &&
+                t.required >= 0 && t.required <= 100 &&
+                t.byTurn >= 0 && t.byTurn <= 20
+            )) {
+                return types;
+            }
+        } catch (e) {
+            console.warn('Failed to parse compact mullTypes format', e);
+        }
+    }
+
+    // Fall back to legacy JSON format for backward compatibility
+    try {
+        const types = JSON.parse(decodeURIComponent(str));
+        if (Array.isArray(types) && types.every(t =>
+            t &&
+            typeof t.id === 'number' &&
+            typeof t.name === 'string' &&
+            typeof t.count === 'number' &&
+            typeof t.required === 'number' &&
+            typeof t.byTurn === 'number' &&
+            t.count >= 0 && t.count <= 100 &&
+            t.required >= 0 && t.required <= 100 &&
+            t.byTurn >= 0 && t.byTurn <= 20
+        )) {
+            return types;
+        }
+    } catch (e) {
+        console.warn('Failed to parse JSON mullTypes format', e);
+    }
+
+    return null;
+}
+
 // Allowed deck import domains
 const ALLOWED_DECK_HOSTS = ['moxfield.com', 'www.moxfield.com', 'archidekt.com', 'www.archidekt.com'];
 
@@ -67,27 +135,11 @@ export async function parseShareUrl() {
 
     const mullTypes = params.get('mullTypes');
     if (mullTypes) {
-        try {
-            const types = JSON.parse(decodeURIComponent(mullTypes));
-
-            // Validate structure before using
-            if (Array.isArray(types) && types.every(t =>
-                t &&
-                typeof t.id === 'number' &&
-                typeof t.name === 'string' &&
-                typeof t.count === 'number' &&
-                typeof t.required === 'number' &&
-                typeof t.byTurn === 'number' &&
-                t.count >= 0 && t.count <= 100 &&
-                t.required >= 0 && t.required <= 100 &&
-                t.byTurn >= 0 && t.byTurn <= 20
-            )) {
-                Mulligan.setCardTypes(types);
-            } else {
-                console.warn('Invalid mulligan types structure');
-            }
-        } catch (e) {
-            console.error("Failed to parse mulligan types", e);
+        const types = decodeMullTypes(mullTypes);
+        if (types) {
+            Mulligan.setCardTypes(types);
+        } else {
+            console.warn('Invalid mulligan types structure');
         }
     }
 
@@ -206,17 +258,9 @@ export function getShareUrl() {
     // Mulligan Specifics
     if (activeTab && activeTab.id === 'mulligan-tab') {
         const mullState = Mulligan.getState();
-        if (mullState && mullState.types) {
-            // Only serialize if custom types exist (default lands/ramp might be noise, but safer to just send all)
-            const serializedTypes = JSON.stringify(mullState.types.map(t => ({
-                id: t.id,
-                name: t.name,
-                count: t.count,
-                required: t.required,
-                byTurn: t.byTurn,
-                color: t.color
-            })));
-            params.set('mullTypes', serializedTypes);
+        if (mullState && mullState.types && mullState.types.length > 0) {
+            // Use compact format: "id|name|count|required|byTurn|color~..."
+            params.set('mullTypes', encodeMullTypes(mullState.types));
         }
         
         const penalty = document.getElementById('mull-penalty');

@@ -7,21 +7,15 @@ import { choose, drawTwoTypeMin, drawThreeTypeMin } from '../utils/hypergeometri
 import { formatNumber, formatPercentage, createCache } from '../utils/simulation.js';
 import { createOrUpdateChart } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
-import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
-import {
-    buildDeckFromCardData, shuffleDeck, renderCardBadge, renderDistributionChart,
-    createCollapsibleSection, extractCardTypes
-} from '../utils/sampleSimulator.js';
+import { generateSampleRevealsHTML } from '../utils/components.js';
+import { shuffleDeck, createCollapsibleSection } from '../utils/sampleSimulator.js';
 
 let simulationCache = createCache(100);
 let lastConfigHash = '';
-let chart = null;
 let turnChart = null;
 
 // Stable samples state
 let stableSamples = [];
-let lastSampleDeckHash = '';
 const SAMPLE_COUNT_DEFAULT = 10;
 let renderedCount = 0;
 
@@ -106,8 +100,7 @@ export function calcMultiTypeSuccess(deckSize, types, handCounts) {
     
     // Check for impossible Turn 0 requirements
     if (uniqueDeadlines[0] <= 0) return 0;
-    
-    const initialDeckCounts = types.map((t, i) => t.count - handCounts[i]);
+
     const initialCardsInDeck = deckSize - 7;
     
     // Memoization cache
@@ -844,7 +837,7 @@ export function runSampleReveals() {
                 if (draws.length > 0) {
                     html += `<div style="margin-top: 8px; font-size: 0.85em; color: var(--text-dim);">Next ${draws.length} natural draws:</div>`;
                     html += '<div style="margin: 4px 0; display: flex; flex-wrap: wrap; gap: 4px; opacity: 0.9;">';
-                    draws.forEach((card, idx) => {
+                    draws.forEach(card => {
                         html += renderVirtualCard(card);
                     });
                     html += '</div>';
@@ -1139,11 +1132,6 @@ function updateSummary(config, result, sharedData) {
     const summaryEl = document.getElementById('mull-summary');
     if (!summaryEl) return;
 
-    // Calculate confidence consistency using shared data
-    const confidentKeepRate = result.strategy.reduce((sum, h) =>
-        h.keep && h.successProb >= config.confidenceThreshold ? sum + h.handProb : sum, 0);
-    const confidenceConsistency = sharedData.totalKeepProb > 0 ? confidentKeepRate / sharedData.totalKeepProb : 0;
-
     // Marginal benefits helper
     const getImpact = (pct) => pct > 1.5 ? ['🔥 High Impact', '#22c55e'] : pct > 0.5 ? ['✅ Medium Impact', '#4ade80'] : pct < 0 ? ['⚠️ Negative Impact', '#ef4444'] : ['Low Impact', 'var(--text-dim)'];
 
@@ -1172,7 +1160,6 @@ function updateSummary(config, result, sharedData) {
         }
 
         const [label, color] = getImpact(benefitPct);
-        const baselinePct = b.baseline * 100;
         return `<li style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05)">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
                 <span style="color:var(--text-light);font-weight:600">+1 ${config.types[i].name}</span>

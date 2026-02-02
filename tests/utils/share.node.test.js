@@ -142,36 +142,37 @@ describe('Share URL - Security & Validation', () => {
             });
         });
 
-        it('should validate mullPenalty within bounds (0-1)', () => {
+        it('should validate mullPenalty within bounds (0-100)', () => {
             const testCases = [
-                { value: '0.5', valid: true },
+                { value: '5', valid: true },
                 { value: '0', valid: true },
-                { value: '1', valid: true },
-                { value: '1.1', valid: false },
-                { value: '-0.1', valid: false },
+                { value: '100', valid: true },
+                { value: '50.5', valid: true },
+                { value: '101', valid: false },
+                { value: '-1', valid: false },
                 { value: 'abc', valid: false }
             ];
 
             testCases.forEach(({ value, valid }) => {
                 const parsed = parseFloat(value);
-                const isValid = !isNaN(parsed) && parsed >= 0 && parsed <= 1;
+                const isValid = !isNaN(parsed) && parsed >= 0 && parsed <= 100;
 
                 assert.strictEqual(isValid, valid, `mullPenalty value "${value}" should be ${valid ? 'valid' : 'invalid'}`);
             });
         });
 
-        it('should validate mullThreshold within bounds (0-1)', () => {
+        it('should validate mullThreshold within bounds (0-100)', () => {
             const testCases = [
-                { value: '0.75', valid: true },
+                { value: '75', valid: true },
                 { value: '0', valid: true },
-                { value: '1', valid: true },
-                { value: '2', valid: false },
+                { value: '100', valid: true },
+                { value: '101', valid: false },
                 { value: '-1', valid: false }
             ];
 
             testCases.forEach(({ value, valid }) => {
                 const parsed = parseFloat(value);
-                const isValid = !isNaN(parsed) && parsed >= 0 && parsed <= 1;
+                const isValid = !isNaN(parsed) && parsed >= 0 && parsed <= 100;
 
                 assert.strictEqual(isValid, valid, `mullThreshold value "${value}" should be ${valid ? 'valid' : 'invalid'}`);
             });
@@ -202,18 +203,92 @@ describe('Share URL - Security & Validation', () => {
         });
     });
 
-    describe('JSON Validation (Mulligan Types)', () => {
-        it('should accept valid mulligan types structure', () => {
+    describe('Mulligan Types - Compact Format', () => {
+        it('should encode types to compact format', () => {
+            const types = [
+                { id: 1, name: 'Lands', count: 40, required: 2, byTurn: 2, color: '#22c55e' },
+                { id: 2, name: 'Ramp', count: 14, required: 1, byTurn: 1, color: '#3b82f6' }
+            ];
+
+            // Encode: id|name|count|required|byTurn|color (no #)
+            const encoded = types.map(t =>
+                `${t.id}|${t.name}|${t.count}|${t.required}|${t.byTurn}|${t.color.replace('#', '')}`
+            ).join('~');
+
+            assert.strictEqual(encoded, '1|Lands|40|2|2|22c55e~2|Ramp|14|1|1|3b82f6');
+        });
+
+        it('should decode compact format correctly', () => {
+            const compact = '1|Lands|40|2|2|22c55e~2|Ramp|14|1|1|3b82f6';
+
+            const types = compact.split('~').map(typeStr => {
+                const [id, name, count, required, byTurn, color] = typeStr.split('|');
+                return {
+                    id: parseInt(id, 10),
+                    name: name,
+                    count: parseInt(count, 10),
+                    required: parseInt(required, 10),
+                    byTurn: parseInt(byTurn, 10),
+                    color: `#${color}`
+                };
+            });
+
+            assert.strictEqual(types.length, 2);
+            assert.deepStrictEqual(types[0], { id: 1, name: 'Lands', count: 40, required: 2, byTurn: 2, color: '#22c55e' });
+            assert.deepStrictEqual(types[1], { id: 2, name: 'Ramp', count: 14, required: 1, byTurn: 1, color: '#3b82f6' });
+        });
+
+        it('should produce shorter URLs than JSON format', () => {
+            const types = [
+                { id: 1, name: 'Lands', count: 40, required: 2, byTurn: 2, color: '#22c55e' },
+                { id: 2, name: 'Ramp', count: 14, required: 1, byTurn: 1, color: '#3b82f6' }
+            ];
+
+            const jsonEncoded = encodeURIComponent(JSON.stringify(types));
+            const compactEncoded = types.map(t =>
+                `${t.id}|${t.name}|${t.count}|${t.required}|${t.byTurn}|${t.color.replace('#', '')}`
+            ).join('~');
+
+            // Compact should be significantly shorter
+            assert.ok(compactEncoded.length < jsonEncoded.length,
+                `Compact (${compactEncoded.length}) should be shorter than JSON (${jsonEncoded.length})`);
+        });
+
+        it('should handle single type correctly', () => {
+            const compact = '1|Lands|40|2|2|22c55e';
+            const parts = compact.split('|');
+
+            assert.strictEqual(parts.length, 6);
+            assert.strictEqual(parts[0], '1');
+            assert.strictEqual(parts[1], 'Lands');
+        });
+
+        it('should validate decoded compact format values', () => {
+            const validCompact = '1|Lands|40|2|2|22c55e';
+            const [id, name, count, required, byTurn] = validCompact.split('|');
+
+            const parsedCount = parseInt(count, 10);
+            const parsedRequired = parseInt(required, 10);
+            const parsedByTurn = parseInt(byTurn, 10);
+
+            assert.ok(parsedCount >= 0 && parsedCount <= 100, 'Count should be valid');
+            assert.ok(parsedRequired >= 0 && parsedRequired <= 100, 'Required should be valid');
+            assert.ok(parsedByTurn >= 0 && parsedByTurn <= 20, 'ByTurn should be valid');
+        });
+    });
+
+    describe('Mulligan Types - Legacy JSON Format (Backward Compatibility)', () => {
+        it('should accept valid mulligan types structure with numeric IDs', () => {
             const validTypes = JSON.stringify([
-                { id: '1', name: 'Lands', count: 24, required: 2, byTurn: 1, color: '#ff0000' },
-                { id: '2', name: 'Ramp', count: 10, required: 1, byTurn: 2, color: '#00ff00' }
+                { id: 1, name: 'Lands', count: 24, required: 2, byTurn: 1, color: '#ff0000' },
+                { id: 2, name: 'Ramp', count: 10, required: 1, byTurn: 2, color: '#00ff00' }
             ]);
 
             const parsed = JSON.parse(validTypes);
 
             const isValid = Array.isArray(parsed) && parsed.every(t =>
                 t &&
-                typeof t.id === 'string' &&
+                typeof t.id === 'number' &&
                 typeof t.name === 'string' &&
                 typeof t.count === 'number' &&
                 typeof t.required === 'number' &&
@@ -230,9 +305,9 @@ describe('Share URL - Security & Validation', () => {
             const invalidCases = [
                 { json: '{}', desc: 'Not an array' },
                 { json: '[{"id": 1}]', desc: 'Missing required fields' },
-                { json: '[{"id": "1", "name": "Test", "count": 101, "required": 1, "byTurn": 1}]', desc: 'Count out of bounds' },
-                { json: '[{"id": "1", "name": "Test", "count": 50, "required": 101, "byTurn": 1}]', desc: 'Required out of bounds' },
-                { json: '[{"id": "1", "name": "Test", "count": 50, "required": 1, "byTurn": 21}]', desc: 'ByTurn out of bounds' },
+                { json: '[{"id": 1, "name": "Test", "count": 101, "required": 1, "byTurn": 1}]', desc: 'Count out of bounds' },
+                { json: '[{"id": 1, "name": "Test", "count": 50, "required": 101, "byTurn": 1}]', desc: 'Required out of bounds' },
+                { json: '[{"id": 1, "name": "Test", "count": 50, "required": 1, "byTurn": 21}]', desc: 'ByTurn out of bounds' },
             ];
 
             invalidCases.forEach(({ json, desc }) => {
@@ -240,7 +315,7 @@ describe('Share URL - Security & Validation', () => {
 
                 const isValid = Array.isArray(parsed) && parsed.every(t =>
                     t &&
-                    typeof t.id === 'string' &&
+                    typeof t.id === 'number' &&
                     typeof t.name === 'string' &&
                     typeof t.count === 'number' &&
                     typeof t.required === 'number' &&
@@ -265,7 +340,7 @@ describe('Share URL - Security & Validation', () => {
 
         it('should handle JSON with extra properties safely', () => {
             const jsonWithExtra = JSON.stringify([
-                { id: '1', name: 'Test', count: 10, required: 1, byTurn: 1, malicious: '<script>alert(1)</script>' }
+                { id: 1, name: 'Test', count: 10, required: 1, byTurn: 1, malicious: '<script>alert(1)</script>' }
             ]);
 
             const parsed = JSON.parse(jsonWithExtra);
@@ -273,7 +348,7 @@ describe('Share URL - Security & Validation', () => {
             // Validation should still work, extra properties are ignored
             const isValid = Array.isArray(parsed) && parsed.every(t =>
                 t &&
-                typeof t.id === 'string' &&
+                typeof t.id === 'number' &&
                 typeof t.name === 'string' &&
                 typeof t.count === 'number' &&
                 typeof t.required === 'number' &&
