@@ -22,7 +22,6 @@ yarn-error.log*
 
 # Dependencies (if you add a build step later)
 node_modules/
-package-lock.json
 yarn.lock
 
 # Build outputs (if you add a build step later)
@@ -39,8 +38,12 @@ build/
 tmp/
 temp/
 *.tmp
+response.json
 
 # Backup files
 *.bak
 *.backup
 *~
+
+.gitignore
+/.claude

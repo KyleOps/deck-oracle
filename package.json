@@ -11,8 +11,8 @@
     "test:node:watch": "node --test --watch tests/**/*.node.test.js",
     "test:perf": "node --test tests/performance/benchmarks.node.test.js",
     "test:watch": "nodemon --watch js --watch tests --exec npm run test:legacy",
-    "dev": "npx live-server --port=8080 --no-browser",
-    "serve": "npx http-server -p 8080 -c-1"
+    "dev": "npx live-server --port=3000 --no-browser",
+    "serve": "npx http-server -p 3000 -c-1"
   },
   "keywords": [
     "mtg",

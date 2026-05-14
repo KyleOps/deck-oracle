@@ -21,23 +21,34 @@ const CONFIG = {
 };
 
 const COLORS = {
-    primary: '#c084fc',
-    primaryDim: 'rgba(192, 132, 252, 0.1)',
-    danger: '#dc2626',
-    dangerDim: 'rgba(220, 38, 38, 0.1)',
-    success: '#22c55e',
-    warning: '#f59e0b',
-    white: '#fff',
-    text: '#a09090',
-    grid: 'rgba(139, 0, 0, 0.2)',
-    creature: '#22c55e',
-    sorcery: '#ef4444',
-    instant: '#3b82f6',
-    artifact: '#a8a29e',
-    enchantment: '#a855f7',
-    planeswalker: '#f59e0b',
-    battle: '#ec4899',
-    land: '#92867d'
+    primary: '#4ade80',
+    primaryDim: 'rgba(74, 222, 128, 0.08)',
+    danger: '#fbbf24',
+    dangerDim: 'rgba(251, 191, 36, 0.08)',
+    success: '#4ade80',
+    warning: '#fbbf24',
+    white: '#d4dfd9',
+    text: '#5a6b66',
+    grid: '#1c2520',
+    creature: '#4ade80',
+    sorcery: '#f87171',
+    instant: '#60a5fa',
+    artifact: '#8b9b95',
+    enchantment: '#c084fc',
+    planeswalker: '#fbbf24',
+    battle: '#f472b6',
+    land: '#5a6b66'
+};
+
+const TX_TYPE_COLORS = {
+    creature: '#4ade80',
+    instant: '#60a5fa',
+    sorcery: '#f87171',
+    artifact: '#8b9b95',
+    enchantment: '#c084fc',
+    planeswalker: '#fbbf24',
+    land: '#5a6b66',
+    battle: '#f472b6'
 };
 
 let simulationCache = createCache(50);
@@ -252,7 +263,7 @@ export function calculate() {
     const { deck, numTypes } = buildDeckIntArray(config.types, config.cardData);
     const effectiveDeckSize = deck.length;
 
-    const maxX = Math.min(config.x + CONFIG.X_RANGE_AFTER, effectiveDeckSize);
+    const maxX = Math.min(Math.max(config.x + CONFIG.X_RANGE_AFTER, 20), effectiveDeckSize);
     const batchResults = simulatePortentBatch(deck, numTypes, effectiveDeckSize, maxX);
 
     return { config, results: batchResults };
@@ -261,51 +272,53 @@ export function calculate() {
 function updateChart(config, results) {
     const minX = Math.max(1, config.x - CONFIG.X_RANGE_BEFORE);
     const maxX = Math.min(config.x + CONFIG.X_RANGE_AFTER, Object.keys(results).length);
-    
+
     const xValues = [];
     for (let i = minX; i <= maxX; i++) xValues.push(i);
 
-    const pointRadii = xValues.map(x => x === config.x ? 8 : 4);
-
     chart = createOrUpdateChart(chart, 'portent-combinedChart', {
-        type: 'line',
+        type: 'bar',
         data: {
-            labels: xValues.map(x => 'X=' + x),
+            labels: xValues.map(x => 'x=' + x),
             datasets: [
                 {
-                    label: 'P(Free Spell) %',
-                    data: xValues.map(x => results[x].prob4Plus * 100),
-                    borderColor: COLORS.primary,
-                    backgroundColor: COLORS.primaryDim,
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: pointRadii,
-                    pointBackgroundColor: xValues.map(x => x === config.x ? COLORS.white : COLORS.primary),
-                    yAxisID: 'yProb'
+                    label: 'E[CARDS]',
+                    data: xValues.map(x => results[x] ? +(x * results[x].prob4Plus).toFixed(3) : 0),
+                    backgroundColor: xValues.map(x => x === config.x ? COLORS.danger : COLORS.dangerDim),
+                    borderColor: 'transparent',
+                    yAxisID: 'yCards',
+                    order: 2
                 },
                 {
-                    label: 'Types Exiled',
-                    data: xValues.map(x => results[x].expectedTypes),
-                    borderColor: COLORS.danger,
-                    backgroundColor: COLORS.dangerDim,
-                    fill: false,
+                    label: 'P(FREE) %',
+                    data: xValues.map(x => results[x] ? +(results[x].prob4Plus * 100).toFixed(2) : 0),
+                    borderColor: COLORS.primary,
+                    backgroundColor: 'transparent',
+                    type: 'line',
                     tension: 0.3,
-                    pointRadius: pointRadii,
-                    pointBackgroundColor: xValues.map(x => x === config.x ? COLORS.white : COLORS.danger),
-                    yAxisID: 'yTypes'
+                    pointRadius: xValues.map(x => x === config.x ? 6 : 3),
+                    pointBackgroundColor: xValues.map(x => x === config.x ? COLORS.primary : 'transparent'),
+                    pointBorderColor: COLORS.primary,
+                    fill: false,
+                    yAxisID: 'yProb',
+                    order: 1
                 }
             ]
         },
         options: {
             scales: {
-                yProb: { type: 'linear', position: 'left', beginAtZero: true, max: 100, title: { display: true, text: 'P(Free Spell) %', color: COLORS.primary }, grid: { color: COLORS.grid }, ticks: { color: COLORS.primary } },
-                yTypes: { type: 'linear', position: 'right', beginAtZero: true, title: { display: true, text: 'Types Exiled', color: COLORS.danger }, grid: { drawOnChartArea: false }, ticks: { color: COLORS.danger } },
+                yProb: { type: 'linear', position: 'left', beginAtZero: true, max: 100,
+                    grid: { color: COLORS.grid }, ticks: { color: COLORS.primary } },
+                yCards: { type: 'linear', position: 'right', beginAtZero: true,
+                    grid: { drawOnChartArea: false }, ticks: { color: COLORS.danger } },
                 x: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text } }
             },
             plugins: {
                 tooltip: {
                     callbacks: {
-                        label: ctx => ctx.datasetIndex === 0 ? `Free spell: ${ctx.parsed.y.toFixed(1)}%` : `Types exiled: ${ctx.parsed.y.toFixed(2)}`
+                        label: ctx => ctx.datasetIndex === 1
+                            ? `P(free): ${ctx.parsed.y.toFixed(1)}%`
+                            : `E[cards]: ${ctx.parsed.y.toFixed(2)}`
                     }
                 }
             }
@@ -549,6 +562,179 @@ export function runSampleReveals() {
     }
 }
 
+function updateTerminalDisplay(config, results) {
+    const x = config.x;
+    const r = results[x];
+    if (!r) return;
+
+    const prob = r.prob4Plus;
+    const eCards = x * prob;
+    const eLoss = x * (1 - prob);
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+    set('portent-x-display', x);
+    set('portent-n-display', config.deckSize);
+    set('portent-n-label', `N=${config.deckSize}`);
+    set('portent-pct-display', `${(x / config.deckSize * 100).toFixed(1)}%`);
+    set('portent-hero-pfree', (prob * 100).toFixed(2) + '%');
+    set('portent-hero-pfree-sub', `x=${x}`);
+    set('portent-hero-ecards', eCards.toFixed(2));
+    set('portent-hero-loss', eLoss.toFixed(2));
+    set('portent-reveal-header', `06 · SAMPLE REVEAL · X=${x}`);
+}
+
+function updateTypeBar(types, deckSize) {
+    const total = deckSize || Object.values(types).reduce((a, b) => a + b, 0);
+    if (total === 0) return;
+
+    const typeBar = document.getElementById('portent-type-bar');
+    const typeGrid = document.getElementById('portent-type-grid');
+
+    const entries = Object.entries(types).filter(([, v]) => v > 0);
+
+    if (typeBar) {
+        typeBar.innerHTML = entries.map(([type, count]) => {
+            const pct = (count / total * 100).toFixed(2);
+            return `<span class="tx-bar-seg" style="width:${pct}%; background:${TX_TYPE_COLORS[type] || '#8b9b95'};" title="${type}: ${count}"></span>`;
+        }).join('');
+    }
+
+    if (typeGrid) {
+        typeGrid.innerHTML = entries.map(([type, count]) => `
+            <span style="color:${TX_TYPE_COLORS[type] || '#8b9b95'}; line-height:1.8;">●</span>
+            <span style="color:var(--tx-mid); text-transform:uppercase; font-size:10px; line-height:1.8;">${type.slice(0, 4)}</span>
+            <span style="color:var(--tx-bright); text-align:right; line-height:1.8;">${count}</span>
+            <span style="color:var(--tx-dim); text-align:right; font-size:10px; line-height:1.8;">${(count / total * 100).toFixed(0)}%</span>
+        `).join('');
+    }
+}
+
+function updateSweepTable(config, results) {
+    const tbody = document.getElementById('portent-sweep-body');
+    if (!tbody) return;
+
+    const getVerdict = (p) => {
+        if (p >= 0.85) return { text: 'CERTAIN', color: '#4ade80' };
+        if (p >= 0.65) return { text: 'STRONG', color: '#22c55e' };
+        if (p >= 0.40) return { text: 'FAIR', color: '#fbbf24' };
+        return { text: 'WEAK', color: '#f87171' };
+    };
+
+    let prevProb = null;
+    let html = '';
+
+    for (let x = 3; x <= 20; x++) {
+        const r = results[x];
+        if (!r) continue;
+        const prob = r.prob4Plus;
+        const eCards = (x * prob).toFixed(2);
+
+        let deltaP = '—';
+        let deltaPColor = 'var(--tx-dim)';
+        if (prevProb !== null) {
+            const diff = (prob - prevProb) * 100;
+            deltaP = (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%';
+            deltaPColor = diff >= 0.05 ? '#4ade80' : diff < -0.05 ? '#f87171' : 'var(--tx-dim)';
+        }
+        prevProb = prob;
+
+        const verdict = getVerdict(prob);
+        const isCurrent = x === config.x;
+        const barFill = Math.min(100, +(prob * 100).toFixed(1));
+        const rowStyle = isCurrent ? ' class="current"' : '';
+
+        html += `<tr${rowStyle}>
+            <td style="text-align:left; font-weight:${isCurrent ? '700' : '400'}; color:${isCurrent ? 'var(--tx-bright)' : 'var(--tx-mid)'};">${x}</td>
+            <td style="color:#4ade80;">${(prob * 100).toFixed(2)}%</td>
+            <td class="p-bar-cell"><span class="tx-p-bar"><span class="tx-p-fill" style="width:${barFill}%"></span></span></td>
+            <td style="color:#fbbf24;">${eCards}</td>
+            <td style="color:${deltaPColor};">${deltaP}</td>
+            <td style="color:${verdict.color}; font-weight:600; font-size:10px; letter-spacing:0.08em;">${verdict.text}</td>
+        </tr>`;
+    }
+
+    tbody.innerHTML = html;
+}
+
+function updateTrials(config) {
+    const container = document.getElementById('portent-trials-container');
+    if (!container) return;
+
+    const cardData = config.cardData;
+    if (!cardData || !cardData.cardsByName || Object.keys(cardData.cardsByName).length === 0) {
+        container.innerHTML = '<div class="portent-trial" style="color:var(--tx-dim); font-size:10px; padding:20px 16px;">Import a decklist to see sample reveals.</div>';
+        return;
+    }
+
+    if (stableSamples.length < 4) return;
+
+    let html = '';
+    for (let t = 0; t < 4; t++) {
+        const sample = stableSamples[t];
+        if (!sample) continue;
+        const revealed = sample.slice(0, config.x);
+        const typesSet = new Set();
+        revealed.forEach(card => card.types.forEach(ty => typesSet.add(ty)));
+        const numTypes = typesSet.size;
+        const isFree = numTypes >= CONFIG.FREE_SPELL_THRESHOLD;
+        const typeList = Array.from(typesSet).sort();
+
+        const cardDots = revealed.map(card => {
+            const t = card.types[0] || 'land';
+            return `<span style="color:${TX_TYPE_COLORS[t] || '#8b9b95'};" title="${card.type_line || t}">●</span> <span style="color:var(--tx-mid); font-size:10px;">${card.name}</span>`;
+        }).join('<br>');
+
+        html += `<div class="portent-trial" style="padding:0;">
+            <div style="display:flex; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--tx-rule); font-size:10px; letter-spacing:0.08em;">
+                <span style="color:var(--tx-mid);">TRIAL ${String(t + 1).padStart(3,'0')} · X=${config.x}</span>
+                <span style="color:${isFree ? '#4ade80' : '#f87171'}; font-weight:600;">${isFree ? 'FREE ✓' : 'FIZZ ✗'}</span>
+            </div>
+            <div style="padding:8px 12px; font-size:11px; line-height:1.7;">${cardDots}</div>
+            <div style="padding:6px 12px; border-top:1px solid var(--tx-rule); font-size:10px; color:var(--tx-dim); letter-spacing:0.06em;">
+                DIST ${numTypes} TYPES · ${typeList.map(ty => `<span style="color:${TX_TYPE_COLORS[ty] || '#8b9b95'};">${ty}</span>`).join(' ')}
+            </div>
+        </div>`;
+    }
+
+    container.innerHTML = html;
+}
+
+function updateLiveTape(config, results) {
+    const tape = document.getElementById('portent-live-tape');
+    if (!tape || !results || Object.keys(results).length === 0) return;
+
+    const now = new Date();
+    let html = '';
+    const xRange = [];
+    for (let x = Math.max(3, config.x - 6); x <= Math.min(20, config.x + 7); x++) {
+        if (results[x]) xRange.push(x);
+        if (xRange.length >= 14) break;
+    }
+
+    xRange.forEach((x, i) => {
+        const r = results[x];
+        if (!r) return;
+        const prob = r.prob4Plus;
+        const t = new Date(now.getTime() - (13 - i) * 1400);
+        const ts = `${String(t.getUTCHours()).padStart(2,'0')}:${String(t.getUTCMinutes()).padStart(2,'0')}:${String(t.getUTCSeconds()).padStart(2,'0')}`;
+        const barFillCount = Math.round(prob * 10);
+        const isCurrent = x === config.x;
+        const pColor = prob >= 0.65 ? '#4ade80' : prob >= 0.40 ? '#fbbf24' : '#f87171';
+        const filledBar = '█'.repeat(barFillCount);
+        const emptyBar = '░'.repeat(10 - barFillCount);
+
+        html += `<div class="portent-tape-row${isCurrent ? ' current' : ''}">
+            <span style="color:var(--tx-dim); font-size:9px;">${ts}</span>
+            <span style="color:var(--tx-mid);">x=${x}</span>
+            <span style="letter-spacing:-0.05em; font-size:10px;"><span style="color:${pColor}; opacity:0.7;">${filledBar}</span><span style="color:var(--tx-rule-hi);">${emptyBar}</span></span>
+            <span style="color:${pColor}; text-align:right;">${(prob * 100).toFixed(2)}%</span>
+        </div>`;
+    });
+
+    tape.innerHTML = html;
+}
+
 /**
  * Update all UI elements
  */
@@ -564,9 +750,14 @@ export function updateUI() {
     updateChart(config, results);
     updateStats(config, results);
     updateTable(config, results);
+    updateTerminalDisplay(config, results);
+    updateTypeBar(config.types, config.deckSize);
+    updateSweepTable(config, results);
+    updateLiveTape(config, results);
 
     if (config.cardData && config.cardData.cardsByName && Object.keys(config.cardData.cardsByName).length > 0) {
         runSampleReveals();
+        updateTrials(config);
     }
 
     // Render big spell comparison
@@ -593,6 +784,30 @@ export function init() {
             }
             const btn = document.getElementById('portent-draw-reveals-btn');
             if (btn) btn.addEventListener('click', refreshSamples);
+
+            // Preset chips: clicking sets the slider and hidden input then recalcs
+            document.querySelectorAll('#portent-presets .tx-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const x = parseInt(chip.dataset.x);
+                    const slider = document.getElementById('portent-xSlider');
+                    const hidden = document.getElementById('portent-xValue');
+                    if (slider) slider.value = x;
+                    if (hidden) { hidden.value = x; hidden.dispatchEvent(new Event('input')); }
+                    // Mark active chip
+                    document.querySelectorAll('#portent-presets .tx-chip').forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    updateUI();
+                });
+            });
+
+            // Reshuffle button
+            const reshuffleBtn = document.getElementById('portent-reshuffle-btn');
+            if (reshuffleBtn) {
+                reshuffleBtn.addEventListener('click', () => {
+                    refreshSamples();
+                    updateUI();
+                });
+            }
         }
     });
 }

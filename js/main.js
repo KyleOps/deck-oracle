@@ -24,6 +24,36 @@ import * as DeckConfig from './utils/deckConfig.js';
 let currentTab = 'mulligan';
 let currentGroup = 'deck-tools';
 
+// ==================== CHART.JS GLOBAL TERMINAL DEFAULTS ====================
+
+// Set after Chart.js loads
+function applyChartDefaults() {
+    if (typeof Chart === 'undefined') return;
+    Chart.defaults.color = '#5a6b66';
+    Chart.defaults.borderColor = '#1c2520';
+    Chart.defaults.backgroundColor = '#0e1311';
+    Chart.defaults.font.family = "'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace";
+    Chart.defaults.font.size = 10;
+    Chart.defaults.plugins.legend.display = false;
+    Chart.defaults.plugins.tooltip.backgroundColor = '#0e1311';
+    Chart.defaults.plugins.tooltip.borderColor = '#1c2520';
+    Chart.defaults.plugins.tooltip.borderWidth = 1;
+    Chart.defaults.plugins.tooltip.titleColor = '#8b9b95';
+    Chart.defaults.plugins.tooltip.bodyColor = '#d4dfd9';
+    Chart.defaults.plugins.tooltip.padding = 8;
+    Chart.defaults.plugins.tooltip.cornerRadius = 0;
+    Chart.defaults.scale = Chart.defaults.scale || {};
+    if (Chart.defaults.scales) {
+        const scaleDefaults = {
+            grid: { color: '#1c2520', drawTicks: false },
+            ticks: { color: '#5a6b66', font: { size: 9 } },
+            border: { color: '#1c2520', dash: [] }
+        };
+        Chart.defaults.scales.linear = { ...Chart.defaults.scales.linear, ...scaleDefaults };
+        Chart.defaults.scales.category = { ...Chart.defaults.scales.category, ...scaleDefaults };
+    }
+}
+
 // Calculator metadata with groupings
 const calculators = {
     portent: { icon: '⚡', name: 'Portent of Calamity', group: 'spells' },
@@ -59,12 +89,119 @@ function switchGroup(group) {
 }
 
 /**
+ * Initialize terminal chrome: clock, seed display, build date, tx-tab navigation, paste panel
+ */
+function initTerminalChrome() {
+    // UTC clock
+    const clockEl = document.getElementById('tx-clock');
+    if (clockEl) {
+        const updateClock = () => {
+            const now = new Date();
+            const hh = String(now.getUTCHours()).padStart(2, '0');
+            const mm = String(now.getUTCMinutes()).padStart(2, '0');
+            const ss = String(now.getUTCSeconds()).padStart(2, '0');
+            clockEl.textContent = `${hh}:${mm}:${ss} UTC`;
+        };
+        updateClock();
+        setInterval(updateClock, 1000);
+    }
+
+    // Seed display (random hex)
+    const seedEl = document.getElementById('tx-seed-display');
+    if (seedEl) {
+        const seed = Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase();
+        seedEl.textContent = `SEED:${seed}`;
+    }
+
+    // Build date
+    const buildDateEl = document.getElementById('tx-build-date');
+    if (buildDateEl) {
+        const d = new Date();
+        buildDateEl.textContent = `BUILD ${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    // TX tab row click handlers
+    document.querySelectorAll('.tx-tab[data-tab]').forEach(tab => {
+        tab.addEventListener('click', () => {
+            switchTab(tab.dataset.tab);
+        });
+    });
+
+    // Paste panel toggle: clicking the paste hint input opens the panel
+    const pasteHint = document.getElementById('tx-paste-hint');
+    const pastePanel = document.getElementById('tx-paste-panel');
+    const pastePanelClose = document.getElementById('tx-paste-panel-close');
+
+    if (pasteHint && pastePanel) {
+        pasteHint.addEventListener('click', () => {
+            pastePanel.style.display = pastePanel.style.display === 'none' ? 'block' : 'none';
+            if (pastePanel.style.display === 'block') {
+                const textarea = pastePanel.querySelector('#decklist-input');
+                if (textarea) textarea.focus();
+            }
+        });
+    }
+
+    if (pastePanelClose && pastePanel) {
+        pastePanelClose.addEventListener('click', () => {
+            pastePanel.style.display = 'none';
+        });
+    }
+
+    // F key: focus moxfield URL input
+    // P key: open paste panel
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        if (e.key === 'f' || e.key === 'F') {
+            const moxInput = document.getElementById('moxfield-input');
+            if (moxInput) { e.preventDefault(); moxInput.focus(); }
+        } else if (e.key === 'p' || e.key === 'P') {
+            if (pastePanel) {
+                e.preventDefault();
+                pastePanel.style.display = 'block';
+                const textarea = pastePanel.querySelector('#decklist-input');
+                if (textarea) textarea.focus();
+            }
+        }
+    });
+
+    // Deck-loaded pill: update when DeckConfig changes
+    const updateDeckPill = () => {
+        const pill = document.getElementById('tx-deck-pill');
+        const hashEl = document.getElementById('tx-deck-hash');
+        if (!pill) return;
+        const deckConfig = window._deckConfig || null;
+        const total = document.getElementById('deck-size')?.value || 99;
+        const hasImport = document.getElementById('import-status')?.textContent?.includes('Loaded');
+        if (hasImport) {
+            pill.classList.add('loaded');
+            pill.querySelector?.('.tx-dot')?.classList.add('tx-flicker');
+        }
+        if (hashEl) {
+            const h = Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+            hashEl.textContent = `#${h}`;
+        }
+    };
+
+    // Poll for deck load state changes (lightweight, import is infrequent)
+    const importStatus = document.getElementById('import-status');
+    if (importStatus) {
+        new MutationObserver(updateDeckPill).observe(importStatus, { childList: true, subtree: true, characterData: true });
+    }
+}
+
+/**
  * Switch between calculator tabs
  * @param {string} tab - Tab name (portent, surge, wave, vortex, lands, rashmi, lumra, mulligan)
  */
 function switchTab(tab) {
     // Update body theme
     document.body.className = 'theme-' + tab;
+
+    // Update terminal tab row active state
+    document.querySelectorAll('.tx-tab[data-tab]').forEach(txTab => {
+        txTab.classList.toggle('active', txTab.dataset.tab === tab);
+    });
 
     // Update the calculator group if needed
     if (calculators[tab] && calculators[tab].group !== currentGroup) {
@@ -393,11 +530,17 @@ function initPWAInstall() {
  * Initialize application
  */
 function init() {
+    // Apply terminal Chart.js defaults before any calculator renders
+    applyChartDefaults();
+
     // Initialize shared deck configuration first
     DeckConfig.initDeckConfig();
 
     // Initialize shared opponent state for multiplayer calculators
     OpponentState.init();
+
+    // Initialize terminal chrome (clock, seed, tx-tabs, paste panel)
+    initTerminalChrome();
 
     // Initialize all components
     initTabNavigation();

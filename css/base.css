@@ -1,65 +1,79 @@
-/* ==================== GLASSMORPHISM UI - BASE STYLES ==================== */
+/* ==================== TERMINAL UI — BASE STYLES ==================== */
 
 :root {
-    /* ==================== PRIMARY COLOR PALETTE ==================== */
-    --primary: #3b82f6;
-    --primary-light: #60a5fa;
-    --primary-dark: #2563eb;
-    --primary-glow: rgba(59, 130, 246, 0.4);
+    /* ==================== TERMINAL COLOR PALETTE ==================== */
+    --tx-bg:        #080a09;
+    --tx-panel:     #0e1311;
+    --tx-panel-alt: #121815;
+    --tx-rule:      #1c2520;
+    --tx-rule-hi:   #2a3530;
+    --tx-row-hi:    #161e1a;
+    --tx-dim:       #5a6b66;
+    --tx-mid:       #8b9b95;
+    --tx-text:      #d4dfd9;
+    --tx-bright:    #ecf2ed;
+    --tx-green:     oklch(0.78 0.18 145);
+    --tx-green-dim: oklch(0.45 0.12 145);
+    --tx-amber:     oklch(0.82 0.16 80);
+    --tx-amber-dim: oklch(0.55 0.12 80);
+    --tx-red:       oklch(0.68 0.20 25);
+    --tx-blue:      oklch(0.72 0.14 235);
 
-    --secondary: #06b6d4;
-    --secondary-light: #22d3ee;
-    --secondary-dark: #0891b2;
-    --secondary-glow: rgba(6, 182, 212, 0.4);
+    /* ==================== LEGACY VARIABLE ALIASES (keep old names working) ==================== */
+    --primary:           var(--tx-amber);
+    --primary-light:     var(--tx-bright);
+    --primary-dark:      var(--tx-amber-dim);
+    --primary-glow:      transparent;
 
-    /* ==================== BACKGROUND COLORS ==================== */
-    --bg-dark: #0f0f1a;
-    --bg-gradient-1: #1a1a2e;
-    --bg-gradient-2: #16213e;
-    --bg-gradient-3: #0f3460;
+    --secondary:         var(--tx-green);
+    --secondary-light:   var(--tx-green);
+    --secondary-dark:    var(--tx-green-dim);
+    --secondary-glow:    transparent;
 
-    /* ==================== GLASS EFFECT COLORS ==================== */
-    --glass-bg: rgba(255, 255, 255, 0.03);
-    --glass-bg-hover: rgba(255, 255, 255, 0.06);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-border-hover: rgba(255, 255, 255, 0.15);
-    --glass-highlight: rgba(255, 255, 255, 0.1);
-    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    --glass-blur: 10px;
+    --bg-dark:       var(--tx-bg);
+    --bg-gradient-1: var(--tx-panel);
+    --bg-gradient-2: var(--tx-panel);
+    --bg-gradient-3: var(--tx-panel);
 
-    /* ==================== TEXT COLORS ==================== */
-    --text-primary: #e2e8f0;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-    --text-dim: #475569;
-    --text-light: #f1f5f9;
+    --glass-bg:           var(--tx-panel);
+    --glass-bg-hover:     var(--tx-panel-alt);
+    --glass-border:       var(--tx-rule);
+    --glass-border-hover: var(--tx-rule-hi);
+    --glass-highlight:    transparent;
+    --glass-shadow:       none;
+    --glass-blur:         0px;
 
-    /* ==================== SEMANTIC COLORS ==================== */
-    --success: #22c55e;
-    --success-light: #4ade80;
-    --success-dark: #15803d;
-    --warning: #f59e0b;
-    --warning-light: #fbbf24;
-    --danger: #ef4444;
-    --danger-light: #f87171;
-    --danger-dark: #991b1b;
-    --info: #0ea5e9;
-    --info-dark: #0c4a6e;
+    --text-primary:   var(--tx-text);
+    --text-secondary: var(--tx-mid);
+    --text-muted:     var(--tx-dim);
+    --text-dim:       var(--tx-dim);
+    --text-light:     var(--tx-bright);
 
-    /* ==================== TYPE COLORS (MTG Card Types) ==================== */
-    --type-creature: #22c55e;
-    --type-sorcery: #ef4444;
-    --type-instant: #3b82f6;
-    --type-artifact: #a8a29e;
-    --type-enchantment: #a855f7;
-    --type-planeswalker: #f59e0b;
-    --type-battle: #ec4899;
-    --type-land: #78716c;
+    --success:       var(--tx-green);
+    --success-light: var(--tx-green);
+    --success-dark:  var(--tx-green-dim);
+    --warning:       var(--tx-amber);
+    --warning-light: var(--tx-bright);
+    --danger:        var(--tx-red);
+    --danger-light:  var(--tx-red);
+    --danger-dark:   var(--tx-red);
+    --info:          var(--tx-blue);
+    --info-dark:     var(--tx-blue);
+
+    /* ==================== TYPE COLORS (MTG Card Types — terminal palette) ==================== */
+    --type-creature:     oklch(0.78 0.18 145);
+    --type-sorcery:      oklch(0.72 0.16 290);
+    --type-instant:      oklch(0.72 0.14 235);
+    --type-artifact:     oklch(0.72 0.04 80);
+    --type-enchantment:  oklch(0.72 0.14 60);
+    --type-planeswalker: oklch(0.68 0.20 0);
+    --type-battle:       oklch(0.68 0.20 25);
+    --type-land:         oklch(0.55 0.08 110);
 
     /* ==================== UI COLORS ==================== */
-    --input-bg: rgba(0, 0, 0, 0.3);
-    --overlay-bg: rgba(0, 0, 0, 0.5);
-    --panel-bg-alt: rgba(0, 0, 0, 0.2);
+    --input-bg:      var(--tx-bg);
+    --overlay-bg:    rgba(0, 0, 0, 0.6);
+    --panel-bg-alt:  var(--tx-panel-alt);
 
     /* ==================== SPACING ==================== */
     --spacing-xs: 4px;
@@ -70,125 +84,76 @@
     --spacing-2xl: 24px;
     --spacing-3xl: 32px;
 
-    /* ==================== BORDER RADIUS ==================== */
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 18px;
-    --radius-2xl: 24px;
-    --radius-full: 9999px;
+    /* ==================== BORDER RADIUS — zero everywhere ==================== */
+    --radius-sm:   0px;
+    --radius-md:   0px;
+    --radius-lg:   0px;
+    --radius-xl:   0px;
+    --radius-2xl:  0px;
+    --radius-full: 2px;
 
-    /* ==================== TRANSITIONS ==================== */
-    --transition-fast: 0.15s ease;
-    --transition-normal: 0.25s ease;
-    --transition-slow: 0.4s ease;
-    --transition-bounce: 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    /* ==================== TRANSITIONS — keep snappy ==================== */
+    --transition-fast:   0.12s ease;
+    --transition-normal: 0.15s ease;
+    --transition-slow:   0.20s ease;
+    --transition-bounce: 0.15s ease;
 
-    /* ==================== FONTS ==================== */
-    --font-display: 'Cinzel', serif;
-    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    /* ==================== FONTS — monospace only ==================== */
+    --font-display: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+    --font-body:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+    --font-mono:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
 
     /* ==================== Z-INDEX LAYERS ==================== */
-    --z-base: 1;
+    --z-base:     1;
     --z-dropdown: 100;
-    --z-sticky: 200;
-    --z-modal: 1000;
-    --z-toast: 2000;
+    --z-sticky:   200;
+    --z-modal:    1000;
+    --z-toast:    2000;
 
-    /* ==================== THEME VARIABLES (set by body class) ==================== */
-    --accent: var(--primary);
-    --accent-light: var(--primary-light);
-    --accent-glow: var(--primary-glow);
-    --theme-tint: rgba(59, 130, 246, 0.1);
+    /* ==================== THEME VARIABLES — terminal defaults ==================== */
+    --accent:      var(--tx-amber);
+    --accent-light: var(--tx-bright);
+    --accent-glow: transparent;
+    --theme-tint:  rgba(28, 37, 32, 0.5);
 }
 
-/* ==================== CALCULATOR ACCENT THEMES ==================== */
+/* ==================== CALCULATOR ACCENT THEMES — all inherit terminal palette ==================== */
 
-body.theme-portent {
-    --accent: #8b5cf6;
-    --accent-light: #a78bfa;
-    --accent-glow: rgba(139, 92, 246, 0.4);
-    --theme-tint: rgba(139, 92, 246, 0.08);
-}
-
-body.theme-surge {
-    --accent: #22c55e;
-    --accent-light: #4ade80;
-    --accent-glow: rgba(34, 197, 94, 0.4);
-    --theme-tint: rgba(34, 197, 94, 0.08);
-}
-
-body.theme-wave {
-    --accent: #0ea5e9;
-    --accent-light: #38bdf8;
-    --accent-glow: rgba(14, 165, 233, 0.4);
-    --theme-tint: rgba(14, 165, 233, 0.08);
-}
-
-body.theme-vow {
-    --accent: #10b981;
-    --accent-light: #34d399;
-    --accent-glow: rgba(16, 185, 129, 0.4);
-    --theme-tint: rgba(16, 185, 129, 0.08);
-}
-
-body.theme-vortex {
-    --accent: #f97316;
-    --accent-light: #fb923c;
-    --accent-glow: rgba(249, 115, 22, 0.4);
-    --theme-tint: rgba(249, 115, 22, 0.08);
-}
-
-body.theme-lands {
-    --accent: #84cc16;
-    --accent-light: #a3e635;
-    --accent-glow: rgba(132, 204, 22, 0.4);
-    --theme-tint: rgba(132, 204, 22, 0.08);
-}
-
-body.theme-mulligan {
-    --accent: #3b82f6;
-    --accent-light: #60a5fa;
-    --accent-glow: rgba(59, 130, 246, 0.4);
-    --theme-tint: rgba(59, 130, 246, 0.08);
-}
-
-body.theme-rashmi {
-    --accent: #06b6d4;
-    --accent-light: #22d3ee;
-    --accent-glow: rgba(6, 182, 212, 0.4);
-    --theme-tint: rgba(6, 182, 212, 0.08);
-}
-
+body.theme-portent,
+body.theme-surge,
+body.theme-wave,
+body.theme-vow,
+body.theme-vortex,
+body.theme-lands,
+body.theme-mulligan,
+body.theme-rashmi,
 body.theme-lumra {
-    --accent: #65a30d;
-    --accent-light: #84cc16;
-    --accent-glow: rgba(101, 163, 13, 0.4);
-    --theme-tint: rgba(101, 163, 13, 0.08);
+    --accent:      var(--tx-amber);
+    --accent-light: var(--tx-bright);
+    --accent-glow: transparent;
+    --theme-tint:  rgba(28, 37, 32, 0.5);
 }
 
 body.theme-mara {
-    --accent: #dc2626;
-    --accent-light: #ef4444;
-    --accent-glow: rgba(220, 38, 38, 0.4);
-    --theme-tint: rgba(220, 38, 38, 0.08);
-    --mara-primary: #dc2626;
-    --mara-secondary: #ef4444;
+    --accent:      var(--tx-red);
+    --accent-light: var(--tx-bright);
+    --accent-glow: transparent;
+    --theme-tint:  rgba(28, 37, 32, 0.5);
+    --mara-primary: var(--tx-red);
+    --mara-secondary: var(--tx-red);
 }
 
 body.theme-dreamharvest {
-    --accent: #1e40af;
-    --accent-light: #3b82f6;
-    --accent-glow: rgba(30, 64, 175, 0.4);
-    --theme-tint: rgba(30, 64, 175, 0.08);
-    --dreamharvest-primary: #1e40af;
-    --dreamharvest-secondary: #3b82f6;
+    --accent:      var(--tx-blue);
+    --accent-light: var(--tx-bright);
+    --accent-glow: transparent;
+    --theme-tint:  rgba(28, 37, 32, 0.5);
+    --dreamharvest-primary: var(--tx-blue);
+    --dreamharvest-secondary: var(--tx-blue);
 }
 
 /* ==================== MULTIPLAYER CALCULATORS - OPPONENT UI ==================== */
 
-/* Opponent Tab Container */
 .opponent-tabs {
     display: flex;
     flex-wrap: wrap;
@@ -196,7 +161,6 @@ body.theme-dreamharvest {
     margin-bottom: var(--spacing-md);
 }
 
-/* Opponent Tab Button */
 .opponent-tab {
     padding: var(--spacing-sm) var(--spacing-md);
     background: var(--glass-bg);
@@ -214,29 +178,28 @@ body.theme-dreamharvest {
 }
 
 .opponent-tab:hover {
-    background: var(--theme-tint);
-    border-color: var(--accent);
+    background: var(--tx-panel-alt);
+    border-color: var(--tx-amber);
 }
 
 .opponent-tab.active {
-    background: var(--accent);
-    color: var(--bg-dark);
-    border-color: var(--accent);
+    background: var(--tx-amber);
+    color: var(--tx-bg);
+    border-color: var(--tx-amber);
     font-weight: 600;
 }
 
 .opponent-tab.add-opponent {
     background: transparent;
     border-style: dashed;
-    color: var(--text-dim);
+    color: var(--tx-dim);
 }
 
 .opponent-tab.add-opponent:hover {
-    color: var(--accent);
-    border-color: var(--accent);
+    color: var(--tx-amber);
+    border-color: var(--tx-amber);
 }
 
-/* Opponent Remove Button */
 .opponent-remove {
     display: inline-flex;
     align-items: center;
@@ -246,68 +209,62 @@ body.theme-dreamharvest {
     height: 16px;
     line-height: 1;
     text-align: center;
-    border-radius: 50%;
-    background: rgba(239, 68, 68, 0.2);
-    color: var(--danger);
+    border-radius: 0;
+    background: transparent;
+    color: var(--tx-red);
     font-size: 12px;
     cursor: pointer;
     transition: all var(--transition-fast);
 }
 
 .opponent-remove:hover {
-    background: var(--danger);
-    color: var(--text-light);
+    color: var(--tx-bright);
 }
 
-/* Import Success Indicator */
 .import-indicator {
-    color: var(--success);
+    color: var(--tx-green);
     margin-left: var(--spacing-xs);
 }
 
-/* Opponent Import Panel */
 .opponent-import-panel {
     margin-bottom: var(--spacing-md);
 }
 
-/* Opponent Deck Status Bar */
 .opponent-deck-status {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: var(--spacing-md);
     padding: var(--spacing-sm) var(--spacing-md);
-    background: rgba(34, 197, 94, 0.1);
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(34, 197, 94, 0.3);
+    background: var(--tx-panel);
+    border: 1px solid var(--tx-rule);
 }
 
 .opponent-deck-status .deck-info {
-    color: var(--success);
+    color: var(--tx-green);
 }
 
 .opponent-deck-status .clear-btn {
     background: transparent;
-    border: 1px solid var(--danger);
-    color: var(--danger);
+    border: 1px solid var(--tx-red);
+    color: var(--tx-red);
     padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--radius-sm);
+    border-radius: 0;
     cursor: pointer;
     font-size: 0.8em;
     transition: all var(--transition-fast);
 }
 
 .opponent-deck-status .clear-btn:hover {
-    background: rgba(239, 68, 68, 0.15);
+    background: var(--tx-red);
+    color: var(--tx-bg);
 }
 
-/* Opponent Results Card */
 .opponent-results {
     margin-bottom: var(--spacing-md);
     padding: var(--spacing-md);
-    background: var(--glass-bg);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--glass-border);
+    background: var(--tx-panel);
+    border: 1px solid var(--tx-rule);
 }
 
 .opponent-results h3 {
@@ -315,7 +272,6 @@ body.theme-dreamharvest {
     font-size: 1em;
 }
 
-/* Choice/Stat Grid (for Mara, Dream Harvest) */
 .choice-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -324,24 +280,14 @@ body.theme-dreamharvest {
 
 .choice-card {
     padding: var(--spacing-sm);
-    border-radius: var(--radius-sm);
-    border-left: 3px solid var(--accent);
+    border: 0;
+    border-left: 2px solid var(--accent);
+    background: var(--tx-panel-alt);
 }
 
-.choice-card.choice-purple {
-    background: rgba(168, 85, 247, 0.1);
-    border-left-color: var(--type-enchantment);
-}
-
-.choice-card.choice-red {
-    background: rgba(239, 68, 68, 0.1);
-    border-left-color: var(--danger);
-}
-
-.choice-card.choice-blue {
-    background: rgba(59, 130, 246, 0.1);
-    border-left-color: #3b82f6;
-}
+.choice-card.choice-purple { border-left-color: oklch(0.72 0.16 290); }
+.choice-card.choice-red    { border-left-color: var(--tx-red); }
+.choice-card.choice-blue   { border-left-color: var(--tx-blue); }
 
 .choice-card .choice-label {
     font-size: 0.8em;
@@ -349,30 +295,20 @@ body.theme-dreamharvest {
     margin-bottom: var(--spacing-xs);
 }
 
-.choice-card.choice-purple .choice-label {
-    color: #a855f7;
-}
+.choice-card.choice-purple .choice-label { color: oklch(0.72 0.16 290); }
+.choice-card.choice-red    .choice-label { color: var(--tx-red); }
+.choice-card.choice-blue   .choice-label { color: var(--tx-blue); }
 
-.choice-card.choice-red .choice-label {
-    color: #f87171;
-}
-
-.choice-card.choice-blue .choice-label {
-    color: #3b82f6;
-}
-
-/* Summary Stats Box */
 .summary-stats-box {
     margin-bottom: var(--spacing-lg);
     padding: var(--spacing-md);
-    background: var(--glass-bg);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--glass-border);
+    background: var(--tx-panel);
+    border: 1px solid var(--tx-rule);
 }
 
 .summary-stats-box h3 {
     margin: 0 0 var(--spacing-md) 0;
-    color: var(--text-light);
+    color: var(--tx-bright);
     font-size: 1em;
 }
 
@@ -384,52 +320,30 @@ body.theme-dreamharvest {
 
 .summary-stat {
     padding: var(--spacing-md);
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--tx-rule);
     text-align: center;
+    background: var(--tx-panel-alt);
 }
 
-.summary-stat.purple {
-    background: rgba(168, 85, 247, 0.15);
-}
+.summary-stat.purple  { border-color: oklch(0.72 0.16 290); }
+.summary-stat.red     { border-color: var(--tx-red); }
+.summary-stat.blue    { border-color: var(--tx-blue); }
+.summary-stat.dark-blue { border-color: var(--tx-blue); }
 
-.summary-stat.red {
-    background: rgba(239, 68, 68, 0.15);
-}
+.summary-stat .stat-label { font-size: 0.75em; margin-bottom: var(--spacing-xs); letter-spacing: 0.12em; text-transform: uppercase; }
+.summary-stat.purple  .stat-label { color: oklch(0.72 0.16 290); }
+.summary-stat.red     .stat-label { color: var(--tx-red); }
+.summary-stat.blue    .stat-label { color: var(--tx-blue); }
+.summary-stat.dark-blue .stat-label { color: var(--tx-blue); }
 
-.summary-stat.blue {
-    background: rgba(59, 130, 246, 0.15);
-}
+.summary-stat .stat-value { font-size: 1.8em; font-weight: 700; font-feature-settings: 'tnum' 1; }
+.summary-stat.purple  .stat-value { color: oklch(0.72 0.16 290); }
+.summary-stat.red     .stat-value { color: var(--tx-red); }
+.summary-stat.blue    .stat-value { color: var(--tx-blue); }
+.summary-stat.dark-blue .stat-value { color: var(--tx-blue); }
 
-.summary-stat.dark-blue {
-    background: rgba(30, 64, 175, 0.15);
-}
+.summary-stat .stat-unit { font-size: 0.75em; color: var(--tx-dim); }
 
-.summary-stat .stat-label {
-    font-size: 0.85em;
-    margin-bottom: var(--spacing-xs);
-}
-
-.summary-stat.purple .stat-label { color: #a855f7; }
-.summary-stat.red .stat-label { color: #f87171; }
-.summary-stat.blue .stat-label { color: #3b82f6; }
-.summary-stat.dark-blue .stat-label { color: #60a5fa; }
-
-.summary-stat .stat-value {
-    font-size: 1.8em;
-    font-weight: 700;
-}
-
-.summary-stat.purple .stat-value { color: #a855f7; }
-.summary-stat.red .stat-value { color: var(--danger); }
-.summary-stat.blue .stat-value { color: #3b82f6; }
-.summary-stat.dark-blue .stat-value { color: #1e40af; }
-
-.summary-stat .stat-unit {
-    font-size: 0.75em;
-    color: var(--text-dim);
-}
-
-/* Compact Distribution Chart */
 .compact-dist-chart {
     display: flex;
     flex-direction: column;
@@ -446,42 +360,41 @@ body.theme-dreamharvest {
 .compact-dist-label {
     min-width: 28px;
     text-align: right;
-    color: var(--text-dim);
+    color: var(--tx-dim);
     white-space: nowrap;
 }
 
 .compact-dist-bar-bg {
     flex: 1;
-    height: 16px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-sm);
+    height: 8px;
+    background: var(--tx-bg);
+    border: 1px solid var(--tx-rule);
     overflow: hidden;
 }
 
 .compact-dist-bar {
     height: 100%;
-    border-radius: var(--radius-sm);
     transition: width var(--transition-normal);
 }
 
 .compact-dist-value {
     min-width: 44px;
     text-align: right;
-    color: var(--text-secondary);
+    color: var(--tx-mid);
+    font-feature-settings: 'tnum' 1;
 }
 
-/* CMC Badge (for damage/CMC displays) */
 .cmc-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 24px;
     height: 24px;
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--tx-rule);
     font-size: 0.75em;
     font-weight: 700;
-    color: var(--text-light);
-    background: var(--accent);
+    color: var(--tx-bright);
+    background: var(--tx-panel-alt);
 }
 
 /* ==================== RESET & BASE ==================== */
@@ -501,136 +414,94 @@ html {
     scroll-behavior: smooth;
 }
 
-/* ==================== ANIMATED BACKGROUND ==================== */
-
-@keyframes gradientShift {
-    0%, 100% {
-        background-position: 0% 50%;
-    }
-    25% {
-        background-position: 50% 100%;
-    }
-    50% {
-        background-position: 100% 50%;
-    }
-    75% {
-        background-position: 50% 0%;
-    }
-}
-
 body {
     font-family: var(--font-body);
+    font-feature-settings: 'tnum' 1, 'cv01' 1;
+    letter-spacing: 0.01em;
     min-height: 100vh;
-    color: var(--text-primary);
-    padding: var(--spacing-lg);
+    color: var(--tx-text);
+    background: var(--tx-bg);
     overflow-x: hidden;
-
-    /* Animated gradient background */
-    background: linear-gradient(
-        -45deg,
-        var(--bg-dark),
-        var(--bg-gradient-1),
-        var(--bg-gradient-2),
-        var(--bg-gradient-1),
-        var(--bg-dark)
-    );
-    background-size: 400% 400%;
-    animation: gradientShift 25s ease infinite;
-
-    /* Fallback for reduced motion */
-    background-attachment: fixed;
+    padding: 0;
 }
 
-/* Performance: Reduce animation on battery saver or reduced motion */
 @media (prefers-reduced-motion: reduce) {
-    body {
-        animation: none;
-        background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-gradient-1) 50%, var(--bg-gradient-2) 100%);
-        background-size: 100% 100%;
-    }
+    * { animation: none !important; transition: none !important; }
 }
 
 /* ==================== TYPOGRAPHY ==================== */
 
 h1 {
     font-family: var(--font-display);
-    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--tx-dim);
     margin-bottom: var(--spacing-sm);
-    font-size: clamp(1.5rem, 4vw, 2rem);
-    letter-spacing: 2px;
-    color: var(--accent-light);
-    text-shadow: 0 0 30px var(--accent-glow), 0 0 60px var(--accent-glow);
-    transition: color var(--transition-slow), text-shadow var(--transition-slow);
+    text-align: left;
+    text-shadow: none;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--tx-rule);
 }
 
 h2 {
     font-family: var(--font-display);
-    font-size: 1.1rem;
-    margin-bottom: var(--spacing-lg);
-    padding-bottom: var(--spacing-sm);
-    letter-spacing: 1px;
-    color: var(--accent);
-    border-bottom: 1px solid var(--glass-border);
-    transition: color var(--transition-slow), border-color var(--transition-slow);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    margin-bottom: 0;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--tx-rule);
 }
 
 h3 {
     font-family: var(--font-display);
-    font-size: 1rem;
-    color: var(--text-light);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--tx-dim);
     margin-bottom: var(--spacing-md);
 }
 
 p {
     line-height: 1.6;
-    color: var(--text-secondary);
+    color: var(--tx-mid);
 }
 
 .card-text {
-    text-align: center;
-    font-style: italic;
-    color: var(--text-muted);
-    margin-bottom: var(--spacing-2xl);
-    font-size: 0.95rem;
-    max-width: 600px;
-    margin-left: auto;
-    margin-right: auto;
+    display: none;
 }
 
 /* ==================== LAYOUT ==================== */
 
 .container {
-    max-width: 1200px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
     width: 100%;
-    padding: 0 var(--spacing-xl);
+    padding: 0;
     box-sizing: border-box;
     overflow-x: hidden;
 }
 
-/* Footer Action Buttons */
 .footer-actions {
     display: flex;
     gap: var(--spacing-md);
     align-items: center;
     justify-content: center;
-    margin-bottom: var(--spacing-lg);
+    padding: var(--spacing-md) var(--spacing-lg);
 }
 
-/* Header Row (Tab Navigation) */
 .header-row {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-lg);
-    position: relative;
-    z-index: var(--z-dropdown);
+    display: none;
 }
 
-/* Calculator Content - constrain width to match header elements */
 .calculator-content {
     max-width: 100%;
-    padding: 0 var(--spacing-xl);
+    padding: 0;
     box-sizing: border-box;
 }
 
@@ -645,8 +516,9 @@ p {
 .main-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: var(--spacing-2xl);
+    gap: 0;
     width: 100%;
+    border-top: 1px solid var(--tx-rule);
 }
 
 .main-grid.single-column {
@@ -658,22 +530,10 @@ p {
 
 .tab-content {
     display: none;
-    animation: fadeSlideIn var(--transition-normal) ease-out;
 }
 
 .tab-content.active {
     display: block;
-}
-
-@keyframes fadeSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(12px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 /* ==================== UTILITY CLASSES ==================== */
@@ -690,13 +550,11 @@ p {
     border-width: 0;
 }
 
-/* Focus styles for accessibility */
 *:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
+    outline: 1px solid var(--tx-amber);
+    outline-offset: 1px;
 }
 
-/* Loading state */
 .loading {
     opacity: 0.6;
     pointer-events: none;
@@ -705,40 +563,17 @@ p {
 
 /* ==================== SCROLLBAR STYLING ==================== */
 
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--tx-bg); }
+::-webkit-scrollbar-thumb { background: var(--tx-rule-hi); }
+::-webkit-scrollbar-thumb:hover { background: var(--tx-amber); }
 
-::-webkit-scrollbar-track {
-    background: var(--glass-bg);
-    border-radius: var(--radius-full);
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--glass-border-hover);
-    border-radius: var(--radius-full);
-    transition: background var(--transition-fast);
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--accent);
-}
-
-/* Firefox scrollbar */
 * {
     scrollbar-width: thin;
-    scrollbar-color: var(--glass-border-hover) var(--glass-bg);
+    scrollbar-color: var(--tx-rule-hi) var(--tx-bg);
 }
 
 /* ==================== SELECTION ==================== */
 
-::selection {
-    background: var(--accent);
-    color: var(--bg-dark);
-}
-
-::-moz-selection {
-    background: var(--accent);
-    color: var(--bg-dark);
-}
+::selection { background: var(--tx-amber); color: var(--tx-bg); }
+::-moz-selection { background: var(--tx-amber); color: var(--tx-bg); }

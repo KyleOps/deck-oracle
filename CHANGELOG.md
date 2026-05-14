@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-05-14
+
+### Changed
+- **Terminal UI Reskin**: Complete visual overhaul to a Bloomberg/quant trading terminal aesthetic
+  - Replaced glassmorphism (backdrop-filter, box-shadows, border-radius) with flat hairline-ruled panels
+  - Replaced Cinzel/Crimson Text fonts with JetBrains Mono throughout; all type in `tnum` tabular numerics
+  - Introduced `--tx-*` CSS custom property token system (oklch color space: green, amber, red, blue accents on near-black surfaces)
+  - New persistent status bar (28px): NET OK live indicator, seed display, UTC clock, version
+  - New flat ticker navigation bar (64px): 3-letter ticker codes (POR/WAV/VOW/SUR/VOR/RSH/LMR/MUL/LND/MAR/DRH), deck pill state, deck hash
+  - New sub-bar (38px): inline deck import strip with URL fetch and paste decklist panel
+  - New footer (26px): keyboard hints (F=fetch, P=paste, R=reshuffle, /search)
+- **Portent Tab Rebuilt as Terminal 3-Column Layout**:
+  - Left rail: X param slider with 56px hero digit, preset chips (X=5/7/9/12/15), library type bar with per-type count grid
+  - Center: 3-up hero numerics (P(FREE SPELL), E[CARDS TO HAND], EXPECTED LOSS), dual-axis bar+line chart (green P(free) line + amber E[cards] bars), X=3..20 sweep table with inline p-bar and WEAK/FAIR/STRONG/CERTAIN verdicts
+  - Right rail: 4 sample trial cards (FREE ✓ / FIZZ ✗ with type-colored card dots), live tape with 14 probability ticks and ASCII fill bars
+- **Chart.js defaults updated** to terminal dark palette: hairline grid (#1c2520), monospace font, flat tooltips, no legend
+
 ## [1.7.2] - 2026-02-03
 
 ### Changed

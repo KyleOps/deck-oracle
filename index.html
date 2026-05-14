@@ -15,8 +15,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
 
-    <!-- Fonts - preload for performance -->
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <!-- Fonts - JetBrains Mono for terminal aesthetic -->
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Stylesheets -->
     <link rel="stylesheet" href="css/base.css">
@@ -26,298 +26,285 @@
 </head>
 <body class="theme-mulligan">
     <div class="container">
-        <!-- Tab Group Navigation (TOP OF PAGE) -->
-        <nav class="header-row" id="tab-group-nav" aria-label="Calculator navigation">
-            <!-- Main Category Tabs -->
-            <div class="tab-groups" role="navigation" aria-label="Calculator categories">
+
+        <!-- STATUS BAR -->
+        <div class="tx-status-bar" id="tx-status-bar">
+            <span class="tx-net-ok">
+                <span class="tx-dot tx-flicker" style="background: var(--tx-green);"></span>
+                NET OK
+            </span>
+            <span>DECK-ORACLE://v2.4.1</span>
+            <span>ENGINE: MC-25K</span>
+            <span id="tx-seed-display">SEED: 0x000000</span>
+            <span class="tx-status-right">
+                <span id="tx-clock">00:00:00 UTC</span>
+                <span>FOLIO 01/01</span>
+            </span>
+        </div>
+
+        <!-- HEADER BAND -->
+        <div class="tx-header" id="tx-header">
+            <div class="tx-wordmark">
+                <span class="tx-deck">DECK</span>
+                <span class="tx-oracle">ORACLE</span>
+                <span class="tx-tag">◇ TERMINAL</span>
+            </div>
+            <div class="tx-tab-row" id="tx-tab-row">
+                <button class="tx-tab" data-tab="portent"><span class="tx-code">POR</span><span class="tx-name">Portent</span></button>
+                <button class="tx-tab" data-tab="wave"><span class="tx-code">WAV</span><span class="tx-name">Wave</span></button>
+                <button class="tx-tab" data-tab="vow"><span class="tx-code">VOW</span><span class="tx-name">Vow</span></button>
+                <button class="tx-tab" data-tab="surge"><span class="tx-code">SUR</span><span class="tx-name">Surge</span></button>
+                <button class="tx-tab" data-tab="vortex"><span class="tx-code">VOR</span><span class="tx-name">Vortex</span></button>
+                <button class="tx-tab" data-tab="rashmi"><span class="tx-code">RSH</span><span class="tx-name">Rashmi</span></button>
+                <button class="tx-tab" data-tab="lumra"><span class="tx-code">LMR</span><span class="tx-name">Lumra</span></button>
+                <button class="tx-tab active" data-tab="mulligan"><span class="tx-code">MUL</span><span class="tx-name">Mulligan</span></button>
+                <button class="tx-tab" data-tab="lands"><span class="tx-code">LND</span><span class="tx-name">Lands</span></button>
+                <button class="tx-tab" data-tab="mara"><span class="tx-code">MAR</span><span class="tx-name">Mara</span></button>
+                <button class="tx-tab" data-tab="dreamharvest"><span class="tx-code">DRH</span><span class="tx-name">Dream Hvst</span></button>
+            </div>
+            <div class="tx-deck-pill">
+                <span class="tx-pill" id="tx-deck-pill">
+                    <span class="tx-dot" style="background: var(--tx-dim);"></span>
+                    NO DECK
+                </span>
+                <span class="tx-deck-hash" id="tx-deck-hash"></span>
+            </div>
+        </div>
+
+        <!-- SUB-BAR: deck import strip (replaces collapsible deck-config for spells/creatures/tools) -->
+        <div class="tx-sub-bar" id="tx-sub-bar">
+            <span class="tx-src-label">SRC »</span>
+            <input class="tx-url-input" id="moxfield-input" type="text" placeholder="moxfield.com/decks/… or archidekt.com/decks/…" autocomplete="off">
+            <span class="tx-or">OR</span>
+            <input class="tx-paste-input" id="tx-paste-hint" type="text" placeholder="paste decklist…" readonly>
+            <button class="tx-fetch-btn" id="moxfield-import-btn">FETCH ↵</button>
+            <span class="tx-import-meta" id="tx-import-meta">
+                <a href="#" id="load-example-btn" style="color: var(--tx-amber); text-decoration: none; letter-spacing: 0.08em;">LOAD EXAMPLE</a>
+            </span>
+        </div>
+
+        <!-- Hidden: legacy nav structure kept for JS compatibility -->
+        <nav class="header-row" id="tab-group-nav" aria-label="Calculator navigation" style="display:none;">
+            <div class="tab-groups">
                 <div class="tab-group-header">
-                    <button class="tab-group-btn" data-group="spells" role="tab" aria-selected="false">
-                        <span class="tab-icon">⚡</span>
-                        <span>Spells</span>
-                    </button>
-                    <button class="tab-group-btn" data-group="Creatures" role="tab" aria-selected="false">
-                        <span class="tab-icon">👑</span>
-                        <span>Creatures</span>
-                    </button>
-                    <button class="tab-group-btn active" data-group="deck-tools" role="tab" aria-selected="true">
-                        <span class="tab-icon">📊</span>
-                        <span>Tools</span>
-                    </button>
-                    <button class="tab-group-btn" data-group="multiplayer" role="tab" aria-selected="false">
-                        <span class="tab-icon">👥</span>
-                        <span>Multiplayer</span>
-                    </button>
+                    <button class="tab-group-btn active" data-group="deck-tools"></button>
                 </div>
             </div>
-
-            <!-- Sub-navigation Pills (full width) -->
             <div class="tab-sub-nav">
-                    <!-- Spells Group -->
-                    <div class="sub-nav-group" data-group="spells">
-                        <button class="sub-nav-pill" data-tab="portent">
-                            <span>⚡</span> Portent
-                        </button>
-                        <button class="sub-nav-pill" data-tab="wave">
-                            <span>🌊</span> Wave
-                        </button>
-                        <button class="sub-nav-pill" data-tab="vow">
-                            <span>🌱</span> Vow
-                        </button>
-                        <button class="sub-nav-pill" data-tab="surge">
-                            <span>🌿</span> Surge
-                        </button>
-                        <button class="sub-nav-pill" data-tab="vortex">
-                            <span>🌀</span> Vortex
-                        </button>
-                    </div>
-
-                    <!-- Creature Group -->
-                    <div class="sub-nav-group" data-group="Creatures">
-                        <button class="sub-nav-pill" data-tab="rashmi">
-                            <span>🌌</span> Rashmi
-                        </button>
-                        <button class="sub-nav-pill" data-tab="lumra">
-                            <span>🐻</span> Lumra
-                        </button>
-                    </div>
-
-                    <!-- Tools Group -->
-                    <div class="sub-nav-group active" data-group="deck-tools">
-                        <button class="sub-nav-pill active" data-tab="mulligan">
-                            <span>🃏</span> Mulligan
-                        </button>
-                        <button class="sub-nav-pill" data-tab="lands">
-                            <span>🏔️</span> Lands
-                        </button>
-                    </div>
-
-                    <!-- Multiplayer Group -->
-                    <div class="sub-nav-group" data-group="multiplayer">
-                        <button class="sub-nav-pill" data-tab="mara">
-                            <span>🎭</span> Mara
-                        </button>
-                        <button class="sub-nav-pill" data-tab="dreamharvest">
-                            <span>🌙</span> Dream Harvest
-                        </button>
-                    </div>
+                <div class="sub-nav-group active" data-group="deck-tools">
+                    <button class="sub-nav-pill active" data-tab="mulligan"></button>
+                    <button class="sub-nav-pill" data-tab="lands"></button>
+                </div>
+                <div class="sub-nav-group" data-group="spells">
+                    <button class="sub-nav-pill" data-tab="portent"></button>
+                    <button class="sub-nav-pill" data-tab="wave"></button>
+                    <button class="sub-nav-pill" data-tab="vow"></button>
+                    <button class="sub-nav-pill" data-tab="surge"></button>
+                    <button class="sub-nav-pill" data-tab="vortex"></button>
+                </div>
+                <div class="sub-nav-group" data-group="Creatures">
+                    <button class="sub-nav-pill" data-tab="rashmi"></button>
+                    <button class="sub-nav-pill" data-tab="lumra"></button>
+                </div>
+                <div class="sub-nav-group" data-group="multiplayer">
+                    <button class="sub-nav-pill" data-tab="mara"></button>
+                    <button class="sub-nav-pill" data-tab="dreamharvest"></button>
                 </div>
             </div>
         </nav>
 
-        <!-- Legacy Dropdown Selector (hidden by default) -->
-        <div class="calculator-selector" id="calculator-selector" role="navigation" aria-label="Calculator selection" style="margin-bottom: 16px;">
-            <button class="selector-button" id="selector-button" aria-haspopup="true" aria-expanded="false">
-                <div class="selector-current">
-                    <span class="selector-icon">🃏</span>
-                    <span class="selector-name">Mulligan Strategy</span>
-                </div>
-                <span class="selector-arrow">▼</span>
-            </button>
-            <div class="selector-dropdown" id="selector-dropdown" role="menu">
-                <div class="selector-option" data-tab="portent" role="menuitem">
-                    <span class="selector-option-icon">⚡</span>
-                    <span>Portent of Calamity</span>
-                </div>
-                <div class="selector-option" data-tab="surge" role="menuitem">
-                    <span class="selector-option-icon">🌿</span>
-                    <span>Primal Surge</span>
-                </div>
-                <div class="selector-option" data-tab="wave" role="menuitem">
-                    <span class="selector-option-icon">🌊</span>
-                    <span>Genesis Wave</span>
-                </div>
-                <div class="selector-option" data-tab="vow" role="menuitem">
-                    <span class="selector-option-icon">🌱</span>
-                    <span>Kamahl's Druidic Vow</span>
-                </div>
-                <div class="selector-option" data-tab="vortex" role="menuitem">
-                    <span class="selector-option-icon">🌀</span>
-                    <span>Monstrous Vortex</span>
-                </div>
-                <div class="selector-option" data-tab="rashmi" role="menuitem">
-                    <span class="selector-option-icon">🌌</span>
-                    <span>Rashmi</span>
-                </div>
-                <div class="selector-option" data-tab="lumra" role="menuitem">
-                    <span class="selector-option-icon">🐻</span>
-                    <span>Lumra</span>
-                </div>
-                <div class="selector-option" data-tab="lands" role="menuitem">
-                    <span class="selector-option-icon">🏔️</span>
-                    <span>Land Drops</span>
-                </div>
-                <div class="selector-option active" data-tab="mulligan" role="menuitem">
-                    <span class="selector-option-icon">🃏</span>
-                    <span>Mulligan Strategy</span>
-                </div>
-                <div class="selector-option" data-tab="mara" role="menuitem">
-                    <span class="selector-option-icon">🎭</span>
-                    <span>Ensnared by the Mara</span>
-                </div>
+        <!-- Legacy dropdown selector (hidden, kept for JS) -->
+        <div class="calculator-selector" id="calculator-selector" style="display:none !important;" aria-hidden="true">
+            <button class="selector-button" id="selector-button"></button>
+            <div class="selector-dropdown" id="selector-dropdown">
+                <div class="selector-option" data-tab="portent"></div>
+                <div class="selector-option" data-tab="surge"></div>
+                <div class="selector-option" data-tab="wave"></div>
+                <div class="selector-option" data-tab="vow"></div>
+                <div class="selector-option" data-tab="vortex"></div>
+                <div class="selector-option" data-tab="rashmi"></div>
+                <div class="selector-option" data-tab="lumra"></div>
+                <div class="selector-option" data-tab="lands"></div>
+                <div class="selector-option active" data-tab="mulligan"></div>
+                <div class="selector-option" data-tab="mara"></div>
             </div>
         </div>
 
-        <!-- SHARED DECK CONFIGURATION (for Spells, Creatures, Tools) -->
-        <section class="panel collapsible-panel expanded" id="deck-config" aria-label="Deck configuration">
-            <div class="panel-header">
-                <h2>📚 Deck Configuration</h2>
-                <button class="collapse-btn" aria-label="Toggle section">
-                    <span class="collapse-icon">▼</span>
-                </button>
-            </div>
-
+        <!-- SHARED DECK CONFIGURATION — hidden panel, kept for JS state management -->
+        <section class="panel collapsible-panel expanded" id="deck-config" aria-label="Deck configuration" style="display:none;">
             <div class="panel-content">
-                <div class="input-group import-section">
-                    <label for="moxfield-input">Import from Moxfield or Archidekt (URL or ID)</label>
-                    <div class="import-url-row" style="display: flex; gap: var(--spacing-sm); margin-bottom: var(--spacing-sm);">
-                        <input type="text" id="moxfield-input" placeholder="https://moxfield.com/decks/..." style="flex: 1; padding: var(--spacing-md); border-radius: var(--radius-sm); border: 1px solid var(--glass-border); background: var(--input-bg); color: var(--text-light);">
-                        <button id="moxfield-import-btn" class="import-btn" aria-label="Import from Archidekt or Moxfield">
-                            ☁️ Import
-                        </button>
-                    </div>
-                    <div class="example-deck-row" style="margin-bottom: var(--spacing-md); font-size: 0.85em;">
-                        <span style="color: var(--text-dim);">Example: </span>
-                        <a href="#" id="load-example-btn" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent);">Load a real example deck</a>
-                    </div>
-                    <div style="text-align: center; margin-bottom: var(--spacing-md); color: var(--text-dim); font-size: 0.9em; position: relative;">
-                        <span style="background: var(--bg-gradient-1); padding: 0 var(--spacing-md); position: relative; z-index: 1;">OR PASTE TEXT</span>
-                        <div style="position: absolute; top: 50%; left: 0; right: 0; border-top: 1px solid var(--glass-border); z-index: 0;"></div>
-                    </div>
-
-                    <label for="decklist-input">Import Decklist (paste text)</label>
-                    <textarea
-                        id="decklist-input"
-                        placeholder="Paste your decklist here...&#10;Format: 4 Lightning Bolt&#10;1 Jace, the Mind Sculptor&#10;etc.. Or export>plain text from your deck builder."
-                        rows="4"
-                        aria-label="Decklist input"></textarea>
-                    <button id="import-btn" class="import-btn" aria-label="Import decklist">
-                        🔍 Import & Analyze
-                    </button>
-                    <div class="import-progress" id="import-progress">
-                        <div class="import-progress-bar" id="import-progress-bar"></div>
-                    </div>
-                    <div id="import-status" class="import-status" role="status" aria-live="polite"></div>
-                </div>
-
-                <div class="collapsible-panel" id="manual-counts-section" style="border-top: 1px solid var(--glass-border); padding-top: var(--spacing-lg); margin-top: var(--spacing-lg);">
-                    <div class="panel-header" style="padding: var(--spacing-sm) 0; margin: 0; margin-bottom: var(--spacing-md); cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: none;">
-                        <h3 style="margin: 0; font-size: 1em; color: var(--text-light);">⌨️ Manual Type Counts</h3>
-                        <span class="collapse-icon" style="font-size: 0.8em;">▶</span>
-                    </div>
+                <div class="collapsible-panel expanded" id="manual-counts-section">
                     <div class="panel-content">
                         <div class="type-grid">
-                            <div class="type-input">
-                                <label for="deck-creatures">Creatures</label>
-                                <input type="number" id="deck-creatures" value="25" min="0" aria-label="Creatures">
-                            </div>
-                            <div class="type-input">
-                                <label for="deck-instants">Instant</label>
-                                <input type="number" id="deck-instants" value="8" min="0" aria-label="Instants">
-                            </div>
-                            <div class="type-input">
-                                <label for="deck-sorceries">Sorcery</label>
-                                <input type="number" id="deck-sorceries" value="6" min="0" aria-label="Sorceries">
-                            </div>
-                            <div class="type-input">
-                                <label for="deck-artifacts">Artifact</label>
-                                <input type="number" id="deck-artifacts" value="4" min="0" aria-label="Artifacts">
-                            </div>
-                            <div class="type-input">
-                                <label for="deck-enchantments">Enchant</label>
-                                <input type="number" id="deck-enchantments" value="3" min="0" aria-label="Enchantments">
-                            </div>
-                            <div class="type-input">
-                                <label for="deck-planeswalkers">Planeswalker</label>
-                                <input type="number" id="deck-planeswalkers" value="2" min="0" aria-label="Planeswalkers">
-                            </div>
-                            <div class="type-input">
-                                <label for="deck-lands">Land</label>
-                                <input type="number" id="deck-lands" value="32" min="0" aria-label="Lands">
-                            </div>
-                            <div class="type-input">
-                                <label for="deck-battles">Battle</label>
-                                <input type="number" id="deck-battles" value="0" min="0" aria-label="Battles">
-                            </div>
+                            <div class="type-input"><label for="deck-creatures">Creatures</label><input type="number" id="deck-creatures" value="25" min="0"></div>
+                            <div class="type-input"><label for="deck-instants">Instant</label><input type="number" id="deck-instants" value="8" min="0"></div>
+                            <div class="type-input"><label for="deck-sorceries">Sorcery</label><input type="number" id="deck-sorceries" value="6" min="0"></div>
+                            <div class="type-input"><label for="deck-artifacts">Artifact</label><input type="number" id="deck-artifacts" value="4" min="0"></div>
+                            <div class="type-input"><label for="deck-enchantments">Enchant</label><input type="number" id="deck-enchantments" value="3" min="0"></div>
+                            <div class="type-input"><label for="deck-planeswalkers">Planeswalker</label><input type="number" id="deck-planeswalkers" value="2" min="0"></div>
+                            <div class="type-input"><label for="deck-lands">Land</label><input type="number" id="deck-lands" value="32" min="0"></div>
+                            <div class="type-input"><label for="deck-battles">Battle</label><input type="number" id="deck-battles" value="0" min="0"></div>
                         </div>
-                        <div class="deck-total" style="margin-top: var(--spacing-md);">
-                            Total cards in library: <span id="deck-total">80</span>
-                        </div>
+                        <div class="deck-total">Total: <span id="deck-total">80</span></div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- SHARED OPPONENTS CONFIGURATION (for Multiplayer) -->
+        <!-- OPPONENTS DECK IMPORT — visible for multiplayer tabs -->
         <section class="panel collapsible-panel expanded" id="opponents-config" aria-label="Opponent configuration" style="display: none;">
-            <div class="panel-header">
-                <h2>👥 Opponent Decklists</h2>
-                <button class="collapse-btn" aria-label="Toggle section">
-                    <span class="collapse-icon">▼</span>
-                </button>
-            </div>
-            <div class="panel-content">
-                <p style="color: var(--text-dim); margin-bottom: var(--spacing-lg); font-size: 0.9em;">
-                    Import opponent decklists to analyze their deck composition.
-                </p>
-                <div id="shared-opponent-tabs" class="opponent-tabs">
-                    <!-- Opponent tabs rendered by JS -->
-                </div>
-                <div id="shared-opponent-import">
-                    <!-- Import panels rendered by JS -->
-                </div>
+            <div class="tx-h"><span>OPPONENT DECKLISTS</span></div>
+            <div class="panel-content" style="padding: 14px;">
+                <div id="shared-opponent-tabs" class="opponent-tabs"></div>
+                <div id="shared-opponent-import"></div>
             </div>
         </section>
+
+        <!-- PASTE DECKLIST PANEL (shown when user clicks paste hint in sub-bar) -->
+        <div id="tx-paste-panel" style="display:none; border-bottom:1px solid var(--tx-rule); background:var(--tx-panel);">
+            <div class="tx-h"><span>PASTE DECKLIST</span><span class="tx-h-r" id="tx-paste-panel-close" style="cursor:pointer;">[ CLOSE ✕ ]</span></div>
+            <div style="padding:14px; display:flex; gap:12px; align-items:flex-start;">
+                <textarea id="decklist-input" placeholder="Paste your decklist here…&#10;Format: 4 Lightning Bolt&#10;1 Jace, the Mind Sculptor" rows="6" style="flex:1; background:var(--tx-bg); border:1px solid var(--tx-rule); color:var(--tx-bright); padding:10px; font-family:inherit; font-size:11px; resize:vertical; outline:none;" aria-label="Decklist input"></textarea>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <button id="import-btn" class="tx-fetch-btn">IMPORT ↵</button>
+                    <div class="import-progress" id="import-progress"><div class="import-progress-bar" id="import-progress-bar"></div></div>
+                    <div id="import-status" class="import-status" role="status" aria-live="polite"></div>
+                </div>
+            </div>
+        </div>
 
         <!-- Calculator Content Wrapper -->
         <div class="calculator-content">
 
         <!-- PORTENT TAB -->
         <div id="portent-tab" class="tab-content" role="tabpanel" aria-labelledby="portent">
-            <h1>⚡ Portent of Calamity Calculator</h1>
-            <p class="card-text">"A 9 mana draw 3, nice!"</p>
+            <div class="portent-grid">
 
-            <div class="main-grid single-column">
-                <section class="panel" aria-label="Configuration">
-                    <h2>⚙️ Calculation Settings</h2>
-                    <div class="input-group">
-                        <label for="portent-xValue">X value (cards to reveal)</label>
-                        <div class="x-slider-row">
-                            <input type="range" id="portent-xSlider" value="7" min="1" max="20" step="1" aria-label="X value slider">
-                            <input type="number" id="portent-xValue" value="7" min="1" max="50" class="x-number" aria-label="X value number input">
+                <!-- LEFT RAIL: inputs -->
+                <div class="portent-left">
+                    <div class="tx-h"><span>01 · X PARAM</span><span class="tx-h-r">cards to reveal</span></div>
+                    <div style="padding:16px;">
+                        <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:10px;">
+                            <span id="portent-x-display" style="font-size:56px; font-weight:700; color:var(--tx-bright); line-height:1; letter-spacing:-0.02em; font-feature-settings:'tnum' 1;">7</span>
+                            <span style="color:var(--tx-dim); font-size:11px;">/ <span id="portent-n-display">80</span></span>
+                            <span style="flex:1;"></span>
+                            <span id="portent-pct-display" style="color:var(--tx-mid); font-size:10px;"></span>
+                        </div>
+                        <input class="tx-slider" type="range" id="portent-xSlider" value="7" min="1" max="20" step="1" aria-label="X value slider">
+                        <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:9px; color:var(--tx-dim);">
+                            <span>1</span><span>5</span><span>10</span><span>15</span><span>20</span>
+                        </div>
+                        <div style="display:flex; gap:6px; margin-top:12px;" id="portent-presets">
+                            <button class="tx-chip" data-x="5">X=5</button>
+                            <button class="tx-chip" data-x="7">X=7</button>
+                            <button class="tx-chip" data-x="9">X=9</button>
+                            <button class="tx-chip" data-x="12">X=12</button>
+                            <button class="tx-chip" data-x="15">X=15</button>
+                        </div>
+                        <!-- Hidden number input for JS compatibility -->
+                        <input type="number" id="portent-xValue" value="7" min="1" max="50" style="position:absolute; opacity:0; pointer-events:none; width:1px; height:1px;" aria-label="X value" tabindex="-1">
+                    </div>
+
+                    <div class="tx-h"><span>02 · LIBRARY</span><span class="tx-h-r" id="portent-n-label">N=80</span></div>
+                    <div style="padding:16px;">
+                        <div class="tx-bar" id="portent-type-bar"></div>
+                        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px 12px; font-size:11px; margin-top:8px;" id="portent-type-grid"></div>
+                    </div>
+
+                    <div class="tx-h"><span>03 · TRIGGER RULE</span><span class="tx-h-r">&ge;4 types</span></div>
+                    <div style="padding:16px; font-size:11px; color:var(--tx-mid); line-height:1.55;">
+                        <div style="margin-bottom:8px;">If reveal contains <span style="color:var(--tx-amber);">&ge;4 distinct types</span>, all X cards go to hand.</div>
+                        <div style="color:var(--tx-dim); font-size:10px;">Method: hypergeometric · Monte Carlo 25,000 trials · seed-stable.</div>
+                    </div>
+
+                    <!-- Big spell comparison (legacy, repurposed as extra rail content) -->
+                    <div id="big-spell-comparison-portent"></div>
+
+                    <!-- Legacy stats panel, hidden (replaced by hero numerics) -->
+                    <div id="portent-stats" style="display:none;"></div>
+                </div>
+
+                <!-- CENTER: hero numerics + chart + sweep table -->
+                <div class="portent-center">
+                    <!-- Hero numerics -->
+                    <div class="portent-hero" id="portent-hero">
+                        <div class="tx-stat">
+                            <div class="tx-stat-label">P(FREE SPELL)</div>
+                            <div class="tx-stat-value" id="portent-hero-pfree" style="color:var(--tx-green);">—</div>
+                            <div class="tx-stat-sub" id="portent-hero-pfree-sub">x=7</div>
+                        </div>
+                        <div class="tx-stat">
+                            <div class="tx-stat-label">E[CARDS TO HAND]</div>
+                            <div class="tx-stat-value" id="portent-hero-ecards" style="color:var(--tx-amber);">—</div>
+                            <div class="tx-stat-sub">x · p(free)</div>
+                        </div>
+                        <div class="tx-stat" style="border-right:none;">
+                            <div class="tx-stat-label">EXPECTED LOSS</div>
+                            <div class="tx-stat-value" id="portent-hero-loss" style="color:var(--tx-red);">—</div>
+                            <div class="tx-stat-sub">9 mana · breakeven</div>
                         </div>
                     </div>
-                </section>
 
-                <section class="panel" aria-label="Probability chart">
-                    <h2>📈 Probability & Expected Cards vs X Value</h2>
-                    <div class="chart-container" style="height: 320px;">
+                    <!-- Chart -->
+                    <div class="tx-h">
+                        <span>04 · KERNEL · P(FREE) AND E[CARDS] vs X</span>
+                        <span class="tx-h-r"><span style="color:var(--tx-green);">●</span> P(FREE) &nbsp; <span style="color:var(--tx-amber);">▮</span> E[CARDS]</span>
+                    </div>
+                    <div class="chart-container" style="height:280px; padding:0;">
                         <canvas id="portent-combinedChart" role="img" aria-label="Portent probability chart"></canvas>
                     </div>
-                    <div class="chart-legend">
-                        <span class="legend-item"><span class="legend-color" style="background: #c084fc;"></span> P(Free Spell) %</span>
-                        <span class="legend-item"><span class="legend-color" style="background: #dc2626;"></span> Expected Cards to Hand</span>
-                    </div>
-                </section>
 
-                <section class="panel" id="portent-stats" aria-label="Current X analysis">
-                    <!-- Analysis content will be inserted here -->
-                </section>
-
-                <section class="panel" id="portent-sample-reveals" aria-label="Sample reveals">
-                </section>
-
-                <section class="panel" id="big-spell-comparison-portent" aria-label="Big spell comparison">
-                    <!-- Comparison will be inserted here -->
-                </section>
-
-                <section class="panel" aria-label="X value comparison">
-                    <h2>🔍 X Value Comparison</h2>
-                    <div class="table-wrapper">
-                        <table class="comparison-table" id="portent-comparisonTable">
+                    <!-- X sweep table -->
+                    <div class="tx-h"><span>05 · X SWEEP · STEP RESPONSE</span><span class="tx-h-r">P(FREE), E[CARDS], Δ vs prev</span></div>
+                    <div style="overflow-x:auto;">
+                        <table class="portent-sweep-table" id="portent-sweep-table">
+                            <thead>
+                                <tr>
+                                    <th style="text-align:left;">x</th>
+                                    <th>p(free)</th>
+                                    <th class="p-bar-cell" style="text-align:left;">p bar</th>
+                                    <th>E[cards]</th>
+                                    <th>Δp</th>
+                                    <th>verdict</th>
+                                </tr>
+                            </thead>
+                            <tbody id="portent-sweep-body">
+                                <!-- Populated by portent.js -->
+                            </tbody>
                         </table>
                     </div>
-                </section>
-            </div>
+
+                    <!-- Legacy comparison table (hidden, kept for JS compatibility) -->
+                    <div style="display:none;">
+                        <table class="comparison-table" id="portent-comparisonTable"></table>
+                    </div>
+                </div>
+
+                <!-- RIGHT RAIL: sample reveals + live tape -->
+                <div class="portent-right">
+                    <div class="tx-h">
+                        <span id="portent-reveal-header">06 · SAMPLE REVEAL · X=7</span>
+                        <span class="tx-h-r" id="portent-reshuffle-btn" style="cursor:pointer;">[ ↻ RESHUFFLE ]</span>
+                    </div>
+                    <div id="portent-trials-container">
+                        <!-- 4 trial cards populated by portent.js -->
+                        <div class="portent-trial" style="color:var(--tx-dim); font-size:10px; padding:20px 16px;">
+                            Import a decklist to see sample reveals.
+                        </div>
+                    </div>
+
+                    <div class="tx-h"><span>07 · LIVE TAPE</span><span class="tx-h-r">P-tick</span></div>
+                    <div id="portent-live-tape">
+                        <!-- 14 tape rows populated by portent.js -->
+                    </div>
+
+                    <!-- Legacy sample reveals panel (hidden) -->
+                    <div id="portent-sample-reveals" style="display:none;"></div>
+                    <div id="portent-reveals-display" style="display:none;"></div>
+                    <div id="portent-sample-count" style="display:none;"></div>
+                </div>
+
+            </div><!-- end portent-grid -->
         </div>
 
         <!-- PRIMAL SURGE TAB -->
@@ -815,32 +802,25 @@
 
         </div><!-- End calculator-content -->
 
-        <!-- Footer -->
-        <footer style="margin-top: var(--spacing-3xl); padding: var(--spacing-2xl) 0; border-top: 1px solid var(--glass-border); text-align: center; color: var(--text-secondary);">
-            <div style="margin-bottom: 16px;">
-                <p style="margin-bottom: 8px;">Deck Oracle is a tool for Magic: The Gathering players to analyze deck consistency and expected values for various spells and strategies.</p>
-                <p style="font-size: 0.9em;">
-                    View source on <a href="https://github.com/KyleOps/deck-oracle" target="_blank" rel="noopener noreferrer" style="color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(--accent);">GitHub</a>
-                </p>
-            </div>
-            
-            <!-- Footer Action Buttons -->
-            <div class="footer-actions">
-                <button id="nav-layout-toggle" class="icon-btn" aria-label="Toggle navigation layout" title="Switch navigation style">
-                    <span class="nav-icon">☰</span>
-                </button>
-                <button id="share-button" class="icon-btn" aria-label="Copy Share Link" title="Copy Share Link">
-                    🔗
-                </button>
-                <button id="install-button" class="icon-btn" style="display: none;" aria-label="Install App" title="Install App (PWA)">
-                    ⬇️
-                </button>
-            </div>
-            
-            <p style="margin-top: 24px; font-size: 0.8em; color: var(--text-dim);">
-                Magic: The Gathering is a trademark of Wizards of the Coast LLC. This site is not affiliated with Wizards of the Coast.
-            </p>
-        </footer>
+        <!-- TERMINAL FOOTER -->
+        <div class="tx-footer" id="tx-footer">
+            <span>↑↓ SELECT X</span>
+            <span>R RESHUFFLE</span>
+            <span>F FETCH DECK</span>
+            <span>P PASTE DECK</span>
+            <span>/SEARCH CALC</span>
+            <span class="tx-footer-right">
+                <button id="share-button" class="tx-chip" style="border:none; background:transparent; color:var(--tx-dim); font-family:inherit; font-size:9px; letter-spacing:0.12em; text-transform:uppercase; cursor:pointer; padding:0;" title="Copy share link">SHARE ↗</button>
+                &nbsp;·&nbsp;
+                BUILD 2.4.1 · <span id="tx-build-date"></span>
+            </span>
+        </div>
+
+        <!-- Hidden legacy buttons kept for JS -->
+        <div style="display:none;">
+            <button id="nav-layout-toggle"></button>
+            <button id="install-button"></button>
+        </div>
 
     </div>
 
