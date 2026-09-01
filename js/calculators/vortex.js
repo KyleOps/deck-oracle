@@ -7,11 +7,11 @@
  */
 
 import { createCache, formatNumber, debounce } from '../utils/simulation.js';
-import { renderMultiColumnTable } from '../utils/tableUtils.js';
-import { createOrUpdateChart } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { renderHeroStats, renderRecommendation, renderInsightBox, renderVerdictBadge, renderSweepTable, pBarCell, generateSampleRevealsHTML } from '../utils/components.js';
+import { formatDelta, deltaColor } from '../utils/analysis.js';
 import {
     buildDeckFromCardData, shuffleDeck, renderCardBadge, renderDistributionChart,
     createCollapsibleSection
@@ -162,8 +162,10 @@ export function runSampleReveals() {
     }
 
     // 2. Build Summary UI
-    let distributionHTML = '<div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: var(--panel-bg-alt); border-radius: var(--radius-md);">';
-    distributionHTML += '<h4 style="margin-top: 0;">Spells Cast Distribution:</h4>';
+    let distributionHTML = '<div class="tx-sim">';
+    distributionHTML += '<div class="tx-h"><span>Spells cast — distribution</span></div>';
+    distributionHTML += '<div class="tx-sim-block">';
+
     
     distributionHTML += renderDistributionChart(
         spellsCastDist,
@@ -172,7 +174,7 @@ export function runSampleReveals() {
         (count) => count >= 2 ? ' ⚡ CHAIN' : ''
     );
 
-    distributionHTML += `<div style="margin-top: var(--spacing-md); text-align: center;">`;
+    distributionHTML += '</div><div class="tx-sim-block">';
     distributionHTML += `<strong>Average:</strong> ${(totalSpells / numSims).toFixed(2)} spells, ${(totalFreeMana / numSims).toFixed(1)} mana per trigger`;
     distributionHTML += '</div></div>';
 
@@ -257,7 +259,7 @@ export function runSampleReveals() {
                     const chainIcon = isPower5Plus ? ' ⚡' : '';
                     
                     revealStepsHTML += renderCardBadge(hitCard);
-                    revealStepsHTML += `<span style="margin-left: 8px; color: ${isPower5Plus ? '#c084fc' : '#22c55e'}; font-weight: bold;">
+                    revealStepsHTML += `<span style="margin-left: 8px; color: ${isPower5Plus ? '#9878b8' : '#55c97f'}; font-weight: bold;">
                         ${isPower5Plus ? 'CAST & CHAIN!' : 'CAST'}
                     </span>`;
 
@@ -276,7 +278,7 @@ export function runSampleReveals() {
                     }
 
                 } else {
-                    revealStepsHTML += `<span style="color: #ef4444;">Exiled rest of deck (Whiff)</span>`;
+                    revealStepsHTML += `<span style="color: #e8635c;">Exiled rest of deck (Whiff)</span>`;
                     revealStepsHTML += `</div>`; // Close content div
                     break;
                 }
@@ -606,34 +608,36 @@ function updateChart(config, results) {
                 {
                     label: 'Avg Free Mana Value',
                     data: freeManaData,
-                    borderColor: '#f97316',
-                    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                    borderColor: '#f0a92c',
+                    backgroundColor: 'rgba(240, 169, 44, 0.1)',
                     fill: false,
                     tension: 0.3,
                     pointRadius: cmcValues.map(cmc => cmc === config.creatureCMC ? 8 : 4),
-                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.creatureCMC ? '#fff' : '#f97316'),
+                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.creatureCMC ? '#fff' : '#f0a92c'),
                     yAxisID: 'yMana'
                 },
                 {
                     label: 'Avg Spell CMC Found',
                     data: avgSpellCMCData,
-                    borderColor: '#22c55e',
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    borderColor: TX.green,
+                    backgroundColor: TX.greenFill,
                     fill: false,
-                    tension: 0.3,
-                    pointRadius: cmcValues.map(cmc => cmc === config.creatureCMC ? 8 : 4),
-                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.creatureCMC ? '#fff' : '#22c55e'),
+                    tension: 0,
+                    pointRadius: cmcValues.map(cmc => cmc === config.creatureCMC ? 6 : 0),
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.creatureCMC ? TX.bright : TX.green),
                     yAxisID: 'yMana'
                 },
                 {
                     label: 'Avg Spells Cast',
                     data: avgSpellsCastData,
-                    borderColor: '#c084fc',
-                    backgroundColor: 'rgba(192, 132, 252, 0.1)',
+                    borderColor: TX.blue,
+                    backgroundColor: TX.blueFill,
                     fill: false,
-                    tension: 0.3,
-                    pointRadius: cmcValues.map(cmc => cmc === config.creatureCMC ? 8 : 4),
-                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.creatureCMC ? '#fff' : '#c084fc'),
+                    tension: 0,
+                    pointRadius: cmcValues.map(cmc => cmc === config.creatureCMC ? 6 : 0),
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.creatureCMC ? TX.bright : TX.blue),
                     yAxisID: 'ySpells'
                 }
             ]
@@ -644,21 +648,21 @@ function updateChart(config, results) {
                     type: 'linear',
                     position: 'left',
                     beginAtZero: true,
-                    title: { display: true, text: 'Mana Value', color: '#f97316' },
-                    grid: { color: 'rgba(249, 115, 22, 0.2)' },
-                    ticks: { color: '#f97316' }
+                    title: { display: true, text: 'Mana Value', color: TX.green, font: { size: 9 } },
+                    grid: { color: TX.rule },
+                    ticks: { color: TX.dim, font: { size: 9 } }
                 },
                 ySpells: {
                     type: 'linear',
                     position: 'right',
                     beginAtZero: true,
-                    title: { display: true, text: 'Spells Cast', color: '#c084fc' },
+                    title: { display: true, text: 'Spells Cast', color: TX.blue, font: { size: 9 } },
                     grid: { display: false },
-                    ticks: { color: '#c084fc' }
+                    ticks: { color: TX.dim, font: { size: 9 } }
                 },
                 x: {
-                    grid: { color: 'rgba(249, 115, 22, 0.2)' },
-                    ticks: { color: '#a09090' }
+                    grid: { color: TX.rule },
+                    ticks: { color: TX.dim, font: { size: 9 } }
                 }
             }
         }
@@ -666,29 +670,51 @@ function updateChart(config, results) {
 }
 
 /**
- * Update comparison table
+ * Map average spells-per-trigger to a verdict tier.
+ */
+function discoverVerdict(avgSpells, castable) {
+    if (!castable) return { label: 'NO TARGETS', color: 'var(--tx-red)', advice: 'No spells at or below this mana value.' };
+    if (avgSpells >= 1.5) return { label: 'EXPLOSIVE', color: 'var(--tx-green)', advice: 'Frequently chains into multiple spells.' };
+    if (avgSpells >= 1.25) return { label: 'STRONG', color: 'var(--tx-green)', advice: 'Chains often for strong value.' };
+    if (avgSpells >= 1.10) return { label: 'SOLID', color: 'var(--tx-blue)', advice: 'Reliable value with the odd chain.' };
+    return { label: 'FLAT', color: 'var(--tx-amber)', advice: 'Reliable single hits; chains are rare.' };
+}
+
+/**
+ * Pick the creature CMC in the swept range that yields the most free mana value.
+ */
+function bestCMC(results) {
+    let best = null;
+    Object.keys(results).map(Number).forEach(cmc => {
+        const v = results[cmc]?.avgFreeMana ?? -1;
+        if (best == null || v > best.value) best = { x: cmc, value: v };
+    });
+    return best;
+}
+
+/**
+ * Render the discover-by-CMC sweep table.
  */
 function updateTable(config, results) {
-    const cmcValues = CONFIG.CMC_RANGE;
-    const headers = ['Creature CMC', 'Castable Cards', 'Avg Spell CMC', 'Avg Free Mana'];
+    const cmcValues = Object.keys(results).map(Number).sort((a, b) => a - b);
+    const recommended = bestCMC(results)?.x ?? null;
 
-    const rows = [];
-    cmcValues.forEach((cmc) => {
-        const r = results[cmc];
-        if (!r) return;
+    const rows = cmcValues.map(cmc => ({ x: cmc, ...results[cmc] })).filter(r => r.creatureCMC !== undefined);
 
-        rows.push({
-            cells: [
-                cmc,
-                r.castableCards,
-                formatNumber(r.avgSpellCMC, 2),
-                formatNumber(r.avgFreeMana, 2)
-            ],
-            class: cmc === config.creatureCMC ? 'current' : ''
-        });
+    renderSweepTable('vortex-comparisonTable', {
+        current: config.creatureCMC,
+        recommended,
+        rows,
+        emptyText: 'Configure your deck with power 5+ creatures to see results.',
+        columns: [
+            { label: 'CMC', align: 'left', render: r => `${r.x}` },
+            { label: 'POOL', render: r => `${r.castableCards}` },
+            { label: 'AVG MV', render: r => `<span style="color:var(--tx-green);">${formatNumber(r.avgSpellCMC, 2)}</span>` },
+            { label: 'FREE MV', render: r => `<span style="color:var(--tx-amber);">${formatNumber(r.avgFreeMana, 2)}</span>` },
+            { label: 'CHAIN', align: 'left', render: r => pBarCell(r.multiDiscoverRate || 0, 'oklch(0.72 0.16 290)') },
+            { label: 'VERDICT', render: r => { const v = discoverVerdict(r.avgSpellsPerTrigger, r.castableCards); return `<span style="color:${v.color}; font-weight:600; letter-spacing:0.06em;">${v.label}</span>`; } }
+        ]
     });
-
-    renderMultiColumnTable('vortex-comparisonTable', headers, rows);
 }
 
 /**
@@ -728,7 +754,7 @@ function updateStats(config, results) {
 
                 if (power5Plus.length > 0) {
                     const names = power5Plus.map(c => c.name).join(', ');
-                    section += `<br>&nbsp;&nbsp;⚡ <span style="color: #c084fc;">Chain: ${names}</span>`;
+                    section += `<br>&nbsp;&nbsp;⚡ <span style="color: #9878b8;">Chain: ${names}</span>`;
                 }
 
                 if (regularCards.length > 0) {
@@ -742,25 +768,7 @@ function updateStats(config, results) {
             castableCMCBreakdown = `<br><div style="margin-top: 8px; padding-left: 8px; line-height: 1.6;">${cmcSections.join('<br>')}</div>`;
         }
 
-        // Create interpretation message
-        let interpretation = '';
-        let color = '#f97316';
-        if (currentResult.avgSpellsPerTrigger >= 1.5) {
-             interpretation = `<strong style="color: #22c55e;">Incredible!</strong> High chain potential. You will often cast multiple spells per trigger.`;
-             color = '#22c55e';
-        } else if (currentResult.avgSpellsPerTrigger >= 1.25) {
-            interpretation = `<strong style="color: #22c55e;">Great!</strong> You're chaining frequently and getting strong value.`;
-            color = '#22c55e';
-        } else if (currentResult.avgSpellsPerTrigger >= 1.10) {
-            interpretation = `<strong style="color: #38bdf8;">Solid.</strong> Good discover value with occasional chains.`;
-            color = '#38bdf8';
-        } else if (currentResult.castableCards === 0) {
-             interpretation = `<strong style="color: #dc2626;">No Targets.</strong> You have no spells with CMC ${config.creatureCMC} or less (excluding lands).`;
-             color = '#dc2626';
-        } else {
-            interpretation = `<strong style="color: #f59e0b;">OK.</strong> Reliable hits, but chains are rare.`;
-            color = '#f59e0b';
-        }
+        const verdict = discoverVerdict(currentResult.avgSpellsPerTrigger, currentResult.castableCards);
 
         // Use the power5PlusInRange from the result
         const power5PlusInRange = currentResult.power5PlusInRange || 0;
@@ -770,53 +778,34 @@ function updateStats(config, results) {
 
         // Check if we're excluding a creature from the pool
         const excludedCreatureNote = config.power5PlusAtCMC && config.power5PlusAtCMC.length > 0
-            ? `<div style="margin-bottom: 12px; padding: 8px; background: rgba(192, 132, 252, 0.1); border-left: 3px solid #c084fc; border-radius: 4px; font-size: 0.9em;">
-                ⚡ Casting <strong>${config.power5PlusAtCMC[0].name}</strong> - excluded from discover pool
+            ? `<div style="margin:0; padding:8px 14px; background:var(--tx-panel-alt); border-bottom:1px solid var(--tx-rule); border-left:2px solid oklch(0.72 0.16 290); font-size:11px;">
+                ⚡ Casting <strong style="color:var(--tx-bright);">${config.power5PlusAtCMC[0].name}</strong> — excluded from the discover pool
                </div>`
             : '';
 
-        const cardsHTML = [
-            renderStatCard('Avg Spells', formatNumber(currentResult.avgSpellsPerTrigger, 2), 'per trigger', 'var(--text-light)'),
-            renderStatCard('Avg Mana', formatNumber(currentResult.avgFreeMana, 1), 'value per trigger', '#f97316'),
-            renderStatCard('Chain Prob', formatNumber(currentResult.multiDiscoverRate * 100, 1) + '%', 'chance of >1 spell', '#22c55e')
-        ];
+        const hero = renderHeroStats([
+            { label: 'AVG SPELLS', value: formatNumber(currentResult.avgSpellsPerTrigger, 2), sub: 'cast per trigger', color: 'var(--tx-bright)', size: 'big' },
+            { label: 'FREE MANA', value: formatNumber(currentResult.avgFreeMana, 1), sub: 'value per trigger', color: 'var(--tx-amber)' },
+            { label: 'CHAIN PROB', value: formatNumber(currentResult.multiDiscoverRate * 100, 1) + '%', sub: 'chance of 2+ spells', color: 'var(--tx-green)' },
+            { label: 'DISCOVER POOL', value: currentResult.castableCards, sub: `${formatNumber(castablePercent, 0)}% of non-lands`, color: 'var(--tx-mid)' }
+        ]);
 
-        const secondRow = `
-            <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
-                     <span style="color: var(--text-dim);">Discover Pool Size</span>
-                     <strong>${currentResult.castableCards} cards <span style="font-weight: normal; color: var(--text-secondary); font-size: 0.9em;">(${formatNumber(castablePercent, 0)}% of non-lands)</span></strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;" title="Percentage of discoverable cards that will trigger another discover">
-                     <span style="color: var(--text-dim);">Chain Density (Pool)</span>
-                     <strong style="color: #c084fc;">${formatNumber(chainablePercent, 1)}% <span style="font-weight: normal; color: var(--text-secondary); font-size: 0.9em;">(${power5PlusInRange} cards)</span></strong>
-                </div>
-                 <div style="display: flex; justify-content: space-between;" title="Probability of finding ANY valid card (not whiffing)">
-                     <span style="color: var(--text-dim);">Hit Probability</span>
-                     <strong>${currentResult.castableCards > 0 ? '100%' : '0%'}</strong>
-                </div>
-            </div>
-        `;
+        const best = bestCMC(results);
+        const rec = best
+            ? renderRecommendation(`Best value casting a <strong>CMC-${best.x}</strong> creature (~${formatNumber(best.value, 1)} free mana). Chain density in this pool: <strong>${formatNumber(chainablePercent, 1)}%</strong> (${power5PlusInRange} power-5+ targets).`)
+            : '';
 
-        const customStatsGrid = `
-            <div class="stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; margin-bottom: 16px;">
-                ${cardsHTML.join('')}
-            </div>
-        `;
+        const insight = renderInsightBox('', `Casting a power-5+ creature at CMC ${config.creatureCMC} discovers ${config.creatureCMC}. Average discovered spell costs ${formatNumber(currentResult.avgSpellCMC, 1)} mana. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
 
-        statsPanel.innerHTML = `
-            ${renderInsightBox(`🌀 Discover ${config.creatureCMC} Analysis`, excludedCreatureNote, '')}
-            ${customStatsGrid}
-            ${secondRow}
-            ${renderInsightBox('', interpretation, `• Average discovered spell costs ${formatNumber(currentResult.avgSpellCMC, 1)} mana`, color)}
-            <details style="margin-top: 12px; color: var(--text-dim); font-size: 0.85em;">
-                <summary style="cursor: pointer; user-select: none;">📊 Discover pool breakdown (${currentResult.castableCards} cards)</summary>
-                <div style="margin-top: 8px; padding-left: 8px;">
+        const details = `<details style="padding:10px 14px; border-bottom:1px solid var(--tx-rule); color:var(--tx-dim); font-size:11px;">
+                <summary style="cursor:pointer; user-select:none; letter-spacing:0.06em;">DISCOVER POOL BREAKDOWN · ${currentResult.castableCards} CARDS</summary>
+                <div style="margin-top:8px; padding-left:8px;">
                     ${castableCMCBreakdown || 'No castable spells'}<br>
-                    <strong style="color: var(--text-light);">${power5PlusInRange} of these can chain</strong> (power 5+ creatures)
+                    <strong style="color:var(--tx-text);">${power5PlusInRange} of these can chain</strong> (power 5+ creatures)
                 </div>
-            </details>
-        `;
+            </details>`;
+
+        statsPanel.innerHTML = excludedCreatureNote + hero + rec + insight + details;
     }
 }
 
@@ -825,13 +814,6 @@ function updateStats(config, results) {
  */
 export function updateUI() {
     const { config, results } = calculate();
-
-    console.log('Vortex updateUI called:', {
-        deckSize: config.deckSize,
-        cardDetailsLength: config.cardDetails?.length,
-        creaturesPower5Plus: config.creaturesPower5Plus,
-        resultsCount: Object.keys(results).length
-    });
 
     // Show/hide import warning based on whether we have card details
     const importWarning = document.getElementById('vortex-import-warning');
@@ -845,10 +827,10 @@ export function updateUI() {
 
     if (config.cardDetails.length === 0 || config.creaturesPower5Plus === 0 || Object.keys(results).length === 0) {
         if (chart) chart.destroy();
-        document.getElementById('vortex-comparisonTable').innerHTML = '<tr><td colspan="5">Configure your deck with creatures (power 5+) to see results</td></tr>';
+        document.getElementById('vortex-comparisonTable').innerHTML = '<div class="tx-empty">Configure your deck with power 5+ creatures to see results.</div>';
         const statsPanel = document.getElementById('vortex-stats');
         if (statsPanel) {
-            statsPanel.innerHTML = '<p>Import a decklist to analyze Monstrous Vortex triggers.</p>';
+            statsPanel.innerHTML = '<div class="tx-empty">Import a decklist to analyze Monstrous Vortex triggers.</div>';
         }
         return;
     }

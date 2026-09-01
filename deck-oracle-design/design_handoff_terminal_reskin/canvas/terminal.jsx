@@ -1,4 +1,3 @@
-// TERMINAL — Bloomberg-style quant data console direction.
 // Dense, monospace, deck/calc encoded as ticker codes, hero numerics as
 // giant readouts. Game-neutral.
 

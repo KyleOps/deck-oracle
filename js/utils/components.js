@@ -3,6 +3,8 @@
  * Creates and manages reusable UI elements
  */
 
+import { renderDistributionChart } from './sampleSimulator.js';
+
 /**
  * Render a single statistic card
  * @param {string} label - Top label (e.g. "Expected Permanents")
@@ -19,6 +21,248 @@ export function renderStatCard(label, value, subtext, color = 'var(--text-light)
             <div style="color: var(--text-secondary); font-size: 0.8em;">${subtext}</div>
         </div>
     `;
+}
+
+/**
+ * Render a horizontal hero-stat row (the big terminal numerics used across the
+ * site for a calculator's headline metrics). Mirrors Portent's hero block so
+ * every calculator leads with its key numbers in the same visual language.
+ *
+ * @param {Array<{label:string, value:string|number, sub?:string, color?:string, size?:'big'|'medium'}>} stats
+ * @returns {string} - HTML string
+ */
+export function renderHeroStats(stats) {
+    if (!Array.isArray(stats) || stats.length === 0) return '';
+    const cells = stats.map(s => `
+        <div class="tx-stat">
+            <div class="tx-stat-label">${s.label ?? ''}</div>
+            <div class="tx-stat-value ${s.size === 'big' ? '' : 'medium'}" style="color:${s.color || 'var(--tx-bright)'};">${s.value ?? '—'}</div>
+            <div class="tx-stat-sub">${s.sub ?? ''}</div>
+        </div>`).join('');
+    return `<div class="tx-hero">${cells}</div>`;
+}
+
+/**
+ * Render a verdict pill (e.g. STRONG / FAIR / WEAK) from an analysis verdict object.
+ * @param {{label:string, color:string}} verdict
+ * @returns {string}
+ */
+export function renderVerdictBadge(verdict) {
+    if (!verdict) return '';
+    return `<span class="tx-verdict" style="color:${verdict.color}; border-color:${verdict.color};">${verdict.label}</span>`;
+}
+
+/**
+ * Render a one-line recommendation banner (terminal note with a leading marker).
+ * @param {string} html - Inner HTML/text of the recommendation
+ * @param {Object} [opts]
+ * @param {string} [opts.icon='★'] - Leading marker
+ * @param {string} [opts.accent='var(--tx-amber)'] - Marker color
+ * @returns {string}
+ */
+export function renderRecommendation(html, opts = {}) {
+    const { icon = '★', accent = 'var(--tx-amber)' } = opts;
+    return `<div class="tx-rec"><span class="tx-rec-icon" style="color:${accent};">${icon}</span><span>${html}</span></div>`;
+}
+
+/**
+ * Build an inline probability bar cell (for sweep tables).
+ * @param {number} fraction - 0..1
+ * @param {string} [color='var(--tx-green)']
+ * @returns {string}
+ */
+export function pBarCell(fraction, color = 'var(--tx-green)') {
+    const pct = Math.max(0, Math.min(100, (Number.isFinite(fraction) ? fraction : 0) * 100));
+    return `<span class="tx-p-bar"><span class="tx-p-fill" style="width:${pct.toFixed(1)}%; background:${color};"></span></span>`;
+}
+
+/**
+ * Render a parameter-sweep table (the Portent-style "step response" view) into a
+ * container. Column-config driven so each calculator can describe its own metrics
+ * while sharing the same look, hover/active/recommended highlighting, and tnum
+ * alignment.
+ *
+ * @param {string} elementId - Container element id (a div; existing <table> ids are replaced)
+ * @param {Object} opts
+ * @param {Array<{label:string, render:(row:Object, ctx:Object)=>string, align?:'left'|'right'}>} opts.columns
+ * @param {Array<Object>} opts.rows - Row objects; each must expose `x`
+ * @param {number} [opts.current] - x value to mark as the active row
+ * @param {number} [opts.recommended] - x value to flag with the recommendation rail
+ * @param {string} [opts.emptyText] - Shown when there are no rows
+ */
+export function renderSweepTable(elementId, opts = {}) {
+    const container = document.getElementById(elementId);
+    if (!container) return;
+
+    const { columns = [], rows = [], current = null, recommended = null, emptyText = 'Import a deck or adjust inputs to populate.' } = opts;
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+        container.innerHTML = `<div class="tx-empty">${emptyText}</div>`;
+        return;
+    }
+
+    const headCells = columns.map(c => `<th class="${c.align === 'left' ? 'ta-l' : ''}">${c.label}</th>`).join('');
+
+    const bodyRows = rows.map(row => {
+        const isCurrent = current != null && row.x === current;
+        const isRec = recommended != null && row.x === recommended;
+        const rowClass = [isCurrent ? 'active-row' : '', isRec ? 'rec-row' : ''].filter(Boolean).join(' ');
+        const ctx = { isCurrent, isRec };
+        const tds = columns.map(c => `<td class="${c.align === 'left' ? 'ta-l' : ''}">${c.render(row, ctx)}</td>`).join('');
+        return `<tr class="${rowClass}">${tds}</tr>`;
+    }).join('');
+
+    container.innerHTML = `<table class="tx-sweep-table"><thead><tr>${headCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+}
+
+/**
+ * Render a 2x2 outcome matrix — the confusion-matrix view of a decision rule.
+ *
+ * Four separate tinted boxes hide the thing that actually matters: whether the
+ * strategy's calls line up with reality. Laying the same four numbers out as a
+ * matrix puts agreement on the diagonal, so accuracy is readable at a glance and
+ * the two failure modes sit opposite each other.
+ *
+ * @param {Object} opts
+ * @param {string} [opts.title] - Section title
+ * @param {string} [opts.subtitle] - Right-aligned context (e.g. sample size)
+ * @param {[string, string]} opts.rowLabels - Labels for the decision axis
+ * @param {[string, string]} opts.colLabels - Labels for the outcome axis
+ * @param {Array<Array<{label:string, value:number, note?:string, good?:boolean}>>} opts.cells
+ *        2x2 grid of cells; `value` is a fraction in 0..1
+ * @returns {string} - HTML string
+ */
+export function renderOutcomeMatrix(opts = {}) {
+    const { title = '', subtitle = '', rowLabels = ['', ''], colLabels = ['', ''], cells = [] } = opts;
+    if (cells.length !== 2 || cells.some(r => !Array.isArray(r) || r.length !== 2)) return '';
+
+    const pct = (v) => `${((Number.isFinite(v) ? v : 0) * 100).toFixed(1)}%`;
+
+    // Agreement sits on the diagonal: correct-keep and correct-mull.
+    const accuracy = (cells[0][0]?.value ?? 0) + (cells[1][1]?.value ?? 0);
+
+    const cellHTML = (cell) => {
+        if (!cell) return '<td class="tx-mx-cell"></td>';
+        const color = cell.good ? 'var(--tx-green)' : 'var(--tx-red)';
+        return `
+            <td class="tx-mx-cell ${cell.good ? 'is-good' : 'is-bad'}">
+                <div class="tx-mx-mark" style="color:${color};">${cell.good ? '✓' : '✗'}</div>
+                <div class="tx-mx-label">${cell.label ?? ''}</div>
+                <div class="tx-mx-value" style="color:${color};">${pct(cell.value)}</div>
+                ${pBarCell(cell.value, color)}
+                ${cell.note ? `<div class="tx-mx-note">${cell.note}</div>` : ''}
+            </td>`;
+    };
+
+    return `
+        <div class="tx-matrix">
+            <div class="tx-h">
+                <span>${title}</span>
+                <span class="tx-h-r">${subtitle}</span>
+            </div>
+            <table class="tx-mx-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>${colLabels[0]}</th>
+                        <th>${colLabels[1]}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><th class="tx-mx-rowlabel">${rowLabels[0]}</th>${cellHTML(cells[0][0])}${cellHTML(cells[0][1])}</tr>
+                    <tr><th class="tx-mx-rowlabel">${rowLabels[1]}</th>${cellHTML(cells[1][0])}${cellHTML(cells[1][1])}</tr>
+                </tbody>
+            </table>
+            <div class="tx-mx-foot">
+                <span>STRATEGY ACCURACY</span>
+                <span class="tx-mx-acc">${pct(accuracy)}</span>
+                <span class="tx-mx-foot-note">agreement between the rule's call and the outcome</span>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Render a calculator's simulation summary.
+ *
+ * Every calculator previously hand-rolled this block with its own inline styles,
+ * its own heading level, and its own metric grid — so the same information was
+ * laid out differently on each tab, and several calculators showed no shape of
+ * the results at all, only averages. This renders the one standard structure:
+ *
+ *   header (with run count) -> headline metrics -> distribution -> outcomes
+ *
+ * The distribution is the important part: an average tells you where the middle
+ * is, but not whether the spread is tight or bimodal, which is what actually
+ * decides whether a card is worth running.
+ *
+ * @param {Object} opts
+ * @param {string} [opts.title='Simulation summary']
+ * @param {number} [opts.runs] - Number of simulations; shown in the header
+ * @param {Array<{label:string, value:string|number, sub?:string, color?:string}>} [opts.metrics]
+ * @param {{title?:string, counts:number[], totalSims:number, labelFn:Function, markerFn?:Function}} [opts.distribution]
+ * @param {Array<{label:string, value:number, good?:boolean}>} [opts.outcomes] - value is a fraction 0..1
+ * @returns {string} HTML
+ */
+export function renderSimulationSummary(opts = {}) {
+    const {
+        title = 'Simulation summary',
+        runs = null,
+        metrics = [],
+        distribution = null,
+        outcomes = []
+    } = opts;
+
+    const runLabel = Number.isFinite(runs) ? `${runs.toLocaleString('en-US')} runs` : '';
+
+    const metricsHTML = metrics.length ? `
+        <div class="tx-sim-metrics">
+            ${metrics.map(m => `
+                <div class="tx-sim-metric">
+                    <div class="tx-sim-metric-label">${m.label ?? ''}</div>
+                    <div class="tx-sim-metric-value" style="color:${m.color || 'var(--tx-bright)'};">${m.value ?? '—'}</div>
+                    ${m.sub ? `<div class="tx-sim-metric-sub">${m.sub}</div>` : ''}
+                </div>`).join('')}
+        </div>` : '';
+
+    let distHTML = '';
+    if (distribution && Array.isArray(distribution.counts) && distribution.totalSims > 0) {
+        const { counts, totalSims, labelFn, markerFn = () => null, toneFn = null, title: distTitle = 'Distribution' } = distribution;
+        distHTML = `
+            <div class="tx-sim-block">
+                <div class="tx-sim-block-title">${distTitle}</div>
+                ${renderDistributionChart(counts, totalSims, labelFn, markerFn, toneFn)}
+            </div>`;
+    }
+
+    const outcomesHTML = outcomes.length ? `
+        <div class="tx-sim-block">
+            <div class="tx-sim-block-title">Outcomes</div>
+            <div class="tx-sim-outcomes">
+                ${outcomes.map(o => {
+                    const v = Number.isFinite(o.value) ? o.value : 0;
+                    const color = o.good === false ? 'var(--tx-bad)' : (o.good ? 'var(--tx-good)' : 'var(--tx-mid)');
+                    const mark = o.good === false ? '✗' : (o.good ? '✓' : '·');
+                    return `
+                        <div class="tx-sim-outcome">
+                            <span class="tx-sim-outcome-mark" style="color:${color};">${mark}</span>
+                            <span class="tx-sim-outcome-label">${o.label ?? ''}</span>
+                            ${pBarCell(v, color)}
+                            <span class="tx-sim-outcome-value" style="color:${color};">${(v * 100).toFixed(1)}%</span>
+                        </div>`;
+                }).join('')}
+            </div>
+        </div>` : '';
+
+    if (!metricsHTML && !distHTML && !outcomesHTML) return '';
+
+    return `
+        <div class="tx-sim">
+            <div class="tx-h"><span>${title}</span><span class="tx-h-r">${runLabel}</span></div>
+            ${metricsHTML}
+            ${distHTML}
+            ${outcomesHTML}
+        </div>`;
 }
 
 /**
@@ -141,66 +385,6 @@ export function initCollapsiblePanels() {
 }
 
 /**
- * Create a type input group (reusable component)
- * @param {string} id - Input ID
- * @param {string} label - Input label
- * @param {number} defaultValue - Default value
- * @returns {HTMLElement} - Type input element
- */
-export function createTypeInput(id, label, defaultValue = 0) {
-    const div = document.createElement('div');
-    div.className = 'type-input';
-    div.innerHTML = `
-        <label for="${id}">${label}</label>
-        <input type="number" id="${id}" value="${defaultValue}" min="0" aria-label="${label}">
-    `;
-    return div;
-}
-
-/**
- * Create a deck total display
- * @param {string} id - Display ID
- * @param {number} initialTotal - Initial total
- * @returns {HTMLElement} - Deck total element
- */
-export function createDeckTotal(id, initialTotal = 0) {
-    const div = document.createElement('div');
-    div.className = 'deck-total';
-    div.innerHTML = `
-        Total cards in library: <span id="${id}">${initialTotal}</span>
-    `;
-    return div;
-}
-
-/**
- * Auto-collapse config panels on mobile after calculation
- */
-export function autoCollapseOnMobile() {
-    if (window.innerWidth <= 900) {
-        document.querySelectorAll('.collapsible-panel.config').forEach(panel => {
-            if (panel.classList.contains('expanded')) {
-                togglePanel(panel);
-            }
-        });
-
-        // Expand results panels
-        document.querySelectorAll('.collapsible-panel.results').forEach(panel => {
-            if (!panel.classList.contains('expanded')) {
-                togglePanel(panel);
-            }
-        });
-
-        // Scroll to results
-        const resultsPanel = document.querySelector('.collapsible-panel.results');
-        if (resultsPanel) {
-            setTimeout(() => {
-                resultsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 300);
-        }
-    }
-}
-
-/**
  * Generate the HTML for the Sample Reveals section
  * @param {string} prefix - ID prefix (e.g., 'portent')
  * @param {string} title - Section title (e.g., 'Sample Portent Reveals')
@@ -211,14 +395,13 @@ export function generateSampleRevealsHTML(prefix, title, options = {}) {
     const { requiresImport = true } = options;
     
     return `
-        <h2>🎴 ${title}</h2>
-        <div style="display: flex; gap: var(--spacing-md); align-items: center; margin-bottom: var(--spacing-md); flex-wrap: wrap;">
-            <label for="${prefix}-sample-count" style="color: var(--text-secondary);">Simulations:</label>
-            <input type="number" id="${prefix}-sample-count" min="1" max="10000" value="500"
-                   style="width: 100px; padding: 8px; background: var(--panel-bg-alt); border: 1px solid var(--accent); border-radius: var(--radius-md); color: var(--text-light); text-align: center;">
-            <button id="${prefix}-draw-reveals-btn" class="import-btn run-sim-btn" ${requiresImport ? 'disabled' : ''}>Run Simulations</button>
-            ${requiresImport ? `<span class="sim-import-note" style="color: var(--text-dim); font-size: 0.85em; margin-left: 8px;">(Import deck to enable)</span>` : ''}
-            <span style="color: var(--text-dim); font-size: 0.85em;">(1-10000)</span>
+        <div class="tx-h"><span>${title}</span></div>
+        <div class="tx-sim-controls">
+            <label for="${prefix}-sample-count">Simulations</label>
+            <input type="number" id="${prefix}-sample-count" min="1" max="10000" value="500">
+            <button id="${prefix}-draw-reveals-btn" class="import-btn run-sim-btn" ${requiresImport ? 'disabled' : ''}>Run simulations</button>
+            ${requiresImport ? `<span class="sim-import-note">Import a deck to enable</span>` : ''}
+            <span class="tx-sim-controls-hint">1–10,000</span>
         </div>
         <div id="${prefix}-reveals-display"></div>
     `;

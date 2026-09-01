@@ -4,9 +4,12 @@
 
 @media (max-width: 900px) {
     .container {
-        max-width: 100vw;
-        padding: 0 var(--spacing-md);
-        overflow-x: hidden;
+        /* No overflow-x clamp and no side padding: the clamp breaks
+           position:sticky (it makes .container a scroll container), and the
+           shell is edge-to-edge on small screens by design — the gutter token
+           handles spacing from 900px up. */
+        max-width: 100%;
+        padding: 0;
     }
 
     .main-grid {
@@ -183,9 +186,11 @@
         margin: 0;
     }
 
+    /* Left to the intrinsic auto-fit rule in components.css: three inputs
+       fit across a 390px phone, and forcing one column here made each card
+       type nearly a full screen tall. */
     .type-grid {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-sm);
+        gap: 1px;
     }
 
     /* Larger slider thumb for mobile */
@@ -613,4 +618,192 @@
     .main-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* ==================== TERMINAL SHELL — RESPONSIVE ====================
+   The terminal chrome (header, tab row, sub-bar, deck radar) was built
+   desktop-first. These rules make it usable on phones: the header stacks, the
+   nav rails scroll horizontally with momentum, and the radar drops to one
+   column. */
+
+@media (max-width: 900px) {
+    /* Header stacks: identity row on top, group rail beneath. */
+    .tx-header-top {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "wordmark pill"
+            "groups   groups";
+        height: auto;
+    }
+
+    .tx-wordmark  { grid-area: wordmark; border-right: 0; height: 44px; }
+    .tx-deck-pill { grid-area: pill;     height: 44px; }
+
+    .tx-group-row {
+        grid-area: groups;
+        border-right: 0;
+        border-top: 1px solid var(--tx-rule);
+        height: 38px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .tx-group-row::-webkit-scrollbar { display: none; }
+
+    .tx-group {
+        padding: 0 14px;
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        flex: 0 0 auto;
+    }
+
+    /* Tab row scrolls rather than compressing tab labels to nothing. */
+    .tx-tab {
+        padding: 0 14px;
+        min-width: 0;
+    }
+
+    .tx-tab .tx-name { display: none; }
+    .tx-tab .tx-sep  { display: none; }
+    .tx-tab .tx-code { font-size: 12px; }
+
+    /* The active tab keeps its full name so you always know where you are. */
+    .tx-tab.active .tx-name { display: inline; }
+    .tx-tab.active .tx-sep  { display: inline; }
+
+    /* Sticky offsets must follow the taller stacked header. */
+    .tx-header   { position: static; }
+    .tx-sub-bar  { position: static; }
+
+    /* Sub-bar wraps into a two-row import strip. */
+    .tx-sub-bar {
+        height: auto;
+        flex-wrap: wrap;
+        padding: 10px 12px;
+        gap: 8px;
+        overflow: visible;
+    }
+
+    .tx-sub-bar .tx-url-input   { flex: 1 1 100%; }
+    .tx-sub-bar .tx-paste-input { flex: 1 1 140px; }
+    .tx-sub-bar .tx-or          { display: none; }
+    .tx-sub-bar .tx-fetch-btn   { flex: 0 0 auto; }
+    .tx-sub-bar .tx-import-meta { margin-left: auto; }
+
+    /* Deck radar: one column, composition above matches. */
+    .rdr-body {
+        grid-template-columns: 1fr;
+    }
+
+    .rdr-col-comp {
+        border-right: 0;
+        border-bottom: 1px solid var(--tx-rule);
+    }
+
+    .rdr-row {
+        grid-template-columns: 70px 1fr;
+        row-gap: 4px;
+    }
+
+    /* "OPEN →" is redundant on touch — the whole row is the target. */
+    .rdr-go { display: none; }
+
+    /* Calculator dashboards are multi-column grids on desktop; collapse them
+       all rather than listing every calculator's bespoke grid class. */
+    .portent-grid,
+    .tab-content [class$="-grid"]:not(.type-grid) {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Keep every table swipeable instead of blowing out the page width. */
+    .tab-content table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 640px) {
+    .tx-wordmark .tx-tag { display: none; }
+    .tx-wordmark .tx-deck,
+    .tx-wordmark .tx-oracle { font-size: 15px; }
+    .tx-wordmark { padding: 0 12px; }
+    .tx-deck-pill { padding: 0 12px; font-size: 9px; }
+
+    .tx-status-bar {
+        gap: 12px;
+        font-size: 9px;
+        padding: 0 12px;
+    }
+
+    /* Radar composition metrics: 2x2 rather than a squeezed single row. */
+    .rdr-metrics { grid-template-columns: repeat(2, 1fr); gap: 12px 8px; }
+    .rdr-curve { height: 64px; }
+
+    /* Terminal headings inside calculators stay label-sized on mobile too —
+       the legacy h1 rules above would otherwise scale them up to 1.25rem. */
+    .tab-content h1 {
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--tx-mid);
+        text-shadow: none;
+        margin-bottom: var(--spacing-md);
+    }
+
+    /* Full-width touch targets for the sub-bar controls. */
+    .tx-sub-bar .tx-paste-input { flex: 1 1 100%; }
+    .tx-sub-bar .tx-fetch-btn { flex: 1 1 100%; padding: 9px 14px; }
+
+    /* Hero stat rows wrap instead of shrinking numbers to illegibility. */
+    .tx-hero,
+    .portent-hero {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .tx-stat { border-right: 0 !important; }
+}
+
+/* Comfortable touch targets on coarse pointers. */
+@media (hover: none) and (pointer: coarse) {
+    .tx-tab { min-height: 44px; }
+    .tx-group { min-height: 38px; }
+    .rdr-row { padding: 12px 10px; }
+    .calculator-content input[type="range"] { height: 6px; }
+    .calculator-content input[type="range"]::-webkit-slider-thumb {
+        width: 18px;
+        height: 26px;
+    }
+}
+
+/* Outcome matrix stacks into single-column cells on narrow screens — a 2x2
+   grid of 22px numbers plus notes does not survive a 390px viewport. */
+@media (max-width: 640px) {
+    .tx-mx-table,
+    .tx-mx-table thead,
+    .tx-mx-table tbody,
+    .tx-mx-table tr,
+    .tx-mx-table th,
+    .tx-mx-table td {
+        display: block;
+        width: auto;
+    }
+
+    .tx-mx-table thead { display: none; }
+
+    .tx-mx-rowlabel {
+        width: auto;
+        border-right: 0;
+        background: var(--tx-panel-alt);
+    }
+
+    .tx-mx-cell { border-right: 0; }
+
+    .tx-mx-foot { flex-wrap: wrap; }
+    .tx-mx-foot-note { margin-left: 0; flex: 1 1 100%; }
 }

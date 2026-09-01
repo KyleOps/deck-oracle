@@ -5,11 +5,11 @@
 
 import { createCache, partialShuffle, formatNumber, formatPercentage, debounce } from '../utils/simulation.js';
 import { renderMultiColumnTable } from '../utils/tableUtils.js';
-import { createOrUpdateChart } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { renderDistributionChart, buildDeckFromCardData, shuffleDeck, createCollapsibleSection, extractCardTypes } from '../utils/sampleSimulator.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
 import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
 
 const CONFIG = {
@@ -21,35 +21,20 @@ const CONFIG = {
 };
 
 const COLORS = {
-    primary: '#4ade80',
-    primaryDim: 'rgba(74, 222, 128, 0.08)',
-    danger: '#fbbf24',
-    dangerDim: 'rgba(251, 191, 36, 0.08)',
-    success: '#4ade80',
-    warning: '#fbbf24',
-    white: '#d4dfd9',
-    text: '#5a6b66',
-    grid: '#1c2520',
-    creature: '#4ade80',
-    sorcery: '#f87171',
-    instant: '#60a5fa',
-    artifact: '#8b9b95',
-    enchantment: '#c084fc',
-    planeswalker: '#fbbf24',
-    battle: '#f472b6',
-    land: '#5a6b66'
+    primary: '#55c97f',
+    primaryDim: 'rgba(85, 201, 127, 0.08)',
+    danger: '#f0a92c',
+    dangerDim: 'rgba(240, 169, 44, 0.08)',
+    success: '#55c97f',
+    warning: '#f0a92c',
+    white: '#d2d8d4',
+    text: '#808b85',
+    grid: '#1e221f',
+    ...TX.types
 };
 
-const TX_TYPE_COLORS = {
-    creature: '#4ade80',
-    instant: '#60a5fa',
-    sorcery: '#f87171',
-    artifact: '#8b9b95',
-    enchantment: '#c084fc',
-    planeswalker: '#fbbf24',
-    land: '#5a6b66',
-    battle: '#f472b6'
-};
+// Single source of truth for card-type colours (mirrors --type-* in base.css)
+const TX_TYPE_COLORS = TX.types;
 
 let simulationCache = createCache(50);
 let lastDeckHash = '';
@@ -88,10 +73,10 @@ function refreshSamples() {
         Object.values(cardData.cardsByName).forEach(card => {
             const types = extractCardTypes(card);
             for (let i = 0; i < card.count; i++) {
-                deck.push({ name: card.name, types, type_line: card.type_line });
+                deck.push({ name: card.name, types, type_line: card.type_line, cmc: card.cmc ?? 0 });
             }
         });
-        
+
         generateStableSamples(deck, numSims);
         runSampleReveals();
     }
@@ -225,7 +210,7 @@ export function getDeckConfig() {
         Object.values(cardData.cardsByName).forEach(card => {
             const t = extractCardTypes(card);
             for (let i = 0; i < card.count; i++) {
-                deck.push({ name: card.name, types: t, type_line: card.type_line });
+                deck.push({ name: card.name, types: t, type_line: card.type_line, cmc: card.cmc ?? 0 });
             }
         });
         generateStableSamples(deck, 20);
@@ -279,19 +264,19 @@ function updateChart(config, results) {
     chart = createOrUpdateChart(chart, 'portent-combinedChart', {
         type: 'bar',
         data: {
-            labels: xValues.map(x => 'x=' + x),
             datasets: [
                 {
-                    label: 'E[CARDS]',
-                    data: xValues.map(x => results[x] ? +(x * results[x].prob4Plus).toFixed(3) : 0),
+                    label: 'E[TYPES]',
+                    data: xValues.map(x => ({ x, y: results[x] ? +results[x].expectedTypes.toFixed(3) : 0 })),
                     backgroundColor: xValues.map(x => x === config.x ? COLORS.danger : COLORS.dangerDim),
                     borderColor: 'transparent',
-                    yAxisID: 'yCards',
-                    order: 2
+                    yAxisID: 'yTypes',
+                    order: 2,
+                    barThickness: 'flex'
                 },
                 {
                     label: 'P(FREE) %',
-                    data: xValues.map(x => results[x] ? +(results[x].prob4Plus * 100).toFixed(2) : 0),
+                    data: xValues.map(x => ({ x, y: results[x] ? +(results[x].prob4Plus * 100).toFixed(2) : 0 })),
                     borderColor: COLORS.primary,
                     backgroundColor: 'transparent',
                     type: 'line',
@@ -307,18 +292,22 @@ function updateChart(config, results) {
         },
         options: {
             scales: {
+                x: {
+                    type: 'linear',
+                    ticks: { stepSize: 1, color: COLORS.text, callback: val => `x=${val}` },
+                    grid: { color: COLORS.grid }
+                },
                 yProb: { type: 'linear', position: 'left', beginAtZero: true, max: 100,
                     grid: { color: COLORS.grid }, ticks: { color: COLORS.primary } },
-                yCards: { type: 'linear', position: 'right', beginAtZero: true,
-                    grid: { drawOnChartArea: false }, ticks: { color: COLORS.danger } },
-                x: { grid: { color: COLORS.grid }, ticks: { color: COLORS.text } }
+                yTypes: { type: 'linear', position: 'right', beginAtZero: true,
+                    grid: { drawOnChartArea: false }, ticks: { color: COLORS.danger } }
             },
             plugins: {
                 tooltip: {
                     callbacks: {
                         label: ctx => ctx.datasetIndex === 1
                             ? `P(free): ${ctx.parsed.y.toFixed(1)}%`
-                            : `E[cards]: ${ctx.parsed.y.toFixed(2)}`
+                            : `E[types]: ${ctx.parsed.y.toFixed(2)}`
                     }
                 }
             }
@@ -381,37 +370,8 @@ const formatMarginal = (compareResult, currentResult) => {
     return `<span style="color: ${probColor};">${probDiff >= 0 ? '+' : ''}${probDiff.toFixed(1)}%</span> free spell, <span style="color: ${typesColor};">${typesDiff >= 0 ? '+' : ''}${formatNumber(typesDiff, 2)}</span> types exiled`;
 };
 
-function updateStats(config, results) {
-    const statsPanel = document.getElementById('portent-stats');
-    const currentResult = results[config.x];
-
-    if (statsPanel && currentResult) {
-        const marginalUp = formatMarginal(results[config.x + 1], currentResult);
-        const marginalDown = formatMarginal(results[config.x - 1], currentResult);
-        const expectedTypes = currentResult.expectedTypes;
-        const prob = currentResult.prob4Plus;
-        
-        let message, color, advice;
-        if (prob >= 0.90) { message = 'Incredible!'; color = COLORS.success; advice = ' Nearly guaranteed free spell.'; }
-        else if (prob >= 0.75) { message = 'Excellent!'; color = COLORS.primary; advice = ' Reliable free spell trigger.'; }
-        else if (prob >= 0.60) { message = 'Good.'; color = '#38bdf8'; advice = ' Moderate consistency.'; }
-        else if (prob >= 0.40) { message = 'Risky.'; color = COLORS.warning; advice = ' Often misses the free spell.'; }
-        else { message = 'Poor.'; color = COLORS.danger; advice = ' Unlikely to hit free spell. Diversify types!'; }
-
-        const cardsHTML = [
-            renderStatCard('Free Spell Chance', formatPercentage(currentResult.prob4Plus), '4+ types revealed', COLORS.primary),
-            renderStatCard('Types Exiled', formatNumber(expectedTypes, 1), 'avg per cast (1 per type)', COLORS.danger)
-        ];
-
-        const footer = `<strong>Marginal Value:</strong><br>• X=${config.x + 1}: ${marginalUp}<br>• X=${config.x - 1}: ${marginalDown}`;
-
-        statsPanel.innerHTML = `
-            ${renderInsightBox(`⚡ Portent of Calamity X=${config.x} Analysis`, '', '')}
-            ${renderStatsGrid(cardsHTML)}
-            ${renderInsightBox('', `<strong style="color: ${color};">${message}</strong> ${advice}`, footer)}
-        `;
-    }
-}
+// updateStats() removed: it rendered legacy stat cards into #portent-stats,
+// which is display:none — the hero numerics and sweep table replaced it.
 
 /**
  * Run sample Portent reveals
@@ -435,7 +395,7 @@ export function runSampleReveals() {
         Object.values(cardData.cardsByName).forEach(card => {
             const types = extractCardTypes(card);
             for (let i = 0; i < card.count; i++) {
-                deck.push({ name: card.name, types, type_line: card.type_line });
+                deck.push({ name: card.name, types, type_line: card.type_line, cmc: card.cmc ?? 0 });
             }
         });
         generateStableSamples(deck, numSims);
@@ -467,8 +427,10 @@ export function runSampleReveals() {
     // 2. Build Summary UI
     const avgTypesExiled = (totalTypesExiled / numSims).toFixed(2);
 
-    let distributionHTML = '<div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: var(--panel-bg-alt); border-radius: var(--radius-md);">';
-    distributionHTML += '<h4 style="margin-top: 0;">Type Distribution:</h4>';
+    let distributionHTML = '<div class="tx-sim">';
+    distributionHTML += '<div class="tx-h"><span>Types revealed — distribution</span></div>';
+    distributionHTML += '<div class="tx-sim-block">';
+
     
     distributionHTML += renderDistributionChart(
         typeDistribution,
@@ -477,7 +439,7 @@ export function runSampleReveals() {
         (count) => (count >= CONFIG.FREE_SPELL_THRESHOLD && typeDistribution[count] > 0) ? ' ← FREE SPELL' : ''
     );
 
-    distributionHTML += `<div style="margin-top: var(--spacing-md); text-align: center;">`;
+    distributionHTML += '</div><div class="tx-sim-block">';
     distributionHTML += `<strong>Sample Result:</strong> ${freeSpellCount}/${numSims} reveals = ${((freeSpellCount / numSims) * 100).toFixed(1)}% chance of free spell<br>`;
     distributionHTML += `<strong>Average types exiled:</strong> ${avgTypesExiled}`;
     distributionHTML += '</div></div>';
@@ -568,8 +530,9 @@ function updateTerminalDisplay(config, results) {
     if (!r) return;
 
     const prob = r.prob4Plus;
-    const eCards = x * prob;
-    const eLoss = x * (1 - prob);
+    const eTypes = r.expectedTypes;
+    const rNext = results[x + 1];
+    const marginal = rNext ? (rNext.prob4Plus - prob) * 100 : null;
 
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
@@ -579,8 +542,16 @@ function updateTerminalDisplay(config, results) {
     set('portent-pct-display', `${(x / config.deckSize * 100).toFixed(1)}%`);
     set('portent-hero-pfree', (prob * 100).toFixed(2) + '%');
     set('portent-hero-pfree-sub', `x=${x}`);
-    set('portent-hero-ecards', eCards.toFixed(2));
-    set('portent-hero-loss', eLoss.toFixed(2));
+    set('portent-hero-types', eTypes.toFixed(2));
+    if (marginal !== null) {
+        const sign = marginal >= 0 ? '+' : '';
+        set('portent-hero-marginal', sign + marginal.toFixed(2) + '%');
+        set('portent-hero-marginal-sub', `x=${x} → x=${x + 1}`);
+        const margEl = document.getElementById('portent-hero-marginal');
+        if (margEl) margEl.style.color = marginal > 0 ? 'var(--tx-green)' : marginal < 0 ? 'var(--tx-red)' : 'var(--tx-dim)';
+    } else {
+        set('portent-hero-marginal', '—');
+    }
     set('portent-reveal-header', `06 · SAMPLE REVEAL · X=${x}`);
 }
 
@@ -596,13 +567,13 @@ function updateTypeBar(types, deckSize) {
     if (typeBar) {
         typeBar.innerHTML = entries.map(([type, count]) => {
             const pct = (count / total * 100).toFixed(2);
-            return `<span class="tx-bar-seg" style="width:${pct}%; background:${TX_TYPE_COLORS[type] || '#8b9b95'};" title="${type}: ${count}"></span>`;
+            return `<span class="tx-bar-seg" style="width:${pct}%; background:${TX_TYPE_COLORS[type] || '#939c97'};" title="${type}: ${count}"></span>`;
         }).join('');
     }
 
     if (typeGrid) {
         typeGrid.innerHTML = entries.map(([type, count]) => `
-            <span style="color:${TX_TYPE_COLORS[type] || '#8b9b95'}; line-height:1.8;">●</span>
+            <span style="color:${TX_TYPE_COLORS[type] || '#939c97'}; line-height:1.8;">●</span>
             <span style="color:var(--tx-mid); text-transform:uppercase; font-size:10px; line-height:1.8;">${type.slice(0, 4)}</span>
             <span style="color:var(--tx-bright); text-align:right; line-height:1.8;">${count}</span>
             <span style="color:var(--tx-dim); text-align:right; font-size:10px; line-height:1.8;">${(count / total * 100).toFixed(0)}%</span>
@@ -615,14 +586,15 @@ function updateSweepTable(config, results) {
     if (!tbody) return;
 
     const getVerdict = (p) => {
-        if (p >= 0.85) return { text: 'CERTAIN', color: '#4ade80' };
-        if (p >= 0.65) return { text: 'STRONG', color: '#22c55e' };
-        if (p >= 0.40) return { text: 'FAIR', color: '#fbbf24' };
-        return { text: 'WEAK', color: '#f87171' };
+        if (p >= 0.85) return { text: 'CERTAIN', color: '#55c97f' };
+        if (p >= 0.65) return { text: 'STRONG', color: '#55c97f' };
+        if (p >= 0.40) return { text: 'FAIR', color: '#f0a92c' };
+        return { text: 'WEAK', color: '#e8635c' };
     };
 
     let prevProb = null;
     let html = '';
+    let crossedThreshold = false;
 
     for (let x = 3; x <= 20; x++) {
         const r = results[x];
@@ -630,12 +602,18 @@ function updateSweepTable(config, results) {
         const prob = r.prob4Plus;
         const eCards = (x * prob).toFixed(2);
 
+        // Insert FREE SPELL threshold separator on first row where P >= 40%
+        if (!crossedThreshold && prob >= 0.40) {
+            crossedThreshold = true;
+            html += `<tr><td colspan="6" style="padding:3px 14px; border-bottom:1px solid var(--tx-green); font-size:9px; color:var(--tx-green); letter-spacing:0.14em; text-align:center; background:rgba(85,201,127,0.04);">▲ FREE SPELL THRESHOLD (≥4 TYPES)</td></tr>`;
+        }
+
         let deltaP = '—';
         let deltaPColor = 'var(--tx-dim)';
         if (prevProb !== null) {
             const diff = (prob - prevProb) * 100;
             deltaP = (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%';
-            deltaPColor = diff >= 0.05 ? '#4ade80' : diff < -0.05 ? '#f87171' : 'var(--tx-dim)';
+            deltaPColor = diff >= 0.05 ? '#55c97f' : diff < -0.05 ? '#e8635c' : 'var(--tx-dim)';
         }
         prevProb = prob;
 
@@ -646,9 +624,9 @@ function updateSweepTable(config, results) {
 
         html += `<tr${rowStyle}>
             <td style="text-align:left; font-weight:${isCurrent ? '700' : '400'}; color:${isCurrent ? 'var(--tx-bright)' : 'var(--tx-mid)'};">${x}</td>
-            <td style="color:#4ade80;">${(prob * 100).toFixed(2)}%</td>
+            <td style="color:#55c97f;">${(prob * 100).toFixed(2)}%</td>
             <td class="p-bar-cell"><span class="tx-p-bar"><span class="tx-p-fill" style="width:${barFill}%"></span></span></td>
-            <td style="color:#fbbf24;">${eCards}</td>
+            <td style="color:#f0a92c;">${eCards}</td>
             <td style="color:${deltaPColor};">${deltaP}</td>
             <td style="color:${verdict.color}; font-weight:600; font-size:10px; letter-spacing:0.08em;">${verdict.text}</td>
         </tr>`;
@@ -680,19 +658,40 @@ function updateTrials(config) {
         const isFree = numTypes >= CONFIG.FREE_SPELL_THRESHOLD;
         const typeList = Array.from(typesSet).sort();
 
+        // Find highest CMC non-land spell for free cast display
+        let bestSpell = null;
+        if (isFree) {
+            const spells = revealed.filter(c => !c.types.includes('land'));
+            if (spells.length > 0) {
+                bestSpell = spells.reduce((best, c) => (c.cmc ?? 0) > (best.cmc ?? 0) ? c : best);
+            }
+        }
+
+        const freeLabel = isFree
+            ? bestSpell ? `FREE ✓ · MV=${bestSpell.cmc}` : 'FREE ✓'
+            : 'FIZZ ✗';
+
         const cardDots = revealed.map(card => {
-            const t = card.types[0] || 'land';
-            return `<span style="color:${TX_TYPE_COLORS[t] || '#8b9b95'};" title="${card.type_line || t}">●</span> <span style="color:var(--tx-mid); font-size:10px;">${card.name}</span>`;
-        }).join('<br>');
+            const ty = card.types[0] || 'land';
+            const isBest = bestSpell && card === bestSpell;
+            const nameColor = isBest ? '#55c97f' : 'var(--tx-mid)';
+            const prefix = isBest ? '→ ' : '  ';
+            return `<div style="display:flex; align-items:baseline; gap:6px; line-height:1.6;">
+                <span style="color:${TX_TYPE_COLORS[ty] || '#939c97'}; flex-shrink:0;" title="${card.type_line || ty}">●</span>
+                <span style="color:${nameColor}; font-size:10px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${prefix}${card.name}</span>
+                ${isBest ? `<span style="color:var(--tx-green); font-size:9px; flex-shrink:0; letter-spacing:0.06em;">MV${bestSpell.cmc}</span>` : `<span style="color:var(--tx-dim); font-size:9px; flex-shrink:0;">${card.cmc > 0 ? card.cmc : (card.types.includes('land') ? 'L' : '0')}</span>`}
+            </div>`;
+        }).join('');
 
         html += `<div class="portent-trial" style="padding:0;">
             <div style="display:flex; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--tx-rule); font-size:10px; letter-spacing:0.08em;">
                 <span style="color:var(--tx-mid);">TRIAL ${String(t + 1).padStart(3,'0')} · X=${config.x}</span>
-                <span style="color:${isFree ? '#4ade80' : '#f87171'}; font-weight:600;">${isFree ? 'FREE ✓' : 'FIZZ ✗'}</span>
+                <span style="color:${isFree ? '#55c97f' : '#e8635c'}; font-weight:600;">${freeLabel}</span>
             </div>
-            <div style="padding:8px 12px; font-size:11px; line-height:1.7;">${cardDots}</div>
-            <div style="padding:6px 12px; border-top:1px solid var(--tx-rule); font-size:10px; color:var(--tx-dim); letter-spacing:0.06em;">
-                DIST ${numTypes} TYPES · ${typeList.map(ty => `<span style="color:${TX_TYPE_COLORS[ty] || '#8b9b95'};">${ty}</span>`).join(' ')}
+            <div style="padding:8px 12px; font-size:11px;">${cardDots}</div>
+            <div style="padding:6px 12px; border-top:1px solid var(--tx-rule); font-size:9px; color:var(--tx-dim); letter-spacing:0.06em; display:flex; justify-content:space-between;">
+                <span>${numTypes} TYPES · ${typeList.map(ty => `<span style="color:${TX_TYPE_COLORS[ty] || '#939c97'};">${ty.slice(0,4).toUpperCase()}</span>`).join(' ')}</span>
+                ${bestSpell ? `<span style="color:var(--tx-green);">CAST: ${bestSpell.name.length > 16 ? bestSpell.name.slice(0,15) + '…' : bestSpell.name}</span>` : ''}
             </div>
         </div>`;
     }
@@ -700,37 +699,52 @@ function updateTrials(config) {
     container.innerHTML = html;
 }
 
-function updateLiveTape(config, results) {
+function updateLiveTape(config) {
     const tape = document.getElementById('portent-live-tape');
-    if (!tape || !results || Object.keys(results).length === 0) return;
+    if (!tape) return;
 
     const now = new Date();
     let html = '';
-    const xRange = [];
-    for (let x = Math.max(3, config.x - 6); x <= Math.min(20, config.x + 7); x++) {
-        if (results[x]) xRange.push(x);
-        if (xRange.length >= 14) break;
+
+    if (stableSamples.length < 14) {
+        for (let i = 0; i < 14; i++) {
+            html += `<div class="portent-tape-row">
+                <span style="color:var(--tx-dim); font-size:9px;">—:—:—</span>
+                <span style="color:var(--tx-dim);">—T</span>
+                <span style="color:var(--tx-dim); font-size:10px;">● ● ●</span>
+                <span style="color:var(--tx-dim);">IMPORT DECK</span>
+            </div>`;
+        }
+        tape.innerHTML = html;
+        return;
     }
 
-    xRange.forEach((x, i) => {
-        const r = results[x];
-        if (!r) return;
-        const prob = r.prob4Plus;
-        const t = new Date(now.getTime() - (13 - i) * 1400);
-        const ts = `${String(t.getUTCHours()).padStart(2,'0')}:${String(t.getUTCMinutes()).padStart(2,'0')}:${String(t.getUTCSeconds()).padStart(2,'0')}`;
-        const barFillCount = Math.round(prob * 10);
-        const isCurrent = x === config.x;
-        const pColor = prob >= 0.65 ? '#4ade80' : prob >= 0.40 ? '#fbbf24' : '#f87171';
-        const filledBar = '█'.repeat(barFillCount);
-        const emptyBar = '░'.repeat(10 - barFillCount);
+    const count = Math.min(14, stableSamples.length);
+    for (let i = 0; i < count; i++) {
+        const sampleIdx = Math.floor(i * stableSamples.length / count);
+        const sample = stableSamples[sampleIdx];
+        if (!sample) continue;
 
-        html += `<div class="portent-tape-row${isCurrent ? ' current' : ''}">
+        const revealed = sample.slice(0, config.x);
+        const typesSet = new Set();
+        revealed.forEach(card => card.types.forEach(ty => typesSet.add(ty)));
+        const numTypes = typesSet.size;
+        const isFree = numTypes >= CONFIG.FREE_SPELL_THRESHOLD;
+
+        const t = new Date(now.getTime() - (count - 1 - i) * 2300);
+        const ts = `${String(t.getUTCHours()).padStart(2,'0')}:${String(t.getUTCMinutes()).padStart(2,'0')}:${String(t.getUTCSeconds()).padStart(2,'0')}`;
+
+        const typeDots = Array.from(typesSet).map(ty =>
+            `<span style="color:${TX_TYPE_COLORS[ty] || '#939c97'};" title="${ty}">●</span>`
+        ).join('');
+
+        html += `<div class="portent-tape-row${isFree ? ' current' : ''}">
             <span style="color:var(--tx-dim); font-size:9px;">${ts}</span>
-            <span style="color:var(--tx-mid);">x=${x}</span>
-            <span style="letter-spacing:-0.05em; font-size:10px;"><span style="color:${pColor}; opacity:0.7;">${filledBar}</span><span style="color:var(--tx-rule-hi);">${emptyBar}</span></span>
-            <span style="color:${pColor}; text-align:right;">${(prob * 100).toFixed(2)}%</span>
+            <span style="color:${isFree ? '#55c97f' : 'var(--tx-dim)'};">${numTypes}T</span>
+            <span style="font-size:12px; letter-spacing:2px;">${typeDots}</span>
+            <span style="color:${isFree ? '#55c97f' : '#e8635c'}; font-weight:${isFree ? '600' : '400'};">${isFree ? 'FREE ✓' : 'FIZZ ✗'}</span>
         </div>`;
-    });
+    }
 
     tape.innerHTML = html;
 }
@@ -748,12 +762,11 @@ export function updateUI() {
     }
 
     updateChart(config, results);
-    updateStats(config, results);
     updateTable(config, results);
     updateTerminalDisplay(config, results);
     updateTypeBar(config.types, config.deckSize);
     updateSweepTable(config, results);
-    updateLiveTape(config, results);
+    updateLiveTape(config);
 
     if (config.cardData && config.cardData.cardsByName && Object.keys(config.cardData.cardsByName).length > 0) {
         runSampleReveals();

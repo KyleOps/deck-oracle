@@ -6,10 +6,11 @@
 import { drawType, drawTypeMin } from '../utils/hypergeometric.js';
 import { formatNumber, formatPercentage, createCache, debounce } from '../utils/simulation.js';
 import { renderMultiColumnTable } from '../utils/tableUtils.js';
-import { createOrUpdateChart } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
+import { probabilityVerdict } from '../utils/analysis.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { renderHeroStats, renderVerdictBadge, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
 import {
     buildDeckFromCardData, shuffleDeck, renderCardBadge, 
     createCollapsibleSection, extractCardTypes
@@ -28,14 +29,14 @@ let renderedCount = 0; // Track displayed samples for pagination
 
 // Color constants
 const COLORS = {
-    primary: '#4ade80',
-    primaryDim: 'rgba(74, 222, 128, 0.4)',
-    primaryBright: 'rgba(74, 222, 128, 0.8)',
-    primaryFaint: 'rgba(74, 222, 128, 0.1)',
-    primaryGrid: 'rgba(34, 197, 94, 0.2)',
-    danger: '#dc2626',
-    dangerFaint: 'rgba(220, 38, 38, 0.1)',
-    text: '#a09090',
+    primary: TX.green,
+    primaryDim: 'rgba(85, 201, 127, 0.4)',
+    primaryBright: 'rgba(85, 201, 127, 0.8)',
+    primaryFaint: 'rgba(85, 201, 127, 0.1)',
+    primaryGrid: TX.rule,
+    danger: TX.red,
+    dangerFaint: 'rgba(232, 99, 92, 0.1)',
+    text: TX.dim,
     white: '#fff'
 };
 
@@ -338,7 +339,7 @@ export function calculate() {
  * Common chart scale options
  */
 const getScaleOptions = () => ({
-    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Probability (%)', color: COLORS.primary }, grid: { color: COLORS.primaryGrid }, ticks: { color: COLORS.primary } },
+    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Probability (%)', color: TX.dim, font: { size: 9 } }, grid: { color: TX.rule }, ticks: { color: TX.dim, font: { size: 9 } } },
     x: { grid: { color: COLORS.primaryGrid }, ticks: { color: COLORS.text } }
 });
 
@@ -431,37 +432,25 @@ function updateStatsPanel(config, openingHands, landDropMiss, landDropByTurn) {
     const prob2to4 = openingHands.distribution.slice(2, 5).reduce((sum, d) => sum + d.probability, 0);
     const probTurn3 = landDropByTurn[2].makeProbability;
 
-    // Interpretation
-    let interpretation = '';
-    let color = COLORS.primary; // Green
-    
-    if (landDropMiss >= 6) {
-        interpretation = `<strong style="color: #4ade80;">Very Consistent.</strong> You reliably hit your land drops for the early to mid game.`;
-    } else if (landDropMiss >= 4) {
-        interpretation = `<strong style="color: #f59e0b;">Decent.</strong> You should hit your first few drops, but may stall mid-game.`;
-        color = '#f59e0b';
-    } else {
-        interpretation = `<strong style="color: #dc2626;">Risky.</strong> High chance of missing an early land drop (Turn ${landDropMiss}). Consider adding lands or ramp.`;
-        color = '#dc2626';
-    }
+    // Verdict tier from the first turn you expect to miss a land drop
+    let verdict;
+    if (landDropMiss === Infinity || landDropMiss >= 6) verdict = { label: 'CONSISTENT', color: 'var(--tx-green)', advice: 'Reliably hits land drops into the mid-game.' };
+    else if (landDropMiss >= 4) verdict = { label: 'DECENT', color: 'var(--tx-amber)', advice: 'Hits the early drops but may stall mid-game.' };
+    else verdict = { label: 'RISKY', color: 'var(--tx-red)', advice: `High chance of missing your turn ${landDropMiss} land drop — add lands or ramp.` };
 
-    const cardsHTML = [
-        renderStatCard('Miss Land Drop', expectedTurn, 'expected fail point', color),
-        renderStatCard('Median Hand', `${medianLands} lands`, 'in opening 7', '#38bdf8'),
-        renderStatCard('Keepable Hand', formatPercentage(prob2to4), '2-4 lands in opener', '#c084fc'),
-        renderStatCard('Turn 3 Ready', formatPercentage(probTurn3), 'chance to have 3 lands', probTurn3 > 0.8 ? '#4ade80' : '#f59e0b')
-    ];
+    const landPct = config.deckSize > 0 ? (config.landCount / config.deckSize) * 100 : 0;
+
+    const hero = renderHeroStats([
+        { label: 'FIRST MISSED DROP', value: landDropMiss === Infinity ? 'Never' : `T${landDropMiss}`, sub: 'expected fail point', color: verdict.color, size: 'big' },
+        { label: 'MEDIAN OPENER', value: `${medianLands}`, sub: 'lands in opening 7', color: 'var(--tx-blue)' },
+        { label: 'KEEPABLE', value: formatPercentage(prob2to4), sub: '2–4 lands in opener', color: probabilityVerdict(prob2to4).color },
+        { label: 'TURN 3 READY', value: formatPercentage(probTurn3), sub: '3 lands by turn 3', color: probTurn3 > 0.8 ? 'var(--tx-green)' : 'var(--tx-amber)' }
+    ]);
+
+    const insight = renderInsightBox('', `${config.landCount} lands in a ${config.deckSize}-card deck (${landPct.toFixed(1)}%). ${renderVerdictBadge(verdict)} ${verdict.advice}`);
 
     const container = document.getElementById('lands-stats-container');
-    if (container) {
-        container.innerHTML = `
-            ${renderInsightBox('🏔️ Land Consistency Analysis', interpretation, '')}
-            ${renderStatsGrid(cardsHTML)}
-            <div style="margin-top: 12px; font-size: 0.9em; text-align: center; color: var(--text-dim);">
-                Based on ${config.landCount} lands in a ${config.deckSize}-card deck (${((config.landCount / config.deckSize) * 100).toFixed(1)}%)
-            </div>
-        `;
-    }
+    if (container) container.innerHTML = hero + insight;
 }
 
 /**
@@ -474,7 +463,7 @@ export function updateUI() {
         if (openingHandChart) openingHandChart.destroy();
         if (landDropChart) landDropChart.destroy();
         const container = document.getElementById('lands-stats-container');
-        if (container) container.innerHTML = '<div class="panel-content"><p style="color: var(--text-dim); text-align: center;">Configure deck with lands to see results</p></div>';
+        if (container) container.innerHTML = '<div class="tx-empty">Configure deck with lands to see results.</div>';
         return;
     }
 

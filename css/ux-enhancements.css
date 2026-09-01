@@ -2,15 +2,6 @@
 
 /* ==================== NET-OK FLICKER ==================== */
 
-@keyframes txflick {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.45; }
-}
-
-.tx-flicker {
-    animation: txflick 1.4s ease-in-out infinite;
-}
-
 /* ==================== COLLAPSIBLE SECTIONS ==================== */
 
 .collapsible-section {
@@ -224,27 +215,29 @@
 /* ==================== MOBILE STYLES ==================== */
 
 @media (max-width: 900px) {
-    .tx-header {
+    .tx-header-top {
         grid-template-columns: auto 1fr auto;
-        height: 52px;
-        top: 24px;
     }
 
     .tx-wordmark .tx-deck,
     .tx-wordmark .tx-oracle {
-        font-size: 16px;
+        font-size: 15px;
     }
 
     .tx-wordmark .tx-tag { display: none; }
 
+    .tx-group { padding: 0 10px; font-size: 9px; letter-spacing: 0.12em; }
+
     .tx-tab .tx-name { display: none; }
+    .tx-tab .tx-sep { display: none; }
+    .tx-tab { padding: 0 14px; justify-content: center; }
 
     .tx-sub-bar {
         height: auto;
         flex-wrap: wrap;
         padding: 6px 10px;
         gap: 6px;
-        top: 76px;
+        top: 108px;
     }
 
     .tx-sub-bar .tx-url-input,
@@ -277,8 +270,9 @@
 
 @media (max-width: 480px) {
     .tx-status-bar { font-size: 9px; gap: 10px; padding: 0 10px; }
-    .tx-tab { padding: 0 8px; font-size: 10px; }
+    .tx-tab { padding: 0 10px; font-size: 10px; }
     .tx-tab .tx-name { display: none; }
+    .tx-tab .tx-sep { display: none; }
     .portent-hero { grid-template-columns: 1fr 1fr; }
     .portent-hero .tx-stat:nth-child(3) { display: none; }
     .tx-stat-value { font-size: 32px; }

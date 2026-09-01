@@ -5,10 +5,10 @@
 
 import { drawType } from '../utils/hypergeometric.js';
 import { createCache, formatNumber, debounce } from '../utils/simulation.js';
-import { createOrUpdateChart } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { renderHeroStats, renderVerdictBadge, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
 import {
     buildDeckFromCardData, shuffleDeck, renderCardBadge, renderDistributionChart,
     createCollapsibleSection
@@ -172,7 +172,7 @@ function updateChart(config, distribution) {
     
     // Highlight the most likely outcome
     const maxProb = Math.max(...data);
-    const backgroundColors = data.map(p => p === maxProb ? '#65a30d' : 'rgba(101, 163, 13, 0.4)');
+    const backgroundColors = data.map(p => p === maxProb ? '#7d8f6a' : 'rgba(139, 156, 120, 0.4)');
 
     chart = createOrUpdateChart(chart, 'lumra-chart', {
         type: 'bar',
@@ -182,7 +182,7 @@ function updateChart(config, distribution) {
                 label: 'Probability (%)',
                 data,
                 backgroundColor: backgroundColors,
-                borderColor: '#65a30d',
+                borderColor: '#7d8f6a',
                 borderWidth: 1
             }]
         },
@@ -190,13 +190,13 @@ function updateChart(config, distribution) {
             scales: {
                 y: {
                     beginAtZero: true,
-                    title: { display: true, text: 'Probability (%)', color: '#65a30d' },
-                    grid: { color: 'rgba(101, 163, 13, 0.2)' },
-                    ticks: { color: '#65a30d' }
+                    title: { display: true, text: 'Probability (%)', color: '#7d8f6a' },
+                    grid: { color: 'rgba(139, 156, 120, 0.2)' },
+                    ticks: { color: '#7d8f6a' }
                 },
                 x: {
-                    grid: { color: 'rgba(101, 163, 13, 0.2)' },
-                    ticks: { color: '#a09090' }
+                    grid: { color: 'rgba(139, 156, 120, 0.2)' },
+                    ticks: { color: TX.dim, font: { size: 9 } }
                 }
             },
             plugins: {
@@ -216,36 +216,26 @@ function updateChart(config, distribution) {
 function updateStats(config, expectedMilled, totalReturned) {
     const statsPanel = document.getElementById('lumra-stats');
     
-    if (statsPanel) {
-        // Interpretation
-        let interpretation, color;
-        // Arbitrary thresholds for "good" Lumra value
-        // 6 mana for a big body + ramp.
-        // If you get back 4+ lands, that's insane ramp.
-        if (totalReturned >= 5) {
-            interpretation = `<strong style="color: #65a30d;">Massive Value!</strong> Returning ${formatNumber(totalReturned, 1)} lands is game-changing.`;
-            color = '#65a30d';
-        } else if (totalReturned >= 3) {
-            interpretation = `<strong style="color: #84cc16;">Solid Value.</strong> Good ramp and a decent body.`;
-            color = '#84cc16';
-        } else {
-            interpretation = `<strong style="color: #f59e0b;">Moderate Value.</strong> Consider filling your graveyard more.`;
-            color = '#f59e0b';
-        }
+    if (!statsPanel) return;
 
-        const cardsHTML = [
-            renderStatCard('Expected Milled', formatNumber(expectedMilled, 2), `lands from top ${4 * config.multiplier}`, '#84cc16'),
-            renderStatCard('Total Returned', formatNumber(totalReturned, 1), 'lands to battlefield', '#65a30d'),
-            renderStatCard('Lands in Deck', config.landCount, `${((config.landCount/config.deckSize)*100).toFixed(0)}% density`, '#a09090'),
-            renderStatCard('Graveyard', config.gyLands, 'lands before cast', '#a09090')
-        ];
+    // Verdict tier from total lands returned to the battlefield
+    let verdict;
+    if (totalReturned >= 5) verdict = { label: 'MASSIVE', color: 'var(--tx-green)', advice: `Returning ${formatNumber(totalReturned, 1)} lands is game-changing ramp.` };
+    else if (totalReturned >= 3) verdict = { label: 'SOLID', color: 'var(--tx-green)', advice: 'Good ramp and a sizeable body.' };
+    else verdict = { label: 'MODERATE', color: 'var(--tx-amber)', advice: 'Fill your graveyard more to grow the bear.' };
 
-        statsPanel.innerHTML = `
-            ${renderInsightBox(`🐻 Lumra Analysis`, '', '')}
-            ${renderStatsGrid(cardsHTML)}
-            ${renderInsightBox('', interpretation, `Based on ${config.landCount} lands in ${config.deckSize} cards.`)}
-        `;
-    }
+    const density = config.deckSize > 0 ? (config.landCount / config.deckSize) * 100 : 0;
+
+    const hero = renderHeroStats([
+        { label: 'LANDS RETURNED', value: formatNumber(totalReturned, 1), sub: 'onto the battlefield', color: 'var(--tx-green)', size: 'big' },
+        { label: 'MILLED LANDS', value: formatNumber(expectedMilled, 2), sub: `from top ${4 * config.multiplier}`, color: 'var(--tx-amber)' },
+        { label: 'LAND DENSITY', value: `${density.toFixed(0)}%`, sub: `${config.landCount} of ${config.deckSize}`, color: 'var(--tx-blue)' },
+        { label: 'GRAVEYARD', value: config.gyLands, sub: 'lands before cast', color: 'var(--tx-mid)' }
+    ]);
+
+    const insight = renderInsightBox('', `Lumra mills ${4 * config.multiplier} and returns every land milled plus those already in your graveyard. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
+
+    statsPanel.innerHTML = hero + insight;
 }
 
 /**
@@ -310,16 +300,18 @@ export function runSampleReveals(passedConfig) {
     const avgLands = (totalLandsMilled / numSims).toFixed(2);
     const avgReturned = (totalLandsReturned / numSims).toFixed(2);
     
-    let distributionHTML = '<div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: var(--panel-bg-alt); border-radius: var(--radius-md);">';
-    distributionHTML += '<h4 style="margin-top: 0;">Land Count Distribution (Sampler):</h4>';
+    let distributionHTML = '<div class="tx-sim">';
+    distributionHTML += '<div class="tx-h"><span>Lands milled — distribution</span></div>';
+    distributionHTML += '<div class="tx-sim-block">';
+
     distributionHTML += renderDistributionChart(
         distributionArray,
         numSims,
         (count) => `${count} land${count !== 1 ? 's' : ''}`,
-        (idx) => (idx === 0 ? ' ⚠️' : (idx >= 4 ? ' 🔥' : '')) 
+        (idx) => (idx === 0 ? ' ✗' : (idx >= 4 ? ' ▲' : '')) 
     );
 
-    distributionHTML += `<div style="margin-top: var(--spacing-md); text-align: center; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">`;
+    distributionHTML += '</div><div class="tx-sim-block">';
     distributionHTML += `<div><small style="color:var(--text-dim)">Avg Milled</small><br><strong>${avgLands}</strong></div>`;
     distributionHTML += `<div><small style="color:var(--text-dim)">Avg Returned</small><br><strong style="color: var(--lumra-primary);">${avgReturned}</strong></div>`;
     distributionHTML += '</div></div>';
@@ -370,8 +362,8 @@ export function runSampleReveals(passedConfig) {
             for (let j = 0; j < limit; j++) {
                 const card = shuffled[j];
                 const isLand = card.types && card.types.includes('land');
-                const color = isLand ? '#65a30d' : '#333';
-                const textColor = isLand ? '#fff' : '#aaa';
+                const color = isLand ? 'var(--type-land)' : 'var(--tx-panel-alt)';
+                const textColor = isLand ? '#0a0b0a' : 'var(--tx-mid)';
                 html += `<span class="reveal-card" style="background: ${color}; color: ${textColor};">${card.name}</span>`;
             }
 
@@ -428,7 +420,7 @@ export function updateUI() {
     const millAmount = 4 * config.multiplier;
     const chartHeader = document.getElementById('lumra-chart-header');
     if (chartHeader) {
-        chartHeader.textContent = `📈 Lands Milled Distribution (Mill ${millAmount})`;
+        chartHeader.textContent = `Lands Milled Distribution (Mill ${millAmount})`;
     }
     
     // Update sample reveals header if it exists

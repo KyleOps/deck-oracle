@@ -2,22 +2,86 @@
 
 :root {
     /* ==================== TERMINAL COLOR PALETTE ==================== */
-    --tx-bg:        #080a09;
-    --tx-panel:     #0e1311;
-    --tx-panel-alt: #121815;
-    --tx-rule:      #1c2520;
-    --tx-rule-hi:   #2a3530;
-    --tx-row-hi:    #161e1a;
-    --tx-dim:       #5a6b66;
-    --tx-mid:       #8b9b95;
-    --tx-text:      #d4dfd9;
-    --tx-bright:    #ecf2ed;
-    --tx-green:     oklch(0.78 0.18 145);
-    --tx-green-dim: oklch(0.45 0.12 145);
-    --tx-amber:     oklch(0.82 0.16 80);
-    --tx-amber-dim: oklch(0.55 0.12 80);
-    --tx-red:       oklch(0.68 0.20 25);
-    --tx-blue:      oklch(0.72 0.14 235);
+    /* ---- SUBSTRATE ----
+       Near-black with a faint cool-green cast (deactivated phosphor), never pure
+       #000. Each step is a real surface level, not decoration. */
+    --tx-void:      #060706;  /* outside the shell — letterboxing on wide screens */
+    --tx-bg:        #0a0b0a;
+    --tx-panel:     #101211;
+    --tx-panel-alt: #151816;
+    --tx-rule:      #1e221f;
+    --tx-rule-hi:   #2c322e;
+    --tx-row-hi:    #171b18;
+
+    /* ---- INK ---- */
+    /* Lightened from #626b66, which sat at 3.25:1 on the panel tone — below the
+       4.5:1 WCAG AA floor for body text, and this is the most-used dim tone in
+       the UI (inactive tabs, hints, small labels). */
+    --tx-dim:       #808b85;
+    --tx-mid:       #939c97;
+    --tx-text:      #d2d8d4;
+    --tx-bright:    #eef1ef;
+
+    /* ---- ACCENT ----
+       ONE brand accent. It marks the active tab, the focus ring, the primary
+       action, and the recommended row. Nothing else may use it, or it stops
+       meaning "look here". */
+    --tx-accent:     #f0a92c;
+    --tx-accent-dim: #7a5716;
+
+    /* ---- SEMANTIC DATA PAIR ----
+       Reserved for what the numbers MEAN (likely/unlikely, correct/incorrect).
+       Never used for chrome, so colour always carries information. Amber stays
+       the brand accent rather than the brutalist default red, because red is
+       already spoken for here: in a probability tool it reads as "bad outcome",
+       not "brand". */
+    --tx-good:      #55c97f;
+    --tx-bad:       #e8635c;
+    --tx-flat:      #7d8a92;
+
+    /* Legacy aliases — existing rules keep working, now on the new palette */
+    --tx-green:     var(--tx-good);
+    --tx-green-dim: #2c5f40;
+    --tx-amber:     var(--tx-accent);
+    --tx-amber-dim: var(--tx-accent-dim);
+    --tx-red:       var(--tx-bad);
+    --tx-blue:      var(--tx-flat);
+
+    /* ---- TYPE SCALE ----
+       The old design put 99 of its 122 font sizes in the 8-11px band: one
+       register for everything, so nothing had hierarchy. This scale is
+       deliberately bimodal — a dense telemetry band (9-13px) for data and
+       metadata, and a display band an order of magnitude larger for the few
+       numbers that actually carry the answer. */
+    --t-display: clamp(42px, 5vw, 68px);
+    --t-xxl:     34px;
+    --t-xl:      24px;
+    --t-lg:      17px;
+    --t-body:    13px;
+    --t-sm:      12px;
+    --t-xs:      11px;
+    --t-label:   10px;
+    --t-micro:    9px;
+
+    /* Tracking: negative for display (glyphs form solid blocks),
+       generous for small caps labels (mechanical spacing). */
+    --track-display: -0.035em;
+    --track-tight:   -0.015em;
+    --track-label:    0.16em;
+    --track-wide:     0.22em;
+
+    /* Shell width — see .container.
+       The gutter token is 0 below 900px (legacy body padding already supplies a
+       small phone margin) and grows with the viewport above it, so margins
+       scale continuously rather than snapping in at the cap.
+
+       The cap is deliberately generous: a tight cap meant that past ~1690px the
+       shell froze and only the margins grew, so dragging the window wider did
+       nothing to the content. Readability at this width is protected by tiling
+       results into more columns as space allows (see ADAPTIVE LAYOUT) rather
+       than by starving the shell. */
+    --shell-max: 2200px;
+    --shell-gutter: 0px;
 
     /* ==================== LEGACY VARIABLE ALIASES (keep old names working) ==================== */
     --primary:           var(--tx-amber);
@@ -60,15 +124,17 @@
     --info:          var(--tx-blue);
     --info-dark:     var(--tx-blue);
 
-    /* ==================== TYPE COLORS (MTG Card Types — terminal palette) ==================== */
-    --type-creature:     oklch(0.78 0.18 145);
-    --type-sorcery:      oklch(0.72 0.16 290);
-    --type-instant:      oklch(0.72 0.14 235);
-    --type-artifact:     oklch(0.72 0.04 80);
-    --type-enchantment:  oklch(0.72 0.14 60);
-    --type-planeswalker: oklch(0.68 0.20 0);
-    --type-battle:       oklch(0.68 0.20 25);
-    --type-land:         oklch(0.55 0.08 110);
+    /* ==================== TYPE COLORS (MTG Card Types — terminal palette) ====================
+       Mirrored as literals in TX_CHART.types (js/utils/chartHelpers.js) because
+       canvas cannot resolve CSS custom properties. Edit the two together. */
+    --type-creature:     #7ab77f;
+    --type-instant:      #6f9dc4;
+    --type-sorcery:      #a68ac4;
+    --type-artifact:     #9aa19d;
+    --type-enchantment:  #d2ac6b;
+    --type-planeswalker: #c4869e;
+    --type-battle:       #c67d72;
+    --type-land:         #8b9c78;
 
     /* ==================== UI COLORS ==================== */
     --input-bg:      var(--tx-bg);
@@ -127,7 +193,8 @@ body.theme-vortex,
 body.theme-lands,
 body.theme-mulligan,
 body.theme-rashmi,
-body.theme-lumra {
+body.theme-lumra,
+body.theme-abstract {
     --accent:      var(--tx-amber);
     --accent-light: var(--tx-bright);
     --accent-glow: transparent;
@@ -150,6 +217,14 @@ body.theme-dreamharvest {
     --theme-tint:  rgba(28, 37, 32, 0.5);
     --dreamharvest-primary: var(--tx-blue);
     --dreamharvest-secondary: var(--tx-blue);
+}
+
+body.theme-mindsdilation {
+    --accent:      var(--tx-blue);
+    --accent-light: var(--tx-bright);
+    --accent-glow: transparent;
+    --theme-tint:  rgba(28, 37, 32, 0.5);
+    --mindsdilation-primary: var(--tx-blue);
 }
 
 /* ==================== MULTIPLAYER CALCULATORS - OPPONENT UI ==================== */
@@ -420,9 +495,9 @@ body {
     letter-spacing: 0.01em;
     min-height: 100vh;
     color: var(--tx-text);
-    background: var(--tx-bg);
-    overflow-x: hidden;
+    background: var(--tx-void);
     padding: 0;
+    font-size: var(--t-sm);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -479,12 +554,17 @@ p {
 /* ==================== LAYOUT ==================== */
 
 .container {
-    max-width: 100%;
-    margin: 0;
-    width: 100%;
+    /* Capped and centred. Previously full-bleed, which stranded content on the
+       left of an ultrawide monitor with dead space to the right. The side rules
+       make the letterboxing read as a deliberate frame rather than an accident. */
+    width: min(100% - (2 * var(--shell-gutter)), var(--shell-max));
+    max-width: var(--shell-max);
+    margin-inline: auto;
     padding: 0;
     box-sizing: border-box;
-    overflow-x: hidden;
+    background: var(--tx-bg);
+    border-inline: 1px solid var(--tx-rule);
+    min-height: 100vh;
 }
 
 .footer-actions {
@@ -577,3 +657,94 @@ p {
 
 ::selection { background: var(--tx-amber); color: var(--tx-bg); }
 ::-moz-selection { background: var(--tx-amber); color: var(--tx-bg); }
+
+
+/* ==================== TEXTURE ====================
+   A fixed, very low opacity noise field over the whole viewport. Pure flat
+   dark surfaces read as sterile digital vector; a little grain gives the
+   substrate a physical quality. Non-interactive and behind all content. */
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body::after { display: none; }
+}
+
+/* ==================== DISPLAY TYPOGRAPHY ====================
+   The macro half of the bimodal scale. Reserved for the single number that
+   answers the question on each calculator, and for calculator mastheads. */
+
+.tx-display {
+    font-size: var(--t-display);
+    font-weight: 700;
+    line-height: 0.9;
+    letter-spacing: var(--track-display);
+    color: var(--tx-bright);
+    font-feature-settings: 'tnum' 1;
+}
+
+/* Section eyebrow: small, wide-tracked, uppercase. The micro half. */
+.tx-eyebrow {
+    font-size: var(--t-micro);
+    font-weight: 500;
+    letter-spacing: var(--track-wide);
+    text-transform: uppercase;
+    color: var(--tx-dim);
+}
+
+/* ==================== CALCULATOR MASTHEAD ====================
+   Each calculator opens with its name at display scale over the card's rules
+   text. Previously every h1 was 12px, so a calculator had no title presence at
+   all and every tab looked identical on arrival. */
+
+.calculator-content .tab-content > h1 {
+    font-size: var(--t-xl);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: var(--track-tight);
+    text-transform: none;
+    color: var(--tx-bright);
+    text-shadow: none;
+    margin: 0;
+    padding: 22px 20px 0;
+}
+
+/* The flavour/rules line under a masthead title. */
+.calculator-content .tab-content > .card-text {
+    display: block;
+    font-size: var(--t-body);
+    line-height: 1.5;
+    color: var(--tx-mid);
+    margin: 8px 0 0;
+    padding: 0 20px 20px;
+    max-width: 68ch;
+    border-bottom: 1px solid var(--tx-rule);
+    text-wrap: pretty;
+}
+
+/* Gutter scales with the viewport once there is room for one. */
+@media (min-width: 900px) {
+    :root { --shell-gutter: clamp(16px, 2.2vw, 44px); }
+}
+
+/* Chimil, the Inner Sun — the terminal palette is uniform, so a calculator
+   theme is just the accent selection and focus colour. */
+body.theme-chimil {
+    --accent:       var(--tx-accent);
+    --accent-light: var(--tx-bright);
+    --accent-glow:  transparent;
+    --theme-tint:   rgba(30, 34, 31, 0.5);
+    --chimil-primary:   var(--tx-good);
+    --chimil-secondary: var(--tx-accent);
+}
+
+.theme-chimil h1 { color: var(--tx-bright); text-shadow: none; }
+.theme-chimil h2 { color: var(--tx-mid); border-bottom-color: var(--tx-rule); }
+.theme-chimil *:focus-visible { outline-color: var(--tx-accent); }

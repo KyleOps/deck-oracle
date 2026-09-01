@@ -4,11 +4,11 @@
  */
 
 import { createCache, formatNumber, formatPercentage, debounce } from '../utils/simulation.js';
-import { renderMultiColumnTable } from '../utils/tableUtils.js';
 import { createOrUpdateChart } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { generateSampleRevealsHTML } from '../utils/components.js';
+import { generateSampleRevealsHTML, renderHeroStats, renderRecommendation, renderInsightBox, renderVerdictBadge, renderSweepTable, pBarCell, renderSimulationSummary } from '../utils/components.js';
+import { probabilityVerdict, formatDelta, deltaColor, recommendThresholdX } from '../utils/analysis.js';
 import {
     buildDeckFromCardData, shuffleDeck, renderCardBadge, 
     createCollapsibleSection, extractCardTypes
@@ -239,23 +239,23 @@ function updateChart(config, results) {
                 {
                     label: 'P(Free Spell) %',
                     data: probFreeSpellData,
-                    borderColor: '#22c55e',
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    borderColor: '#55c97f',
+                    backgroundColor: 'rgba(85, 201, 127, 0.1)',
                     fill: false,
                     tension: 0.3,
                     pointRadius: cmcValues.map(cmc => cmc === config.castCmc ? 8 : 4),
-                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.castCmc ? '#fff' : '#22c55e'),
+                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.castCmc ? '#fff' : '#55c97f'),
                     yAxisID: 'yProb'
                 },
                 {
                     label: 'Expected Free CMC',
                     data: expectedCmcData,
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderColor: '#5b8db8',
+                    backgroundColor: 'rgba(91, 141, 184, 0.1)',
                     fill: false,
                     tension: 0.3,
                     pointRadius: cmcValues.map(cmc => cmc === config.castCmc ? 8 : 4),
-                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.castCmc ? '#fff' : '#3b82f6'),
+                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.castCmc ? '#fff' : '#5b8db8'),
                     yAxisID: 'yCmc'
                 }
             ]
@@ -267,17 +267,17 @@ function updateChart(config, results) {
                     position: 'left',
                     beginAtZero: true,
                     max: 100,
-                    title: { display: true, text: 'P(Free Spell) %', color: '#22c55e' },
+                    title: { display: true, text: 'P(Free Spell) %', color: '#55c97f' },
                     grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: '#22c55e' }
+                    ticks: { color: '#55c97f' }
                 },
                 yCmc: {
                     type: 'linear',
                     position: 'right',
                     beginAtZero: true,
-                    title: { display: true, text: 'Expected Free CMC', color: '#3b82f6' },
+                    title: { display: true, text: 'Expected Free CMC', color: '#5b8db8' },
                     grid: { drawOnChartArea: false },
-                    ticks: { color: '#3b82f6' }
+                    ticks: { color: '#5b8db8' }
                 }
             }
         }
@@ -285,32 +285,81 @@ function updateChart(config, results) {
 }
 
 /**
- * Update comparison table
+ * Compute P(free spell) across the full cast-CMC range for the sweep table and
+ * the reliability recommendation.
+ * @returns {Array<{x:number, prob:number, expectedCmc:number}>}
  */
-function updateTable(config, results) {
-    const cmcValues = Object.keys(results).map(Number).sort((a, b) => a - b);
-    const headers = ['Cast CMC', 'P(Free Spell)', 'P(Whiff)', 'Avg Free CMC', 'Value Ratio'];
-    
-    const rows = cmcValues.map(cmc => {
-        const r = results[cmc];
-        const valueRatio = cmc > 0 ? r.expectedCmc / cmc : 0;
-        const ratioClass = valueRatio > 0.5 ? 'marginal-positive' : (valueRatio > 0.25 ? '' : 'marginal-negative');
-        
-        return {
-            cells: [
-                cmc,
-                formatPercentage(r.probFreeSpell),
-                formatPercentage(r.probWhiff),
-                formatNumber(r.expectedCmc),
-                { value: formatNumber(valueRatio, 3), class: ratioClass }
-            ],
-            class: cmc === config.castCmc ? 'current' : ''
-        };
+function computeSweep(config) {
+    const sweep = [];
+    for (let cmc = 1; cmc <= 15; cmc++) {
+        const r = calculateRashmiProbability(config, cmc);
+        sweep.push({ x: cmc, prob: r.probFreeSpell, expectedCmc: r.expectedCmc });
+    }
+    return sweep;
+}
+
+/**
+ * Render the cast-CMC sweep table.
+ */
+function updateTable(config) {
+    const sweep = computeSweep(config);
+    const rec = recommendThresholdX(sweep.map(p => ({ x: p.x, value: p.prob })), { target: 0.7 });
+    const recommended = rec && rec.reason === 'threshold' ? rec.x : null;
+
+    let prev = null;
+    const rows = sweep.map(p => {
+        const delta = prev != null ? p.prob - prev : null;
+        prev = p.prob;
+        return { ...p, delta };
     });
 
-    renderMultiColumnTable('rashmi-comparisonTable', headers, rows, { 
-        highlightRowIndex: cmcValues.indexOf(config.castCmc) 
+    renderSweepTable('rashmi-comparisonTable', {
+        current: config.castCmc,
+        recommended,
+        rows,
+        columns: [
+            { label: 'CAST CMC', align: 'left', render: r => `${r.x}` },
+            { label: 'P(FREE)', render: r => `<span style="color:var(--tx-green);">${formatPercentage(r.prob)}</span>` },
+            { label: 'CHANCE', align: 'left', render: r => pBarCell(r.prob, 'var(--tx-green)') },
+            { label: 'AVG FREE MV', render: r => `<span style="color:var(--tx-blue);">${formatNumber(r.expectedCmc, 2)}</span>` },
+            { label: 'Δp', render: r => r.delta == null ? '—' : `<span style="color:${deltaColor(r.delta, 0.005)};">${formatDelta(r.delta * 100, 1, '%')}</span>` },
+            { label: 'VERDICT', render: r => { const v = probabilityVerdict(r.prob); return `<span style="color:${v.color}; font-weight:600; letter-spacing:0.06em;">${v.label}</span>`; } }
+        ]
     });
+}
+
+/**
+ * Render hero numerics + verdict + recommendation for the current cast CMC.
+ */
+function updateStats(config, results) {
+    const heroPanel = document.getElementById('rashmi-hero');
+    const currentResult = results[config.castCmc];
+    if (!heroPanel || !currentResult) return;
+
+    const prob = currentResult.probFreeSpell;
+    const next = results[config.castCmc + 1];
+    const marginal = next ? next.probFreeSpell - prob : null;
+    const verdict = probabilityVerdict(prob);
+
+    const hero = renderHeroStats([
+        { label: 'P(FREE SPELL)', value: formatPercentage(prob), sub: `casting CMC ${config.castCmc}`, color: 'var(--tx-green)', size: 'big' },
+        { label: 'AVG FREE MV', value: formatNumber(currentResult.expectedCmc, 1), sub: 'value when it hits', color: 'var(--tx-blue)' },
+        { label: 'WHIFF', value: formatPercentage(currentResult.probWhiff), sub: 'draw only', color: 'var(--tx-amber)' },
+        { label: 'MARGINAL +1 CMC', value: marginal != null ? formatDelta(marginal * 100, 1, '%') : '—', sub: 'Δ trigger chance', color: marginal != null ? deltaColor(marginal, 0.001) : 'var(--tx-dim)' }
+    ]);
+
+    const sweep = computeSweep(config);
+    const rec = recommendThresholdX(sweep.map(p => ({ x: p.x, value: p.prob })), { target: 0.7 });
+    let recBanner = '';
+    if (rec && rec.reason === 'threshold') {
+        recBanner = renderRecommendation(`Rashmi reliably triggers (≥70%) once you cast <strong>CMC ${rec.x}+</strong> spells. Build your curve so your payoff spells sit above that line.`);
+    } else if (rec) {
+        recBanner = renderRecommendation(`Even your most expensive spells top out at <strong>${formatPercentage(rec.value)}</strong> — add more cheap spells to make Rashmi consistent.`);
+    }
+
+    const insight = renderInsightBox('', `Casting a CMC ${config.castCmc} spell flips the top card; a free cast needs a non-land with CMC &lt; ${config.castCmc}. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
+
+    heroPanel.innerHTML = hero + recBanner + insight;
 }
 
 /**
@@ -318,15 +367,15 @@ function updateTable(config, results) {
  */
 function updateCMCBreakdown(config) {
     const cmcs = Object.keys(config.cmcDistribution).map(Number).sort((a, b) => a - b);
-    let breakdownHTML = '<h2>📊 Deck CMC Distribution</h2>';
+    let breakdownHTML = '<h2>Deck CMC Distribution</h2>';
 
     if (config.xSpells && config.xSpells.length > 0) {
         const totalXSpells = config.xSpells.reduce((sum, spell) => sum + spell.count, 0);
         const statusText = config.excludeXSpells ? 'excluded from calculation' : `counted at their base CMC`;
 
         breakdownHTML += `
-            <div style="margin-bottom: var(--spacing-md); padding: var(--spacing-md); background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: var(--radius-md);">
-                <strong style="color: #0891b2;">⚠️ X Spells Detected (${totalXSpells} cards ${statusText}):</strong><br>
+            <div style="margin-bottom: var(--spacing-md); padding: var(--spacing-md); background: rgba(240, 169, 44, 0.08); border: 1px solid rgba(240, 169, 44, 0.28); border-radius: var(--radius-md);">
+                <strong style="color: #f0a92c;">▲ X spells detected (${totalXSpells} cards ${statusText}):</strong><br>
                 <small style="color: var(--text-dim); display: block; margin-top: 4px; font-style: italic;">
                     Note: When revealed from library, X=0, so these can't be cast for free with Rashmi
                 </small>
@@ -393,6 +442,7 @@ export function runSampleReveals() {
     let revealsHTML = '';
     let hitCount = 0;
     let totalFreeCMC = 0;
+    const freeCmcDist = [];
 
     // 1. STATS LOOP (Full Simulation)
     // Use the stable samples!
@@ -412,6 +462,7 @@ export function runSampleReveals() {
         if (isFree) {
             hitCount++;
             totalFreeCMC += cardCmc;
+            freeCmcDist[cardCmc] = (freeCmcDist[cardCmc] || 0) + 1;
         }
     }
 
@@ -419,21 +470,30 @@ export function runSampleReveals() {
     const hitPct = (hitCount / numSims * 100).toFixed(1);
     const missPct = (100 - parseFloat(hitPct)).toFixed(1);
     
-    let distributionHTML = '<div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: var(--panel-bg-alt); border-radius: var(--radius-md);">';
-    distributionHTML += `<h4 style="margin-top: 0;">Hit Rate for Cast CMC ${config.castCmc}:</h4>`;
-    distributionHTML += `<div style="display: flex; height: 24px; border-radius: 4px; overflow: hidden; margin: 12px 0;">
-        <div style="width: ${hitPct}%; background: #22c55e;" title="Free Spell (${hitPct}%)"></div>
-        <div style="width: ${missPct}%; background: #ef4444;" title="Draw Only (${missPct}%)"></div>
-    </div>`;
-    distributionHTML += `<div style="display: flex; justify-content: space-between; font-size: 0.9em;">
-        <span style="color: #22c55e;">Free Spell: ${hitPct}%</span>
-        <span style="color: #ef4444;">Draw Only: ${missPct}%</span>
-    </div>`;
+    for (let i = 0; i < freeCmcDist.length; i++) if (!freeCmcDist[i]) freeCmcDist[i] = 0;
+    const avgFreeCMC = hitCount > 0 ? (totalFreeCMC / hitCount).toFixed(2) : '—';
 
-    if (hitCount > 0) {
-        distributionHTML += `<div style="margin-top: 8px; text-align: center; font-size: 0.9em; color: var(--text-secondary);">Avg Free CMC: ${(totalFreeCMC / hitCount).toFixed(2)}</div>`;
-    }
-    distributionHTML += '</div>';
+    const distributionHTML = renderSimulationSummary({
+        title: `Free cast at MV ${config.castCmc}`,
+        runs: numSims,
+        metrics: [
+            { label: 'Free cast rate', value: `${hitPct}%`, sub: 'triggers that cast something', color: probabilityVerdict(hitCount / numSims).color },
+            { label: 'Avg free MV', value: avgFreeCMC, sub: 'mana value cheated', color: 'var(--tx-accent)' },
+            { label: 'Draw only', value: `${missPct}%`, sub: 'no free spell', color: 'var(--tx-mid)' }
+        ],
+        distribution: hitCount > 0 ? {
+            title: 'Free cast mana value — distribution',
+            counts: freeCmcDist,
+            totalSims: numSims,
+            labelFn: (i) => `MV ${i}`,
+            markerFn: () => null
+        } : null,
+        outcomes: [
+            { label: 'Free spell cast', value: hitCount / numSims, good: true },
+            { label: 'Draw only', value: (numSims - hitCount) / numSims, good: false }
+        ]
+    });
+
 
     // 3. Prepare List Container
     const listId = 'rashmi-samples-list';
@@ -470,10 +530,10 @@ export function runSampleReveals() {
             html += renderCardBadge(revealedCard);
             
             if (isFree) {
-                html += `<span style="margin-left: 8px; color: #22c55e; font-weight: bold;">CAST FREE!${isX ? ' (X=0)' : ''}</span>`;
+                html += `<span style="margin-left: 8px; color: #55c97f; font-weight: bold;">CAST FREE!${isX ? ' (X=0)' : ''}</span>`;
             } else {
                 let reason = isLand ? '(Land)' : (cardCmc >= config.castCmc ? `(CMC ${cardCmc} too high)` : '(X Spell excluded)');
-                html += `<span style="margin-left: 8px; color: #ef4444;">Draw card ${reason}</span>`;
+                html += `<span style="margin-left: 8px; color: #e8635c;">Draw card ${reason}</span>`;
             }
             html += '</div></div>';
         }
@@ -510,11 +570,13 @@ export function updateUI() {
     const importWarning = document.getElementById('rashmi-import-warning');
     const statsSection = document.getElementById('rashmi-stats');
     const breakdownSection = document.getElementById('rashmi-breakdown');
+    const heroSection = document.getElementById('rashmi-hero');
 
     if (!config.hasImportedData) {
         if (importWarning) importWarning.style.display = 'block';
         if (statsSection) statsSection.style.display = 'none';
         if (breakdownSection) breakdownSection.style.display = 'none';
+        if (heroSection) heroSection.style.display = 'none';
         if (chart) { chart.destroy(); chart = null; }
         const table = document.getElementById('rashmi-comparisonTable');
         if (table) table.innerHTML = '';
@@ -524,6 +586,7 @@ export function updateUI() {
     if (importWarning) importWarning.style.display = 'none';
     if (statsSection) statsSection.style.display = 'block';
     if (breakdownSection) breakdownSection.style.display = 'block';
+    if (heroSection) heroSection.style.display = 'block';
 
     if (config.deckSize === 0 || Object.keys(results).length === 0) {
         if (chart) chart.destroy();
@@ -532,8 +595,9 @@ export function updateUI() {
         return;
     }
 
+    updateStats(config, results);
     updateChart(config, results);
-    updateTable(config, results);
+    updateTable(config);
     updateCMCBreakdown(config);
 
     if (document.getElementById('rashmi-reveals-display')) {

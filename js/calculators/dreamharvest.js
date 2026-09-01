@@ -10,7 +10,7 @@
 
 import { createCache } from '../utils/simulation.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { generateSampleRevealsHTML } from '../utils/components.js';
+import { generateSampleRevealsHTML, renderHeroStats } from '../utils/components.js';
 import { shuffleDeck, renderCardBadge, createCollapsibleSection, buildDeckFromCardData } from '../utils/sampleSimulator.js';
 import * as OpponentState from '../utils/opponentState.js';
 
@@ -39,7 +39,7 @@ const renderedCounts = {
 /**
  * Render a compact horizontal bar chart (no gaps, shows all values)
  */
-function renderCompactChart(data, totalSims, labelFn, barColor = '#3b82f6', labelWidth = 28) {
+function renderCompactChart(data, totalSims, labelFn, barColor = '#5b8db8', labelWidth = 28) {
     let html = '<div class="compact-dist-chart" style="display: flex; flex-direction: column; gap: 2px;">';
 
     for (let i = 0; i < data.length; i++) {
@@ -208,23 +208,11 @@ function renderResults() {
 
     // Summary section
     if (allStats.length > 0) {
-        html += `
-            <div class="summary-stats-box">
-                <h3>Summary: Your Expected Gains</h3>
-                <div class="summary-stats-grid">
-                    <div class="summary-stat blue">
-                        <div class="stat-label">Total Free Spells</div>
-                        <div class="stat-value">${totalFreeSpells.toFixed(1)}</div>
-                        <div class="stat-unit">spells cast free</div>
-                    </div>
-                    <div class="summary-stat dark-blue">
-                        <div class="stat-label">Total Value Gained</div>
-                        <div class="stat-value">${totalValueGained.toFixed(1)}</div>
-                        <div class="stat-unit">mana value</div>
-                    </div>
-                </div>
-            </div>
-        `;
+        html += `<div class="tx-h"><span>SUMMARY · EXPECTED GAINS</span><span class="tx-h-r">across ${allStats.length} opponent${allStats.length > 1 ? 's' : ''}</span></div>`;
+        html += renderHeroStats([
+            { label: 'TOTAL FREE SPELLS', value: totalFreeSpells.toFixed(1), sub: 'spells cast free', color: 'var(--tx-blue)', size: 'big' },
+            { label: 'TOTAL VALUE GAINED', value: totalValueGained.toFixed(1), sub: 'mana value', color: 'var(--tx-green)', size: 'big' }
+        ]);
     }
 
     // Individual opponent results
@@ -232,26 +220,26 @@ function renderResults() {
         html += `
             <div class="opponent-results">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-sm);">
-                    <h3 style="color: var(--dreamharvest-primary, #3b82f6);">${data.name}</h3>
+                    <h3 style="color: var(--dreamharvest-primary, #5b8db8);">${data.name}</h3>
                     <span style="color: var(--text-dim); font-size: 0.85em;">${stats.deckSize} cards</span>
                 </div>
 
                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-sm); margin-bottom: var(--spacing-md);">
                     <div class="choice-card choice-blue" style="text-align: center;">
                         <div style="font-size: 0.75em; color: var(--text-dim);">Cards Exiled</div>
-                        <div style="font-size: 1.3em; font-weight: bold; color: #3b82f6;">${stats.avgCardsExiled.toFixed(1)}</div>
+                        <div style="font-size: 1.3em; font-weight: bold; color: #5b8db8;">${stats.avgCardsExiled.toFixed(1)}</div>
                     </div>
                     <div class="choice-card choice-blue" style="text-align: center;">
                         <div style="font-size: 0.75em; color: var(--text-dim);">Total MV</div>
-                        <div style="font-size: 1.3em; font-weight: bold; color: #3b82f6;">${stats.avgTotalMV.toFixed(1)}</div>
+                        <div style="font-size: 1.3em; font-weight: bold; color: #5b8db8;">${stats.avgTotalMV.toFixed(1)}</div>
                     </div>
                     <div class="choice-card choice-blue" style="text-align: center;">
                         <div style="font-size: 0.75em; color: var(--text-dim);">Free Spells</div>
-                        <div style="font-size: 1.3em; font-weight: bold; color: #3b82f6;">${stats.avgCastable.toFixed(1)}</div>
+                        <div style="font-size: 1.3em; font-weight: bold; color: #5b8db8;">${stats.avgCastable.toFixed(1)}</div>
                     </div>
                     <div class="choice-card choice-blue" style="text-align: center;">
                         <div style="font-size: 0.75em; color: var(--text-dim);">Value Gained</div>
-                        <div style="font-size: 1.3em; font-weight: bold; color: #3b82f6;">${stats.avgCastableMV.toFixed(1)}</div>
+                        <div style="font-size: 1.3em; font-weight: bold; color: #5b8db8;">${stats.avgCastableMV.toFixed(1)}</div>
                     </div>
                 </div>
             </div>
@@ -320,28 +308,28 @@ export function runSampleReveals() {
         const avgMV = (totalMV / numSims).toFixed(1);
         const avgCastable = (totalCastable / numSims).toFixed(1);
 
-        let oppHTML = `<div style="margin-bottom: var(--spacing-lg); padding: var(--spacing-md); background: var(--panel-bg-alt); border-radius: var(--radius-md); border: 1px solid var(--glass-border);">`;
-        oppHTML += `<h4 style="margin-top: 0; color: var(--dreamharvest-primary, #3b82f6);">${data.name}</h4>`;
+        let oppHTML = `<div class="tx-opp-card">`;
+        oppHTML += `<h4 style="margin-top: 0; color: var(--dreamharvest-primary, #5b8db8);">${data.name}</h4>`;
 
         // Stats summary
         oppHTML += `<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-sm); margin-bottom: var(--spacing-md);">`;
-        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(59, 130, 246, 0.1); border-radius: var(--radius-sm);">`;
+        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(91, 141, 184, 0.1); border-radius: var(--radius-sm);">`;
         oppHTML += `<small style="color: var(--text-dim);">Avg Cards</small><br>`;
-        oppHTML += `<strong style="color: #3b82f6; font-size: 1.2em;">${avgCards}</strong>`;
+        oppHTML += `<strong style="color: #5b8db8; font-size: 1.2em;">${avgCards}</strong>`;
         oppHTML += `</div>`;
-        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(59, 130, 246, 0.1); border-radius: var(--radius-sm);">`;
+        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(91, 141, 184, 0.1); border-radius: var(--radius-sm);">`;
         oppHTML += `<small style="color: var(--text-dim);">Avg MV</small><br>`;
-        oppHTML += `<strong style="color: #3b82f6; font-size: 1.2em;">${avgMV}</strong>`;
+        oppHTML += `<strong style="color: #5b8db8; font-size: 1.2em;">${avgMV}</strong>`;
         oppHTML += `</div>`;
-        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(59, 130, 246, 0.1); border-radius: var(--radius-sm);">`;
+        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(91, 141, 184, 0.1); border-radius: var(--radius-sm);">`;
         oppHTML += `<small style="color: var(--text-dim);">Free Spells</small><br>`;
-        oppHTML += `<strong style="color: #3b82f6; font-size: 1.2em;">${avgCastable}</strong>`;
+        oppHTML += `<strong style="color: #5b8db8; font-size: 1.2em;">${avgCastable}</strong>`;
         oppHTML += `</div></div>`;
 
         // Cards exiled distribution
         oppHTML += `<div style="margin-bottom: var(--spacing-md);">`;
-        oppHTML += `<h5 style="margin: 0 0 var(--spacing-sm) 0; color: #3b82f6;">Cards Exiled Distribution</h5>`;
-        oppHTML += renderCompactChart(cardsDistArray, numSims, (idx) => `${idx}`, '#3b82f6');
+        oppHTML += `<h5 style="margin: 0 0 var(--spacing-sm) 0; color: #5b8db8;">Cards Exiled Distribution</h5>`;
+        oppHTML += renderCompactChart(cardsDistArray, numSims, (idx) => `${idx}`, '#5b8db8');
         oppHTML += `</div>`;
 
         // Sample list
@@ -381,7 +369,7 @@ export function runSampleReveals() {
                 html += `<div style="margin-bottom: var(--spacing-xs);"><strong>Sample ${i + 1}:</strong> Exiled ${result.cardsExiled} cards (MV ${result.totalMV})</div>`;
                 html += `<div style="margin-bottom: var(--spacing-xs);">${exiledHtml}</div>`;
                 if (result.numCastable > 0) {
-                    html += `<div style="color: #3b82f6;"><strong>Cast free:</strong> ${castableNames} <span style="color: var(--text-dim);">(${result.totalCastableMV} MV value)</span></div>`;
+                    html += `<div style="color: #5b8db8;"><strong>Cast free:</strong> ${castableNames} <span style="color: var(--text-dim);">(${result.totalCastableMV} MV value)</span></div>`;
                 } else {
                     html += `<div style="color: var(--danger);">No castable spells (all lands)</div>`;
                 }

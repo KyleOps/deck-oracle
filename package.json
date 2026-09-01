@@ -1,5 +1,5 @@
 {
-  "name": "deck-oracle",
+    "name": "deck-oracle",
   "version": "1.0.0",
   "type": "module",
   "description": "Deck Oracle - Magic: The Gathering probability calculators",
@@ -29,5 +29,8 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "claude": "^0.1.1"
   }
 }

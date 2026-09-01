@@ -4,11 +4,11 @@
  */
 
 import { formatNumber, formatPercentage, createCache } from '../utils/simulation.js';
-import { createOrUpdateChart } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import { simulateGenesisWave } from './wave.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { renderHeroStats, renderVerdictBadge, renderInsightBox, generateSampleRevealsHTML, renderSimulationSummary } from '../utils/components.js';
 import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
 import {
     buildDeckFromCardData, shuffleDeck, renderCardBadge,
@@ -249,24 +249,24 @@ function updateChart(config, result) {
                 {
                     label: 'Expected Permanents',
                     data: expectedPermsData,
-                    borderColor: '#4ade80',
-                    backgroundColor: 'rgba(74, 222, 128, 0.2)',
+                    borderColor: '#55c97f',
+                    backgroundColor: 'rgba(85, 201, 127, 0.2)',
                     fill: true,
                     tension: 0.3,
                     pointRadius: nonPermRange.map(x => x === config.nonPermanents ? 8 : 4),
-                    pointBackgroundColor: nonPermRange.map(x => x === config.nonPermanents ? '#fff' : '#4ade80'),
+                    pointBackgroundColor: nonPermRange.map(x => x === config.nonPermanents ? '#fff' : '#55c97f'),
                     yAxisID: 'y'
                 },
                 {
                     label: 'Whiff Risk (<5 perms)',
                     data: whiffRiskData,
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderColor: '#e8635c',
+                    backgroundColor: 'rgba(232, 99, 92, 0.1)',
                     borderDash: [5, 5],
                     fill: true,
                     tension: 0.3,
                     pointRadius: nonPermRange.map(x => x === config.nonPermanents ? 6 : 3),
-                    pointBackgroundColor: nonPermRange.map(x => x === config.nonPermanents ? '#fff' : '#ef4444'),
+                    pointBackgroundColor: nonPermRange.map(x => x === config.nonPermanents ? '#fff' : '#e8635c'),
                     yAxisID: 'y2'
                 }
             ]
@@ -277,25 +277,25 @@ function updateChart(config, result) {
                     type: 'linear',
                     position: 'left',
                     beginAtZero: true,
-                    title: { display: true, text: 'Expected Permanents', color: '#4ade80' },
-                    grid: { color: 'rgba(34, 197, 94, 0.2)' },
-                    ticks: { color: '#4ade80' }
+                    title: { display: true, text: 'Expected Permanents', color: '#55c97f' },
+                    grid: { color: 'rgba(85, 201, 127, 0.2)' },
+                    ticks: { color: '#55c97f' }
                 },
                 y2: {
                     type: 'linear',
                     position: 'right',
                     beginAtZero: true,
                     max: 100,
-                    title: { display: true, text: 'Whiff Risk %', color: '#ef4444' },
+                    title: { display: true, text: 'Whiff Risk %', color: '#e8635c' },
                     grid: { drawOnChartArea: false },
                     ticks: {
-                        color: '#ef4444',
+                        color: '#e8635c',
                         callback: value => value + '%'
                     }
                 },
                 x: {
-                    grid: { color: 'rgba(34, 197, 94, 0.2)' },
-                    ticks: { color: '#a09090' }
+                    grid: { color: 'rgba(85, 201, 127, 0.2)' },
+                    ticks: { color: TX.dim, font: { size: 9 } }
                 }
             },
             plugins: {
@@ -345,44 +345,33 @@ function updateStatsPanel(config, result) {
     const avgCMC = config.permanents > 0 ? result.expectedPermanents * (config.totalPermCMC / config.permanents) : 0;
     const allPermsProb = calcAllPermsProb(config.deckSize, config.nonPermanents);
 
-    // Create interpretation
-    let interpretation = '';
-    if (result.expectedPermanents > 40) {
-        interpretation = `<strong style="color: #22c55e;">Game Winning!</strong> You will likely play half your deck or more.`;
-    } else if (result.expectedPermanents > 20) {
-        interpretation = `<strong style="color: #4ade80;">Massive Value.</strong> Expect a board state explosion.`;
-    } else if (result.expectedPermanents > 10) {
-        interpretation = `<strong style="color: #f59e0b;">Solid.</strong> Good return on investment for 10 mana.`;
-    } else {
-        interpretation = `<strong style="color: #dc2626;">Risky.</strong> High chance of hitting a non-permanent early.`;
-    }
+    // Verdict tier from expected permanents
+    let verdict;
+    if (result.expectedPermanents > 40) verdict = { label: 'LETHAL', color: 'var(--tx-green)', advice: 'Likely plays half your deck or more.' };
+    else if (result.expectedPermanents > 20) verdict = { label: 'EXPLOSIVE', color: 'var(--tx-green)', advice: 'Expect a board-state explosion.' };
+    else if (result.expectedPermanents > 10) verdict = { label: 'SOLID', color: 'var(--tx-amber)', advice: 'Good return on investment for 10 mana.' };
+    else verdict = { label: 'RISKY', color: 'var(--tx-red)', advice: 'High chance of bricking on an early non-permanent.' };
 
     // Show non-permanents remaining in library (after Surge is cast)
     const nonPermLabel = config.nonPermanents === 0
         ? 'no other non-permanents'
-        : `${config.nonPermanents} other non-perm${config.nonPermanents > 1 ? 's' : ''} in library`;
+        : `${config.nonPermanents} non-perm${config.nonPermanents > 1 ? 's' : ''} left`;
 
-    const cardsHTML = [
-        renderStatCard('Expected Permanents', formatNumber(result.expectedPermanents, 1), `avg per cast`, '#4ade80'),
-        renderStatCard('Avg Lands', formatNumber(avgLands, 1), 'put onto battlefield', '#a3e635'),
-        renderStatCard('Avg Mana Value', formatNumber(avgCMC, 1), 'total mana cheated', '#c084fc'),
-        renderStatCard('Library Played', formatNumber(result.percentOfDeck, 1) + '%', nonPermLabel, result.percentOfDeck > 50 ? '#22c55e' : '#f59e0b')
-    ];
+    const hero = renderHeroStats([
+        { label: 'E[PERMANENTS]', value: formatNumber(result.expectedPermanents, 1), sub: 'hit the battlefield', color: 'var(--tx-green)', size: 'big' },
+        { label: 'AVG LANDS', value: formatNumber(avgLands, 1), sub: 'onto battlefield', color: 'var(--tx-amber)' },
+        { label: 'AVG MANA VALUE', value: formatNumber(avgCMC, 1), sub: 'total mana cheated', color: 'var(--tx-mid)' },
+        { label: 'LIBRARY PLAYED', value: formatNumber(result.percentOfDeck, 1) + '%', sub: nonPermLabel, color: result.percentOfDeck > 50 ? 'var(--tx-green)' : 'var(--tx-amber)' }
+    ]);
 
-    // Use the stable container for stats
+    const note = config.nonPermanents === 0
+        ? `<strong style="color:var(--tx-green);">100% chance to play your entire library.</strong>`
+        : `Chance to hit all ${config.permanents} permanents before a non-perm: <strong>${formatPercentage(allPermsProb, 2)}</strong>`;
+
+    const insight = renderInsightBox('', `Primal Surge plays cards off the top until it reveals a non-permanent. ${renderVerdictBadge(verdict)} ${verdict.advice}<br><span style="color:var(--tx-dim);">${note}</span>`);
+
     const container = document.getElementById('surge-stats-container');
-    if (container) {
-        container.innerHTML = `
-            ${renderInsightBox('🌿 Primal Surge Analysis', interpretation, '')}
-            ${renderStatsGrid(cardsHTML)}
-            <div style="margin-top: 12px; color: var(--text-dim); font-size: 0.9em; text-align: center;">
-                ${config.nonPermanents === 0
-                    ? `<strong style="color: #22c55e;">100% chance to play entire library!</strong>`
-                    : `Chance to hit all ${config.permanents} permanents: <strong>${formatPercentage(allPermsProb, 2)}</strong>`
-                }
-            </div>
-        `;
-    }
+    if (container) container.innerHTML = hero + insight;
 }
 
 /**
@@ -520,32 +509,37 @@ export function runSampleReveals() {
     const avgMana = (totalManaValue / statsCount).toFixed(0);
     const avgLands = (totalLands / statsCount).toFixed(1);
 
-    let summaryHTML = '<div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: var(--panel-bg-alt); border-radius: var(--radius-md);">';
-    summaryHTML += `<h4 style="margin-top: 0;">Simulation Summary (${statsCount} runs)</h4>`;
+    // Bucket the permanent counts so the sample section shows the SHAPE of the
+    // outcome, not just its average — a mean of 12 permanents reads very
+    // differently if the spread is 10-14 versus a bimodal 2-or-25.
+    const permDistribution = [];
+    for (const c of permanentCounts) permDistribution[c] = (permDistribution[c] || 0) + 1;
+    for (let i = 0; i < permDistribution.length; i++) if (!permDistribution[i]) permDistribution[i] = 0;
 
-    // Averages row
-    summaryHTML += `<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-sm); text-align: center; margin-bottom: var(--spacing-md);">`;
-    summaryHTML += `<div><div style="font-size: 1.4em; font-weight: bold; color: #4ade80;">${avgPermanents}</div><div style="font-size: 0.85em; color: var(--text-dim);">Avg Permanents</div></div>`;
-    summaryHTML += `<div><div style="font-size: 1.4em; font-weight: bold; color: #a3e635;">${avgLands}</div><div style="font-size: 0.85em; color: var(--text-dim);">Avg Lands</div></div>`;
-    summaryHTML += `<div><div style="font-size: 1.4em; font-weight: bold; color: #c084fc;">${avgMana}</div><div style="font-size: 0.85em; color: var(--text-dim);">Avg Mana Value</div></div>`;
-    summaryHTML += `</div>`;
+    const summaryHTML = renderSimulationSummary({
+        title: 'Simulation summary',
+        runs: statsCount,
+        metrics: [
+            { label: 'Avg permanents', value: avgPermanents, sub: `range ${minPermanents}–${maxPermanents}`, color: 'var(--tx-good)' },
+            { label: 'Avg lands', value: avgLands, sub: 'onto the battlefield', color: 'var(--type-land)' },
+            { label: 'Avg mana value', value: avgMana, sub: 'total MV cheated', color: 'var(--tx-accent)' }
+        ],
+        distribution: {
+            title: 'Permanents hit — distribution',
+            counts: permDistribution,
+            totalSims: statsCount,
+            labelFn: (i) => `${i} perm${i === 1 ? '' : 's'}`,
+            markerFn: (i) => (i === deckSize ? 'FULL DECK' : (i < 5 ? 'WHIFF' : null)),
+            toneFn: (i) => (i < 5 ? 'bad' : null)
+        },
+        outcomes: [
+            { label: 'Full deck emptied', value: fullDeckCount / statsCount, good: true },
+            { label: '20+ permanents', value: over20Count / statsCount, good: true },
+            { label: '10+ permanents', value: over10Count / statsCount, good: true },
+            { label: 'Whiffed (under 5)', value: under5Count / statsCount, good: false }
+        ]
+    });
 
-    // Outcome probabilities
-    summaryHTML += `<div style="border-top: 1px solid var(--border-color); padding-top: var(--spacing-sm);">`;
-    summaryHTML += `<div style="font-weight: 600; margin-bottom: var(--spacing-xs);">Outcome Chances:</div>`;
-    summaryHTML += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-xs); font-size: 0.9em;">`;
-
-    // Good outcomes
-    summaryHTML += `<div style="color: #22c55e;">✓ Full deck: ${((fullDeckCount / statsCount) * 100).toFixed(1)}%</div>`;
-    summaryHTML += `<div style="color: #4ade80;">✓ 20+ perms: ${((over20Count / statsCount) * 100).toFixed(1)}%</div>`;
-    summaryHTML += `<div style="color: #a3e635;">✓ 10+ perms: ${((over10Count / statsCount) * 100).toFixed(1)}%</div>`;
-
-    // Risk
-    summaryHTML += `<div style="color: #f59e0b;">⚠ Whiff (<5): ${((under5Count / statsCount) * 100).toFixed(1)}%</div>`;
-
-    summaryHTML += `</div>`;
-    summaryHTML += `<div style="margin-top: var(--spacing-sm); font-size: 0.85em; color: var(--text-dim);">Range: ${minPermanents} to ${maxPermanents} permanents</div>`;
-    summaryHTML += `</div></div>`;
 
     // 3. Prepare List Container (shows displayCount individual reveals)
     const listId = 'surge-samples-list';
@@ -604,7 +598,7 @@ export function runSampleReveals() {
             html += `<div class="reveal-summary ${!hitNonPermanent ? 'free-spell' : 'whiff'}">`;
 
             if (hitNonPermanent) {
-                html += `<strong>⛔ Stopped!</strong>`;
+                html += `<strong>✗ Stopped</strong>`;
             } else {
                 html += `<strong>✓ Full Deck!</strong>`;
             }

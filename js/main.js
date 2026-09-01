@@ -14,11 +14,16 @@ import * as Lumra from './calculators/lumra.js';
 import * as Mulligan from './calculators/mulligan.js';
 import * as Mara from './calculators/mara.js';
 import * as DreamHarvest from './calculators/dreamharvest.js';
+import * as Abstract from './calculators/abstract.js';
+import * as MindsDilation from './calculators/mindsdilation.js';
+import * as Chimil from './calculators/chimil.js';
 import * as Share from './utils/share.js';
 import * as OpponentState from './utils/opponentState.js';
 import { debounce } from './utils/simulation.js';
 import * as Components from './utils/components.js';
 import * as DeckConfig from './utils/deckConfig.js';
+import { renderRadar } from './utils/radarPanel.js';
+import { TX_CHART as TX } from './utils/chartHelpers.js';
 
 // Current active tab and group
 let currentTab = 'mulligan';
@@ -29,44 +34,52 @@ let currentGroup = 'deck-tools';
 // Set after Chart.js loads
 function applyChartDefaults() {
     if (typeof Chart === 'undefined') return;
-    Chart.defaults.color = '#5a6b66';
-    Chart.defaults.borderColor = '#1c2520';
-    Chart.defaults.backgroundColor = '#0e1311';
+    Chart.defaults.color = TX.dim;
+    Chart.defaults.borderColor = TX.rule;
+    Chart.defaults.backgroundColor = TX.bg;
     Chart.defaults.font.family = "'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace";
     Chart.defaults.font.size = 10;
     Chart.defaults.plugins.legend.display = false;
-    Chart.defaults.plugins.tooltip.backgroundColor = '#0e1311';
-    Chart.defaults.plugins.tooltip.borderColor = '#1c2520';
+    Chart.defaults.plugins.tooltip.backgroundColor = TX.bg;
+    Chart.defaults.plugins.tooltip.borderColor = TX.ruleHi;
     Chart.defaults.plugins.tooltip.borderWidth = 1;
-    Chart.defaults.plugins.tooltip.titleColor = '#8b9b95';
-    Chart.defaults.plugins.tooltip.bodyColor = '#d4dfd9';
+    Chart.defaults.plugins.tooltip.titleColor = TX.mid;
+    Chart.defaults.plugins.tooltip.bodyColor = TX.text;
     Chart.defaults.plugins.tooltip.padding = 8;
     Chart.defaults.plugins.tooltip.cornerRadius = 0;
     Chart.defaults.scale = Chart.defaults.scale || {};
     if (Chart.defaults.scales) {
-        const scaleDefaults = {
-            grid: { color: '#1c2520', drawTicks: false },
-            ticks: { color: '#5a6b66', font: { size: 9 } },
-            border: { color: '#1c2520', dash: [] }
-        };
-        Chart.defaults.scales.linear = { ...Chart.defaults.scales.linear, ...scaleDefaults };
-        Chart.defaults.scales.category = { ...Chart.defaults.scales.category, ...scaleDefaults };
+        // Merge one level deeper than a plain spread. Replacing the whole `ticks`
+        // object drops Chart.js's own tick callback — on a category axis that is
+        // what maps an index back to its label, so string labels silently
+        // rendered as 0, 1, 2 … instead of the labels supplied.
+        const applyScaleDefaults = (scale = {}) => ({
+            ...scale,
+            grid: { ...scale.grid, color: TX.rule, drawTicks: false },
+            ticks: { ...scale.ticks, color: TX.dim, font: { size: 9 } },
+            border: { ...scale.border, color: TX.rule, dash: [] }
+        });
+        Chart.defaults.scales.linear = applyScaleDefaults(Chart.defaults.scales.linear);
+        Chart.defaults.scales.category = applyScaleDefaults(Chart.defaults.scales.category);
     }
 }
 
-// Calculator metadata with groupings
+// Calculator metadata: display name + which group its tab belongs to
 const calculators = {
-    portent: { icon: '⚡', name: 'Portent of Calamity', group: 'spells' },
-    surge: { icon: '🌿', name: 'Primal Surge', group: 'spells' },
-    wave: { icon: '🌊', name: 'Genesis Wave', group: 'spells' },
-    vow: { icon: '🌱', name: 'Kamahl\'s Druidic Vow', group: 'spells' },
-    vortex: { icon: '🌀', name: 'Monstrous Vortex', group: 'spells' },
-    rashmi: { icon: '🌌', name: 'Rashmi', group: 'Creatures' },
-    lumra: { icon: '🐻', name: 'Lumra', group: 'Creatures' },
-    lands: { icon: '🏔️', name: 'Land Drops', group: 'deck-tools' },
-    mulligan: { icon: '🃏', name: 'Mulligan Strategy', group: 'deck-tools' },
-    mara: { icon: '🎭', name: 'Ensnared by the Mara', group: 'multiplayer' },
-    dreamharvest: { icon: '🌙', name: 'Dream Harvest', group: 'multiplayer' }
+    portent: { name: 'Portent of Calamity', group: 'spells' },
+    surge: { name: 'Primal Surge', group: 'spells' },
+    wave: { name: 'Genesis Wave', group: 'spells' },
+    vow: { name: 'Kamahl\'s Druidic Vow', group: 'spells' },
+    vortex: { name: 'Monstrous Vortex', group: 'spells' },
+    rashmi: { name: 'Rashmi', group: 'Creatures' },
+    lumra: { name: 'Lumra', group: 'Creatures' },
+    lands: { name: 'Land Drops', group: 'deck-tools' },
+    mulligan: { name: 'Mulligan Strategy', group: 'deck-tools' },
+    mara: { name: 'Ensnared by the Mara', group: 'multiplayer' },
+    dreamharvest: { name: 'Dream Harvest', group: 'multiplayer' },
+    mindsdilation: { name: "Mind's Dilation", group: 'multiplayer' },
+    abstract: { name: 'Abstract Performance', group: 'spells' },
+    chimil: { name: 'Chimil, the Inner Sun', group: 'spells' }
 };
 
 /**
@@ -76,54 +89,39 @@ const calculators = {
 function switchGroup(group) {
     currentGroup = group;
 
-    // Update group buttons
-    document.querySelectorAll('.tab-group-btn').forEach(btn => {
+    // Update new terminal group buttons
+    document.querySelectorAll('.tx-group[data-group]').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.group === group);
-        btn.setAttribute('aria-selected', btn.dataset.group === group);
     });
 
-    // Show corresponding sub-navigation
-    document.querySelectorAll('.sub-nav-group').forEach(nav => {
-        nav.classList.toggle('active', nav.dataset.group === group);
+    // Show/hide tx-tabs by group
+    document.querySelectorAll('.tx-tab[data-group]').forEach(tab => {
+        tab.classList.toggle('group-hidden', tab.dataset.group !== group);
     });
+
 }
 
 /**
  * Initialize terminal chrome: clock, seed display, build date, tx-tab navigation, paste panel
  */
 function initTerminalChrome() {
-    // UTC clock
-    const clockEl = document.getElementById('tx-clock');
-    if (clockEl) {
-        const updateClock = () => {
-            const now = new Date();
-            const hh = String(now.getUTCHours()).padStart(2, '0');
-            const mm = String(now.getUTCMinutes()).padStart(2, '0');
-            const ss = String(now.getUTCSeconds()).padStart(2, '0');
-            clockEl.textContent = `${hh}:${mm}:${ss} UTC`;
-        };
-        updateClock();
-        setInterval(updateClock, 1000);
-    }
-
-    // Seed display (random hex)
-    const seedEl = document.getElementById('tx-seed-display');
-    if (seedEl) {
-        const seed = Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase();
-        seedEl.textContent = `SEED:${seed}`;
-    }
-
-    // Build date
-    const buildDateEl = document.getElementById('tx-build-date');
-    if (buildDateEl) {
-        const d = new Date();
-        buildDateEl.textContent = `BUILD ${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
-    }
-
-    // TX tab row click handlers
+    // TX tab row: ARIA roles + click handlers
+    const tabRow = document.getElementById('tx-tab-row');
+    if (tabRow) tabRow.setAttribute('role', 'tablist');
     document.querySelectorAll('.tx-tab[data-tab]').forEach(tab => {
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-selected', tab.classList.contains('active') ? 'true' : 'false');
         tab.addEventListener('click', () => {
             switchTab(tab.dataset.tab);
+        });
+    });
+
+    // Group button click handlers — switch to first tab in group
+    document.querySelectorAll('.tx-group[data-group]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const group = btn.dataset.group;
+            const firstTab = document.querySelector(`.tx-tab[data-group="${group}"]`);
+            if (firstTab) switchTab(firstTab.dataset.tab);
         });
     });
 
@@ -165,29 +163,67 @@ function initTerminalChrome() {
         }
     });
 
-    // Deck-loaded pill: update when DeckConfig changes
-    const updateDeckPill = () => {
+    // Deck pill: update whenever DeckConfig changes (fires after every import)
+    DeckConfig.onDeckUpdate((config) => {
         const pill = document.getElementById('tx-deck-pill');
-        const hashEl = document.getElementById('tx-deck-hash');
+        const sourceEl = document.getElementById('tx-deck-hash');
         if (!pill) return;
-        const deckConfig = window._deckConfig || null;
-        const total = document.getElementById('deck-size')?.value || 99;
-        const hasImport = document.getElementById('import-status')?.textContent?.includes('Loaded');
-        if (hasImport) {
-            pill.classList.add('loaded');
-            pill.querySelector?.('.tx-dot')?.classList.add('tx-flicker');
-        }
-        if (hashEl) {
-            const h = Math.floor(Math.random() * 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-            hashEl.textContent = `#${h}`;
-        }
-    };
 
-    // Poll for deck load state changes (lightweight, import is infrequent)
-    const importStatus = document.getElementById('import-status');
-    if (importStatus) {
-        new MutationObserver(updateDeckPill).observe(importStatus, { childList: true, subtree: true, characterData: true });
-    }
+        const n = DeckConfig.getDeckSize(true);
+        const name = config.deckName;
+        const source = config.importSource;
+        const url = config.importUrl;
+
+        // Dot: a steady state marker, not an animated one
+        const dot = pill.querySelector('.tx-dot');
+        if (dot) dot.style.background = 'var(--tx-green)';
+
+        // Pill label: truncated deck name or fallback
+        const label = pill.childNodes[pill.childNodes.length - 1];
+        const displayName = name
+            ? (name.length > 22 ? name.slice(0, 21) + '…' : name)
+            : 'DECK LOADED';
+        if (label && label.nodeType === Node.TEXT_NODE) {
+            label.textContent = ` ${displayName} · N=${n}`;
+        } else {
+            pill.insertAdjacentText('beforeend', ` ${displayName} · N=${n}`);
+        }
+
+        // Source tag + optional link
+        if (sourceEl) {
+            if (source === 'moxfield' || source === 'archidekt') {
+                const label = source === 'moxfield' ? 'MOXFIELD' : 'ARCHIDEKT';
+                if (url) {
+                    sourceEl.innerHTML = `<a href="${url}" target="_blank" rel="noopener" style="color:var(--tx-amber); text-decoration:none; letter-spacing:0.08em;">VIA ${label} ↗</a>`;
+                } else {
+                    sourceEl.textContent = `VIA ${label}`;
+                    sourceEl.style.color = 'var(--tx-amber)';
+                }
+            } else {
+                sourceEl.textContent = 'PASTED';
+                sourceEl.style.color = 'var(--tx-mid)';
+            }
+        }
+    });
+}
+
+/**
+ * Initialize the Deck Radar: after every import, analyse the decklist, show the
+ * composition breakdown plus the ranked list of calculators that actually apply,
+ * and mark the matching tabs in the nav.
+ */
+function initDeckRadar() {
+    DeckConfig.onDeckImport((config) => {
+        renderRadar(config, { onSelect: switchTab });
+
+        // Deliberately does NOT change tabs. Auto-navigating to the strongest
+        // match reads as the app moving on its own for no visible reason —
+        // especially when the match came from stale state. The radar lists the
+        // matches and marks the tabs; choosing one stays the user's decision.
+
+        const radar = document.getElementById('tx-radar');
+        radar?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
 }
 
 /**
@@ -200,29 +236,15 @@ function switchTab(tab) {
 
     // Update terminal tab row active state
     document.querySelectorAll('.tx-tab[data-tab]').forEach(txTab => {
-        txTab.classList.toggle('active', txTab.dataset.tab === tab);
+        const isActive = txTab.dataset.tab === tab;
+        txTab.classList.toggle('active', isActive);
+        txTab.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
 
     // Update the calculator group if needed
     if (calculators[tab] && calculators[tab].group !== currentGroup) {
         switchGroup(calculators[tab].group);
     }
-
-    // Update ALL sub-navigation pills across all groups (not just current group)
-    document.querySelectorAll('.sub-nav-pill').forEach(pill => {
-        pill.classList.toggle('active', pill.dataset.tab === tab);
-    });
-
-    // Update dropdown selector button and options
-    const selectorIcon = document.querySelector('.selector-icon');
-    const selectorName = document.querySelector('.selector-name');
-    if (selectorIcon && selectorName && calculators[tab]) {
-        selectorIcon.textContent = calculators[tab].icon;
-        selectorName.textContent = calculators[tab].name;
-    }
-    document.querySelectorAll('.selector-option').forEach(option => {
-        option.classList.toggle('active', option.dataset.tab === tab);
-    });
 
     // Update tab content
     document.querySelectorAll('.tab-content').forEach(content => {
@@ -270,6 +292,12 @@ function switchTab(tab) {
         Mara.updateUI();
     } else if (tab === 'dreamharvest') {
         DreamHarvest.updateUI();
+    } else if (tab === 'mindsdilation') {
+        MindsDilation.updateUI();
+    } else if (tab === 'abstract') {
+        Abstract.updateUI();
+    } else if (tab === 'chimil') {
+        Chimil.updateUI();
     }
 }
 
@@ -277,62 +305,58 @@ function switchTab(tab) {
  * Initialize tab navigation
  */
 function initTabNavigation() {
-    // Tab group buttons
-    document.querySelectorAll('.tab-group-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            switchGroup(btn.dataset.group);
-        });
-    });
-
-    // Sub-navigation pills
-    document.querySelectorAll('.sub-nav-pill').forEach(pill => {
-        pill.addEventListener('click', () => {
-            switchTab(pill.dataset.tab);
-        });
-    });
-
-    // Legacy dropdown selector (keep for backwards compatibility)
-    const selectorButton = document.getElementById('selector-button');
-    const selector = document.getElementById('calculator-selector');
-    const dropdown = document.getElementById('selector-dropdown');
-
-    if (selectorButton && selector && dropdown) {
-        // Toggle dropdown
-        selectorButton.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isOpen = selector.classList.toggle('open');
-            selectorButton.setAttribute('aria-expanded', isOpen);
-        });
-
-        // Handle option clicks
-        document.querySelectorAll('.selector-option').forEach(option => {
-            option.addEventListener('click', () => {
-                switchTab(option.dataset.tab);
-                // Auto-close dropdown after selection
-                selector.classList.remove('open');
-                selectorButton.setAttribute('aria-expanded', 'false');
-            });
-        });
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!selector.contains(e.target)) {
-                selector.classList.remove('open');
-                selectorButton.setAttribute('aria-expanded', 'false');
-            }
-        });
-
-        // Close dropdown on escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && selector.classList.contains('open')) {
-                selector.classList.remove('open');
-                selectorButton.setAttribute('aria-expanded', 'false');
-                selectorButton.focus();
-            }
-        });
-    }
+    // The terminal tab row and group rail are wired in initTerminalChrome().
+    // The old hidden sub-nav pills and dropdown selector were removed along with
+    // their markup — nothing else to bind here.
 }
 
+/**
+ * Initialize keyboard navigation across calculator tabs.
+ * - Left/Right arrows (and Home/End) move between tabs in the active group
+ * - Alt+1..9 jumps to the Nth tab in the active group
+ * Ignored while typing in inputs, and arrows only act from the tab strip or body
+ * so they don't hijack scrolling or slider adjustment.
+ */
+function initKeyboardNav() {
+    document.addEventListener('keydown', (e) => {
+        const tag = e.target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+        const visibleTabs = Array.from(document.querySelectorAll('.tx-tab:not(.group-hidden)'));
+        if (visibleTabs.length === 0) return;
+        const currentIndex = Math.max(0, visibleTabs.findIndex(t => t.dataset.tab === currentTab));
+
+        // Alt+number → Nth tab in the active group
+        if (e.altKey && /^[1-9]$/.test(e.key)) {
+            const idx = parseInt(e.key, 10) - 1;
+            if (idx < visibleTabs.length) {
+                e.preventDefault();
+                switchTab(visibleTabs[idx].dataset.tab);
+            }
+            return;
+        }
+
+        // Arrow / Home / End → move within the active group, but only when the tab
+        // strip (or nothing) is focused, to avoid hijacking page scroll.
+        const active = document.activeElement;
+        const fromTabStrip = active && active.classList && active.classList.contains('tx-tab');
+        const fromBody = !active || active === document.body;
+        if (!fromTabStrip && !fromBody) return;
+
+        let target = null;
+        if (e.key === 'ArrowRight') target = (currentIndex + 1) % visibleTabs.length;
+        else if (e.key === 'ArrowLeft') target = (currentIndex - 1 + visibleTabs.length) % visibleTabs.length;
+        else if (e.key === 'Home') target = 0;
+        else if (e.key === 'End') target = visibleTabs.length - 1;
+
+        if (target !== null) {
+            e.preventDefault();
+            const tab = visibleTabs[target];
+            switchTab(tab.dataset.tab);
+            tab.focus();
+        }
+    });
+}
 
 /**
  * Initialize Portent calculator inputs
@@ -412,48 +436,39 @@ function initDreamHarvestInputs() {
 }
 
 /**
- * Initialize navigation layout toggle
+ * Initialize Mind's Dilation calculator inputs
  */
-function initNavLayoutToggle() {
-    const navToggle = document.getElementById('nav-layout-toggle');
-    const navIcon = navToggle?.querySelector('.nav-icon');
-    const tabGroupNav = document.getElementById('tab-group-nav');
-    const dropdownNav = document.querySelector('.calculator-selector');
+function initMindsDilationInputs() {
+    MindsDilation.init();
+}
 
-    // Load saved layout preference
-    const savedLayout = localStorage.getItem('navLayout') || 'tabs';
-    if (savedLayout === 'dropdown') {
-        tabGroupNav?.classList.add('hidden');
-        dropdownNav?.classList.add('shown');
-        if (navIcon) navIcon.textContent = '📑';
-    }
+/**
+ * Initialize Abstract Performance calculator inputs
+ */
+function initAbstractInputs() {
+    Abstract.init();
+}
 
-    // Toggle layout on click
-    if (navToggle) {
-        navToggle.addEventListener('click', () => {
-            const isTabs = !tabGroupNav?.classList.contains('hidden');
-
-            if (isTabs) {
-                // Switch to dropdown
-                tabGroupNav?.classList.add('hidden');
-                dropdownNav?.classList.add('shown');
-                if (navIcon) navIcon.textContent = '📑';
-                localStorage.setItem('navLayout', 'dropdown');
-            } else {
-                // Switch to tabs
-                tabGroupNav?.classList.remove('hidden');
-                dropdownNav?.classList.remove('shown');
-                if (navIcon) navIcon.textContent = '☰';
-                localStorage.setItem('navLayout', 'tabs');
-            }
-        });
-    }
+/**
+ * Initialize Chimil calculator inputs
+ */
+function initChimilInputs() {
+    Chimil.init();
 }
 
 /**
  * Initialize service worker for offline support
  */
 function initServiceWorker() {
+    // Skip on localhost. The worker is stale-while-revalidate, so during local
+    // development it silently serves the previous build's CSS/JS and every edit
+    // appears to do nothing until the caches are manually purged.
+    const isLocal = ['localhost', '127.0.0.1', '::1', ''].includes(window.location.hostname);
+    if (isLocal) {
+        navigator.serviceWorker?.getRegistrations?.().then(rs => rs.forEach(r => r.unregister()));
+        return;
+    }
+
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             // Get the correct path for service worker based on deployment
@@ -479,12 +494,11 @@ function initUXEnhancements() {
     // Initialize collapsible panels
     Components.initCollapsiblePanels();
 
-    // Auto-collapse config on mobile after calculations
-    window.addEventListener('resize', () => {
-        if (window.innerWidth <= 900) {
-            Components.autoCollapseOnMobile();
-        }
-    });
+    // Deliberately no resize handler here. This used to call
+    // autoCollapseOnMobile() on every resize event, which collapses panels and
+    // scrollIntoView()s the results — so dragging a window smaller repeatedly
+    // yanked the user's scroll position. The layout adapts through CSS
+    // container queries instead, which need no JavaScript at all.
 }
 
 /**
@@ -539,12 +553,54 @@ function init() {
     // Initialize shared opponent state for multiplayer calculators
     OpponentState.init();
 
+    // Example opponents button — loads 3 preset decks simultaneously
+    const exampleOpponentsBtn = document.getElementById('load-example-opponents-btn');
+    if (exampleOpponentsBtn) {
+        exampleOpponentsBtn.addEventListener('click', async () => {
+            const urls = MindsDilation.EXAMPLE_OPPONENTS;
+            const keys = ['opponent1', 'opponent2', 'opponent3'];
+            exampleOpponentsBtn.textContent = 'LOADING…';
+            exampleOpponentsBtn.disabled = true;
+            try {
+                // Ensure 3 opponent slots are active
+                while (OpponentState.getActiveOpponents().length < 3) {
+                    OpponentState.addOpponent();
+                }
+                await Promise.all(urls.map((url, i) =>
+                    OpponentState.importOpponentDeck(keys[i], url, true)
+                ));
+                OpponentState.renderOpponentTabs();
+                // Collapse the import panel once decks are loaded
+                const opponentsPanelContent = document.querySelector('#opponents-config .panel-content');
+                if (opponentsPanelContent) opponentsPanelContent.style.display = 'none';
+            } catch (e) {
+                console.error('Failed to load example opponents', e);
+            } finally {
+                exampleOpponentsBtn.textContent = 'LOAD EXAMPLES ↓';
+                exampleOpponentsBtn.disabled = false;
+            }
+        });
+    }
+
+    // Make the opponents-config tx-h header toggleable (click to collapse/expand)
+    const opponentsConfigHeader = document.querySelector('#opponents-config .tx-h');
+    if (opponentsConfigHeader) {
+        opponentsConfigHeader.style.cursor = 'pointer';
+        opponentsConfigHeader.addEventListener('click', (e) => {
+            if (e.target.closest('button')) return;
+            const content = document.querySelector('#opponents-config .panel-content');
+            if (content) {
+                content.style.display = content.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+    }
+
     // Initialize terminal chrome (clock, seed, tx-tabs, paste panel)
     initTerminalChrome();
+    initDeckRadar();
 
     // Initialize all components
     initTabNavigation();
-    initNavLayoutToggle();
     initPortentInputs();
     initSurgeInputs();
     initWaveInputs();
@@ -556,6 +612,9 @@ function init() {
     initMulliganInputs();
     initMaraInputs();
     initDreamHarvestInputs();
+    initMindsDilationInputs();
+    initAbstractInputs();
+    initChimilInputs();
     initServiceWorker();
     initUXEnhancements();
     initPWAInstall();
@@ -582,23 +641,16 @@ function init() {
     // Must be called AFTER all inputs are initialized so listeners are ready
     Share.parseShareUrl();
 
-    // Initial render
-    Mulligan.updateUI();
+    // Initial render goes through switchTab so the first paint takes exactly the
+    // same path as every later tab change. Calling updateUI() directly skipped
+    // the panel show/hide logic, so the shared deck-config panel stayed hidden
+    // until the user clicked a tab and then appeared — a visible inconsistency
+    // between the landing state and every state after it.
+    // currentTab is whatever parseShareUrl() resolved to, so a shared link still wins.
+    switchTab(currentTab);
 
-    // Add keyboard navigation
-    document.addEventListener('keydown', (e) => {
-        // Alt+1/2/3/4/5/6 to switch tabs
-        if (e.altKey) {
-            if (e.key === '1') switchTab('portent');
-            else if (e.key === '2') switchTab('surge');
-            else if (e.key === '3') switchTab('wave');
-            else if (e.key === '4') switchTab('vow');
-            else if (e.key === '5') switchTab('vortex');
-            else if (e.key === '6') switchTab('lands');
-            else if (e.key === '7') switchTab('rashmi');
-            else if (e.key === '8') switchTab('lumra');
-        }
-    });
+    // Add keyboard navigation (dynamic — follows the visible tabs in the active group)
+    initKeyboardNav();
 
     // Mark as visited
     if (!localStorage.getItem('visited')) {

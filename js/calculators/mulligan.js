@@ -5,10 +5,11 @@
 
 import { choose, drawTwoTypeMin, drawThreeTypeMin } from '../utils/hypergeometric.js';
 import { formatNumber, formatPercentage, createCache } from '../utils/simulation.js';
-import { createOrUpdateChart } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
-import { generateSampleRevealsHTML } from '../utils/components.js';
+import { generateSampleRevealsHTML, renderHeroStats, renderOutcomeMatrix } from '../utils/components.js';
 import { shuffleDeck, createCollapsibleSection } from '../utils/sampleSimulator.js';
+import { probabilityVerdict } from '../utils/analysis.js';
 
 let simulationCache = createCache(100);
 let lastConfigHash = '';
@@ -19,7 +20,7 @@ let stableSamples = [];
 const SAMPLE_COUNT_DEFAULT = 10;
 let renderedCount = 0;
 
-const DEFAULT_COLORS = ['#22c55e', '#3b82f6', '#ef4444', '#eab308', '#a855f7', '#ec4899', '#06b6d4', '#f97316'];
+const DEFAULT_COLORS = ['#55c97f', '#5b8db8', '#e8635c', '#f0a92c', '#9878b8', '#b8738f', '#5fa8a0', '#f0a92c'];
 
 // Card type management
 let cardTypes = [
@@ -448,7 +449,7 @@ export function runSampleReveals() {
     
     // 1. Success (Meets or exceeds all)
     scenarios.push({
-        label: '✅ Meets or exceeds',
+        label: '✓ Meets or exceeds',
         match: (c) => config.types.every((t, idx) => c[idx] >= t.required),
         sampleCount: 0,
         type: 'success'
@@ -457,7 +458,7 @@ export function runSampleReveals() {
     // 2. Missing exactly 1 card of a specific type (and others are met)
     config.types.forEach((t, i) => {
         scenarios.push({
-            label: `⚠️ Missing 1: ${t.name}`,
+            label: `✗ Missing 1: ${t.name}`,
             match: (c) => {
                 // This type is exactly 1 short
                 if (c[i] !== t.required - 1) return false;
@@ -583,61 +584,44 @@ export function runSampleReveals() {
     // Build Summary UI
     const pct = (val) => ((val / numSims) * 100).toFixed(1) + '%';
     
-    let summaryContentHTML = '<div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: var(--panel-bg-alt); border-radius: var(--radius-md); margin-bottom: var(--spacing-lg);">';
-    
-    // Natural Hits & Accuracy Analysis
-    summaryContentHTML += `
-        <div style="padding-top: 8px;">
-             <!-- Natural Hit Rate -->
-            <div style="margin-bottom: 20px; padding: 12px; background: rgba(192, 132, 252, 0.1); border: 1px solid rgba(192, 132, 252, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: space-between;">
-                <div>
-                    <div style="color: #c084fc; font-weight: bold; font-size: 1.1em;">Natural "God Hands"</div>
-                    <div style="color: var(--text-secondary); font-size: 0.85em;">Hands meeting all requirements immediately (Turn 0)</div>
-                </div>
-                <div style="font-size: 1.4em; font-weight: bold; color: #fff;">${pct(instantSuccessCount)}</div>
-            </div>
+    let summaryContentHTML = '<div class="mull-summary-block">';
 
-            <div style="color:var(--text-dim); text-transform:uppercase; font-size:0.75em; letter-spacing:1px; margin-bottom:12px; text-align:center;">Simulation vs Strategy Analysis</div>
-            
-            <div style="display: grid; gap: 12px;">
-                <!-- 1. Correct Keep -->
-                <div style="background:rgba(34,197,94,0.05); padding:10px; border-radius:6px; border:1px solid rgba(34,197,94,0.1); display:grid; grid-template-columns: 1fr auto; align-items:center;">
-                    <div>
-                        <div style="font-size:0.9em; color:#4ade80; font-weight:600;">Correct Keep (Won)</div>
-                        <div style="font-size:0.8em; color:var(--text-dim);">Strategy said Keep, and you got there.</div>
-                    </div>
-                    <div style="font-size:1.2em; font-weight:bold; color:#4ade80;">${pct(correctKeepCount)}</div>
-                </div>
+    // Decision-quality breakdown. The four keep/mull outcomes are a confusion
+    // matrix, so render them as one — agreement lands on the diagonal and the
+    // two failure modes (too greedy vs too cautious) sit opposite each other,
+    // which is what tells you which slider to move.
+    const frac = (v) => (numSims > 0 ? v / numSims : 0);
 
-                <!-- 2. Bad Beat -->
-                <div style="background:rgba(239,68,68,0.05); padding:10px; border-radius:6px; border:1px solid rgba(239,68,68,0.1); display:grid; grid-template-columns: 1fr auto; align-items:center;">
-                    <div>
-                        <div style="font-size:0.9em; color:#f87171; font-weight:600;">Bad Beat (Kept & Failed)</div>
-                        <div style="font-size:0.8em; color:var(--text-dim);">Strategy said Keep (High Odds), but luck failed you. <br><span style="color:var(--text-secondary);">Rule: To reduce risk, <strong>INCREASE Confidence Threshold</strong>.</span></div>
-                    </div>
-                    <div style="font-size:1.2em; font-weight:bold; color:#f87171;">${pct(overconfidentKeepCount)}</div>
-                </div>
+    summaryContentHTML += renderHeroStats([
+        {
+            label: 'NATURAL "GOD HANDS"',
+            value: pct(instantSuccessCount),
+            sub: 'meets every requirement on turn 0',
+            size: 'big',
+            color: 'var(--tx-green)'
+        }
+    ]);
 
-                <!-- 3. Missed Opportunity -->
-                <div style="background:rgba(245, 158, 11, 0.05); padding:10px; border-radius:6px; border:1px solid rgba(245, 158, 11, 0.1); display:grid; grid-template-columns: 1fr auto; align-items:center;">
-                    <div>
-                        <div style="font-size:0.9em; color:#f59e0b; font-weight:600;">Missed Opportunity (Mulled & Succeeded)</div>
-                        <div style="font-size:0.8em; color:var(--text-dim);">Strategy said Mull, but the hand would have hit. <br><span style="color:var(--text-secondary);">Rule: To be greedier, <strong>DECREASE Confidence Threshold</strong>.</span></div>
-                    </div>
-                    <div style="font-size:1.2em; font-weight:bold; color:#f59e0b;">${pct(missedOpportunityCount)}</div>
-                </div>
-
-                <!-- 4. Correct Mulligan -->
-                <div style="background:rgba(56, 189, 248, 0.05); padding:10px; border-radius:6px; border:1px solid rgba(56, 189, 248, 0.1); display:grid; grid-template-columns: 1fr auto; align-items:center;">
-                    <div>
-                        <div style="font-size:0.9em; color:#38bdf8; font-weight:600;">Good Mulligan (Avoided Loss)</div>
-                        <div style="font-size:0.8em; color:var(--text-dim);">Strategy said Mull, and the hand would have bricked.</div>
-                    </div>
-                    <div style="font-size:1.2em; font-weight:bold; color:#38bdf8;">${pct(correctMulliganCount)}</div>
-                </div>
-            </div>
-        </div>
-    `;
+    summaryContentHTML += renderOutcomeMatrix({
+        title: 'DECISION QUALITY',
+        subtitle: `${numSims.toLocaleString('en-US')} SIMULATED HANDS`,
+        rowLabels: ['STRATEGY SAYS KEEP', 'STRATEGY SAYS MULL'],
+        colLabels: ['HAND WOULD HIT', 'HAND WOULD BRICK'],
+        cells: [
+            [
+                { label: 'Correct keep', value: frac(correctKeepCount), good: true,
+                  note: 'Kept, and you got there.' },
+                { label: 'Bad beat', value: frac(overconfidentKeepCount), good: false,
+                  note: 'Too greedy — raise the confidence threshold.' }
+            ],
+            [
+                { label: 'Missed opportunity', value: frac(missedOpportunityCount), good: false,
+                  note: 'Too cautious — lower the confidence threshold.' },
+                { label: 'Good mulligan', value: frac(correctMulliganCount), good: true,
+                  note: 'Mulled away a hand that would have bricked.' }
+            ]
+        ]
+    });
 
     // Scenario Table (Cheat Sheet)
     let tableHTML = `
@@ -669,7 +653,7 @@ export function runSampleReveals() {
                     const isKeep = keepProbability > 0.5; // Majority of hands in this scenario are kept
 
                     // Color win chance based on the actual probability (independent of strategy decision)
-                    const winChanceColor = avgSuccessProb >= 0.75 ? '#4ade80' : avgSuccessProb >= 0.5 ? '#f59e0b' : '#f87171';
+                    const winChanceColor = avgSuccessProb >= 0.75 ? '#55c97f' : avgSuccessProb >= 0.5 ? '#f0a92c' : '#e8635c';
 
                     return `<tr>
                         <td style="text-align:left; color:var(--text-light);">${s.label}</td>
@@ -684,7 +668,7 @@ export function runSampleReveals() {
                         <td style="color:${winChanceColor}; font-weight:bold;">${formatPercentage(avgSuccessProb)}</td>
                         <td style="color:var(--text-dim);">${formatPercentage(theoreticalProb)}</td>
                         <td style="color:var(--text-dim);">${pct(s.sampleCount)}</td>
-                        <td style="color:${isKeep ? '#4ade80' : '#f87171'}; font-weight:bold;">${isKeep ? 'KEEP' : 'MULL'}</td>
+                        <td style="color:${isKeep ? '#55c97f' : '#e8635c'}; font-weight:bold;">${isKeep ? 'KEEP' : 'MULL'}</td>
                     </tr>`;
                 }).join('')}
             </table>
@@ -779,27 +763,27 @@ export function runSampleReveals() {
 
                 if (keep) {
                     if (isSuccess) {
-                        label = '✅ Correct Keep';
-                        statusColor = '#4ade80';
-                        statusBg = 'rgba(34, 197, 94, 0.05)';
-                        borderColor = 'rgba(34, 197, 94, 0.3)';
+                        label = '✓ Correct keep';
+                        statusColor = '#55c97f';
+                        statusBg = 'rgba(85, 201, 127, 0.05)';
+                        borderColor = 'rgba(85, 201, 127, 0.3)';
                     } else {
-                        label = '💀 Bad Beat';
-                        statusColor = '#f87171';
-                        statusBg = 'rgba(239, 68, 68, 0.05)';
-                        borderColor = 'rgba(239, 68, 68, 0.3)';
+                        label = '✗ Bad beat';
+                        statusColor = '#e8635c';
+                        statusBg = 'rgba(232, 99, 92, 0.05)';
+                        borderColor = 'rgba(232, 99, 92, 0.3)';
                     }
                 } else {
                     if (isSuccess) {
-                        label = '⚠️ Missed Opportunity';
-                        statusColor = '#f59e0b';
-                        statusBg = 'rgba(245, 158, 11, 0.05)';
-                        borderColor = 'rgba(245, 158, 11, 0.3)';
+                        label = '✗ Missed opportunity';
+                        statusColor = '#f0a92c';
+                        statusBg = 'rgba(240, 169, 44, 0.05)';
+                        borderColor = 'rgba(240, 169, 44, 0.3)';
                     } else {
-                        label = '✅ Good Mulligan';
-                        statusColor = '#38bdf8';
-                        statusBg = 'rgba(56, 189, 248, 0.05)';
-                        borderColor = 'rgba(56, 189, 248, 0.3)';
+                        label = '✓ Good mulligan';
+                        statusColor = '#7d8a92';
+                        statusBg = 'rgba(125, 138, 146, 0.05)';
+                        borderColor = 'rgba(125, 138, 146, 0.3)';
                     }
                 }
 
@@ -807,7 +791,7 @@ export function runSampleReveals() {
                 
                 html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                     <div style="font-weight:600; color:${statusColor}; font-size:0.95em;">${label} <span style="color:var(--text-dim); font-weight:normal; font-size:0.9em;">(Sample ${i + 1})</span></div>
-                    <div style="font-size:0.85em; color:var(--text-secondary);">Strategy: <span style="font-weight:bold; color:${keep ? '#4ade80' : '#f87171'}">${keep ? 'KEEP' : 'MULL'}</span> <span style="color:var(--text-dim)">(${formatPercentage(successProb)} win chance)</span></div>
+                    <div style="font-size:0.85em; color:var(--text-secondary);">Strategy: <span style="font-weight:bold; color:${keep ? '#55c97f' : '#e8635c'}">${keep ? 'KEEP' : 'MULL'}</span> <span style="color:var(--text-dim)">(${formatPercentage(successProb)} win chance)</span></div>
                 </div>`;
                 
                 html += '<div style="margin: 8px 0; display: flex; flex-wrap: wrap; gap: 4px;">';
@@ -816,17 +800,17 @@ export function runSampleReveals() {
                 });
                 html += '</div>';
                 
-                let fixColor = '#ef4444';
+                let fixColor = '#e8635c';
                 let fixText = '';
                 if (needs.length === 0) {
                     fixText = 'Started with requirements met';
-                    fixColor = '#4ade80';
+                    fixColor = '#55c97f';
                 } else if (fixedByTurn) {
                     fixText = `Found missing pieces by Turn ${fixedByTurn}`;
-                    fixColor = '#4ade80';
+                    fixColor = '#55c97f';
                 } else {
                     fixText = `Failed to find pieces (Checked ${maxTurn} draws)`;
-                    fixColor = '#ef4444';
+                    fixColor = '#e8635c';
                 }
 
                 html += `<div class="reveal-summary" style="font-size:0.85em; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:8px; border-top:1px dashed ${borderColor};">
@@ -920,9 +904,9 @@ function createVirtualDeck(deckSize, types) {
  * Render a virtual card badge
  */
 function renderVirtualCard(card) {
-    const color = card.isKnown ? (card.color || 'var(--theme-secondary)') : '#4b5563';
+    const color = card.isKnown ? (card.color || 'var(--theme-secondary)') : '#2c322e';
     const bg = card.isKnown 
-        ? (card.color ? card.color + '33' : 'rgba(192, 132, 252, 0.2)') 
+        ? (card.color ? card.color + '33' : 'rgba(152, 120, 184, 0.2)') 
         : 'rgba(255, 255, 255, 0.05)';
     return `<span style="
         padding: 2px 6px; 
@@ -1020,9 +1004,9 @@ function renderCardTypes() {
             ${cardTypes.length > 1 ? `<button class="remove-type-btn" data-type-id="${t.id}" aria-label="Remove type">✕</button>` : ''}
         </div>
         <div class="type-grid">
-            <div class="type-input"><label>Cards in Deck</label><input type="number" class="type-count" value="${t.count}" min="0" data-type-id="${t.id}"></div>
-            <div class="type-input"><label>Need in Hand</label><input type="number" class="type-required" value="${t.required}" min="0" max="7" data-type-id="${t.id}"></div>
-            <div class="type-input"><label>By Turn</label><input type="number" class="type-turn" value="${t.byTurn}" min="1" max="10" data-type-id="${t.id}"></div>
+            <div class="type-input"><label>In deck</label><input type="number" class="type-count" value="${t.count}" min="0" data-type-id="${t.id}"></div>
+            <div class="type-input"><label>Need</label><input type="number" class="type-required" value="${t.required}" min="0" max="7" data-type-id="${t.id}"></div>
+            <div class="type-input"><label>By turn</label><input type="number" class="type-turn" value="${t.byTurn}" min="1" max="10" data-type-id="${t.id}"></div>
         </div>
     </div>`).join('');
 
@@ -1133,14 +1117,7 @@ function updateSummary(config, result, sharedData) {
     if (!summaryEl) return;
 
     // Marginal benefits helper
-    const getImpact = (pct) => pct > 1.5 ? ['🔥 High Impact', '#22c55e'] : pct > 0.5 ? ['✅ Medium Impact', '#4ade80'] : pct < 0 ? ['⚠️ Negative Impact', '#ef4444'] : ['Low Impact', 'var(--text-dim)'];
-
-    const s = { // Common styles
-        card: 'text-align:center;padding:16px;border-radius:12px',
-        label: 'font-size:0.8em;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px',
-        big: 'font-size:2.2em;font-weight:700;line-height:1',
-        sub: 'color:var(--text-dim);font-size:0.8em;margin-top:4px'
-    };
+    const getImpact = (pct) => pct > 1.5 ? ['▲ High impact', '#55c97f'] : pct > 0.5 ? ['✓ Medium impact', '#55c97f'] : pct < 0 ? ['✗ Negative impact', '#e8635c'] : ['· Low impact', 'var(--text-dim)'];
 
     const marginalsHTML = result.marginalBenefits.map((b, i) => {
         const benefitPct = b.overall * 100;
@@ -1156,14 +1133,14 @@ function updateSummary(config, result, sharedData) {
                 ? "Adding more reduces consistency. You likely have too many." 
                 : `Diminishing returns. Adding more gives minimal gain (+${formatPercentage(Math.max(0, b.overall), 2)}).`;
 
-             return `<li style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="color:var(--text-light);font-weight:600">Consider Cutting 1 ${config.types[i].name}</span><span style="font-size:0.85em;font-weight:bold;color:#f59e0b;background:rgba(245, 158, 11, 0.1);padding:2px 8px;border-radius:4px">✂️ Cut Recommendation</span></div><div style="font-size:0.9em;color:var(--text-secondary)">${reason}</div></li>`;
+             return `<li style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="color:var(--text-light);font-weight:600">Consider Cutting 1 ${config.types[i].name}</span><span style="font-size:0.85em;font-weight:bold;color:#f0a92c;background:rgba(240, 169, 44, 0.1);padding:2px 8px;border-radius:0">✗ Cut recommendation</span></div><div style="font-size:0.9em;color:var(--text-secondary)">${reason}</div></li>`;
         }
 
         const [label, color] = getImpact(benefitPct);
         return `<li style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05)">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
                 <span style="color:var(--text-light);font-weight:600">+1 ${config.types[i].name}</span>
-                <span style="font-size:0.85em;font-weight:bold;color:${color};background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:4px">${label}</span>
+                <span style="font-size:0.85em;font-weight:bold;color:${color};background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:0">${label}</span>
             </div>
             <div style="font-size:0.9em;color:var(--text-secondary)">
                 Improves win rate by <strong style="color:${color}">${formatPercentage(Math.max(0, b.overall), 2)}</strong>
@@ -1187,15 +1164,15 @@ function updateSummary(config, result, sharedData) {
                 const avgWinRate = m.cumulativeKeep > 0 ? m.cumulativeSuccess / m.cumulativeKeep : 0;
                 
                 return `
-                <div style="display:grid; grid-template-columns: 1.5fr 1fr 1fr; align-items:center; padding:8px 12px; background:${idx === 0 ? 'rgba(34,197,94,0.05)' : 'rgba(255,255,255,0.02)'}; border-radius:6px; border:1px solid ${idx === 0 ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.03)'}">
-                    <div style="font-size:0.9em; color:${idx === 0 ? '#4ade80' : 'var(--text-light)'}">
+                <div style="display:grid; grid-template-columns: 1.5fr 1fr 1fr; align-items:center; padding:8px 12px; background:${idx === 0 ? 'rgba(85,201,127,0.05)' : 'var(--tx-panel-alt)'}; border-radius:0; border:1px solid ${idx === 0 ? 'rgba(85,201,127,0.15)' : 'var(--tx-rule)'}">
+                    <div style="font-size:0.9em; color:${idx === 0 ? '#55c97f' : 'var(--text-light)'}">
                         ${m.label.split('(')[0].trim()}
                         <div style="font-size:0.8em; color:var(--text-dim);">Keep ${7 - (m.label.includes('Opening') || m.label.includes('Free') ? 0 : idx - (config.freeMulligan ? 1 : 0))}</div>
                     </div>
-                    <div style="text-align:right; font-weight:bold; color:${m.cumulativeKeep > 0.9 ? '#4ade80' : '#c084fc'}">
+                    <div style="text-align:right; font-weight:bold; color:${m.cumulativeKeep > 0.9 ? '#55c97f' : '#9878b8'}">
                         ${formatPercentage(m.cumulativeKeep)}
                     </div>
-                    <div style="text-align:right; font-weight:bold; color:${avgWinRate >= config.confidenceThreshold ? '#4ade80' : '#f59e0b'}">
+                    <div style="text-align:right; font-weight:bold; color:${avgWinRate >= config.confidenceThreshold ? '#55c97f' : '#f0a92c'}">
                         ${formatPercentage(avgWinRate)}
                     </div>
                 </div>`;
@@ -1203,33 +1180,30 @@ function updateSummary(config, result, sharedData) {
         </div>
         <div style="margin-top:12px; font-size:0.8em; color:var(--text-dim); font-style:italic;">
             * <strong>Keep Chance:</strong> Probability you find a keepable hand by this step (Cumulative).<br>
-            <span style="opacity:0.8; font-size:0.9em; display:block; margin-top:2px; margin-bottom:6px; color:#9ca3af;">&nbsp;&nbsp;↳ Note: This uses probability math, not simple addition. (e.g. Two 50% chances = 75% total chance, not 100%).</span>
+            <span style="opacity:0.8; font-size:0.9em; display:block; margin-top:2px; margin-bottom:6px; color:#939c97;">&nbsp;&nbsp;↳ Note: This uses probability math, not simple addition. (e.g. Two 50% chances = 75% total chance, not 100%).</span>
             * <strong>Win Rate:</strong> Average success rate of hands kept by this step.
         </div>
     `;
 
+    // Colour the headline by its verdict tier rather than a fixed accent, so the
+    // number itself tells you whether the plan is reliable.
+    const successVerdict = probabilityVerdict(result.expectedSuccess);
+
     summaryEl.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px">
-            <div style="${s.card};background:linear-gradient(135deg,rgba(192,132,252,0.1) 0%,rgba(10,10,18,0) 100%);border:1px solid rgba(192,132,252,0.2)">
-                <div style="${s.label}">Strategy Success Rate</div>
-                <div style="${s.big};color:#c084fc">${formatPercentage(result.expectedSuccess)}</div>
-                <div style="${s.sub}">With optimal mulligans <span style="font-size:0.9em; opacity:0.8; display:block;">(${formatPercentage(result.unpenalizedSuccess)} unpenalized)</span></div>
-            </div>
-            <div style="${s.card};background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.2)">
-                <div style="${s.label}">Starting Hand</div>
-                <div style="${s.big};color:#4ade80">~${formatNumber(result.expectedCards, 1)}</div>
-                <div style="${s.sub}">Average cards kept (Avg Mulls: ${formatNumber(result.avgMulligans, 2)})</div>
-            </div>
-        </div>
-        
-        <div style="background:var(--panel-bg-alt);border-radius:8px;padding:16px;margin-bottom:20px">
-            <h3 style="margin:0 0 12px 0;font-size:0.95em;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px">Strategy Breakdown</h3>
-            <details><summary style="cursor:pointer;color:var(--text-dim);font-size:0.85em">View Step-by-Step Stats</summary><div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-color)">${breakdownHTML}</div></details>
+        ${renderHeroStats([
+            { label: 'SUCCESS RATE', value: formatPercentage(result.expectedSuccess), sub: `optimal mulligans · ${formatPercentage(result.unpenalizedSuccess)} unpenalized`, color: successVerdict.color, size: 'big' },
+            { label: 'AVG STARTING HAND', value: '~' + formatNumber(result.expectedCards, 1), sub: 'cards kept', color: 'var(--tx-green)' },
+            { label: 'AVG MULLIGANS', value: formatNumber(result.avgMulligans, 2), sub: 'to a keepable hand', color: 'var(--tx-amber)' }
+        ])}
+
+        <div style="border:1px solid var(--tx-rule); border-top:0; background:var(--tx-panel-alt); padding:14px;">
+            <h3 style="margin:0 0 12px 0; font-size:10px; color:var(--tx-dim); text-transform:uppercase; letter-spacing:0.12em;">Strategy Breakdown</h3>
+            <details><summary style="cursor:pointer; color:var(--tx-mid); font-size:11px;">View step-by-step stats</summary><div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--tx-rule);">${breakdownHTML}</div></details>
         </div>
 
-        <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border-color);border-radius:8px;padding:16px">
-            <h3 style="margin:0 0 16px 0;font-size:0.95em;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px">💡 Deck Tuning Tips</h3>
-            <ul style="margin:0;padding:0;list-style:none">${marginalsHTML}</ul>
+        <div style="border:1px solid var(--tx-rule); border-top:0; background:var(--tx-panel); padding:14px;">
+            <h3 style="margin:0 0 16px 0; font-size:10px; color:var(--tx-dim); text-transform:uppercase; letter-spacing:0.12em;">Deck Tuning Tips</h3>
+            <ul style="margin:0; padding:0; list-style:none">${marginalsHTML}</ul>
         </div>`;
 }
 
@@ -1239,13 +1213,27 @@ function updateSummary(config, result, sharedData) {
 function getChartOptions(xLabel, yLabel = 'Probability', title = null) {
     return {
         plugins: {
-            ...(title && { title: { display: true, text: title, color: '#a09090', font: { size: 14, weight: 'normal' }, padding: { bottom: 15 } } }),
-            legend: { display: true, position: 'top', labels: { color: '#a09090', font: { size: 11 }, padding: 12, usePointStyle: true } },
+            ...(title && { title: { display: true, text: title, color: TX.mid, font: { size: 11, weight: 'normal' }, padding: { bottom: 15 } } }),
+            legend: {
+                display: true,
+                position: 'top',
+                labels: { color: TX.mid, font: { size: 10 }, padding: 12, boxWidth: 10, boxHeight: 2 }
+            },
             tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } }
         },
         scales: {
-            x: { grid: { color: 'rgba(192, 132, 252, 0.1)', drawBorder: false }, ticks: { color: '#a09090' }, title: { display: true, text: xLabel, color: '#a09090' } },
-            y: { beginAtZero: true, max: 100, grid: { color: 'rgba(192, 132, 252, 0.15)', drawBorder: false }, ticks: { color: '#c084fc', callback: v => v + '%' }, title: { display: true, text: yLabel, color: '#c084fc' } }
+            x: {
+                grid: { color: TX.rule, drawBorder: false },
+                ticks: { color: TX.dim, font: { size: 9 } },
+                title: { display: true, text: xLabel, color: TX.dim, font: { size: 9 } }
+            },
+            y: {
+                beginAtZero: true,
+                max: 100,
+                grid: { color: TX.rule, drawBorder: false },
+                ticks: { color: TX.dim, font: { size: 9 }, callback: v => v + '%' },
+                title: { display: true, text: yLabel, color: TX.dim, font: { size: 9 } }
+            }
         }
     };
 }
@@ -1293,23 +1281,43 @@ function updateChart(config, sharedData) {
         if (!sharedData.turnData) {
             sharedData.turnData = calculateTurnProbabilities(config);
         }
-        const colors = ['#a855f7', '#6b7280', '#c084fc'];
-
+        // Per-type series use the colour the user picked for that row in the
+        // requirements list, so the chart matches the swatches above it.
         const datasets = [
             ...config.types.map((type, i) => ({
                 label: type.name,
                 data: sharedData.turnData.map(d => d.typeProbabilities[i] * 100),
-                borderColor: colors[i % colors.length],
-                backgroundColor: colors[i % colors.length] + '30',
-                borderWidth: 2,
+                borderColor: type.color || TX.series[i % TX.series.length],
+                backgroundColor: 'transparent',
+                borderWidth: 1,
                 fill: false,
-                tension: 0.3,
-                pointRadius: 3,
-                pointBackgroundColor: colors[i % colors.length],
-                borderDash: [5, 5]
+                tension: 0,
+                pointRadius: 0,
+                pointHoverRadius: 3,
+                borderDash: [4, 3]
             })),
-            { label: 'Confidence Threshold', data: sharedData.turnData.map(() => config.confidenceThreshold * 100), borderColor: '#22c55e', borderWidth: 2, borderDash: [2, 2], pointRadius: 0, fill: false, order: 0 },
-            { label: 'Combined (ALL)', data: sharedData.turnData.map(d => d.combinedProb * 100), borderColor: '#c084fc', backgroundColor: 'rgba(192, 132, 252, 0.15)', borderWidth: 3, fill: true, tension: 0.3, pointRadius: 5, pointBackgroundColor: '#c084fc', pointBorderColor: '#fff', pointBorderWidth: 2 }
+            {
+                label: 'Confidence threshold',
+                data: sharedData.turnData.map(() => config.confidenceThreshold * 100),
+                borderColor: TX.amber,
+                borderWidth: 1,
+                borderDash: [2, 2],
+                pointRadius: 0,
+                fill: false,
+                order: 0
+            },
+            {
+                label: 'Combined (all requirements)',
+                data: sharedData.turnData.map(d => d.combinedProb * 100),
+                borderColor: TX.green,
+                backgroundColor: TX.greenFill,
+                borderWidth: 2,
+                fill: true,
+                tension: 0,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                pointBackgroundColor: TX.green
+            }
         ];
 
         turnChart = createOrUpdateChart(turnChart, 'mull-turn-chart', {
@@ -1367,12 +1375,12 @@ export function updateUI() {
         if (!warningEl) {
              warningEl = document.createElement('div');
              warningEl.id = warningId;
-             warningEl.style.color = '#ef4444';
+             warningEl.style.color = '#e8635c';
              warningEl.style.marginTop = '16px';
              warningEl.style.marginBottom = '16px';
              warningEl.style.padding = '12px';
-             warningEl.style.background = 'rgba(239, 68, 68, 0.1)';
-             warningEl.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+             warningEl.style.background = 'rgba(232, 99, 92, 0.1)';
+             warningEl.style.border = '1px solid rgba(232, 99, 92, 0.3)';
              warningEl.style.borderRadius = '8px';
              warningEl.style.textAlign = 'left';
              warningEl.style.fontWeight = '600';
@@ -1384,7 +1392,7 @@ export function updateUI() {
                  container.parentNode.insertBefore(warningEl, container.nextSibling);
              }
         }
-        warningEl.innerHTML = errors.map(e => `<div>⚠️ Warning: ${e}</div>`).join('');
+        warningEl.innerHTML = errors.map(e => `<div>✗ Warning: ${e}</div>`).join('');
         warningEl.style.display = 'block';
     } else {
         if (warningEl) warningEl.style.display = 'none';
@@ -1422,19 +1430,10 @@ function applyPreset(preset) {
     els.threshold.value = threshold;
     els.thresholdDisplay.textContent = threshold + '%';
     
-    // Update active button state
+    // Update active button state — styling lives in CSS (.preset-btn.active) so
+    // the buttons stay on-theme instead of carrying hard-coded inline colors.
     document.querySelectorAll('.preset-btn').forEach(btn => {
-        if (btn.dataset.preset === preset) {
-            btn.classList.add('active');
-            btn.style.border = '1px solid var(--accent)';
-            btn.style.background = 'rgba(192,132,252,0.1)';
-            btn.style.color = 'var(--text-light)';
-        } else {
-            btn.classList.remove('active');
-            btn.style.border = '1px solid var(--border-color)';
-            btn.style.background = 'var(--input-bg)';
-            btn.style.color = 'var(--text-dim)';
-        }
+        btn.classList.toggle('active', btn.dataset.preset === preset);
     });
 
     updateDescriptions();

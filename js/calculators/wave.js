@@ -4,11 +4,11 @@
  */
 
 import { createCache, partialShuffle, formatNumber, debounce } from '../utils/simulation.js';
-import { renderMultiColumnTable } from '../utils/tableUtils.js';
 import { createOrUpdateChart } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { renderHeroStats, renderRecommendation, renderInsightBox, renderVerdictBadge, renderSweepTable, pBarCell, generateSampleRevealsHTML } from '../utils/components.js';
+import { efficiencyVerdict, formatDelta, deltaColor, recommendKneeX } from '../utils/analysis.js';
 import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
 
 import {
@@ -256,24 +256,24 @@ function updateChart(config, results) {
                 {
                     label: 'Expected Permanents',
                     data: expectedPermsData,
-                    borderColor: '#38bdf8',
-                    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                    borderColor: '#7d8a92',
+                    backgroundColor: 'rgba(125, 138, 146, 0.2)',
                     fill: true,
                     tension: 0.3,
                     pointRadius: xValues.map(x => x === config.x ? 8 : 4),
-                    pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#38bdf8'),
+                    pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#7d8a92'),
                     yAxisID: 'y'
                 },
                 {
                     label: 'Hit Rate %',
                     data: efficiencyData,
-                    borderColor: '#22c55e',
+                    borderColor: '#55c97f',
                     backgroundColor: 'transparent',
                     borderDash: [5, 5],
                     fill: false,
                     tension: 0.3,
                     pointRadius: xValues.map(x => x === config.x ? 6 : 3),
-                    pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#22c55e'),
+                    pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#55c97f'),
                     yAxisID: 'y2'
                 }
             ]
@@ -284,25 +284,25 @@ function updateChart(config, results) {
                     type: 'linear',
                     position: 'left',
                     beginAtZero: true,
-                    title: { display: true, text: 'Expected Permanents', color: '#38bdf8' },
-                    grid: { color: 'rgba(14, 165, 233, 0.2)' },
-                    ticks: { color: '#38bdf8' }
+                    title: { display: true, text: 'Expected Permanents', color: '#7d8a92' },
+                    grid: { color: 'rgba(240, 169, 44, 0.2)' },
+                    ticks: { color: '#7d8a92' }
                 },
                 y2: {
                     type: 'linear',
                     position: 'right',
                     beginAtZero: true,
                     max: 100,
-                    title: { display: true, text: 'Hit Rate %', color: '#22c55e' },
+                    title: { display: true, text: 'Hit Rate %', color: '#55c97f' },
                     grid: { drawOnChartArea: false },
                     ticks: {
-                        color: '#22c55e',
+                        color: '#55c97f',
                         callback: value => value + '%'
                     }
                 },
                 x: {
-                    grid: { color: 'rgba(14, 165, 233, 0.2)' },
-                    ticks: { color: '#a09090' }
+                    grid: { color: 'rgba(240, 169, 44, 0.2)' },
+                    ticks: { color: '#808b85' }
                 }
             },
             plugins: {
@@ -323,81 +323,81 @@ function updateChart(config, results) {
 }
 
 /**
- * Update comparison table
+ * Compute expected permanents across the full practical X range, for the sweep
+ * table and the diminishing-returns recommendation.
+ * @returns {Array<{x:number, value:number, efficiency:number}>}
  */
-function updateTable(config, results) {
-    const xValues = Object.keys(results).map(Number).sort((a, b) => a - b);
-    const currentResult = results[config.x];
+function computeSweep(config) {
+    const maxX = Math.min(config.deckSize, 20);
+    const sweep = [];
+    for (let x = 1; x <= maxX; x++) {
+        const sim = simulateGenesisWave(config.deckSize, config.distribution, x);
+        sweep.push({ x, value: sim.expectedPermanents, efficiency: x > 0 ? sim.expectedPermanents / x : 0 });
+    }
+    return sweep;
+}
 
-    const headers = ['X', 'Cards Revealed', 'Expected Perms', 'Δ Perms', 'Efficiency'];
-    
-    const rows = xValues.map(x => {
-        const r = results[x];
-        const deltaPerms = r.expectedPermanents - currentResult.expectedPermanents;
-        const efficiency = (r.expectedPermanents / r.cardsRevealed) * 100;
-        const isBaseline = x === config.x;
-        const deltaClass = deltaPerms > 0.01 ? 'marginal-positive' : (deltaPerms < -0.01 ? 'marginal-negative' : '');
+/**
+ * Render the X-sweep step-response table.
+ */
+function updateTable(config) {
+    const sweep = computeSweep(config);
+    const knee = recommendKneeX(sweep.map(p => ({ x: p.x, value: p.efficiency })), { fraction: 0.92 });
+    const recommended = knee ? knee.x : null;
 
-        return {
-            cells: [
-                x,
-                r.cardsRevealed,
-                formatNumber(r.expectedPermanents),
-                { value: isBaseline ? '-' : (deltaPerms >= 0 ? '+' : '') + formatNumber(deltaPerms), class: deltaClass },
-                formatNumber(efficiency, 1) + '%'
-            ],
-            class: isBaseline ? 'current' : ''
-        };
+    let prev = null;
+    const rows = sweep.map(p => {
+        const delta = prev != null ? p.value - prev : null;
+        prev = p.value;
+        return { ...p, delta };
     });
 
-    renderMultiColumnTable('wave-comparisonTable', headers, rows, {
-        highlightRowIndex: xValues.indexOf(config.x)
+    renderSweepTable('wave-comparisonTable', {
+        current: config.x,
+        recommended,
+        rows,
+        columns: [
+            { label: 'X', align: 'left', render: r => `${r.x}` },
+            { label: 'E[PERMS]', render: r => `<span style="color:var(--tx-blue);">${formatNumber(r.value, 2)}</span>` },
+            { label: 'HIT RATE', align: 'left', render: r => pBarCell(r.efficiency, 'var(--tx-green)') },
+            { label: '%', render: r => `<span style="color:var(--tx-green);">${(r.efficiency * 100).toFixed(0)}%</span>` },
+            { label: 'Δ PERMS', render: r => r.delta == null ? '—' : `<span style="color:${deltaColor(r.delta, 0.01)};">${formatDelta(r.delta, 2)}</span>` },
+            { label: 'VERDICT', render: r => { const v = efficiencyVerdict(r.efficiency); return `<span style="color:${v.color}; font-weight:600; letter-spacing:0.06em;">${v.label}</span>`; } }
+        ]
     });
 }
 
 /**
- * Update stats panel with current X analysis using standard components
+ * Render hero numerics + verdict + recommendation for the current X.
  */
 function updateStats(config, results) {
     const statsPanel = document.getElementById('wave-stats');
     const currentResult = results[config.x];
+    if (!statsPanel || !currentResult) return;
 
-    if (statsPanel && currentResult) {
-        const efficiency = (currentResult.expectedPermanents / currentResult.cardsRevealed) * 100;
-        const totalPerms = config.deckSize - config.cmcCounts.nonperm;
-        const permPercent = (totalPerms / config.deckSize) * 100;
+    const eperms = currentResult.expectedPermanents;
+    const efficiency = config.x > 0 ? eperms / config.x : 0;
+    const totalPerms = config.totalPerms ?? (config.deckSize - config.cmcCounts.nonperm);
+    const permPercent = config.deckSize > 0 ? (totalPerms / config.deckSize) * 100 : 0;
+    const next = results[config.x + 1];
+    const marginal = next ? next.expectedPermanents - eperms : null;
+    const verdict = efficiencyVerdict(efficiency);
 
-        // Create interpretation message
-        let interpretation, color;
-        if (efficiency >= 70) {
-            interpretation = `<strong style="color: #22c55e;">Excellent!</strong> Very efficient conversion rate.`;
-            color = '#22c55e';
-        } else if (efficiency >= 60) {
-            interpretation = `<strong style="color: #38bdf8;">Good!</strong> Solid permanent density.`;
-            color = '#38bdf8';
-        } else if (efficiency >= 50) {
-            interpretation = `<strong style="color: #f59e0b;">Decent.</strong> Consider adding more permanents.`;
-            color = '#f59e0b';
-        } else {
-            interpretation = `<strong style="color: #dc2626;">Low efficiency.</strong> Too many instants/sorceries.`;
-            color = '#dc2626';
-        }
+    const hero = renderHeroStats([
+        { label: 'E[PERMANENTS]', value: formatNumber(eperms, 1), sub: `at X=${config.x}`, color: 'var(--tx-blue)', size: 'big' },
+        { label: 'HIT RATE', value: formatNumber(efficiency * 100, 0) + '%', sub: 'reveals that stick', color: 'var(--tx-green)' },
+        { label: 'DECK PERMANENTS', value: totalPerms, sub: `${formatNumber(permPercent, 0)}% of library`, color: 'var(--tx-amber)' },
+        { label: 'MARGINAL +1X', value: marginal != null ? formatDelta(marginal, 2) : '—', sub: 'extra perms per card', color: marginal != null ? deltaColor(marginal, 0.001) : 'var(--tx-dim)' }
+    ]);
 
-        const cardsHTML = [
-            renderStatCard('Cards Revealed', currentResult.cardsRevealed, `at X=${config.x}`),
-            renderStatCard('Expected Perms', formatNumber(currentResult.expectedPermanents, 1), 'played for free', '#38bdf8'),
-            renderStatCard('Efficiency', formatNumber(efficiency, 1) + '%', 'hits are permanents', '#22c55e'),
-            renderStatCard('Deck Composition', totalPerms, `${formatNumber(permPercent, 0)}% permanents`, '#f59e0b')
-        ];
+    const knee = recommendKneeX(computeSweep(config).map(p => ({ x: p.x, value: p.efficiency })), { fraction: 0.92 });
+    const rec = knee
+        ? renderRecommendation(`Efficient cast at <strong>X=${knee.x}</strong> (~${(knee.value * 100).toFixed(0)}% hit rate). Past that, extra mana mostly reveals cards you'd already expect to hit.`)
+        : '';
 
-        const footer = `• Average ${formatNumber(currentResult.expectedPermanents, 1)} permanents per cast<br>• Reveals ${currentResult.cardsRevealed} cards (${formatNumber((currentResult.cardsRevealed / config.deckSize) * 100, 1)}% of deck)`;
+    const insight = renderInsightBox('', `Genesis Wave at X=${config.x} reveals ${config.x} cards and expects <strong style="color:var(--tx-blue);">${formatNumber(eperms, 1)}</strong> permanents to the battlefield. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
 
-        statsPanel.innerHTML = `
-            ${renderInsightBox(`🌊 Genesis Wave X=${config.x} Analysis`, '', '')}
-            ${renderStatsGrid(cardsHTML)}
-            ${renderInsightBox('', interpretation, footer)}
-        `;
-    }
+    statsPanel.innerHTML = hero + rec + insight;
 }
 
 // ... (updateComparison and runSampleReveals remain unchanged) ...
@@ -517,8 +517,10 @@ export function runSampleReveals() {
     const avgPermanents = (totalPermanents / numSims).toFixed(2);
     const avgPercent = ((avgPermanents / config.x) * 100).toFixed(1);
 
-    let distributionHTML = '<div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: var(--panel-bg-alt); border-radius: var(--radius-md);">';
-    distributionHTML += '<h4 style="margin-top: 0;">Permanent Distribution:</h4>';
+    let distributionHTML = '<div class="tx-sim">';
+    distributionHTML += '<div class="tx-h"><span>Permanents — distribution</span></div>';
+    distributionHTML += '<div class="tx-sim-block">';
+
     distributionHTML += renderDistributionChart(
         permanentDistribution,
         numSims,
@@ -526,7 +528,7 @@ export function runSampleReveals() {
         (idx) => (idx === config.x && permanentDistribution[idx] > 0) ? ' ← 100% HITS' : ''
     );
 
-    distributionHTML += `<div style="margin-top: var(--spacing-md); text-align: center;">`;
+    distributionHTML += '</div><div class="tx-sim-block">';
     distributionHTML += `<strong>Average permanents:</strong> ${avgPermanents} out of ${config.x} revealed (${avgPercent}%)`;
     distributionHTML += '</div></div>';
 
@@ -591,14 +593,14 @@ export function runSampleReveals() {
                 const cmc = card.cmc !== undefined ? card.cmc : 0;
 
                 let bgColor = '';
-                let textColor = '#fff';
+                let textColor = '#0a0b0a';
                 if (!hasPermanentType) {
-                    bgColor = '#3b82f6';
+                    bgColor = '#5b8db8';
                 } else if (cmc <= config.x) {
-                    bgColor = '#22c55e';
-                    textColor = '#000';
+                    bgColor = '#55c97f';
+                    textColor = '#0a0b0a';
                 } else {
-                    bgColor = '#dc2626';
+                    bgColor = '#e8635c';
                 }
 
                 html += `<span class="reveal-card" style="background: ${bgColor}; color: ${textColor};" title="${card.type_line} - CMC: ${cmc}">${card.name}</span>`;
@@ -659,7 +661,7 @@ export function updateUI() {
 
     updateChart(config, results);
     updateStats(config, results);
-    updateTable(config, results);
+    updateTable(config);
     updateComparison(config, results);
 
     // Update big spell comparison

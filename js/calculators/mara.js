@@ -10,7 +10,7 @@
 
 import { createCache } from '../utils/simulation.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderStatCard, renderStatsGrid, generateSampleRevealsHTML } from '../utils/components.js';
+import { renderHeroStats, generateSampleRevealsHTML } from '../utils/components.js';
 import { shuffleDeck, renderCardBadge, createCollapsibleSection, TYPE_COLORS, buildDeckFromCardData } from '../utils/sampleSimulator.js';
 import * as OpponentState from '../utils/opponentState.js';
 
@@ -38,7 +38,7 @@ const renderedCounts = {
 /**
  * Render a compact horizontal bar chart (no gaps, shows all values)
  */
-function renderCompactChart(data, totalSims, labelFn, barColor = '#ef4444', labelWidth = 28) {
+function renderCompactChart(data, totalSims, labelFn, barColor = '#e8635c', labelWidth = 28) {
     let html = '<div class="compact-dist-chart" style="display: flex; flex-direction: column; gap: 2px;">';
 
     for (let i = 0; i < data.length; i++) {
@@ -230,23 +230,11 @@ function renderResults() {
 
     // Summary section
     if (allStats.length > 0) {
-        html += `
-            <div class="summary-stats-box">
-                <h3>Summary: Your Expected Gains</h3>
-                <div class="summary-stats-grid">
-                    <div class="summary-stat purple">
-                        <div class="stat-label">If All Choose Free Cast</div>
-                        <div class="stat-value">${totalFreeCastCMC.toFixed(1)}</div>
-                        <div class="stat-unit">total CMC value</div>
-                    </div>
-                    <div class="summary-stat red">
-                        <div class="stat-label">If All Choose Damage</div>
-                        <div class="stat-value">${totalDamage.toFixed(1)}</div>
-                        <div class="stat-unit">damage total</div>
-                    </div>
-                </div>
-            </div>
-        `;
+        html += `<div class="tx-h"><span>SUMMARY · EXPECTED GAINS</span><span class="tx-h-r">across ${allStats.length} opponent${allStats.length > 1 ? 's' : ''}</span></div>`;
+        html += renderHeroStats([
+            { label: 'IF ALL FREE CAST', value: totalFreeCastCMC.toFixed(1), sub: 'total CMC value', color: 'var(--tx-mid)', size: 'big' },
+            { label: 'IF ALL DEAL DAMAGE', value: totalDamage.toFixed(1), sub: 'damage total', color: 'var(--tx-red)', size: 'big' }
+        ]);
     }
 
     // Individual opponent results
@@ -254,7 +242,7 @@ function renderResults() {
         html += `
             <div class="opponent-results">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-sm);">
-                    <h3 style="color: var(--mara-primary, #dc2626);">${data.name}</h3>
+                    <h3 style="color: var(--mara-primary, #e8635c);">${data.name}</h3>
                     <span style="color: var(--text-dim); font-size: 0.85em;">${stats.deckSize} cards</span>
                 </div>
 
@@ -262,7 +250,7 @@ function renderResults() {
                     <div class="choice-card choice-purple">
                         <div class="choice-label">Choice 1: Free Cast</div>
                         <div style="display: flex; gap: var(--spacing-md); flex-wrap: wrap;">
-                            <div><span style="font-size: 1.3em; font-weight: bold; color: #a855f7;">${stats.choice1.avgCMC.toFixed(1)}</span> <span style="font-size: 0.75em; color: var(--text-dim);">avg CMC</span></div>
+                            <div><span style="font-size: 1.3em; font-weight: bold; color: #9878b8;">${stats.choice1.avgCMC.toFixed(1)}</span> <span style="font-size: 0.75em; color: var(--text-dim);">avg CMC</span></div>
                             <div><span style="font-size: 1.3em; font-weight: bold;">${stats.choice1.avgExiled.toFixed(1)}</span> <span style="font-size: 0.75em; color: var(--text-dim);">cards exiled</span></div>
                             <div><span style="font-size: 1.3em; font-weight: bold;">${stats.choice1.pct5Plus.toFixed(0)}%</span> <span style="font-size: 0.75em; color: var(--text-dim);">CMC 5+</span></div>
                         </div>
@@ -271,7 +259,7 @@ function renderResults() {
                     <div class="choice-card choice-red">
                         <div class="choice-label">Choice 2: Damage</div>
                         <div style="display: flex; gap: var(--spacing-md); flex-wrap: wrap;">
-                            <div><span style="font-size: 1.3em; font-weight: bold; color: #ef4444;">${stats.choice2.avgDamage.toFixed(1)}</span> <span style="font-size: 0.75em; color: var(--text-dim);">avg dmg</span></div>
+                            <div><span style="font-size: 1.3em; font-weight: bold; color: #e8635c;">${stats.choice2.avgDamage.toFixed(1)}</span> <span style="font-size: 0.75em; color: var(--text-dim);">avg dmg</span></div>
                             <div><span style="font-size: 1.3em; font-weight: bold;">${stats.choice2.minDamage}-${stats.choice2.maxDamage}</span> <span style="font-size: 0.75em; color: var(--text-dim);">range</span></div>
                         </div>
                     </div>
@@ -364,29 +352,29 @@ export function runSampleReveals() {
         const avgDamage = (totalChoice2Damage / numSims).toFixed(1);
 
         // Build UI
-        let oppHTML = `<div style="margin-bottom: var(--spacing-lg); padding: var(--spacing-md); background: var(--panel-bg-alt); border-radius: var(--radius-md); border: 1px solid var(--glass-border);">`;
-        oppHTML += `<h4 style="margin-top: 0; color: var(--mara-primary, #dc2626);">${data.name}</h4>`;
+        let oppHTML = `<div class="tx-opp-card">`;
+        oppHTML += `<h4 style="margin-top: 0; color: var(--mara-primary, #e8635c);">${data.name}</h4>`;
 
         // Stats summary
         oppHTML += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); margin-bottom: var(--spacing-md);">`;
-        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(168, 85, 247, 0.1); border-radius: var(--radius-sm);">`;
+        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(152, 120, 184, 0.1); border-radius: var(--radius-sm);">`;
         oppHTML += `<small style="color: var(--text-dim);">Avg Free Spell CMC</small><br>`;
-        oppHTML += `<strong style="color: #a855f7; font-size: 1.4em;">${avgCMC}</strong>`;
+        oppHTML += `<strong style="color: #9878b8; font-size: 1.4em;">${avgCMC}</strong>`;
         oppHTML += `</div>`;
-        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(239, 68, 68, 0.1); border-radius: var(--radius-sm);">`;
+        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(232, 99, 92, 0.1); border-radius: var(--radius-sm);">`;
         oppHTML += `<small style="color: var(--text-dim);">Avg Damage (Top 4)</small><br>`;
-        oppHTML += `<strong style="color: #ef4444; font-size: 1.4em;">${avgDamage}</strong>`;
+        oppHTML += `<strong style="color: #e8635c; font-size: 1.4em;">${avgDamage}</strong>`;
         oppHTML += `</div></div>`;
 
         // Distribution charts
         oppHTML += `<div style="margin-bottom: var(--spacing-md);">`;
-        oppHTML += `<h5 style="margin: 0 0 var(--spacing-sm) 0; color: #a855f7;">Choice 1: Free Spell CMC</h5>`;
-        oppHTML += renderCompactChart(cmcDistArray, numSims, (idx) => `${idx}`, '#a855f7');
+        oppHTML += `<h5 style="margin: 0 0 var(--spacing-sm) 0; color: #9878b8;">Choice 1: Free Spell CMC</h5>`;
+        oppHTML += renderCompactChart(cmcDistArray, numSims, (idx) => `${idx}`, '#9878b8');
         oppHTML += `</div>`;
 
         oppHTML += `<div style="margin-bottom: var(--spacing-md);">`;
-        oppHTML += `<h5 style="margin: 0 0 var(--spacing-sm) 0; color: #f87171;">Choice 2: Damage</h5>`;
-        oppHTML += renderCompactChart(damageBins, numSims, (idx) => damageBinLabels[idx] || `${idx}`, '#ef4444', 36);
+        oppHTML += `<h5 style="margin: 0 0 var(--spacing-sm) 0; color: #e8635c;">Choice 2: Damage</h5>`;
+        oppHTML += renderCompactChart(damageBins, numSims, (idx) => damageBinLabels[idx] || `${idx}`, '#e8635c', 36);
         oppHTML += `</div>`;
 
         // Sample list
@@ -423,7 +411,7 @@ export function runSampleReveals() {
                 const revealHtml = revealedCards.map(card => renderCardBadge(card)).join(' ');
 
                 const top4Html = c2.cards.map(card =>
-                    `<span class="cmc-badge" style="background: ${card.types.includes('land') ? TYPE_COLORS.land : 'var(--mara-primary, #dc2626)'};">${card.cmc}</span>`
+                    `<span class="cmc-badge" style="background: ${card.types.includes('land') ? TYPE_COLORS.land : 'var(--mara-primary, #e8635c)'};">${card.cmc}</span>`
                 ).join(' ');
 
                 const isGoodCast = c1.spellCMC >= 4;
@@ -431,7 +419,7 @@ export function runSampleReveals() {
                 html += `<div class="sample-reveal ${isGoodCast ? 'free-spell' : 'whiff'}" style="padding: var(--spacing-sm); margin-bottom: var(--spacing-xs); background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); font-size: 0.85em;">`;
                 html += `<div style="margin-bottom: var(--spacing-xs);"><strong>Sample ${i + 1}:</strong></div>`;
                 html += `<div style="margin-bottom: var(--spacing-xs);">`;
-                html += `<span style="color: #a855f7; font-weight: 600;">C1:</span> ${revealHtml}`;
+                html += `<span style="color: #9878b8; font-weight: 600;">C1:</span> ${revealHtml}`;
                 html += c1.spellName
                     ? ` → <span style="color: var(--success); font-weight: 600;">${c1.spellName}</span> <span style="color: var(--text-dim);">(${c1.spellCMC} CMC)</span>`
                     : ` → <span style="color: var(--danger);">All lands!</span>`;

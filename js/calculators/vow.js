@@ -5,11 +5,11 @@
  */
 
 import { createCache, partialShuffle, formatNumber } from '../utils/simulation.js';
-import { renderMultiColumnTable } from '../utils/tableUtils.js';
 import { createOrUpdateChart } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderStatCard, renderStatsGrid, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
+import { renderHeroStats, renderRecommendation, renderInsightBox, renderVerdictBadge, renderSweepTable, pBarCell, generateSampleRevealsHTML } from '../utils/components.js';
+import { efficiencyVerdict, formatDelta, deltaColor, recommendKneeX } from '../utils/analysis.js';
 import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
 
 import {
@@ -113,8 +113,8 @@ function getCardDisplayStyle(analysis, cardTypeLine) {
     // Color 1: Lands (green) - always hit
     if (isLand) {
         return {
-            bgColor: '#22c55e',
-            textColor: '#000',
+            bgColor: '#55c97f',
+            textColor: '#0a0b0a',
             tooltip: `${baseTooltip} (Land → battlefield)`
         };
     }
@@ -122,8 +122,8 @@ function getCardDisplayStyle(analysis, cardTypeLine) {
     // Color 2: Legends that hit (cyan/blue) - legendary permanents with CMC ≤ X
     if (isLegendary && isPermanent && matchesX) {
         return {
-            bgColor: '#3b82f6',
-            textColor: '#fff',
+            bgColor: '#5b8db8',
+            textColor: '#0a0b0a',
             tooltip: `${baseTooltip} (Legendary + CMC ≤ X → battlefield)`
         };
     }
@@ -131,16 +131,16 @@ function getCardDisplayStyle(analysis, cardTypeLine) {
     // Color 3: Legends that missed (yellow/orange) - legendary permanents with CMC > X
     if (isLegendary && isPermanent && !matchesX) {
         return {
-            bgColor: '#f59e0b',
-            textColor: '#000',
+            bgColor: '#f0a92c',
+            textColor: '#0a0b0a',
             tooltip: `${baseTooltip} (Legendary but CMC > X → graveyard)`
         };
     }
 
     // Color 4: Non-legends (gray/red) - everything else
     return {
-        bgColor: '#6b7280',
-        textColor: '#fff',
+        bgColor: '#808b85',
+        textColor: '#0a0b0a',
         tooltip: `${baseTooltip} (Non-legendary → graveyard)`
     };
 }
@@ -401,23 +401,23 @@ function updateChart(config, results) {
                 {
                     label: 'Expected Hits',
                     data: expectedHitsData,
-                    borderColor: '#22c55e',
-                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    borderColor: '#55c97f',
+                    backgroundColor: 'rgba(85, 201, 127, 0.1)',
                     fill: false,
                     tension: 0.3,
                     pointRadius: xValues.map(x => x === config.x ? 8 : 4),
-                    pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#22c55e'),
+                    pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#55c97f'),
                     yAxisID: 'y'
                 },
                 {
                     label: 'Cards Revealed',
                     data: cardsRevealedData,
-                    borderColor: '#38bdf8',
-                    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                    borderColor: '#7d8a92',
+                    backgroundColor: 'rgba(125, 138, 146, 0.1)',
                     fill: false,
                     tension: 0.3,
                     pointRadius: xValues.map(x => x === config.x ? 8 : 4),
-                    pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#38bdf8'),
+                    pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#7d8a92'),
                     yAxisID: 'y'
                 }
             ]
@@ -427,13 +427,13 @@ function updateChart(config, results) {
                 y: {
                     type: 'linear',
                     beginAtZero: true,
-                    title: { display: true, text: 'Count', color: '#22c55e' },
-                    grid: { color: 'rgba(34, 197, 94, 0.1)' },
-                    ticks: { color: '#22c55e', stepSize: 1 }
+                    title: { display: true, text: 'Count', color: '#55c97f' },
+                    grid: { color: 'rgba(85, 201, 127, 0.1)' },
+                    ticks: { color: '#55c97f', stepSize: 1 }
                 },
                 x: {
-                    grid: { color: 'rgba(160, 144, 144, 0.1)' },
-                    ticks: { color: '#a09090' }
+                    grid: { color: 'rgba(128, 139, 133, 0.1)' },
+                    ticks: { color: '#808b85' }
                 }
             },
             plugins: {
@@ -448,40 +448,54 @@ function updateChart(config, results) {
 }
 
 /**
- * Update comparison table
+ * Compute expected hits across the full practical X range for the sweep table and
+ * the diminishing-returns recommendation.
+ * @returns {Array<{x:number, value:number, efficiency:number, cardsRevealed:number}>}
  */
-function updateTable(config, results) {
-    const xValues = Object.keys(results).map(Number).sort((a, b) => a - b);
-    const currentResult = results[config.x];
+function computeSweep(config) {
+    const multiplier = config.doubleCast ? 2 : 1;
+    const maxX = Math.min(config.deckSize, 20);
+    const sweep = [];
+    for (let x = 1; x <= maxX; x++) {
+        const sim = simulateVow(config.deckSize, config.distribution, x, config.doubleCast, config.cardData);
+        const cardsRevealed = x * multiplier;
+        sweep.push({ x, value: sim.expectedHits, cardsRevealed, efficiency: cardsRevealed > 0 ? sim.expectedHits / cardsRevealed : 0 });
+    }
+    return sweep;
+}
 
-    const headers = ['X', 'Cards Revealed', 'Expected Hits', 'Δ Hits', 'Hit Rate'];
-    
-    const rows = xValues.map(x => {
-        const r = results[x];
-        const delta = r.expectedHits - currentResult.expectedHits;
-        const rate = (r.expectedHits / r.cardsRevealed) * 100;
-        const isBaseline = x === config.x;
-        const deltaClass = delta > 0.01 ? 'marginal-positive' : (delta < -0.01 ? 'marginal-negative' : '');
+/**
+ * Render the X-sweep step-response table.
+ */
+function updateTable(config) {
+    const sweep = computeSweep(config);
+    const knee = recommendKneeX(sweep.map(p => ({ x: p.x, value: p.efficiency })), { fraction: 0.92 });
+    const recommended = knee ? knee.x : null;
 
-        return {
-            cells: [
-                x,
-                r.cardsRevealed,
-                formatNumber(r.expectedHits),
-                { value: isBaseline ? '-' : (delta >= 0 ? '+' : '') + formatNumber(delta), class: deltaClass },
-                formatNumber(rate, 1) + '%'
-            ],
-            class: isBaseline ? 'current' : ''
-        };
+    let prev = null;
+    const rows = sweep.map(p => {
+        const delta = prev != null ? p.value - prev : null;
+        prev = p.value;
+        return { ...p, delta };
     });
 
-    renderMultiColumnTable('vow-comparisonTable', headers, rows, {
-        highlightRowIndex: xValues.indexOf(config.x)
+    renderSweepTable('vow-comparisonTable', {
+        current: config.x,
+        recommended,
+        rows,
+        columns: [
+            { label: 'X', align: 'left', render: r => `${r.x}` },
+            { label: 'E[HITS]', render: r => `<span style="color:var(--tx-green);">${formatNumber(r.value, 2)}</span>` },
+            { label: 'HIT RATE', align: 'left', render: r => pBarCell(r.efficiency, 'var(--tx-green)') },
+            { label: '%', render: r => `<span style="color:var(--tx-green);">${(r.efficiency * 100).toFixed(0)}%</span>` },
+            { label: 'Δ HITS', render: r => r.delta == null ? '—' : `<span style="color:${deltaColor(r.delta, 0.01)};">${formatDelta(r.delta, 2)}</span>` },
+            { label: 'VERDICT', render: r => { const v = efficiencyVerdict(r.efficiency); return `<span style="color:${v.color}; font-weight:600; letter-spacing:0.06em;">${v.label}</span>`; } }
+        ]
     });
 }
 
 /**
- * Update stats panel
+ * Render hero numerics + verdict + recommendation for the current X.
  */
 function updateStats(config, results) {
     const statsPanel = document.getElementById('vow-stats');
@@ -494,68 +508,30 @@ function updateStats(config, results) {
         warningPanel.style.display = hasImport ? 'none' : 'block';
     }
 
-    if (statsPanel && currentResult) {
-        const legendaryPercent = config.totalPermanents > 0 ? (config.totalLegendaries / config.totalPermanents) * 100 : 0;
+    if (!statsPanel || !currentResult) return;
 
-        // Use values already calculated by simulateVow() - no redundant calculations
-        const expectedLands = currentResult.expectedLands;
-        const expectedLegends = currentResult.expectedLegends;
+    const legendaryPercent = config.totalPermanents > 0 ? (config.totalLegendaries / config.totalPermanents) * 100 : 0;
+    const cardsRevealed = currentResult.cardsRevealed;
+    const efficiency = cardsRevealed > 0 ? currentResult.expectedHits / cardsRevealed : 0;
+    const next = results[config.x + 1];
+    const marginal = next ? next.expectedHits - currentResult.expectedHits : null;
+    const verdict = efficiencyVerdict(efficiency);
 
-        // Create interpretation message
-        let interpretation, color;
-        if (legendaryPercent >= 40) {
-            interpretation = `<strong style="color: #22c55e;">Excellent!</strong> High legendary density.`;
-            color = '#22c55e';
-        } else if (legendaryPercent >= 25) {
-            interpretation = `<strong style="color: #38bdf8;">Good!</strong> Solid legendary synergy.`;
-            color = '#38bdf8';
-        } else if (legendaryPercent >= 15) {
-            interpretation = `<strong style="color: #f59e0b;">Decent.</strong> Consider adding more legends.`;
-            color = '#f59e0b';
-        } else {
-            interpretation = `<strong style="color: #dc2626;">Low legendary density.</strong> Mostly likely just hitting lands.`;
-            color = '#dc2626';
-        }
+    const hero = renderHeroStats([
+        { label: 'E[HITS]', value: formatNumber(currentResult.expectedHits, 1), sub: `land + legend${config.doubleCast ? ' · 2×' : ''}`, color: 'var(--tx-green)', size: 'big' },
+        { label: 'E[LANDS]', value: formatNumber(currentResult.expectedLands, 1), sub: 'ramp onto field', color: 'var(--tx-amber)' },
+        { label: 'E[LEGENDS]', value: formatNumber(currentResult.expectedLegends, 1), sub: 'CMC ≤ X', color: 'var(--tx-blue)' },
+        { label: 'MARGINAL +1X', value: marginal != null ? formatDelta(marginal, 2) : '—', sub: 'extra hits', color: marginal != null ? deltaColor(marginal, 0.001) : 'var(--tx-dim)' }
+    ]);
 
-        // Marginal value analysis with detailed breakdown
-        const formatMarginal = (compareResult, baseResult) => {
-            if (!compareResult || !baseResult) return '<span style="color: var(--text-dim);">N/A</span>';
+    const knee = recommendKneeX(computeSweep(config).map(p => ({ x: p.x, value: p.efficiency })), { fraction: 0.92 });
+    const rec = knee
+        ? renderRecommendation(`Efficient cast at <strong>X=${knee.x}</strong> (~${(knee.value * 100).toFixed(0)}% hit rate). ${config.totalLegendaries} legendary permanents and ${formatNumber(legendaryPercent, 0)}% legendary density in the pile.`)
+        : '';
 
-            const hitsDiff = compareResult.expectedHits - baseResult.expectedHits;
-            const landsDiff = compareResult.expectedLands - baseResult.expectedLands;
-            const legendsDiff = compareResult.expectedLegends - baseResult.expectedLegends;
-            const mvDiff = compareResult.expectedManaValue - baseResult.expectedManaValue;
+    const insight = renderInsightBox('', `Kamahl's Druidic Vow at X=${config.x} reveals ${cardsRevealed} cards and expects <strong style="color:var(--tx-green);">${formatNumber(currentResult.expectedHits, 1)}</strong> lands + legends onto the battlefield. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
 
-            const hitsColor = hitsDiff > 0 ? '#22c55e' : '#dc2626';
-            const landsColor = landsDiff > 0 ? '#22c55e' : '#dc2626';
-            const legendsColor = legendsDiff > 0 ? '#3b82f6' : '#dc2626';
-
-            let result = `<span style="color: ${hitsColor};">${hitsDiff >= 0 ? '+' : ''}${formatNumber(hitsDiff, 2)}</span> total hits`;
-            result += ` (<span style="color: ${landsColor};">${landsDiff >= 0 ? '+' : ''}${formatNumber(landsDiff, 2)}</span> lands`;
-            result += `, <span style="color: ${legendsColor};">${legendsDiff >= 0 ? '+' : ''}${formatNumber(legendsDiff, 2)}</span> legends`;
-            result += `, <span style="color: ${hitsColor};">${mvDiff >= 0 ? '+' : ''}${formatNumber(mvDiff, 1)}</span> MV)`;
-
-            return result;
-        };
-
-        const marginalUp = formatMarginal(results[config.x + 1], currentResult);
-        const marginalDown = formatMarginal(results[config.x - 1], currentResult);
-
-        const cardsHTML = [
-            renderStatCard('Expected Lands', formatNumber(expectedLands, 1), `at X=${config.x}${config.doubleCast ? ' (2×)' : ''}`, '#22c55e'),
-            renderStatCard('Expected Legends', formatNumber(expectedLegends, 1), 'CMC ≤ X', '#3b82f6'),
-            renderStatCard('Total Expected Hits', formatNumber(currentResult.expectedHits, 1), 'Land/Legendary', '#10b981'),
-            renderStatCard('Legendary Density', formatNumber(legendaryPercent, 0) + '%', 'of permanents', '#f59e0b')
-        ];
-
-        const footer = `<strong>Marginal Value:</strong><br>• X=${config.x + 1}: ${marginalUp}<br>• X=${config.x - 1}: ${marginalDown}<br><br>• Valid hits: Lands AND Legendary Permanents (CMC <= X)<br>• ${config.totalLegendaries} Legendary Permanents in deck`;
-
-        statsPanel.innerHTML = `
-            ${renderInsightBox(`🌱 Kamahl's Druidic Vow X=${config.x}`, '', '')}
-            ${renderStatsGrid(cardsHTML)}
-            ${renderInsightBox('', interpretation, footer)}
-        `;
-    }
+    statsPanel.innerHTML = hero + rec + insight;
 }
 
 /**
@@ -627,26 +603,28 @@ export function runSampleReveals() {
 
     // Add color legend
     let legendHTML = '<div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: var(--spacing-md); padding: var(--spacing-sm); background: var(--panel-bg); border-radius: var(--radius-md); font-size: 0.9em;">';
-    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #22c55e; border-radius: 3px; display: inline-block;"></span>Lands</span>';
-    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #3b82f6; border-radius: 3px; display: inline-block;"></span>Legends (Hit)</span>';
-    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #f59e0b; border-radius: 3px; display: inline-block;"></span>Legends (Miss)</span>';
-    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #6b7280; border-radius: 3px; display: inline-block;"></span>Non-Legends</span>';
+    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #55c97f; border-radius: 3px; display: inline-block;"></span>Lands</span>';
+    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #5b8db8; border-radius: 3px; display: inline-block;"></span>Legends (Hit)</span>';
+    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #f0a92c; border-radius: 3px; display: inline-block;"></span>Legends (Miss)</span>';
+    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #808b85; border-radius: 3px; display: inline-block;"></span>Non-Legends</span>';
     legendHTML += '</div>';
 
-    let distributionHTML = '<div style="margin-top: var(--spacing-md); padding: var(--spacing-md); background: var(--panel-bg-alt); border-radius: var(--radius-md);">';
-    distributionHTML += '<h4 style="margin-top: 0;">Hit Distribution:</h4>';
+    let distributionHTML = '<div class="tx-sim">';
+    distributionHTML += '<div class="tx-h"><span>Hits — distribution</span></div>';
+    distributionHTML += '<div class="tx-sim-block">';
+
     distributionHTML += renderDistributionChart(
         hitDistribution,
         numSims,
         (count) => `${count.toString().padStart(2)} hits`,
         () => ''
     );
-    distributionHTML += `<div style="margin-top: var(--spacing-md);">`;
+    distributionHTML += '</div><div class="tx-sim-block">';
     distributionHTML += `<div style="text-align: center; margin-bottom: var(--spacing-sm);"><strong>Average Results (${numSims} simulations):</strong></div>`;
     distributionHTML += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--spacing-sm); font-size: 0.9em;">`;
     distributionHTML += `<div><strong>Total Hits:</strong> ${avgHits}</div>`;
-    distributionHTML += `<div><strong>Lands:</strong> <span style="color: #22c55e;">${avgLands}</span></div>`;
-    distributionHTML += `<div><strong>Legends:</strong> <span style="color: #3b82f6;">${avgLegends}</span></div>`;
+    distributionHTML += `<div><strong>Lands:</strong> <span style="color: #55c97f;">${avgLands}</span></div>`;
+    distributionHTML += `<div><strong>Legends:</strong> <span style="color: #5b8db8;">${avgLegends}</span></div>`;
     distributionHTML += `<div><strong>Total MV:</strong> ${avgManaValue}</div>`;
     distributionHTML += `</div>`;
     if (config.doubleCast) {
@@ -766,7 +744,7 @@ export function updateUI() {
 
     updateChart(config, results);
     updateStats(config, results);
-    updateTable(config, results);
+    updateTable(config);
 
     // Update big spell comparison
     const comparisonContainer = document.getElementById('big-spell-comparison');

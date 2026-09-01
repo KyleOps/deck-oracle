@@ -9,14 +9,14 @@ import { shuffle } from './simulation.js';
  * Type color mapping (consistent across all calculators)
  */
 export const TYPE_COLORS = {
-    creature: '#22c55e',
-    sorcery: '#ef4444',
-    instant: '#3b82f6',
-    artifact: '#a8a29e',
-    enchantment: '#a855f7',
-    planeswalker: '#f59e0b',
-    battle: '#ec4899',
-    land: '#92867d'
+    creature: '#55c97f',
+    sorcery: '#e8635c',
+    instant: '#5b8db8',
+    artifact: '#939c97',
+    enchantment: '#9878b8',
+    planeswalker: '#f0a92c',
+    battle: '#b8738f',
+    land: '#808b85'
 };
 
 /**
@@ -96,7 +96,7 @@ export function renderCardBadge(card, primaryType = null) {
  */
 export function renderColoredTypes(types) {
     return types.map(type => {
-        const color = TYPE_COLORS[type] || '#c084fc';
+        const color = TYPE_COLORS[type] || '#9878b8';
         return `<span style="color: ${color}; font-weight: 600;">${type}</span>`;
     }).join(', ');
 }
@@ -109,7 +109,7 @@ export function renderColoredTypes(types) {
  * @param {Function} markerFn - Function to determine if marker should be shown (e.g., free spell threshold)
  * @returns {string} - HTML string
  */
-export function renderDistributionChart(distribution, totalSims, labelFn, markerFn) {
+export function renderDistributionChart(distribution, totalSims, labelFn, markerFn, toneFn = null) {
     let html = '<div class="distribution-chart">';
 
     // Map distribution to objects with metadata
@@ -162,17 +162,16 @@ export function renderDistributionChart(distribution, totalSims, labelFn, marker
         
         const pctStr = row.pct.toFixed(1) + '%';
         const markerHTML = row.marker ? `<span class="dist-marker">${row.marker}</span>` : '';
-        const barColor = row.marker ? 'var(--theme-secondary)' : 'rgba(255,255,255,0.3)';
-        
-        // Highlight logic: if marker is present (success condition usually), use bright color
-        // Otherwise use dim color. Or just use primary theme color for all.
-        // Let's use theme-primary for all bars for consistency, maybe theme-secondary for marked ones.
-        
+        // Optional tone lets a caller colour buckets by meaning (e.g. a whiff
+        // range in red) instead of every bar reading as a neutral success.
+        const tone = toneFn ? toneFn(row.index) : null;
+        const toneClass = tone === 'bad' ? ' is-bad' : tone === 'warn' ? ' is-warn' : '';
+
         html += `
             <div class="dist-row">
                 <div class="dist-label">${row.label}</div>
                 <div class="dist-bar-container">
-                    <div class="dist-bar" style="width: ${row.pct}%;"></div>
+                    <div class="dist-bar${toneClass}" style="width: ${row.pct}%;"></div>
                 </div>
                 <div class="dist-value">${pctStr}</div>
                 ${markerHTML}
@@ -195,13 +194,9 @@ export function renderDistributionChart(distribution, totalSims, labelFn, marker
  */
 export function createCollapsibleSection(title, content, openByDefault = true) {
     return `
-        <details ${openByDefault ? 'open' : ''} style="margin-top: var(--spacing-md);">
-            <summary style="cursor: pointer; padding: var(--spacing-sm); background: var(--panel-bg-alt); border-radius: var(--radius-md); font-weight: bold;">
-                ${title}
-            </summary>
-            <div style="max-height: 400px; overflow-y: auto; margin-top: var(--spacing-sm);">
-                ${content}
-            </div>
+        <details class="tx-collapse" ${openByDefault ? 'open' : ''}>
+            <summary class="tx-collapse-head">${title}</summary>
+            <div class="tx-collapse-body">${content}</div>
         </details>
     `;
 }

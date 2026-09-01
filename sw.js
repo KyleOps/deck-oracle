@@ -3,7 +3,7 @@
  * Provides offline support and faster loading through caching
  */
 
-const CACHE_NAME = 'mtg-calc-v4';
+const CACHE_NAME = 'mtg-calc-v14';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -15,8 +15,13 @@ const STATIC_ASSETS = [
     '/css/ux-enhancements.css',
     '/js/main.js',
     // Calculators
+    '/js/calculators/abstract.js',
+    '/js/calculators/chimil.js',
+    '/js/calculators/dreamharvest.js',
     '/js/calculators/lands.js',
     '/js/calculators/lumra.js',
+    '/js/calculators/mara.js',
+    '/js/calculators/mindsdilation.js',
     '/js/calculators/mulligan.js',
     '/js/calculators/portent.js',
     '/js/calculators/rashmi.js',
@@ -25,14 +30,18 @@ const STATIC_ASSETS = [
     '/js/calculators/vow.js',
     '/js/calculators/wave.js',
     // Utils
+    '/js/utils/analysis.js',
     '/js/utils/bigSpellComparison.js',
     '/js/utils/calculatorBase.js',
     '/js/utils/chartHelpers.js',
     '/js/utils/components.js',
     '/js/utils/deckConfig.js',
+    '/js/utils/deckRadar.js',
     '/js/utils/decklistImport.js',
     '/js/utils/defaultDeckData.js',
+    '/js/utils/radarPanel.js',
     '/js/utils/hypergeometric.js',
+    '/js/utils/opponentState.js',
     '/js/utils/sampleSimulator.js',
     '/js/utils/share.js',
     '/js/utils/simulation.js',
@@ -40,7 +49,7 @@ const STATIC_ASSETS = [
     '/js/utils/ui.js',
     // External CDN
     'https://cdn.jsdelivr.net/npm/chart.js',
-    'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap'
+    'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap'
 ];
 
 // Install event - cache static assets

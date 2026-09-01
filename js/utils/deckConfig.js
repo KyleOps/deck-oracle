@@ -48,6 +48,10 @@ let deckState = {
     // Import Source URL (for sharing)
     importUrl: DEFAULT_DECK_DATA?.importUrl ?? null,
 
+    // Import metadata
+    deckName: DEFAULT_DECK_DATA?.deckName ?? null,
+    importSource: DEFAULT_DECK_DATA?.importSource ?? null, // 'moxfield' | 'archidekt' | 'paste'
+
     // Power 5+ creatures by CMC (for Vortex discover chains - deprecated, use cardDetails)
     power5PlusCMC3: 0,
     power5PlusCMC4: 0,
@@ -62,12 +66,25 @@ let deckState = {
 // Callbacks to notify calculators of changes
 const updateCallbacks = [];
 
+// Callbacks fired only when a decklist is actually imported (not on manual edits)
+const importCallbacks = [];
+
 /**
  * Register a callback to be called when deck config changes
  * @param {Function} callback - Function to call on deck update
  */
 export function onDeckUpdate(callback) {
     updateCallbacks.push(callback);
+}
+
+/**
+ * Register a callback fired only after a successful decklist import. Distinct
+ * from onDeckUpdate, which also fires for every manual type-count keystroke —
+ * import-time UI (e.g. the deck radar) should not re-open on those.
+ * @param {Function} callback - Receives the full deck config
+ */
+export function onDeckImport(callback) {
+    importCallbacks.push(callback);
 }
 
 /**
@@ -161,7 +178,32 @@ export function updateDeck(config) {
  * Notify all registered callbacks of deck changes
  */
 function notifyUpdates() {
-    updateCallbacks.forEach(callback => callback(getDeckConfig()));
+    const config = getDeckConfig();
+    // Isolated per callback: a single calculator throwing used to abort every
+    // later listener AND propagate out of updateDeck() into the import, so one
+    // bad calculator failed the whole decklist import.
+    updateCallbacks.forEach(callback => {
+        try {
+            callback(config);
+        } catch (err) {
+            console.error('Deck update listener failed:', err);
+        }
+    });
+}
+
+/**
+ * Notify import-only subscribers. Isolated in a try/catch per callback so one
+ * broken listener can't abort the rest of the post-import UI.
+ */
+function notifyImport() {
+    const config = getDeckConfig();
+    importCallbacks.forEach(callback => {
+        try {
+            callback(config);
+        } catch (err) {
+            console.error('Deck import listener failed:', err);
+        }
+    });
 }
 
 // ==================== UI Helpers (Module Scope) ====================
@@ -204,6 +246,14 @@ function processImportResult(typeCounts) {
     console.log('Type counts received:', typeCounts);
     console.log('Card details count:', typeCounts.cardDetails?.length || 0);
 
+    // Persist deck name and source from import metadata
+    const metadata = typeCounts.importMetadata;
+    if (metadata) {
+        if (metadata.deckName) deckState.deckName = metadata.deckName;
+        if (metadata.source) deckState.importSource = metadata.source.toLowerCase().includes('moxfield') ? 'moxfield'
+            : metadata.source.toLowerCase().includes('archidekt') ? 'archidekt' : 'paste';
+    }
+
     // Update deck state and UI
     updateDeck(typeCounts);
 
@@ -217,12 +267,12 @@ function processImportResult(typeCounts) {
 
     updateTotalDisplay();
     enableSimulationButtons();
+    notifyImport();
 
     // Use actualCardCount for accurate deck size (accounts for dual-typed cards)
     const totalCards = typeCounts.actualCardCount || 0;
 
-    // Build status message with warnings
-    const metadata = typeCounts.importMetadata;
+    // Build status message with warnings (metadata already declared above)
     let statusMessage = `✓ Successfully imported ${totalCards} cards`;
     if (metadata && metadata.source) statusMessage += ` from ${metadata.source}`;
     if (metadata && metadata.deckName) statusMessage += ` (${metadata.deckName})`;
@@ -240,7 +290,7 @@ function processImportResult(typeCounts) {
     }
 
     if (warnings.length > 0) {
-        statusMessage += `<br><small style="color: #f59e0b;">⚠ ${warnings.join(' • ')}</small>`;
+        statusMessage += `<br><small style="color: #f0a92c;">⚠ ${warnings.join(' • ')}</small>`;
     }
 
     // Show detailed missing cards if any
@@ -424,6 +474,13 @@ export function initDeckConfig() {
                     );
                 });
 
+                // The paste path returns no commander, so without clearing it
+                // the previous deck's commander leaked into the new one and the
+                // deck radar attributed a card the deck does not contain.
+                deckState.importUrl = null;
+                deckState.importSource = 'paste';
+                deckState.deckName = null;
+                deckState.commanderName = null;
                 processImportResult(typeCounts);
 
             } catch (error) {

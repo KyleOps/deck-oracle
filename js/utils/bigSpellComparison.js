@@ -128,7 +128,7 @@ export function compareBigSpells(inputX, sourceSpell = 'generic') {
             efficiency: waveEfficiency,
             restriction: `Permanents with CMC ≤ ${waveX}`,
             metric: 'expected permanents',
-            color: '#10b981'
+            color: '#55c97f'
         },
         {
             name: isSixthDoctor ? 'Kamahl\'s Druidic Vow (×2)' : 'Kamahl\'s Druidic Vow',
@@ -138,7 +138,7 @@ export function compareBigSpells(inputX, sourceSpell = 'generic') {
             efficiency: vowEfficiency,
             restriction: isSixthDoctor ? `Lands or Legends CMC ≤ ${vowX} (Doubled)` : `Lands or Legends CMC ≤ ${vowX}`,
             metric: 'expected permanents',
-            color: '#22c55e'
+            color: '#55c97f'
         },
         {
             name: 'Primal Surge',
@@ -148,7 +148,7 @@ export function compareBigSpells(inputX, sourceSpell = 'generic') {
             efficiency: surgeEfficiency,
             restriction: 'All permanents until non-permanent',
             metric: 'expected permanents',
-            color: '#84cc16'
+            color: '#7d8f6a'
         },
         {
             name: 'Portent of Calamity',
@@ -158,7 +158,7 @@ export function compareBigSpells(inputX, sourceSpell = 'generic') {
             efficiency: portentEfficiency,
             restriction: `Exile ${portentX}, draw cards equal to types`,
             metric: 'expected card types',
-            color: '#c084fc'
+            color: '#9878b8'
         }
     ];
 
@@ -206,7 +206,7 @@ function generateDeckInsight(spells, deckStats) {
             };
         } else if (surgeNonPerms <= 2) {
             return {
-                icon: '✅',
+                icon: '✓',
                 text: `Only ${surgeNonPerms} other non-permanent${surgeNonPerms > 1 ? 's' : ''} in library — excellent for Primal Surge.`
             };
         } else {
@@ -240,7 +240,7 @@ function generateDeckInsight(spells, deckStats) {
             };
         }
         return {
-            icon: '⚔️',
+            icon: '▲',
             text: `Legendary tribal synergy makes Vow efficient for your deck.`
         };
     }
@@ -257,50 +257,53 @@ function generateDeckInsight(spells, deckStats) {
 }
 
 /**
- * Render comparison HTML
+ * Render comparison HTML — terminal flat table style
  */
 export function renderComparison(comparison) {
     if (!comparison) {
-        return '<p style="color: var(--text-dim);">Import a deck to see spell comparison</p>';
+        return '<div style="padding:14px; color:var(--tx-dim); font-size:10px; letter-spacing:0.08em; text-align:center;">IMPORT DECK TO SEE SPELL COMPARISON</div>';
     }
 
     const { spells, insight, totalMana } = comparison;
 
-    let html = '<div class="big-spell-comparison-container">';
-    html += `<h3 style="margin-top: 0;">🎯 Big Spell Comparison (${totalMana} Mana)</h3>`;
+    const shortName = name => name
+        .replace("Kamahl's Druidic Vow", "Druidic Vow")
+        .replace("Portent of Calamity", "Portent")
+        .replace("Genesis Wave", "Gen. Wave")
+        .replace("Primal Surge", "P. Surge");
 
-    // Spell comparison grid
-    const numSpells = spells.length;
-    html += `<div class="big-spell-grid" style="grid-template-columns: repeat(${numSpells}, 1fr);">`;
+    const thStyle = 'padding:6px 10px; color:var(--tx-dim); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; border-bottom:1px solid var(--tx-rule); font-weight:500; text-align:right;';
+
+    let html = `<div class="tx-h"><span>08 · BIG SPELL · ${totalMana}MV</span><span class="tx-h-r">vs same mana</span></div>`;
+    html += '<table style="width:100%; border-collapse:collapse; font-size:11px;">';
+    html += `<thead><tr>
+        <th style="${thStyle} text-align:left;">SPELL</th>
+        <th style="${thStyle}">X</th>
+        <th style="${thStyle}">E[HITS]</th>
+        <th style="${thStyle}">EFF</th>
+    </tr></thead><tbody>`;
 
     spells.forEach((spell, idx) => {
         const isWinner = idx === 0;
-        const xDisplay = spell.x !== null ? `X=${spell.x}` : 'Fixed';
-        const borderColor = isWinner ? spell.color : 'transparent';
+        const xDisplay = spell.x !== null ? spell.x : '—';
+        const nameColor = isWinner ? spell.color : 'var(--tx-mid)';
+        const valColor = isWinner ? spell.color : 'var(--tx-text)';
 
-        html += `<div class="big-spell-card" style="border-color: ${borderColor};">`;
-        html += `<h4 class="big-spell-title" style="color: ${spell.color};" title="${spell.name}">${isWinner ? '👑 ' : ''}${spell.name}</h4>`;
-
-        html += `<div class="big-spell-x-value">${xDisplay}</div>`;
-        html += `<div class="big-spell-value" style="color: ${spell.color};">${spell.expected.toFixed(2)}</div>`;
-        html += `<div class="big-spell-metric">${spell.metric}</div>`;
-
-        html += `<div class="big-spell-details">`;
-        html += `<div>CMC: ${spell.cmc}</div>`;
-        html += `<div>Eff: ${spell.efficiency.toFixed(3)}</div>`;
-        html += `<div class="big-spell-restriction">${spell.restriction}</div>`;
-        html += `</div></div>`;
+        html += `<tr style="border-bottom:1px solid var(--tx-rule);">
+            <td style="padding:7px 10px; color:${nameColor}; font-weight:${isWinner ? '600' : '400'};">
+                ${isWinner ? '<span style="color:var(--tx-amber);">▶</span> ' : '&nbsp;&nbsp;'}${shortName(spell.name)}
+            </td>
+            <td style="text-align:right; padding:7px 10px; color:var(--tx-dim);">${xDisplay}</td>
+            <td style="text-align:right; padding:7px 10px; color:${valColor}; font-weight:${isWinner ? '600' : '400'};">${spell.expected.toFixed(2)}</td>
+            <td style="text-align:right; padding:7px 10px; color:var(--tx-dim);">${spell.efficiency.toFixed(3)}</td>
+        </tr>`;
     });
 
-    html += '</div>';
+    html += '</tbody></table>';
 
-    // Single deck insight (if available)
     if (insight) {
-        html += `<div style="margin-top: var(--spacing-sm); padding: var(--spacing-sm); background: var(--panel-bg-alt); border-radius: var(--radius-sm); font-size: 0.9em;">`;
-        html += `<span style="margin-right: 6px;">${insight.icon}</span>${insight.text}`;
-        html += `</div>`;
+        html += `<div style="padding:8px 10px; border-top:1px solid var(--tx-rule); font-size:10px; color:var(--tx-mid); letter-spacing:0.04em;">${insight.text}</div>`;
     }
 
-    html += '</div>';
     return html;
 }

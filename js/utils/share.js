@@ -9,7 +9,7 @@ import * as Mara from '../calculators/mara.js';
 import * as DreamHarvest from '../calculators/dreamharvest.js';
 
 // Valid tab names whitelist
-const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra', 'mara', 'dreamharvest'];
+const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra', 'mara', 'dreamharvest', 'mindsdilation', 'abstract', 'chimil'];
 
 // LZ-String is loaded globally via CDN
 const LZString = window.LZString;
@@ -42,7 +42,7 @@ function decompressMullTypes(str) {
             count: arr[2],
             required: arr[3],
             byTurn: arr[4],
-            color: arr[5] ? `#${arr[5]}` : '#888888'
+            color: arr[5] ? `#${arr[5]}` : '#808b85'
         }));
 
         // Validate
@@ -160,7 +160,8 @@ export async function parseShareUrl() {
         'rashmiCMC': { id: 'rashmi-cmcSlider', min: 0, max: 15 },
         'lands': { id: 'lands-opening-slider', min: 0, max: 60 },
         'lumraGY': { id: 'lumra-gySlider', min: 0, max: 30 },
-        'lumraMult': { id: 'lumra-multSlider', min: 1, max: 10 }
+        'lumraMult': { id: 'lumra-multSlider', min: 1, max: 10 },
+        'chimilTurns': { id: 'chimil-turnsSlider', min: 1, max: 20 },
     };
 
     Object.entries(sliderMap).forEach(([param, config]) => {
@@ -263,7 +264,8 @@ export function getShareUrl() {
         { id: 'vortex-cmcSlider', param: 'vortexCMC' },
         { id: 'rashmi-cmcSlider', param: 'rashmiCMC' },
         { id: 'lumra-gySlider', param: 'lumraGY' },
-        { id: 'lumra-multSlider', param: 'lumraMult' }
+        { id: 'lumra-multSlider', param: 'lumraMult' },
+        { id: 'chimil-turnsSlider', param: 'chimilTurns' }
     ];
 
     sliders.forEach(({ id, param }) => {
