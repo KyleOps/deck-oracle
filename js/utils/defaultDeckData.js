@@ -4,6 +4,7 @@
  * Source: https://moxfield.com/decks/BdgPCOK4IUyNd2287K2mvg
  * Deck: 🌌Doctor Whostoric📜
  * Generated: 2026-01-26T03:55:47.955Z
+ * Power/toughness backfilled 2026-09-02 for the Wild Pair calculator.
  */
 
 export const DEFAULT_DECK_DATA = {
@@ -25,7 +26,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "3",
-      "isPower5Plus": false
+      "isPower5Plus": false,
+      "toughness": "3",
+      "totalPT": 6
     },
     {
       "name": "Expropriate",
@@ -80,7 +83,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "4",
-      "isPower5Plus": false
+      "isPower5Plus": false,
+      "toughness": "5",
+      "totalPT": 9
     },
     {
       "name": "Nissa, Vital Force",
@@ -108,7 +113,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "12",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "12",
+      "totalPT": 24
     },
     {
       "name": "Genesis Storm",
@@ -181,7 +188,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "6",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "6",
+      "totalPT": 12
     },
     {
       "name": "Kogla, the Titan Ape",
@@ -191,7 +200,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "7",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "6",
+      "totalPT": 13
     },
     {
       "name": "Sea Gate Restoration // Sea Gate, Reborn",
@@ -219,7 +230,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "7",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "7",
+      "totalPT": 14
     },
     {
       "name": "Karn Liberated",
@@ -257,7 +270,9 @@ export const DEFAULT_DECK_DATA = {
         "artifacts"
       ],
       "power": "8",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "8",
+      "totalPT": 16
     },
     {
       "name": "Portal to Phyrexia",
@@ -294,7 +309,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "3",
-      "isPower5Plus": false
+      "isPower5Plus": false,
+      "toughness": "1",
+      "totalPT": 4
     },
     {
       "name": "Path of the Animist",
@@ -331,7 +348,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "1",
-      "isPower5Plus": false
+      "isPower5Plus": false,
+      "toughness": "1",
+      "totalPT": 2
     },
     {
       "name": "Tishana, Voice of Thunder",
@@ -341,7 +360,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "*",
-      "isPower5Plus": false
+      "isPower5Plus": false,
+      "toughness": "*",
+      "totalPT": null
     },
     {
       "name": "Migration Path",
@@ -369,7 +390,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "6",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "6",
+      "totalPT": 12
     },
     {
       "name": "Nexus of Becoming",
@@ -388,7 +411,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "6",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "5",
+      "totalPT": 11
     },
     {
       "name": "Map the Frontier",
@@ -425,7 +450,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "3",
-      "isPower5Plus": false
+      "isPower5Plus": false,
+      "toughness": "3",
+      "totalPT": 6
     },
     {
       "name": "Apex Devastator",
@@ -435,7 +462,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "10",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "10",
+      "totalPT": 20
     },
     {
       "name": "Sink into Stupor // Soporific Springs",
@@ -481,7 +510,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "5",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "5",
+      "totalPT": 10
     },
     {
       "name": "One with the Multiverse",
@@ -528,7 +559,9 @@ export const DEFAULT_DECK_DATA = {
         "enchantments"
       ],
       "power": "9",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "9",
+      "totalPT": 18
     },
     {
       "name": "Reach the Horizon",
@@ -557,7 +590,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "1",
-      "isPower5Plus": false
+      "isPower5Plus": false,
+      "toughness": "1",
+      "totalPT": 2
     },
     {
       "name": "Wan Shi Tong, All-Knowing",
@@ -567,7 +602,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "4",
-      "isPower5Plus": false
+      "isPower5Plus": false,
+      "toughness": "4",
+      "totalPT": 8
     },
     {
       "name": "Planetarium of Wan Shi Tong",
@@ -595,7 +632,9 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "power": "5",
-      "isPower5Plus": true
+      "isPower5Plus": true,
+      "toughness": "5",
+      "totalPT": 10
     }
   ],
   "cardsByName": {
@@ -609,7 +648,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "3"
     },
     "Expropriate": {
       "name": "Expropriate",
@@ -687,7 +727,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "5"
     },
     "Nissa, Vital Force": {
       "name": "Nissa, Vital Force",
@@ -721,7 +762,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "12"
     },
     "Genesis Storm": {
       "name": "Genesis Storm",
@@ -810,7 +852,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "6"
     },
     "Academy Ruins": {
       "name": "Academy Ruins",
@@ -833,7 +876,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "6"
     },
     "Rejuvenating Springs": {
       "name": "Rejuvenating Springs",
@@ -878,7 +922,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "7"
     },
     "Karn Liberated": {
       "name": "Karn Liberated",
@@ -968,7 +1013,8 @@ export const DEFAULT_DECK_DATA = {
         "creatures",
         "artifacts"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "8"
     },
     "Portal to Phyrexia": {
       "name": "Portal to Phyrexia",
@@ -1013,7 +1059,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "1"
     },
     "Path of the Animist": {
       "name": "Path of the Animist",
@@ -1080,7 +1127,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "1"
     },
     "Tishana, Voice of Thunder": {
       "name": "Tishana, Voice of Thunder",
@@ -1092,7 +1140,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "*"
     },
     "Migration Path": {
       "name": "Migration Path",
@@ -1126,7 +1175,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "6"
     },
     "Nexus of Becoming": {
       "name": "Nexus of Becoming",
@@ -1149,7 +1199,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "5"
     },
     "Map the Frontier": {
       "name": "Map the Frontier",
@@ -1194,7 +1245,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "3"
     },
     "Apex Devastator": {
       "name": "Apex Devastator",
@@ -1206,7 +1258,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "10"
     },
     "Sink into Stupor // Soporific Springs": {
       "name": "Sink into Stupor // Soporific Springs",
@@ -1295,7 +1348,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "5"
     },
     "One with the Multiverse": {
       "name": "One with the Multiverse",
@@ -1374,7 +1428,8 @@ export const DEFAULT_DECK_DATA = {
         "creatures",
         "enchantments"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "9"
     },
     "Reach the Horizon": {
       "name": "Reach the Horizon",
@@ -1408,7 +1463,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "artifacts"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "10"
     },
     "Wan Shi Tong, Librarian": {
       "name": "Wan Shi Tong, Librarian",
@@ -1420,7 +1476,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "1"
     },
     "Wan Shi Tong, All-Knowing": {
       "name": "Wan Shi Tong, All-Knowing",
@@ -1432,7 +1489,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "4"
     },
     "Planetarium of Wan Shi Tong": {
       "name": "Planetarium of Wan Shi Tong",
@@ -1477,7 +1535,8 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "creatures"
       ],
-      "count": 1
+      "count": 1,
+      "toughness": "5"
     },
     "Breeding Pool": {
       "name": "Breeding Pool",

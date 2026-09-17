@@ -58,7 +58,8 @@ export function buildDeckFromCardData(cardData) {
                 type_line: card.type_line,
                 cmc: cmc,
                 mana_cost: card.mana_cost || '',
-                power: card.power
+                power: card.power,
+                toughness: card.toughness
             });
         }
     });

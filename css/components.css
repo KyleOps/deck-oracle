@@ -2910,3 +2910,742 @@ input[type="range"].tx-slider::-moz-range-thumb {
     border-top: 1px solid var(--tx-rule);
     line-height: 1.5;
 }
+
+
+/* ==================== WILD PAIR ====================
+   Wild Pair searches rather than reveals, so there is no probability to show —
+   the product is the GROUPING. Everything here answers "which of my creatures
+   find each other", with the mana consequence as a secondary line. One shape
+   repeats at three scales: a fixed-width total badge on the left, the creatures
+   that share it, and what an activation there is worth. */
+
+/* --- Selected group: the primary panel --- */
+
+.wp-group-detail {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 16px;
+    align-items: center;
+    padding: 14px;
+    border-bottom: 1px solid var(--tx-rule);
+    background: var(--tx-panel-alt);
+}
+
+/* The search key itself, in the display band — it is the one number the whole
+   calculator turns on. */
+.wp-detail-key {
+    font-size: var(--t-xxl);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--tx-bright);
+    letter-spacing: var(--track-display);
+    font-feature-settings: 'tnum' 1;
+    border: 1px solid var(--tx-rule-hi);
+    padding: 8px 14px;
+    min-width: 68px;
+    text-align: center;
+}
+
+.wp-group-detail.is-empty .wp-detail-key { color: var(--tx-dim); }
+
+.wp-detail-headline {
+    font-size: var(--t-body);
+    color: var(--tx-bright);
+    line-height: 1.5;
+}
+
+.wp-detail-sub {
+    font-size: var(--t-xs);
+    color: var(--tx-mid);
+    margin-top: 4px;
+    line-height: 1.5;
+}
+
+/* --- The search pool: the full roster at the selected total --- */
+
+/* Members of a total are interchangeable, so the roster carries printed stats
+   and nothing else. Columns are fixed width and tabular so P/T and MV line up
+   down the list; the bar makes the pool's mana spread readable at a glance,
+   which is the thing a repeated "best find" column failed to show. */
+.wp-opt-list { display: grid; }
+
+.wp-opt {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) 62px minmax(60px, 130px) 26px;
+    gap: 12px;
+    align-items: center;
+    padding: 7px 14px;
+    border-bottom: 1px solid var(--tx-rule);
+    font-size: var(--t-xs);
+}
+
+.wp-opt:last-child { border-bottom: 0; }
+.wp-opt:hover { background: var(--tx-row-hi); }
+
+.wp-opt-head {
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    background: var(--tx-panel-alt);
+}
+
+.wp-opt-head:hover { background: var(--tx-panel-alt); }
+
+.wp-opt-pt {
+    font-feature-settings: 'tnum' 1;
+    color: var(--tx-mid);
+}
+
+.wp-opt-head .wp-opt-pt,
+.wp-opt-head .wp-opt-mv { color: var(--tx-dim); }
+
+.wp-opt-name {
+    color: var(--tx-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The two ends of the swing, marked so the headline above can be traced into
+   the list. Everything between them is just as castable and just as findable. */
+.wp-opt-edge {
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    color: var(--tx-dim);
+    text-align: right;
+}
+
+.wp-opt.is-low .wp-opt-name,
+.wp-opt.is-high .wp-opt-name { color: var(--tx-bright); }
+.wp-opt.is-high .wp-opt-edge { color: var(--tx-good); }
+
+.wp-opt-bar {
+    display: block;
+    height: 6px;
+    background: var(--tx-rule);
+}
+
+.wp-opt-bar-fill {
+    display: block;
+    height: 100%;
+    background: var(--tx-mid);
+}
+
+.wp-opt.is-high .wp-opt-bar-fill { background: var(--tx-good); }
+.wp-opt-head .wp-opt-bar { background: transparent; }
+
+.wp-opt-mv {
+    text-align: right;
+    font-feature-settings: 'tnum' 1;
+    color: var(--tx-bright);
+    font-weight: 600;
+}
+
+.wp-opt.is-high .wp-opt-mv { color: var(--tx-good); }
+
+/* --- The one derived number for a pool: its widest mana swing --- */
+
+.wp-swing {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--tx-rule);
+}
+
+.wp-swing-label {
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-dim);
+}
+
+.wp-swing-value {
+    font-size: var(--t-lg);
+    font-weight: 700;
+    line-height: 1;
+    font-feature-settings: 'tnum' 1;
+}
+
+.wp-swing-line {
+    font-size: var(--t-xs);
+    color: var(--tx-mid);
+    line-height: 1.5;
+}
+
+.wp-swing-line strong { color: var(--tx-text); font-weight: 600; }
+
+/* --- All groups: the at-a-glance grid --- */
+
+/* Auto-fill so the grid gains COLUMNS as the shell widens rather than just
+   stretching, which is the layout rule the rest of the app follows. */
+.wp-gc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+    gap: 1px;
+    background: var(--tx-rule);
+    border-bottom: 1px solid var(--tx-rule);
+}
+
+.wp-gc {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    text-align: left;
+    background: var(--tx-panel);
+    border: 0;
+    padding: 12px 14px 10px;
+    font-family: inherit;
+    font-size: var(--t-xs);
+    color: inherit;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.wp-gc:hover { background: var(--tx-panel-alt); }
+
+/* The accent marks the one selected group — the same job it does on the active
+   tab and the recommended row. */
+.wp-gc.is-selected {
+    background: var(--tx-row-hi);
+    box-shadow: inset 2px 0 0 var(--tx-accent);
+}
+
+/* Header: the total badge, the count, and the swing pinned to the right edge so
+   the deltas form a straight column down the grid. */
+.wp-gc-head {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.wp-gc-total {
+    font-size: var(--t-lg);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--tx-bright);
+    font-feature-settings: 'tnum' 1;
+    border: 1px solid var(--tx-rule-hi);
+    padding: 5px 0;
+    text-align: center;
+}
+
+.wp-gc.is-selected .wp-gc-total { border-color: var(--tx-accent); }
+
+.wp-gc-n {
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-mid);
+}
+
+.wp-gc-swing {
+    font-size: var(--t-body);
+    font-weight: 700;
+    font-feature-settings: 'tnum' 1;
+    line-height: 1;
+}
+
+.wp-gc-range {
+    display: block;
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    margin: 7px 0 0 54px;
+}
+
+.wp-gc-cards {
+    list-style: none;
+    margin: 9px 0 0;
+    padding: 9px 0 0;
+    display: grid;
+    gap: 4px;
+    border-top: 1px solid var(--tx-rule);
+}
+
+/* Fixed side columns keep P/T and MV in straight lines across every card in the
+   grid, which is what stops a wall of these reading as noise. */
+.wp-gc-card {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 22px;
+    gap: 10px;
+    align-items: baseline;
+}
+
+.wp-gc-pt {
+    color: var(--tx-dim);
+    font-feature-settings: 'tnum' 1;
+}
+
+.wp-gc-name {
+    color: var(--tx-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wp-gc-mv {
+    text-align: right;
+    color: var(--tx-mid);
+    font-feature-settings: 'tnum' 1;
+}
+
+/* --- Singletons: present, but deliberately quiet --- */
+
+.wp-single-head { border-top: 1px solid var(--tx-rule); }
+
+.wp-single-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 12px 14px;
+}
+
+.wp-single {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 3px 7px;
+    border: 1px solid var(--tx-rule);
+    background: var(--tx-panel);
+    font-family: inherit;
+    font-size: var(--t-xs);
+    color: var(--tx-dim);
+    max-width: 100%;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.wp-single:hover { border-color: var(--tx-rule-hi); background: var(--tx-panel-alt); }
+
+.wp-single-total {
+    color: var(--tx-bad);
+    font-weight: 600;
+    font-feature-settings: 'tnum' 1;
+}
+
+.wp-single-name {
+    color: var(--tx-mid);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wp-single-pt { font-feature-settings: 'tnum' 1; }
+
+/* --- Fit verdict (secondary panel) --- */
+
+.wp-fit {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+    padding: 14px;
+    border-bottom: 1px solid var(--tx-rule);
+    background: var(--tx-panel-alt);
+}
+
+.wp-fit-badge {
+    border: 1px solid;
+    padding: 5px 10px;
+    font-size: var(--t-micro);
+    font-weight: 600;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.wp-fit-advice {
+    font-size: var(--t-body);
+    color: var(--tx-bright);
+    line-height: 1.5;
+}
+
+.wp-fit-detail {
+    font-size: var(--t-xs);
+    color: var(--tx-mid);
+    margin-top: 4px;
+    line-height: 1.5;
+}
+
+/* The rules text that decides every number above it — stated, not buried. */
+.wp-fit-caveat {
+    font-size: var(--t-xs);
+    color: var(--tx-dim);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--tx-rule);
+    line-height: 1.5;
+}
+
+/* Data-quality warnings: variable power/toughness boxes, missing data. */
+.wp-note {
+    padding: 10px 14px;
+    border-top: 1px solid var(--tx-rule);
+    font-size: var(--t-xs);
+    color: var(--tx-accent);
+    line-height: 1.55;
+    display: grid;
+    gap: 4px;
+}
+
+/* --- Best lines --- */
+
+.wp-pair-list { display: grid; }
+
+.wp-pair {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 18px minmax(0, 1fr) 62px;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--tx-rule);
+    font-size: var(--t-xs);
+}
+
+.wp-pair:last-child { border-bottom: 0; }
+.wp-pair:hover { background: var(--tx-row-hi); }
+
+.wp-pair-head {
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    background: var(--tx-panel-alt);
+}
+
+.wp-pair-head:hover { background: var(--tx-panel-alt); }
+
+/* The total is the join key, so it gets the fixed column and a tabular figure. */
+.wp-pair-total {
+    font-feature-settings: 'tnum' 1;
+    font-weight: 700;
+    color: var(--tx-bright);
+    text-align: center;
+    border: 1px solid var(--tx-rule-hi);
+    padding: 2px 0;
+}
+
+.wp-pair-head .wp-pair-total {
+    border-color: transparent;
+    font-weight: 400;
+    color: var(--tx-dim);
+}
+
+.wp-pair-cast,
+.wp-pair-fetch {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+}
+
+.wp-pair-name {
+    color: var(--tx-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wp-pair-fetch .wp-pair-name { color: var(--tx-good); }
+
+.wp-pair-meta {
+    font-size: var(--t-micro);
+    color: var(--tx-dim);
+    font-feature-settings: 'tnum' 1;
+}
+
+.wp-pair-arrow {
+    color: var(--tx-dim);
+    text-align: center;
+}
+
+.wp-pair-gain {
+    text-align: right;
+    font-weight: 700;
+    font-feature-settings: 'tnum' 1;
+}
+
+.wp-pair-head .wp-pair-gain { font-weight: 400; }
+
+/* The pair ladder carries more columns than the other sweep tables, so it is
+   the one that runs out of room first. Let it scroll inside its own box rather
+   than be clipped by an ancestor, and drop the P/T strip when narrow. */
+#wildpair-sweepTable {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 760px) {
+    #wildpair-sweepTable .tx-sweep-table th:last-child,
+    #wildpair-sweepTable .tx-sweep-table td:last-child { display: none; }
+}
+
+/* Compact P/T strip inside the pair-ladder table. */
+.wp-mini {
+    color: var(--tx-dim);
+    font-size: var(--t-micro);
+    font-feature-settings: 'tnum' 1;
+    letter-spacing: 0.04em;
+}
+
+@media (max-width: 620px) {
+    /* The spread bar is the first thing to go when the row gets tight — the
+       printed numbers beside it say the same thing. */
+    .wp-opt {
+        grid-template-columns: 46px minmax(0, 1fr) 26px;
+        gap: 10px;
+    }
+    .wp-opt-edge,
+    .wp-opt-bar { display: none; }
+
+    /* And the five-column pairing row stacks: total and delta stay on the first
+       line, the pair below it. */
+    .wp-pair {
+        grid-template-columns: 42px minmax(0, 1fr) 62px;
+        row-gap: 4px;
+    }
+    .wp-pair-cast { grid-column: 2 / 3; }
+    .wp-pair-arrow { display: none; }
+    .wp-pair-fetch { grid-column: 2 / 4; }
+    .wp-pair-gain { grid-row: 1; grid-column: 3 / 4; }
+    .wp-pair-head .wp-pair-fetch { display: none; }
+}
+
+/* ==================== HEAD TO HEAD ====================
+   A comparison has to make the two sides genuinely comparable at a glance, so
+   both columns are identical in structure and the winner is marked by the one
+   accent rather than by being drawn differently. The centre column carries the
+   tally so the eye has a fixed pivot between them. */
+
+.vs-select {
+    width: 100%;
+    background: var(--tx-bg);
+    border: 1px solid var(--tx-rule-hi);
+    color: var(--tx-bright);
+    font-family: inherit;
+    font-size: var(--t-body);
+    padding: 8px 10px;
+    outline: none;
+}
+
+.vs-select:focus-visible { border-color: var(--tx-accent); }
+
+.vs-board {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+    border-bottom: 1px solid var(--tx-rule);
+}
+
+.vs-side {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* The leader is marked with the accent rail — the same device as the active tab
+   and the recommended row, so it needs no new visual language. */
+.vs-side.is-leader { background: var(--tx-panel-alt); box-shadow: inset 0 2px 0 var(--tx-accent); }
+
+.vs-side-name {
+    font-size: var(--t-body);
+    font-weight: 600;
+    color: var(--tx-bright);
+}
+
+.vs-side-cost {
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    margin-bottom: 8px;
+}
+
+.vs-side-value {
+    font-size: var(--t-xxl);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--tx-bright);
+    letter-spacing: var(--track-display);
+    font-feature-settings: 'tnum' 1;
+}
+
+.vs-side-unit {
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    margin-bottom: 10px;
+}
+
+.vs-side-rows {
+    display: grid;
+    gap: 3px;
+    border-top: 1px solid var(--tx-rule);
+    padding-top: 9px;
+    margin-top: auto;
+}
+
+.vs-side-rows > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: var(--t-xs);
+}
+
+.vs-side-rows span:first-child { color: var(--tx-dim); }
+.vs-side-rows span:last-child { color: var(--tx-text); font-feature-settings: 'tnum' 1; }
+
+.vs-mid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 16px 18px;
+    border-left: 1px solid var(--tx-rule);
+    border-right: 1px solid var(--tx-rule);
+    background: var(--tx-bg);
+}
+
+.vs-mid-vs {
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-wide);
+    color: var(--tx-dim);
+}
+
+.vs-mid-tally {
+    font-size: var(--t-xl);
+    font-weight: 700;
+    line-height: 1;
+    font-feature-settings: 'tnum' 1;
+    white-space: nowrap;
+}
+
+.vs-mid-sep { color: var(--tx-dim); margin: 0 3px; }
+
+.vs-mid-label {
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    text-align: center;
+}
+
+.vs-verdict {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+    border-bottom: 1px solid var(--tx-rule);
+}
+
+.vs-verdict-badge {
+    border: 1px solid;
+    padding: 5px 10px;
+    font-size: var(--t-micro);
+    font-weight: 600;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.vs-verdict-text {
+    font-size: var(--t-xs);
+    color: var(--tx-text);
+    line-height: 1.55;
+}
+
+/* --- Peaks --- */
+
+.vs-peaks-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    border-bottom: 1px solid var(--tx-rule);
+}
+
+.vs-peak {
+    padding: 12px 14px;
+    border-right: 1px solid var(--tx-rule);
+}
+
+.vs-peak:last-child { border-right: 0; }
+
+/* The contested win rate is the answer this panel exists for, so it gets the
+   accent rail the leader gets on the scoreboard. */
+.vs-peak.is-headline {
+    background: var(--tx-panel-alt);
+    box-shadow: inset 0 2px 0 var(--tx-accent);
+}
+
+.vs-peak-label {
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-dim);
+    margin-bottom: 5px;
+}
+
+.vs-peak-value {
+    font-size: var(--t-xl);
+    font-weight: 700;
+    line-height: 1;
+    font-feature-settings: 'tnum' 1;
+}
+
+.vs-peak-sub {
+    font-size: var(--t-micro);
+    color: var(--tx-dim);
+    margin-top: 4px;
+}
+
+/* --- Creature table --- */
+
+.vs-name { color: var(--tx-text); }
+.vs-pt { color: var(--tx-dim); font-feature-settings: 'tnum' 1; }
+
+.vs-detail {
+    color: var(--tx-dim);
+    font-size: var(--t-micro);
+}
+
+/* A scroll container is not enough on its own: .tx-sweep-table is width:100%,
+   so it never exceeds the container and the cells are simply clipped instead of
+   becoming scrollable. Letting the table take its natural width is what makes
+   the overflow real. */
+#versus-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#versus-table .tx-sweep-table,
+#wildpair-sweepTable .tx-sweep-table {
+    min-width: max-content;
+}
+
+@media (max-width: 720px) {
+    /* Side by side stops working once each column is narrower than its own
+       headline number, so the two sides stack with the tally between them. */
+    .vs-board { grid-template-columns: minmax(0, 1fr); }
+
+    .vs-mid {
+        flex-direction: row;
+        gap: 10px;
+        padding: 10px 14px;
+        border-left: 0;
+        border-right: 0;
+        border-top: 1px solid var(--tx-rule);
+        border-bottom: 1px solid var(--tx-rule);
+    }
+
+    .vs-side.is-leader { box-shadow: inset 2px 0 0 var(--tx-accent); }
+
+    .vs-verdict { flex-direction: column; gap: 8px; }
+}

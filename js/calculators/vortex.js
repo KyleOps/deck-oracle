@@ -16,6 +16,7 @@ import {
     buildDeckFromCardData, shuffleDeck, renderCardBadge, renderDistributionChart,
     createCollapsibleSection
 } from '../utils/sampleSimulator.js';
+import { simulateDiscoverChain } from '../utils/discover.js';
 
 /**
  * Check if power is 5 or greater, optionally treating * or X as 5+
@@ -106,55 +107,18 @@ export function runSampleReveals() {
     let totalSpells = 0;
     const spellsCastDist = new Array(10).fill(0); // Track chains 0-9+
 
+    // The chain walk itself lives in utils/discover.js, shared with the
+    // head-to-head comparison. Two copies of this mechanic would eventually
+    // disagree, and the same deck would then get two different answers on two
+    // tabs of the same site.
+    const statsTreatStarAs5Plus = document.getElementById('vortex-star-power')?.checked || false;
+
     for (let i = 0; i < numSims; i++) {
-        const shuffled = stableSamples[i];
-        let currentDiscoverCMC = config.creatureCMC;
-        let deckIndex = 0;
-        let chainCount = 0;
-        let chainMana = 0;
-        
-        // Chain loop
-        while (chainCount < 10 && deckIndex < shuffled.length) {
-            // Reveal cards until hit
-            let hitCard = null;
-
-            for (; deckIndex < shuffled.length; deckIndex++) {
-                const card = shuffled[deckIndex];
-                
-                // Determine if land (CMC 0 and type land)
-                const isLand = card.types.includes('land');
-                
-                if (isLand) {
-                    continue;
-                }
-
-                // Non-land. Check CMC.
-                if (card.cmc <= currentDiscoverCMC) {
-                    hitCard = card;
-                    deckIndex++; // Consume this card
-                    break;
-                }
-            }
-
-            if (hitCard) {
-                // Determine if it chains
-                const treatStarAs5Plus = document.getElementById('vortex-star-power')?.checked || false;
-                const isCreature = hitCard.types.includes('creature');
-                const isPower5Plus = isCreature && isCreaturePower5Plus(hitCard.power, treatStarAs5Plus);
-
-                chainCount++;
-                chainMana += hitCard.cmc;
-                
-                if (isPower5Plus) {
-                    currentDiscoverCMC = hitCard.cmc;
-                } else {
-                    break; // End of chain
-                }
-
-            } else {
-                break;
-            }
-        }
+        const { chainCount, chainMana } = simulateDiscoverChain(
+            stableSamples[i],
+            config.creatureCMC,
+            { treatStarAs5Plus: statsTreatStarAs5Plus }
+        );
 
         totalSpells += chainCount;
         totalFreeMana += chainMana;

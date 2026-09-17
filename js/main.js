@@ -17,6 +17,8 @@ import * as DreamHarvest from './calculators/dreamharvest.js';
 import * as Abstract from './calculators/abstract.js';
 import * as MindsDilation from './calculators/mindsdilation.js';
 import * as Chimil from './calculators/chimil.js';
+import * as WildPair from './calculators/wildpair.js';
+import * as Versus from './calculators/versus.js';
 import * as Share from './utils/share.js';
 import * as OpponentState from './utils/opponentState.js';
 import { debounce } from './utils/simulation.js';
@@ -26,8 +28,8 @@ import { renderRadar } from './utils/radarPanel.js';
 import { TX_CHART as TX } from './utils/chartHelpers.js';
 
 // Current active tab and group
-let currentTab = 'mulligan';
-let currentGroup = 'deck-tools';
+let currentTab = 'wildpair';
+let currentGroup = 'engines';
 
 // ==================== CHART.JS GLOBAL TERMINAL DEFAULTS ====================
 
@@ -64,27 +66,43 @@ function applyChartDefaults() {
     }
 }
 
-// Calculator metadata: display name + which group its tab belongs to
+// Calculator metadata: display name + which group its tab belongs to.
+//
+// Groups are by what the card DOES, not by its printed type: a recurring
+// permanent is an engine whether it is an enchantment (Wild Pair, Monstrous
+// Vortex), an artifact (Chimil) or a creature (Rashmi), while anything that
+// pays off once when you cast it sits with the spells — including Lumra, whose
+// value is all in a single enters trigger. Grouping by type instead had put
+// Wild Pair under Creatures and Chimil under Spells.
 const calculators = {
+    // ENGINES — recurring permanents
+    wildpair: { name: 'Wild Pair', group: 'engines' },
+    vortex: { name: 'Monstrous Vortex', group: 'engines' },
+    chimil: { name: 'Chimil, the Inner Sun', group: 'engines' },
+    rashmi: { name: 'Rashmi', group: 'engines' },
+
+    // SPELLS — one-shot payoffs
     portent: { name: 'Portent of Calamity', group: 'spells' },
-    surge: { name: 'Primal Surge', group: 'spells' },
     wave: { name: 'Genesis Wave', group: 'spells' },
     vow: { name: 'Kamahl\'s Druidic Vow', group: 'spells' },
-    vortex: { name: 'Monstrous Vortex', group: 'spells' },
-    rashmi: { name: 'Rashmi', group: 'Creatures' },
-    lumra: { name: 'Lumra', group: 'Creatures' },
-    lands: { name: 'Land Drops', group: 'deck-tools' },
+    surge: { name: 'Primal Surge', group: 'spells' },
+    abstract: { name: 'Abstract Performance', group: 'spells' },
+    lumra: { name: 'Lumra', group: 'spells' },
+
+    // TOOLS — deck-level, not card-specific
     mulligan: { name: 'Mulligan Strategy', group: 'deck-tools' },
+    lands: { name: 'Land Drops', group: 'deck-tools' },
+    versus: { name: 'Head to Head', group: 'deck-tools' },
+
+    // MULTI — opponent-facing
     mara: { name: 'Ensnared by the Mara', group: 'multiplayer' },
     dreamharvest: { name: 'Dream Harvest', group: 'multiplayer' },
-    mindsdilation: { name: "Mind's Dilation", group: 'multiplayer' },
-    abstract: { name: 'Abstract Performance', group: 'spells' },
-    chimil: { name: 'Chimil, the Inner Sun', group: 'spells' }
+    mindsdilation: { name: "Mind's Dilation", group: 'multiplayer' }
 };
 
 /**
  * Switch between tab groups
- * @param {string} group - Group name (spells, Creatures, deck-tools, multiplayer)
+ * @param {string} group - Group name (engines, spells, deck-tools, multiplayer)
  */
 function switchGroup(group) {
     currentGroup = group;
@@ -228,7 +246,7 @@ function initDeckRadar() {
 
 /**
  * Switch between calculator tabs
- * @param {string} tab - Tab name (portent, surge, wave, vortex, lands, rashmi, lumra, mulligan)
+ * @param {string} tab - Tab name, e.g. wildpair, vortex, chimil, portent, mulligan
  */
 function switchTab(tab) {
     // Update body theme
@@ -298,6 +316,10 @@ function switchTab(tab) {
         Abstract.updateUI();
     } else if (tab === 'chimil') {
         Chimil.updateUI();
+    } else if (tab === 'wildpair') {
+        WildPair.updateUI();
+    } else if (tab === 'versus') {
+        Versus.updateUI();
     }
 }
 
@@ -454,6 +476,20 @@ function initAbstractInputs() {
  */
 function initChimilInputs() {
     Chimil.init();
+}
+
+/**
+ * Initialize Wild Pair calculator inputs
+ */
+function initWildPairInputs() {
+    WildPair.init();
+}
+
+/**
+ * Initialize Head to Head comparison inputs
+ */
+function initVersusInputs() {
+    Versus.init();
 }
 
 /**
@@ -615,6 +651,8 @@ function init() {
     initMindsDilationInputs();
     initAbstractInputs();
     initChimilInputs();
+    initWildPairInputs();
+    initVersusInputs();
     initServiceWorker();
     initUXEnhancements();
     initPWAInstall();

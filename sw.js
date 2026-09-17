@@ -3,7 +3,7 @@
  * Provides offline support and faster loading through caching
  */
 
-const CACHE_NAME = 'mtg-calc-v14';
+const CACHE_NAME = 'mtg-calc-v17';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -29,6 +29,8 @@ const STATIC_ASSETS = [
     '/js/calculators/vortex.js',
     '/js/calculators/vow.js',
     '/js/calculators/wave.js',
+    '/js/calculators/wildpair.js',
+    '/js/calculators/versus.js',
     // Utils
     '/js/utils/analysis.js',
     '/js/utils/bigSpellComparison.js',
@@ -36,6 +38,7 @@ const STATIC_ASSETS = [
     '/js/utils/chartHelpers.js',
     '/js/utils/components.js',
     '/js/utils/deckConfig.js',
+    '/js/utils/discover.js',
     '/js/utils/deckRadar.js',
     '/js/utils/decklistImport.js',
     '/js/utils/defaultDeckData.js',

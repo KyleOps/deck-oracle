@@ -47,7 +47,8 @@ export const TRIGGER_CARDS = {
     dreamharvest:  ['dream harvest'],
     mindsdilation: ["mind's dilation", 'minds dilation'],
     abstract:      ['abstract performance', 'fact or fiction', 'steam augury', 'temporal cascade'],
-    chimil:        ['chimil the inner sun']
+    chimil:        ['chimil the inner sun'],
+    wildpair:      ['wild pair', 'wild pairs']
 };
 
 // ==================== NORMALIZATION ====================
@@ -154,6 +155,26 @@ export function deriveDeckFacts(deck = {}) {
     }
     if (power5Plus === 0) power5Plus = num(deck.creaturesPower5Plus);
 
+    // Wild Pair buckets: creatures grouped by total power + toughness. A bucket
+    // of n creatures yields floor(n / 2) free bodies, because the fetched
+    // creature is not cast from hand and so never triggers again.
+    const ptBuckets = new Map();
+    let ptCreatures = 0;
+    for (const c of cardDetails) {
+        const isCreature = Array.isArray(c?.allTypes) ? c.allTypes.includes('creatures') : c?.type === 'creatures';
+        if (!isCreature) continue;
+        ptCreatures += 1;
+        const total = Number.isFinite(c?.totalPT) ? c.totalPT : null;
+        if (total === null) continue;
+        ptBuckets.set(total, (ptBuckets.get(total) || 0) + 1);
+    }
+    let ptPairs = 0;
+    let ptPairedCreatures = 0;
+    for (const n of ptBuckets.values()) {
+        ptPairs += Math.floor(n / 2);
+        if (n >= 2) ptPairedCreatures += n;
+    }
+
     // Mana curve of non-lands, from per-copy card details when available
     const curve = {};
     for (const c of cardDetails) {
@@ -181,6 +202,10 @@ export function deriveDeckFacts(deck = {}) {
         legendaryPermanents,
         power5Plus,
         cheapNonlands,
+        ptCreatures,
+        ptPairs,
+        ptPairedCreatures,
+        ptPairRate: ptCreatures > 0 ? ptPairedCreatures / ptCreatures : 0,
         curve,
         avgCmc,
         hasCardData: names.size > 0,
@@ -286,6 +311,41 @@ const STRUCTURAL_SIGNALS = {
             return { score: SCORE.WEAK, reason: `${eligible} nonlands at MV 5 or less — discover 5 converts, but digs to find them` };
         }
         return null;
+    },
+
+    // Wild Pair only ever finds a creature that shares a total power+toughness
+    // with the one you cast, so what matters is how much of the creature base is
+    // actually matched up.
+    wildpair: (f) => {
+        if (!f.hasCardData || f.ptCreatures < 4) return null;
+        if (f.ptPairs === 0) return null;
+        if (f.ptPairs >= 5 && f.ptPairRate >= 0.5) {
+            return {
+                score: SCORE.STRUCTURAL,
+                reason: `${f.ptPairs} matched power/toughness pairs across ${f.ptCreatures} creatures — Wild Pair keeps finding bodies`
+            };
+        }
+        if (f.ptPairs >= 2) {
+            return {
+                score: SCORE.WEAK,
+                reason: `${f.ptPairs} creature pairs share a total power + toughness — a few live Wild Pair triggers`
+            };
+        }
+        return null;
+    },
+
+    // Head to Head only has something to say when more than one payoff engine
+    // actually applies to the deck — otherwise there is nothing to compare.
+    versus: (f) => {
+        if (!f.hasCardData) return null;
+        const engines = [];
+        if (f.ptPairs > 0) engines.push('Wild Pair');
+        if (f.power5Plus >= 8) engines.push('Monstrous Vortex');
+        if (engines.length < 2) return null;
+        return {
+            score: SCORE.WEAK,
+            reason: `${engines.join(' and ')} both apply here — compare them cast by cast`
+        };
     },
 
     abstract: () => null,

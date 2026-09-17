@@ -365,3 +365,138 @@ describe('deckRadar — Chimil', () => {
         assert.strictEqual(analyzeDeck(makeDeck({ cards })).find(x => x.tab === 'chimil').score, 0);
     });
 });
+
+describe('deckRadar — Wild Pair', () => {
+    /**
+     * Wild Pair keys off total power + toughness, which the generic fixture
+     * above does not carry, so build the per-copy details directly.
+     * `creatures` is a list of [name, power, toughness, count].
+     */
+    function ptDeck(creatures, extra = {}) {
+        const cardsByName = {};
+        const cardDetails = [];
+        for (const [name, power, toughness, count = 1] of creatures) {
+            cardsByName[name] = {
+                name, type_line: 'Creature — Beast', cmc: 4,
+                power: String(power), toughness: String(toughness),
+                category: 'creatures', count
+            };
+            for (let i = 0; i < count; i++) {
+                cardDetails.push({
+                    name, cmc: 4, type: 'creatures', allTypes: ['creatures'],
+                    power: String(power), toughness: String(toughness),
+                    totalPT: power + toughness, isPower5Plus: power >= 5
+                });
+            }
+        }
+        return {
+            creatures: cardDetails.length, instants: 0, sorceries: 0, artifacts: 0,
+            enchantments: 1, planeswalkers: 0, lands: 36, battles: 0,
+            actualCardCount: 99, cardsByName, cardDetails,
+            commanderName: null, importSource: 'moxfield', ...extra
+        };
+    }
+
+    it('flags Wild Pair when the card is in the deck', () => {
+        const deck = ptDeck([['Bear', 2, 2]]);
+        deck.cardsByName['Wild Pair'] = { name: 'Wild Pair', type_line: 'Enchantment', cmc: 6, category: 'enchantments', count: 1 };
+        deck.cardDetails.push({ name: 'Wild Pair', cmc: 6, type: 'enchantments', allTypes: ['enchantments'] });
+        const r = analyzeDeck(deck).find(x => x.tab === 'wildpair');
+        assert.strictEqual(r.hasCard, true);
+        assert.strictEqual(r.tier, 'core');
+    });
+
+    it('also matches the common misspelling "Wild Pairs"', () => {
+        assert.ok(TRIGGER_CARDS.wildpair.includes('wild pairs'));
+    });
+
+    it('counts pairs as floor(bucket / 2), not bucket size', () => {
+        // Three creatures at total 4 make one pair with one stranded.
+        const facts = deriveDeckFacts(ptDeck([['A', 2, 2], ['B', 1, 3], ['C', 3, 1]]));
+        assert.strictEqual(facts.ptCreatures, 3);
+        assert.strictEqual(facts.ptPairs, 1);
+        assert.strictEqual(facts.ptPairedCreatures, 3);
+    });
+
+    it('does not pair creatures whose totals differ', () => {
+        const facts = deriveDeckFacts(ptDeck([['Five Five', 5, 5], ['Five Six', 5, 6]]));
+        assert.strictEqual(facts.ptPairs, 0);
+        assert.strictEqual(facts.ptPairRate, 0);
+    });
+
+    it('ignores creatures with a variable power or toughness', () => {
+        const deck = ptDeck([['Fixed', 3, 3]]);
+        deck.cardDetails.push({
+            name: 'Star', cmc: 5, type: 'creatures', allTypes: ['creatures'],
+            power: '*', toughness: '*', totalPT: null
+        });
+        const facts = deriveDeckFacts(deck);
+        assert.strictEqual(facts.ptCreatures, 2);
+        assert.strictEqual(facts.ptPairs, 0);
+    });
+
+    it('suggests Wild Pair structurally for a deck built on matched totals', () => {
+        const creatures = [];
+        for (let i = 0; i < 6; i++) {
+            creatures.push([`Cheap ${i}`, 3, 3]);
+            creatures.push([`Big ${i}`, 4, 2]);
+        }
+        const r = analyzeDeck(ptDeck(creatures)).find(x => x.tab === 'wildpair');
+        assert.ok(r.score > 0);
+        assert.ok(/pairs/i.test(r.reasons[0]), r.reasons[0]);
+    });
+
+    it('stays quiet when every creature has a unique total', () => {
+        const creatures = Array.from({ length: 10 }, (_, i) => [`Unique ${i}`, i + 1, 1]);
+        assert.strictEqual(analyzeDeck(ptDeck(creatures)).find(x => x.tab === 'wildpair').score, 0);
+    });
+});
+
+describe('deckRadar — Head to Head', () => {
+    /** A deck fixture carrying both power and totalPT, which the comparison needs. */
+    function engineDeck(creatures) {
+        const cardsByName = {};
+        const cardDetails = [];
+        for (const [name, power, toughness, cmc = 5] of creatures) {
+            cardsByName[name] = {
+                name, type_line: 'Creature — Beast', cmc,
+                power: String(power), toughness: String(toughness),
+                category: 'creatures', count: 1
+            };
+            cardDetails.push({
+                name, cmc, type: 'creatures', allTypes: ['creatures'],
+                power: String(power), toughness: String(toughness),
+                totalPT: power + toughness, isPower5Plus: power >= 5
+            });
+        }
+        return {
+            creatures: cardDetails.length, instants: 0, sorceries: 0, artifacts: 0,
+            enchantments: 0, planeswalkers: 0, lands: 36, battles: 0,
+            actualCardCount: 99, cardsByName, cardDetails,
+            commanderName: null, importSource: 'moxfield'
+        };
+    }
+
+    it('suggests the comparison when both engines apply', () => {
+        // Ten 6/6s: matched totals for Wild Pair, power 5+ for Vortex.
+        const deck = engineDeck(Array.from({ length: 10 }, (_, i) => [`Fatty ${i}`, 6, 6]));
+        const r = analyzeDeck(deck).find(x => x.tab === 'versus');
+        assert.ok(r.score > 0);
+        assert.ok(/Wild Pair and Monstrous Vortex/.test(r.reasons[0]), r.reasons[0]);
+    });
+
+    it('stays quiet when only one engine applies', () => {
+        // Matched totals, but nothing has power 5+ — no Vortex, nothing to compare.
+        const small = engineDeck(Array.from({ length: 10 }, (_, i) => [`Dork ${i}`, 2, 2]));
+        assert.strictEqual(analyzeDeck(small).find(x => x.tab === 'versus').score, 0);
+
+        // Power 5+ everywhere, but every total is unique — no Wild Pair.
+        const unique = engineDeck(Array.from({ length: 10 }, (_, i) => [`Fatty ${i}`, 5 + i, 1]));
+        assert.strictEqual(analyzeDeck(unique).find(x => x.tab === 'versus').score, 0);
+    });
+
+    it('stays quiet for a hand-typed deck with no card data', () => {
+        const bare = { creatures: 30, lands: 36, actualCardCount: 99, cardsByName: {}, cardDetails: [] };
+        assert.strictEqual(analyzeDeck(bare).find(x => x.tab === 'versus').score, 0);
+    });
+});

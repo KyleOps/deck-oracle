@@ -23,7 +23,7 @@
     <link rel="stylesheet" href="css/mobile.css">
     <link rel="stylesheet" href="css/ux-enhancements.css">
 </head>
-<body class="theme-mulligan">
+<body class="theme-wildpair">
     <a class="tx-skip" href="#main">Skip to calculator</a>
     <div class="container">
 
@@ -36,9 +36,9 @@
                     <span class="tx-oracle">ORACLE</span>
                 </div>
                 <div class="tx-group-row">
+                    <button class="tx-group active" data-group="engines">ENGINES</button>
                     <button class="tx-group" data-group="spells">SPELLS</button>
-                    <button class="tx-group" data-group="Creatures">CREATURES</button>
-                    <button class="tx-group active" data-group="deck-tools">TOOLS</button>
+                    <button class="tx-group" data-group="deck-tools">TOOLS</button>
                     <button class="tx-group" data-group="multiplayer">MULTI</button>
                 </div>
                 <div class="tx-deck-pill">
@@ -51,17 +51,19 @@
             </div>
             <!-- Bottom row: calculator tabs (filtered by active group) -->
             <div class="tx-tab-row" id="tx-tab-row">
+                <button class="tx-tab active" data-tab="wildpair" data-group="engines"><span class="tx-code">WPR</span><span class="tx-sep">·</span><span class="tx-name">Wild Pair</span></button>
+                <button class="tx-tab" data-tab="vortex" data-group="engines"><span class="tx-code">VOR</span><span class="tx-sep">·</span><span class="tx-name">Monstrous Vortex</span></button>
+                <button class="tx-tab" data-tab="chimil" data-group="engines"><span class="tx-code">CHM</span><span class="tx-sep">·</span><span class="tx-name">Chimil</span></button>
+                <button class="tx-tab" data-tab="rashmi" data-group="engines"><span class="tx-code">RSH</span><span class="tx-sep">·</span><span class="tx-name">Rashmi</span></button>
                 <button class="tx-tab group-hidden" data-tab="portent" data-group="spells"><span class="tx-code">POR</span><span class="tx-sep">·</span><span class="tx-name">Portent of Calamity</span></button>
                 <button class="tx-tab group-hidden" data-tab="wave" data-group="spells"><span class="tx-code">WAV</span><span class="tx-sep">·</span><span class="tx-name">Genesis Wave</span></button>
                 <button class="tx-tab group-hidden" data-tab="vow" data-group="spells"><span class="tx-code">VOW</span><span class="tx-sep">·</span><span class="tx-name">Kamahl's Vow</span></button>
                 <button class="tx-tab group-hidden" data-tab="surge" data-group="spells"><span class="tx-code">SUR</span><span class="tx-sep">·</span><span class="tx-name">Primal Surge</span></button>
-                <button class="tx-tab group-hidden" data-tab="vortex" data-group="spells"><span class="tx-code">VOR</span><span class="tx-sep">·</span><span class="tx-name">Monstrous Vortex</span></button>
                 <button class="tx-tab group-hidden" data-tab="abstract" data-group="spells"><span class="tx-code">ABS</span><span class="tx-sep">·</span><span class="tx-name">Abstract Perf.</span></button>
-                <button class="tx-tab group-hidden" data-tab="chimil" data-group="spells"><span class="tx-code">CHM</span><span class="tx-sep">·</span><span class="tx-name">Chimil</span></button>
-                <button class="tx-tab group-hidden" data-tab="rashmi" data-group="Creatures"><span class="tx-code">RSH</span><span class="tx-sep">·</span><span class="tx-name">Rashmi</span></button>
-                <button class="tx-tab group-hidden" data-tab="lumra" data-group="Creatures"><span class="tx-code">LMR</span><span class="tx-sep">·</span><span class="tx-name">Lumra</span></button>
-                <button class="tx-tab active" data-tab="mulligan" data-group="deck-tools"><span class="tx-code">MUL</span><span class="tx-sep">·</span><span class="tx-name">Mulligan</span></button>
-                <button class="tx-tab" data-tab="lands" data-group="deck-tools"><span class="tx-code">LND</span><span class="tx-sep">·</span><span class="tx-name">Land Drops</span></button>
+                <button class="tx-tab group-hidden" data-tab="lumra" data-group="spells"><span class="tx-code">LMR</span><span class="tx-sep">·</span><span class="tx-name">Lumra</span></button>
+                <button class="tx-tab group-hidden" data-tab="mulligan" data-group="deck-tools"><span class="tx-code">MUL</span><span class="tx-sep">·</span><span class="tx-name">Mulligan</span></button>
+                <button class="tx-tab group-hidden" data-tab="lands" data-group="deck-tools"><span class="tx-code">LND</span><span class="tx-sep">·</span><span class="tx-name">Land Drops</span></button>
+                <button class="tx-tab group-hidden" data-tab="versus" data-group="deck-tools"><span class="tx-code">VS</span><span class="tx-sep">·</span><span class="tx-name">Head to Head</span></button>
                 <button class="tx-tab group-hidden" data-tab="mara" data-group="multiplayer"><span class="tx-code">MAR</span><span class="tx-sep">·</span><span class="tx-name">Ensnared / Mara</span></button>
                 <button class="tx-tab group-hidden" data-tab="dreamharvest" data-group="multiplayer"><span class="tx-code">DRH</span><span class="tx-sep">·</span><span class="tx-name">Dream Harvest</span></button>
                 <button class="tx-tab group-hidden" data-tab="mindsdilation" data-group="multiplayer"><span class="tx-code">MND</span><span class="tx-sep">·</span><span class="tx-name">Mind's Dilation</span></button>
@@ -766,6 +768,117 @@
             </div>
         </div>
 
+        <!-- WILD PAIR TAB -->
+        <div id="wildpair-tab" class="tab-content" role="tabpanel" aria-labelledby="wildpair">
+            <h1>Wild Pair</h1>
+            <p class="card-text">"Whenever a creature enters, if you cast it from your hand, you may search your library for a creature card with the same total power and toughness, put it onto the battlefield, then shuffle."</p>
+
+            <div class="main-grid single-column">
+                <section class="panel panel-config" aria-label="Configuration">
+                    <div class="tx-h"><span>Total power + toughness</span><span class="tx-h-r">the search key</span></div>
+                    <div style="padding:16px;">
+                        <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:4px;">
+                            <span id="wildpair-total-display" style="font-size:var(--t-display); font-weight:700; color:var(--tx-bright); line-height:1; letter-spacing:var(--track-display); font-feature-settings:'tnum' 1;">—</span>
+                            <span style="color:var(--tx-dim); font-size:var(--t-xs);">power + toughness</span>
+                        </div>
+                        <div id="wildpair-total-summary" style="color:var(--tx-mid); font-size:var(--t-xs); margin-bottom:12px; line-height:1.5;">—</div>
+                        <input class="tx-slider" type="range" id="wildpair-totalSlider" value="0" min="0" max="0" step="1" aria-label="Step through the totals in your deck">
+                        <div id="wildpair-total-scale" style="display:flex; justify-content:space-between; margin-top:4px; font-size:var(--t-micro); color:var(--tx-dim); font-feature-settings:'tnum' 1;">
+                            <span>&mdash;</span><span>&mdash;</span>
+                        </div>
+                        <div id="wildpair-total-stops" style="margin-top:6px; font-size:var(--t-micro); letter-spacing:var(--track-label); text-transform:uppercase; color:var(--tx-mid);"></div>
+                        <input type="number" id="wildpair-totalValue" value="0" min="0" max="40" style="position:absolute; opacity:0; pointer-events:none; width:1px; height:1px;" aria-label="Total power and toughness" tabindex="-1">
+                        <div style="color:var(--tx-dim); font-size:var(--t-micro); margin-top:10px; line-height:1.5;">Wild Pair matches on this number and nothing else. The slider steps through the totals your deck actually has &mdash; no empty stops. Clicking any group below moves it too.</div>
+                    </div>
+
+                    <div class="tx-h"><span>Your deck</span><span class="tx-h-r">as built</span></div>
+                    <div style="padding:16px; font-size:var(--t-xs); color:var(--tx-mid); line-height:1.55;">
+                        <div style="margin-bottom:6px;">Creatures that find something: <span id="wildpair-live-display" style="color:var(--tx-bright);">&mdash;</span></div>
+                        <div style="margin-bottom:8px;">Matched totals: <span id="wildpair-matched-display" style="color:var(--tx-bright);">&mdash;</span></div>
+                        <div style="color:var(--tx-dim); font-size:var(--t-micro);">A 5/5 and a 3/7 match; a 5/5 and a 5/6 never do. Creatures sharing a total are interchangeable &mdash; cast any one of them and you may search up any other.</div>
+                    </div>
+                </section>
+
+                <section class="panel" id="wildpair-group" aria-label="Search options at the selected total"></section>
+
+                <section class="panel" id="wildpair-groups" aria-label="All groups"></section>
+
+                <section class="panel" aria-label="Power and toughness spread">
+                    <div class="tx-h"><span>Total power + toughness spread</span><span class="tx-h-r">any column of two or more is live</span></div>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="wildpair-pt-chart" role="img" aria-label="Creature count by total power and toughness"></canvas>
+                    </div>
+                </section>
+
+                <section class="panel" aria-label="Wild Pair ceiling">
+                    <div class="tx-h"><span>Across the deck</span><span class="tx-h-r">per activation, exact from the decklist</span></div>
+                    <div id="wildpair-hero"></div>
+                    <div id="wildpair-fit"></div>
+                    <div id="wildpair-recommendation"></div>
+                    <div id="wildpair-datanote"></div>
+                </section>
+
+                <section class="panel" id="wildpair-pairings" aria-label="Available pairings"></section>
+
+                <section class="panel" aria-label="Pair ladder">
+                    <div class="tx-h"><span>Total ladder</span><span class="tx-h-r">&#9733; marks your deepest total</span></div>
+                    <div id="wildpair-sweepTable"></div>
+                </section>
+            </div>
+        </div>
+
+        <!-- HEAD TO HEAD TAB -->
+        <div id="versus-tab" class="tab-content" role="tabpanel" aria-labelledby="versus">
+            <h1>Head to Head</h1>
+            <p class="card-text">Two payoff engines, one deck. Which is worth more when you cast a creature &mdash; and at which point in the game?</p>
+
+            <div class="main-grid single-column">
+                <section class="panel panel-config" aria-label="Configuration">
+                    <div class="tx-h"><span>Engines</span><span class="tx-h-r">pick two</span></div>
+                    <div style="padding:16px;">
+                        <label for="versus-engine-a" style="display:block; font-size:var(--t-micro); letter-spacing:var(--track-label); text-transform:uppercase; color:var(--tx-dim); margin-bottom:5px;">Side A</label>
+                        <select id="versus-engine-a" class="vs-select" aria-label="First engine"></select>
+                        <div style="text-align:center; font-size:var(--t-micro); letter-spacing:var(--track-wide); color:var(--tx-dim); margin:10px 0;">VS</div>
+                        <label for="versus-engine-b" style="display:block; font-size:var(--t-micro); letter-spacing:var(--track-label); text-transform:uppercase; color:var(--tx-dim); margin-bottom:5px;">Side B</label>
+                        <select id="versus-engine-b" class="vs-select" aria-label="Second engine"></select>
+                    </div>
+
+                    <div class="tx-h"><span>Assumptions</span><span class="tx-h-r">how to read the deck</span></div>
+                    <div style="padding:16px;">
+                        <label style="display:flex; align-items:flex-start; gap:8px; font-size:var(--t-xs); color:var(--tx-mid); line-height:1.5; cursor:pointer;">
+                            <input type="checkbox" id="versus-star-power" style="margin-top:2px;">
+                            <span>Count <span style="color:var(--tx-bright);">*</span> power as 5 or greater</span>
+                        </label>
+                        <div style="color:var(--tx-dim); font-size:var(--t-micro); margin-top:8px; line-height:1.5;">A creature with a variable power box is 0 in the library but can be large on the stack. Off by default.</div>
+                    </div>
+
+                    <div class="tx-h"><span>This deck</span><span class="tx-h-r">as built</span></div>
+                    <div style="padding:16px; font-size:var(--t-xs); color:var(--tx-mid); line-height:1.55;">
+                        <div style="margin-bottom:6px;">Creature casts compared: <span id="versus-creatures-display" style="color:var(--tx-bright);">&mdash;</span></div>
+                        <div style="margin-bottom:8px;">Leader: <span id="versus-lead-display" style="color:var(--tx-bright);">&mdash;</span></div>
+                        <div style="color:var(--tx-dim); font-size:var(--t-micro);">Both are measured as free mana value off a single creature cast. They do not feed each other: Wild Pair never casts its creature, and a card cast off discover comes from exile, not hand.</div>
+                    </div>
+                </section>
+
+                <section class="panel" id="versus-scoreboard" aria-label="Scoreboard"></section>
+
+                <section class="panel" aria-label="Value by mana value">
+                    <div class="tx-h"><span>Value at each point in the game</span><span class="tx-h-r">by the mana value of the creature you cast</span></div>
+                    <div class="chart-container" style="height: 320px;">
+                        <canvas id="versus-curve-chart" role="img" aria-label="Expected free mana value by cast creature mana value"></canvas>
+                    </div>
+                    <div id="versus-recommendation"></div>
+                </section>
+
+                <section class="panel" id="versus-peaks" aria-label="Peaks"></section>
+
+                <section class="panel" aria-label="Creature by creature">
+                    <div class="tx-h"><span>Creature by creature</span><span class="tx-h-r">what each cast is worth to each engine</span></div>
+                    <div id="versus-table"></div>
+                </section>
+            </div>
+        </div>
+
         <!-- MARA TAB -->
         <div id="mara-tab" class="tab-content" role="tabpanel" aria-labelledby="mara">
             <h1>Ensnared by the Mara Calculator</h1>
@@ -982,7 +1095,7 @@
             <span><kbd>P</kbd> paste deck</span>
             <span class="tx-footer-right">
                 <button id="share-button" class="tx-footer-btn" title="Copy a link to this calculator and deck">Copy share link</button>
-                <span class="tx-footer-ver">v2.9.0</span>
+                <span class="tx-footer-ver">v2.11.0</span>
             </span>
         </footer>
 

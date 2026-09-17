@@ -672,7 +672,7 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
 
             if (count > 0 && matchedKey) {
                 // For dual-faced cards, use front face data only
-                let typeLine, cmc, power;
+                let typeLine, cmc, power, toughness;
 
                 if (cardData.card_faces && cardData.card_faces.length > 0) {
                     // Dual-faced card - use front face (index 0)
@@ -680,11 +680,13 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
                     typeLine = frontFace.type_line;
                     cmc = frontFace.cmc !== undefined ? frontFace.cmc : cardData.cmc;
                     power = frontFace.power;
+                    toughness = frontFace.toughness;
                 } else {
                     // Normal single-faced card
                     typeLine = cardData.type_line;
                     cmc = cardData.cmc;
                     power = cardData.power;
+                    toughness = cardData.toughness;
                 }
 
                 // Get all type categories for dual-typed cards (e.g., "Artifact Creature")
@@ -708,6 +710,7 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
                     cmc: cmc,
                     mana_cost: cardData.mana_cost || '',
                     power: power,
+                    toughness: toughness,
                     category: primaryCategory,
                     allCategories: allCategories, // Store all categories
                     count: count
@@ -717,6 +720,7 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
                 if (primaryCategory !== 'lands' && cmc !== undefined) {
                     // Parse power using helper function
                     const powerNum = allCategories.includes('creatures') ? parsePowerValue(power) : null;
+                    const toughnessNum = allCategories.includes('creatures') ? parsePowerValue(toughness) : null;
 
                     // Add one entry for each copy of the card
                     for (let i = 0; i < count; i++) {
@@ -726,6 +730,11 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
                             type: primaryCategory,
                             allTypes: allCategories,
                             power: power, // Store raw power (e.g. "*", "5")
+                            toughness: toughness, // Store raw toughness (e.g. "*", "5")
+                            // Total power + toughness — what Wild Pair matches on.
+                            // null when either half is variable (*/X), because such
+                            // a creature has no fixed total to pair against.
+                            totalPT: (powerNum !== null && toughnessNum !== null) ? powerNum + toughnessNum : null,
                             isPower5Plus: powerNum !== null && powerNum >= 5
                         });
                     }
@@ -908,6 +917,7 @@ function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName)
     let typeLine = cardData.type_line || cardData.typeLine;
     let cmc = cardData.cmc;
     let power = cardData.power;
+    let toughness = cardData.toughness;
     const name = cardData.name;
 
     // DFC handling
@@ -916,6 +926,7 @@ function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName)
         typeLine = face.type_line || face.typeLine || typeLine;
         cmc = face.cmc !== undefined ? face.cmc : cmc;
         power = face.power;
+        toughness = face.toughness;
     }
     
     // Fallback: Construct type_line from component arrays (Archidekt style)
@@ -953,6 +964,7 @@ function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName)
         cmc: cmc,
         mana_cost: cardData.mana_cost,
         power: power,
+        toughness: toughness,
         category: primaryCategory,
         allCategories: allCategories,
         count: count
@@ -962,6 +974,7 @@ function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName)
     if (primaryCategory !== 'lands' && cmc !== undefined) {
         // Parse power using helper function
         const powerNum = allCategories.includes('creatures') ? parsePowerValue(power) : null;
+        const toughnessNum = allCategories.includes('creatures') ? parsePowerValue(toughness) : null;
 
         for (let i = 0; i < count; i++) {
             cardDetails.push({
@@ -970,6 +983,8 @@ function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName)
                 type: primaryCategory,
                 allTypes: allCategories,
                 power: power, // Store raw power
+                toughness: toughness, // Store raw toughness
+                totalPT: (powerNum !== null && toughnessNum !== null) ? powerNum + toughnessNum : null,
                 isPower5Plus: powerNum !== null && powerNum >= 5
             });
         }

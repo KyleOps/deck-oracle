@@ -9,7 +9,7 @@ import * as Mara from '../calculators/mara.js';
 import * as DreamHarvest from '../calculators/dreamharvest.js';
 
 // Valid tab names whitelist
-const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra', 'mara', 'dreamharvest', 'mindsdilation', 'abstract', 'chimil'];
+const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra', 'mara', 'dreamharvest', 'mindsdilation', 'abstract', 'chimil', 'wildpair', 'versus'];
 
 // LZ-String is loaded globally via CDN
 const LZString = window.LZString;
@@ -93,12 +93,14 @@ export async function parseShareUrl() {
     // 2. Tab Selection - with whitelist validation
     const tab = params.get('tab');
     if (tab && VALID_TABS.includes(tab)) {
-        // Trigger tab switch via the selector logic in main.js
-        // Since we don't have direct access to switchTab from here without circular dependency,
-        // we simulate a click on the selector option.
-        const tabOption = document.querySelector(`.selector-option[data-tab="${CSS.escape(tab)}"]`);
-        if (tabOption) {
-            tabOption.click();
+        // Click the tab button rather than calling switchTab, which lives in
+        // main.js and would be a circular import. This targets the terminal tab
+        // row; it used to target `.selector-option`, the dropdown that was
+        // removed with the legacy nav, so shared links stopped restoring the
+        // tab for every calculator.
+        const tabButton = document.querySelector(`.tx-tab[data-tab="${CSS.escape(tab)}"]`);
+        if (tabButton) {
+            tabButton.click();
         }
     }
 
@@ -162,6 +164,7 @@ export async function parseShareUrl() {
         'lumraGY': { id: 'lumra-gySlider', min: 0, max: 30 },
         'lumraMult': { id: 'lumra-multSlider', min: 1, max: 10 },
         'chimilTurns': { id: 'chimil-turnsSlider', min: 1, max: 20 },
+        'wpTotal': { id: 'wildpair-totalSlider', min: 0, max: 40 },
     };
 
     Object.entries(sliderMap).forEach(([param, config]) => {
@@ -265,7 +268,8 @@ export function getShareUrl() {
         { id: 'rashmi-cmcSlider', param: 'rashmiCMC' },
         { id: 'lumra-gySlider', param: 'lumraGY' },
         { id: 'lumra-multSlider', param: 'lumraMult' },
-        { id: 'chimil-turnsSlider', param: 'chimilTurns' }
+        { id: 'chimil-turnsSlider', param: 'chimilTurns' },
+        { id: 'wildpair-totalSlider', param: 'wpTotal' }
     ];
 
     sliders.forEach(({ id, param }) => {

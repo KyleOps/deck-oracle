@@ -748,3 +748,33 @@ body.theme-chimil {
 .theme-chimil h1 { color: var(--tx-bright); text-shadow: none; }
 .theme-chimil h2 { color: var(--tx-mid); border-bottom-color: var(--tx-rule); }
 .theme-chimil *:focus-visible { outline-color: var(--tx-accent); }
+
+/* Wild Pair — same uniform terminal palette; green carries "paired", red
+   carries "stranded", which is the one distinction this calculator draws. */
+body.theme-wildpair {
+    --accent:       var(--tx-accent);
+    --accent-light: var(--tx-bright);
+    --accent-glow:  transparent;
+    --theme-tint:   rgba(30, 34, 31, 0.5);
+    --wildpair-primary:   var(--tx-good);
+    --wildpair-secondary: var(--tx-accent);
+}
+
+.theme-wildpair h1 { color: var(--tx-bright); text-shadow: none; }
+.theme-wildpair h2 { color: var(--tx-mid); border-bottom-color: var(--tx-rule); }
+.theme-wildpair *:focus-visible { outline-color: var(--tx-accent); }
+
+/* Head to Head — a comparison tab, so green marks side A and amber side B and
+   neither is chrome; the palette is otherwise the shared terminal one. */
+body.theme-versus {
+    --accent:       var(--tx-accent);
+    --accent-light: var(--tx-bright);
+    --accent-glow:  transparent;
+    --theme-tint:   rgba(30, 34, 31, 0.5);
+    --versus-primary:   var(--tx-good);
+    --versus-secondary: var(--tx-accent);
+}
+
+.theme-versus h1 { color: var(--tx-bright); text-shadow: none; }
+.theme-versus h2 { color: var(--tx-mid); border-bottom-color: var(--tx-rule); }
+.theme-versus *:focus-visible { outline-color: var(--tx-accent); }

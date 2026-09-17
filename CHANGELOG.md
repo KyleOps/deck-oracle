@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-09-02
+
+### Added
+- **Head to Head calculator** (`VS` ticker) — two payoff engines, one deck, compared cast by cast.
+  - Every other tab asks "how good is this card in my deck". This one asks the question that actually decides a slot: *given these two cards, which does more for this deck, and when?*
+  - **Compared per creature cast**, because that is the event both engines key off and the unit a player thinks in. Averaged across the creature base it gives the general answer; plotted against the cast creature's mana value it gives the answer *at each point in the game*, which is where the two usually diverge
+  - **Value-by-mana-value chart** — expected free mana value from each engine against the mana value of the creature you cast, with the discover engine's best observed trigger on its own right-hand axis (sharing one scale squashed both averages, the primary series, into the bottom fifth of the plot)
+  - **Randomness against certainty** — the headline is a *situational* head-to-head: on the casts where both engines fire, how often does the random one actually out-roll the certain one? Each contested cast is compared as a distribution against a distribution (by convolution, so it works whichever kinds are being compared) and counts once regardless of how many samples backed it. This replaced a static "% of triggers that beat the tutor's best", which measured against a deck-wide constant and counted triggers on casts the tutor never even saw
+  - **Per-cast odds in the creature table** — a contested row names the likelier winner and its share ("Wild Pair 87% of the time"); an uncontested row says which engine is the only one that fires
+  - **Peaks section** — the chain-length and mana-cheated distributions for the discover engine, with the tutor's best possible outcome marked on it. This is the part no average can express: how often one trigger chains, and how far the tail runs
+  - **Creature-by-creature table** naming what each cast is worth to each engine and which one wins it
+  - **The two engines are deliberately different shapes and the comparison preserves that.** A tutor is certain, capped at one card, and known before you cast; a discover is random, uncapped, and chains. Both get a mean *and* a spread, and the verdict weighs value per cast, how often it fires, and the ceiling separately rather than collapsing them into one score
+  - **Engine registry** — each engine declares `prepare()` and `evaluate()`, so a third one is a new entry rather than a new branch through the rendering. Both selectors populate from it
+  - `*` power is read as 0 by default with a toggle to count it as 5 or greater, matching the Monstrous Vortex tab
+  - 24 unit tests over the engines, the context builder, the comparison, and the verdict
+
+### Changed
+- **Calculator groups are now by what a card DOES, not by its printed type.** The old split mixed two taxonomies and misfiled three tabs: Wild Pair and Monstrous Vortex are enchantments but sat under Creatures and Spells, and Chimil is an artifact that sat under Spells. The line that actually matters is one-shot versus recurring:
+  - **ENGINES** — recurring permanents, ordered by card type: Wild Pair and Monstrous Vortex (enchantments), Chimil (artifact), Rashmi (creature)
+  - **SPELLS** — one-shot payoffs: Portent of Calamity, Genesis Wave, Kamahl's Vow, Primal Surge, Abstract Performance, and Lumra, whose value is all in a single enters trigger
+  - **TOOLS** — deck-level rather than card-specific: Mulligan, Land Drops, Head to Head
+  - **MULTI** — opponent-facing: Ensnared by the Mara, Dream Harvest, Mind's Dilation (an enchantment, but grouped by who it targets)
+- **The app opens on Engines / Wild Pair** rather than Tools / Mulligan
+- **The discover mechanic now lives in one place** — `js/utils/discover.js`, shared by the Monstrous Vortex tab and the new comparison. Vortex previously carried the chain walk inline, and a second copy in the comparison would eventually have drifted, giving the same deck two different answers on two tabs of the same site. A parity test pins the extracted model to the original loop across 720 deck/discover-size/star-power combinations
+- **Deck Radar suggests Head to Head** when more than one payoff engine actually applies to the deck, and stays quiet when there is nothing to compare
+
+### Fixed
+- **The value curve plotted the largest run seen, which produced dips that were pure noise.** Discover N+1 can hit everything discover N can, so on the same library every true statistic is non-decreasing in the discover size — but a maximum over 400 samples moved by up to 20 mana between identical runs and fell from mana value 10 to 13, implying a trend that does not exist. The curve now plots a stable top-5% line on the same axis as the averages (which also removed the need for a second axis), and the dominance property is pinned by tests
+- **`percentileFromDist` returned the maximum for any normalised distribution.** It rounded the rank up, so a distribution whose weights sum to 1 — the shape every pooled per-cast distribution has — only reached its target at the last non-empty bucket. This inflated the per-mana-value top-5% line to 28–49 mana and made it non-monotonic; the correct values are 7–17
+- **The comparison quoted an unstable "ceiling" for the random engine.** It was the largest run seen across the samples, which is a property of the sample size rather than of the deck — take more samples and it climbs. Worse, it was shown beside the tutor's *true* maximum, so the two sides were being compared on different statistics. Both sides now report a typical cast and a stable "good turn (top 5%)" drawn from the same kind of pooled per-cast distribution, and the largest sampled run is kept only in the Peaks section, explicitly labelled as one run in N rather than a ceiling. The verdict compares percentiles too
+- **Wide result tables were clipped rather than scrollable.** `overflow-x: auto` on the container did nothing because `.tx-sweep-table` is `width: 100%` — the table never exceeded the container, so its cells were simply cut off at narrow widths. The table now takes its natural width inside the scroll container
+
+## [2.10.0] - 2026-09-02
+
+### Added
+- **Wild Pair calculator** (`WPR` ticker) — {4}{G}{G} Enchantment, "Whenever a creature enters, if you cast it from your hand, you may search your library for a creature card with the same total power and toughness, put it onto the battlefield, then shuffle."
+  - **It is a group browser, not a simulation.** Wild Pair *searches* — you look at your whole library and choose — so there is no shuffle, no draw, and no probability of hitting the right card. Every other calculator on the site answers "how often does this work"; this one answers "which of my creatures can find each other", which is a property of the decklist and therefore exact. It is the only calculator here that deliberately runs no Monte Carlo
+  - **Totals that can find each other** — the primary view. Every total power + toughness shared by two or more creatures gets a block listing its members with P/T and mana value, in a grid that gains columns as the window widens. Fixed side columns keep P/T and mana value in straight lines across every card, so a wall of them still reads as a table rather than as noise
+  - **Search pool at the selected total** — the full roster for one total, with a bar per row scaled against the deck's most expensive creature, so the pool's mana spread is visible at a glance
+  - **Membership is bidirectional and undifferentiated.** Cast any member and you may search up any other, so no card is assigned a "caster" or "target" role and no row claims a best find — that would just name the same card on every line. The one derived number that varies is the pool's widest mana swing, stated once with both endpoints: *cast Grave Titan (6) → search up Woodfall Primus (8), +2*
+  - **The selector only stops on totals the deck actually has.** The slider runs over the index of the deck's totals rather than the number itself, so dragging never passes through empty positions. Clicking a group block, a singleton chip, or a bar in the spread chart moves it too, and the total ladder highlights the matching row
+  - **Total power + toughness spread chart** — stacked bars per total, matched creatures in green against creatures alone at their total in red, with the selected total ringed in the accent (colour already carries matched-versus-alone, so selection is an outline). This is the deck-building lesson in one image
+  - **No match in the deck** — the creatures alone at their total listed compactly, which is the list to fix
+  - **Mana analysis, kept secondary.** Reported per group as a cheat range — an activation at a given total puts a body worth *X–Y mana* onto the battlefield — with the average and the widest swing. The total ladder carries the same columns for every total, and the deck-level summary, fit verdict and best-lines list sit below the groups rather than above them
+  - **Deliberately does not model running a group dry.** Wild Pair costs {6} and is not on the battlefield for most of a game, so exhausting one total is not worth planning around. That leaves the distinction that actually matters — a total with two or more creatures is live, a total with one is not — and keeps every number a per-activation figure rather than a speculative game total
+  - **Variable power/toughness is reported, not silently dropped.** A `*/*` creature has no fixed total and can never match; it is excluded and named. Missing power/toughness — an import-data gap, a different problem — is reported separately with the fix
+  - 50 unit tests covering box parsing, grouping, pool swings and cheat ranges, the deck-level averages, total lookup, slider snapping (including a total from a share link that the current deck lacks), selector data, and every fit tier
+
+### Changed
+- **Decklist import now records creature toughness**, on both the Scryfall batch path and the Moxfield/Archidekt path, and derives `totalPT` per copy. Power alone was stored, which was enough for Monstrous Vortex's power-5+ check but not for anything matching on the printed pair. The bundled default deck data was backfilled from Scryfall
+- **Deck Radar detects Wild Pair** — by name (including the common "Wild Pairs" misspelling), and structurally from the number of creature pairs sharing a total power and toughness
+
+### Fixed
+- **Shared `?tab=` links stopped restoring the tab.** `parseShareUrl()` clicked `.selector-option[data-tab]`, the dropdown removed with the legacy navigation in 2.8.2, so every share link silently landed on the default calculator. It now clicks the terminal tab button
+
 ## [2.9.0] - 2026-09-01
 
 ### Added
