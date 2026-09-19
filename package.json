@@ -1,36 +1,45 @@
 {
     "name": "deck-oracle",
-  "version": "2.12.1",
-  "type": "module",
-  "description": "Deck Oracle - Magic: The Gathering probability calculators",
-  "main": "index.html",
-  "scripts": {
-    "test": "node --test tests/**/*.node.test.js",
-    "test:legacy": "node tests/run-tests.js",
-    "test:node": "node --test tests/**/*.node.test.js",
-    "test:node:watch": "node --test --watch tests/**/*.node.test.js",
-    "test:perf": "node --test tests/performance/benchmarks.node.test.js",
-    "test:watch": "nodemon --watch js --watch tests --exec npm run test:legacy",
-    "dev": "npx live-server --port=3000 --no-browser",
-    "serve": "npx http-server -p 3000 -c-1"
-  },
-  "keywords": [
-    "mtg",
-    "magic",
-    "calculator",
-    "probability",
-    "hypergeometric"
-  ],
-  "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "lz-string": "^1.5.0",
-    "nodemon": "^3.0.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "dependencies": {
-    "claude": "^0.1.1"
-  }
+    "version": "2.12.2",
+    "type": "module",
+    "description": "Deck Oracle - Magic: The Gathering probability calculators",
+    "main": "index.html",
+    "scripts": {
+        "test": "node --test tests/**/*.node.test.js",
+        "test:legacy": "node tests/run-tests.js",
+        "test:node": "node --test tests/**/*.node.test.js",
+        "test:node:watch": "node --test --watch tests/**/*.node.test.js",
+        "test:perf": "node --test tests/performance/benchmarks.node.test.js",
+        "test:e2e": "playwright test",
+        "test:watch": "nodemon --watch js --watch tests --exec npm run test:legacy",
+        "lint": "eslint js serverless sw.js tests/**/*.node.test.js tests/e2e playwright.config.js eslint.config.js",
+        "check": "npm run lint && npm test && npm run test:e2e",
+        "dev": "http-server . -p 3000 -c-1",
+        "serve": "http-server . -p 3000 -c-1",
+        "serve:test": "http-server . -p 4173 -c-1 -s"
+    },
+    "keywords": [
+        "mtg",
+        "magic",
+        "calculator",
+        "probability",
+        "hypergeometric"
+    ],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "@eslint/js": "10.0.1",
+        "@playwright/test": "1.63.0",
+        "eslint": "10.11.0",
+        "globals": "17.12.0",
+        "http-server": "14.1.1",
+        "lz-string": "^1.5.0",
+        "nodemon": "^3.0.0"
+    },
+    "engines": {
+        "node": ">=20.19.0"
+    },
+    "dependencies": {
+        "claude": "^0.1.1"
+    }
 }

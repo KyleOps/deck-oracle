@@ -11,7 +11,7 @@
  */
 
 import * as OpponentState from '../utils/opponentState.js';
-import { registerCalculator } from '../utils/calculatorBase.js';
+import { registerCalculator, updateCalculatorIfActive } from '../utils/calculatorBase.js';
 import { buildDeckFromCardData } from '../utils/sampleSimulator.js';
 
 // Example opponents for quick load
@@ -385,7 +385,7 @@ export function init() {
         for (const key of Object.keys(stableSamples)) {
             stableSamples[key] = [];
         }
-        updateUI();
+        updateCalculatorIfActive('mindsdilation', updateUI);
     });
 
     registerCalculator({
@@ -407,8 +407,6 @@ export function init() {
             if (reshuffleBtn) {
                 reshuffleBtn.addEventListener('click', refreshSamples);
             }
-
-            updateUI();
         }
     });
 }

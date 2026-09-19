@@ -47,3 +47,5 @@ response.json
 
 .gitignore
 /.claude
+playwright-report/
+test-results/

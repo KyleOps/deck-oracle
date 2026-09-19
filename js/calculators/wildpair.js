@@ -932,6 +932,4 @@ export function init() {
         });
     }
 
-    DeckConfig.onDeckUpdate(() => { updateUI(); });
-    updateUI();
 }

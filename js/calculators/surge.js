@@ -159,7 +159,7 @@ export function calculateSurgePayback(permanentCards, nonPermanents, settings = 
         for (const ways of subsetCounts[size]) whiffSubsets += ways;
         const conditionalWhiff = totalSubsets > 0 ? whiffSubsets / totalSubsets : 1;
 
-        let exactRunProbability = 0;
+        let exactRunProbability;
         if (stops === 0) {
             exactRunProbability = size === permanents ? 1 : 0;
         } else {

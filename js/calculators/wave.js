@@ -649,7 +649,7 @@ export function runSampleReveals() {
                 );
                 const cmc = card.cmc !== undefined ? card.cmc : 0;
 
-                let bgColor = '';
+                let bgColor;
                 let textColor = '#0a0b0a';
                 if (!hasPermanentType) {
                     bgColor = '#5b8db8';

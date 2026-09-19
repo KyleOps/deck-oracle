@@ -890,7 +890,7 @@ async function fetchWithProxy(url, proxyIndex = 0) {
             console.warn('Falling back to public proxy (INSECURE - dev mode only)');
 
             if (proxyIndex >= CORS_PROXIES.length) {
-                throw new Error('All CORS proxies failed. Please try again later.');
+                throw new Error('All CORS proxies failed. Please try again later.', { cause: error });
             }
 
             const proxyBase = CORS_PROXIES[proxyIndex];
@@ -899,7 +899,7 @@ async function fetchWithProxy(url, proxyIndex = 0) {
             try {
                 const response = await fetch(fallbackProxyUrl);
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                    throw new Error(`HTTP ${response.status}`, { cause: error });
                 }
                 return await response.json();
             } catch (fallbackError) {
@@ -908,7 +908,7 @@ async function fetchWithProxy(url, proxyIndex = 0) {
             }
         }
 
-        throw new Error('Failed to fetch deck data. Please try again later.');
+        throw new Error('Failed to fetch deck data. Please try again later.', { cause: error });
     }
 }
 

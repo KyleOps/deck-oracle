@@ -8,6 +8,31 @@ import { bindInputSync } from './ui.js';
 import * as DeckConfig from './deckConfig.js';
 
 /**
+ * Check whether a calculator owns the visible tab panel.
+ * Hidden calculators defer rendering until main.js activates their tab.
+ *
+ * @param {string} name - Calculator key used by `{name}-tab`
+ * @returns {boolean}
+ */
+export function isCalculatorActive(name) {
+    if (typeof name !== 'string' || name.length === 0) return false;
+    return document.getElementById(`${name}-tab`)?.classList?.contains('active') ?? false;
+}
+
+/**
+ * Run a calculator render only when its tab is currently visible.
+ *
+ * @param {string} name - Calculator key
+ * @param {Function} updateUI - Calculator render function
+ * @returns {boolean} Whether a render ran
+ */
+export function updateCalculatorIfActive(name, updateUI) {
+    if (!isCalculatorActive(name) || typeof updateUI !== 'function') return false;
+    updateUI();
+    return true;
+}
+
+/**
  * Register a calculator module.
  * Handles initialization, input binding, and deck updates automatically.
  * 
@@ -23,9 +48,7 @@ export function registerCalculator(options) {
     const { name, updateUI, init, inputs = [] } = options;
 
     const debouncedUpdate = debounce(() => {
-        // Only update if this tab is active or just initialized?
-        // Actually, updating background tabs is fine if debounced, keeps them fresh.
-        updateUI();
+        updateCalculatorIfActive(name, updateUI);
     }, 150);
 
     // Bind Inputs
@@ -36,7 +59,7 @@ export function registerCalculator(options) {
             const valueId = `${name}-${input}Value`;
             
             if (document.getElementById(sliderId) && document.getElementById(valueId)) {
-                bindInputSync(sliderId, valueId, (val) => debouncedUpdate());
+                bindInputSync(sliderId, valueId, () => debouncedUpdate());
             } else {
                 // Fallback: simple change listener on single ID
                 const el = document.getElementById(input.startsWith(name) ? input : `${name}-${input}`);
@@ -57,10 +80,6 @@ export function registerCalculator(options) {
     if (init) {
         init(debouncedUpdate);
     }
-
-    // Initial Render
-    // We defer this slightly to ensure DOM is fully ready if called early
-    setTimeout(updateUI, 0);
 
     return {
         updateUI: debouncedUpdate

@@ -3,29 +3,13 @@
  * Initializes calculators, event listeners, and manages tab switching
  */
 
-import * as Portent from './calculators/portent.js';
-import * as Surge from './calculators/surge.js';
-import * as Wave from './calculators/wave.js';
-import * as Vow from './calculators/vow.js';
-import * as Vortex from './calculators/vortex.js';
-import * as Lands from './calculators/lands.js';
-import * as Rashmi from './calculators/rashmi.js';
-import * as Lumra from './calculators/lumra.js';
-import * as Mulligan from './calculators/mulligan.js';
-import * as Mara from './calculators/mara.js';
-import * as DreamHarvest from './calculators/dreamharvest.js';
-import * as Abstract from './calculators/abstract.js';
-import * as MindsDilation from './calculators/mindsdilation.js';
-import * as Chimil from './calculators/chimil.js';
-import * as WildPair from './calculators/wildpair.js';
-import * as Versus from './calculators/versus.js';
 import * as Share from './utils/share.js';
 import * as OpponentState from './utils/opponentState.js';
-import { debounce } from './utils/simulation.js';
 import * as Components from './utils/components.js';
 import * as DeckConfig from './utils/deckConfig.js';
 import { renderRadar } from './utils/radarPanel.js';
 import { TX_CHART as TX } from './utils/chartHelpers.js';
+import { CALCULATORS as calculators, initializeCalculators } from './utils/calculatorRegistry.js';
 
 // Current active tab and group
 let currentTab = 'wildpair';
@@ -65,40 +49,6 @@ function applyChartDefaults() {
         Chart.defaults.scales.category = applyScaleDefaults(Chart.defaults.scales.category);
     }
 }
-
-// Calculator metadata: display name + which group its tab belongs to.
-//
-// Groups are by what the card DOES, not by its printed type: a recurring
-// permanent is an engine whether it is an enchantment (Wild Pair, Monstrous
-// Vortex), an artifact (Chimil) or a creature (Rashmi), while anything that
-// pays off once when you cast it sits with the spells — including Lumra, whose
-// value is all in a single enters trigger. Grouping by type instead had put
-// Wild Pair under Creatures and Chimil under Spells.
-const calculators = {
-    // ENGINES — recurring permanents
-    wildpair: { name: 'Wild Pair', group: 'engines' },
-    vortex: { name: 'Monstrous Vortex', group: 'engines' },
-    chimil: { name: 'Chimil, the Inner Sun', group: 'engines' },
-    rashmi: { name: 'Rashmi', group: 'engines' },
-
-    // SPELLS — one-shot payoffs
-    portent: { name: 'Portent of Calamity', group: 'spells' },
-    wave: { name: 'Genesis Wave', group: 'spells' },
-    vow: { name: 'Kamahl\'s Druidic Vow', group: 'spells' },
-    surge: { name: 'Primal Surge', group: 'spells' },
-    abstract: { name: 'Abstract Performance', group: 'spells' },
-    lumra: { name: 'Lumra', group: 'spells' },
-
-    // TOOLS — deck-level, not card-specific
-    mulligan: { name: 'Mulligan Strategy', group: 'deck-tools' },
-    lands: { name: 'Land Drops', group: 'deck-tools' },
-    versus: { name: 'Head to Head', group: 'deck-tools' },
-
-    // MULTI — opponent-facing
-    mara: { name: 'Ensnared by the Mara', group: 'multiplayer' },
-    dreamharvest: { name: 'Dream Harvest', group: 'multiplayer' },
-    mindsdilation: { name: "Mind's Dilation", group: 'multiplayer' }
-};
 
 /**
  * Switch between tab groups
@@ -287,40 +237,7 @@ function switchTab(tab) {
         if (opponentsConfig) opponentsConfig.style.display = 'none';
     }
 
-    // Update the respective calculator
-    if (tab === 'portent') {
-        Portent.updateUI();
-    } else if (tab === 'surge') {
-        Surge.updateUI();
-    } else if (tab === 'wave') {
-        Wave.updateUI();
-    } else if (tab === 'vow') {
-        Vow.updateUI();
-    } else if (tab === 'vortex') {
-        Vortex.updateUI();
-    } else if (tab === 'lands') {
-        Lands.updateUI();
-    } else if (tab === 'rashmi') {
-        Rashmi.updateUI();
-    } else if (tab === 'lumra') {
-        Lumra.updateUI();
-    } else if (tab === 'mulligan') {
-        Mulligan.updateUI();
-    } else if (tab === 'mara') {
-        Mara.updateUI();
-    } else if (tab === 'dreamharvest') {
-        DreamHarvest.updateUI();
-    } else if (tab === 'mindsdilation') {
-        MindsDilation.updateUI();
-    } else if (tab === 'abstract') {
-        Abstract.updateUI();
-    } else if (tab === 'chimil') {
-        Chimil.updateUI();
-    } else if (tab === 'wildpair') {
-        WildPair.updateUI();
-    } else if (tab === 'versus') {
-        Versus.updateUI();
-    }
+    calculators[tab]?.module?.updateUI?.();
 }
 
 /**
@@ -378,118 +295,6 @@ function initKeyboardNav() {
             tab.focus();
         }
     });
-}
-
-/**
- * Initialize Portent calculator inputs
- */
-function initPortentInputs() {
-    Portent.init();
-}
-
-/**
- * Initialize Surge calculator inputs
- */
-function initSurgeInputs() {
-    Surge.init();
-}
-
-/**
- * Initialize Wave calculator inputs
- */
-function initWaveInputs() {
-    Wave.init();
-}
-
-/**
- * Initialize Vow calculator inputs
- */
-function initVowInputs() {
-    Vow.init();
-}
-
-/**
- * Initialize Vortex calculator inputs
- */
-function initVortexInputs() {
-    Vortex.init();
-}
-
-/**
- * Initialize Lands calculator inputs
- */
-function initLandsInputs() {
-    Lands.init();
-}
-
-/**
- * Initialize Rashmi calculator inputs
- */
-function initRashmiInputs() {
-    Rashmi.init();
-}
-
-/**
- * Initialize Lumra calculator inputs
- */
-function initLumraInputs() {
-    Lumra.init();
-}
-
-/**
- * Initialize Mulligan calculator inputs
- */
-function initMulliganInputs() {
-    Mulligan.init();
-}
-
-/**
- * Initialize Mara calculator inputs
- */
-function initMaraInputs() {
-    Mara.init();
-}
-
-/**
- * Initialize Dream Harvest calculator inputs
- */
-function initDreamHarvestInputs() {
-    DreamHarvest.init();
-}
-
-/**
- * Initialize Mind's Dilation calculator inputs
- */
-function initMindsDilationInputs() {
-    MindsDilation.init();
-}
-
-/**
- * Initialize Abstract Performance calculator inputs
- */
-function initAbstractInputs() {
-    Abstract.init();
-}
-
-/**
- * Initialize Chimil calculator inputs
- */
-function initChimilInputs() {
-    Chimil.init();
-}
-
-/**
- * Initialize Wild Pair calculator inputs
- */
-function initWildPairInputs() {
-    WildPair.init();
-}
-
-/**
- * Initialize Head to Head comparison inputs
- */
-function initVersusInputs() {
-    Versus.init();
 }
 
 /**
@@ -556,7 +361,7 @@ function initPWAInstall() {
     });
 
     if (installBtn) {
-        installBtn.addEventListener('click', (e) => {
+        installBtn.addEventListener('click', () => {
             // hide our user interface that shows our A2HS button
             installBtn.style.display = 'none';
             // Show the prompt
@@ -593,7 +398,7 @@ async function init() {
     const exampleOpponentsBtn = document.getElementById('load-example-opponents-btn');
     if (exampleOpponentsBtn) {
         exampleOpponentsBtn.addEventListener('click', async () => {
-            const urls = MindsDilation.EXAMPLE_OPPONENTS;
+            const urls = calculators.mindsdilation.module.EXAMPLE_OPPONENTS;
             const keys = ['opponent1', 'opponent2', 'opponent3'];
             exampleOpponentsBtn.textContent = 'LOADING…';
             exampleOpponentsBtn.disabled = true;
@@ -637,22 +442,7 @@ async function init() {
 
     // Initialize all components
     initTabNavigation();
-    initPortentInputs();
-    initSurgeInputs();
-    initWaveInputs();
-    initVowInputs();
-    initVortexInputs();
-    initLandsInputs();
-    initRashmiInputs();
-    initLumraInputs();
-    initMulliganInputs();
-    initMaraInputs();
-    initDreamHarvestInputs();
-    initMindsDilationInputs();
-    initAbstractInputs();
-    initChimilInputs();
-    initWildPairInputs();
-    initVersusInputs();
+    initializeCalculators();
     initServiceWorker();
     initUXEnhancements();
     initPWAInstall();

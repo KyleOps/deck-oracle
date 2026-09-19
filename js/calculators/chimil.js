@@ -732,7 +732,4 @@ export function init() {
 
     const btn = document.getElementById('chimil-draw-reveals-btn');
     if (btn) btn.addEventListener('click', runSampleReveals);
-    DeckConfig.onDeckUpdate(() => { updateUI(); });
-
-    updateUI();
 }

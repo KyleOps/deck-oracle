@@ -818,6 +818,4 @@ export function init() {
     });
 
     registerCalculator({ name: 'versus', calculate, updateUI, inputs: [] });
-    DeckConfig.onDeckUpdate(() => { updateUI(); });
-    updateUI();
 }

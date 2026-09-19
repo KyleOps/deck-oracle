@@ -3,7 +3,7 @@
  * Provides offline support and faster loading through caching
  */
 
-const CACHE_NAME = 'mtg-calc-v20';
+const CACHE_NAME = 'mtg-calc-v21';
 const STATIC_ASSETS = [
     './',
     'index.html',
@@ -35,6 +35,7 @@ const STATIC_ASSETS = [
     'js/utils/analysis.js',
     'js/utils/bigSpellComparison.js',
     'js/utils/calculatorBase.js',
+    'js/utils/calculatorRegistry.js',
     'js/utils/chartHelpers.js',
     'js/utils/components.js',
     'js/utils/deckConfig.js',

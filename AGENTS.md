@@ -41,6 +41,7 @@ mtgcalcs/
 │       ├── components.js       # Reusable UI components (stat cards, grids)
 │       ├── tableUtils.js       # Multi-column comparison tables
 │       ├── calculatorBase.js   # Base infrastructure for calculators
+│       ├── calculatorRegistry.js # Calculator modules, groups, and app lifecycle registry
 │       ├── ui.js               # Collapsible sections, animations, validation
 │       ├── share.js            # URL deep linking, deck encoding
 │       └── bigSpellComparison.js  # Cross-calculator comparison
@@ -97,6 +98,7 @@ When making code changes to this project:
    - Look for test files in the `tests/` directory
    - Test files follow the pattern `tests/**/*.node.test.js`
    - Run tests with: `npm test`
+   - Run correctness checks with: `npm run lint`
 
 2. **Update tests when needed**:
    - If you modify function signatures or behavior, update corresponding tests
@@ -106,6 +108,8 @@ When making code changes to this project:
 3. **Run relevant tests**:
    - For calculator changes: `npm test -- tests/calculators/[calculator-name].node.test.js`
    - For full test suite: `npm test`
+   - For app-shell, navigation, sharing, or deck-input changes: `npm run test:e2e`
+   - For the complete CI-equivalent check: `npm run check`
 
 ## Documentation Requirements
 
@@ -148,12 +152,11 @@ When adding a new calculator to this project, you MUST complete ALL of the follo
    - (The legacy sub-nav pills and dropdown selector were removed in v2.8.2 — the
      terminal tab row is the only navigation. Do not re-add them.)
 
-3. **Register in Main App**: Update `js/main.js`
+3. **Register the Calculator**: Update `js/utils/calculatorRegistry.js`
    - Import the calculator module
-   - Add entry to `calculators` object with name and group (the `icon` field was
-     removed along with the dropdown that consumed it)
-   - Add case to `switchTab()` function
-   - Create and call `init[Name]Inputs()` function in `init()`
+   - Add one `CALCULATORS` entry with its display name, group, and module
+   - Do not add calculator-specific initialization or switching branches to
+     `js/main.js`; the registry drives both operations
 
 4. **Create Theme Styles**: Update `css/base.css`
    - Add CSS variables for calculator theme (primary, secondary, accent, bg colors, border)
@@ -196,6 +199,9 @@ import assert from 'node:assert';
 
 **Commands:**
 - `npm test` - Run full test suite
+- `npm run lint` - Run ESLint correctness checks
+- `npm run test:e2e` - Run Playwright browser smoke tests
+- `npm run check` - Run lint, unit, and browser suites
 - `npm run test:watch` - Watch mode
 - `npm run dev` - Local dev server
 
@@ -239,3 +245,4 @@ import assert from 'node:assert';
 | `share.js` | URL encoding | Deep linking, must update for new calculators |
 | `components.js` | UI builders | Stat cards, grids, insight boxes |
 | `chartHelpers.js` | Chart.js wrapper | Creating/updating charts |
+| `calculatorRegistry.js` | Calculator metadata and lifecycle | Registering calculators with the app shell |

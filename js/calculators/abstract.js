@@ -4,9 +4,10 @@
  * by opponent with partial information.
  */
 
-import { partialShuffle, debounce } from '../utils/simulation.js';
+import { partialShuffle } from '../utils/simulation.js';
 import { createOrUpdateChart } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
+import { updateCalculatorIfActive } from '../utils/calculatorBase.js';
 
 const CONFIG = {
     ITERATIONS: 25000,
@@ -410,14 +411,10 @@ function updateBreakdownTable(results) {
 }
 
 export function init() {
-    calculate();
-    updateUI();
-
     DeckConfig.onDeckUpdate(() => {
         lastDeckHash = '';
         cachedResults = null;
-        calculate();
-        updateUI();
+        updateCalculatorIfActive('abstract', updateUI);
     });
 
     const reshuffleBtn = document.getElementById('abstract-reshuffle-btn');

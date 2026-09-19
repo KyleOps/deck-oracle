@@ -9,7 +9,7 @@
  */
 
 import { createCache } from '../utils/simulation.js';
-import { registerCalculator } from '../utils/calculatorBase.js';
+import { registerCalculator, updateCalculatorIfActive } from '../utils/calculatorBase.js';
 import { generateSampleRevealsHTML, renderHeroStats } from '../utils/components.js';
 import { shuffleDeck, renderCardBadge, createCollapsibleSection, buildDeckFromCardData } from '../utils/sampleSimulator.js';
 import * as OpponentState from '../utils/opponentState.js';
@@ -459,7 +459,7 @@ export function init() {
         for (const key of Object.keys(stableSamples)) {
             stableSamples[key] = [];
         }
-        updateUI();
+        updateCalculatorIfActive('dreamharvest', updateUI);
     });
 
     registerCalculator({
@@ -476,8 +476,6 @@ export function init() {
             if (sampleBtn) {
                 sampleBtn.addEventListener('click', refreshSamples);
             }
-
-            updateUI();
         }
     });
 }

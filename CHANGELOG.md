@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.2] - 2026-09-19
+
+### Added
+- **Browser regression suite** — Playwright now exercises initial startup, registry-driven navigation, shared-link restoration, and live deck edits in Chromium; CI retains traces, screenshots, and an HTML report when a smoke test fails.
+- **Automated correctness linting** — ESLint's recommended correctness rules now run locally through `npm run lint` and block deployment in CI, with stricter unused-variable checks on the app shell and newly consolidated infrastructure.
+
+### Changed
+- **Active-calculator rendering** — deck and opponent changes now invalidate shared state but render only the visible calculator; hidden tabs calculate fresh results when opened instead of all calculators competing for the main thread after every edit.
+- **Single calculator registry** — navigation, initialization, grouping, and tab rendering now consume `calculatorRegistry.js`, replacing 16 initialization wrappers and the calculator-specific `switchTab()` chain.
+- **Supported development runtime** — local tooling now targets Node.js 20.19 or newer and uses a pinned local static server instead of downloading one at runtime.
+
+### Fixed
+- **Initial tab mismatch** — the Wild Pair button and Wild Pair content panel now start active together, preventing Mulligan from being treated as visible during asynchronous startup.
+- **Mind's Dilation example decks** — the preset-opponent loader now resolves the calculator through the shared registry instead of referencing the removed direct module import.
+
 ## [2.12.1] - 2026-09-19
 
 ### Changed

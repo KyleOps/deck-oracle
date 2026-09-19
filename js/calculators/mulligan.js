@@ -10,6 +10,7 @@ import * as DeckConfig from '../utils/deckConfig.js';
 import { generateSampleRevealsHTML, renderHeroStats, renderOutcomeMatrix } from '../utils/components.js';
 import { shuffleDeck, createCollapsibleSection } from '../utils/sampleSimulator.js';
 import { probabilityVerdict } from '../utils/analysis.js';
+import { updateCalculatorIfActive } from '../utils/calculatorBase.js';
 
 let simulationCache = createCache(100);
 let lastConfigHash = '';
@@ -756,10 +757,10 @@ export function runSampleReveals() {
 
                 const isSuccess = (needs.length === 0 || fixedByTurn);
 
-                let label = '';
-                let statusColor = '';
-                let statusBg = '';
-                let borderColor = '';
+                let label;
+                let statusColor;
+                let statusBg;
+                let borderColor;
 
                 if (keep) {
                     if (isSuccess) {
@@ -800,8 +801,8 @@ export function runSampleReveals() {
                 });
                 html += '</div>';
                 
-                let fixColor = '#e8635c';
-                let fixText = '';
+                let fixColor;
+                let fixText;
                 if (needs.length === 0) {
                     fixText = 'Started with requirements met';
                     fixColor = '#55c97f';
@@ -1541,9 +1542,8 @@ export function init() {
 
     // Listen for deck configuration changes
     DeckConfig.onDeckUpdate(() => {
-        updateUI();
+        updateCalculatorIfActive('mulligan', updateUI);
     });
 
     updateDescriptions(); // Initial description set
-    updateUI();
 }
