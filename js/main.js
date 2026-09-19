@@ -579,7 +579,7 @@ function initPWAInstall() {
 /**
  * Initialize application
  */
-function init() {
+async function init() {
     // Apply terminal Chart.js defaults before any calculator renders
     applyChartDefaults();
 
@@ -677,7 +677,7 @@ function init() {
 
     // Check for share link parameters and auto-load if present
     // Must be called AFTER all inputs are initialized so listeners are ready
-    Share.parseShareUrl();
+    await Share.parseShareUrl();
 
     // Initial render goes through switchTab so the first paint takes exactly the
     // same path as every later tab change. Calling updateUI() directly skipped
@@ -699,8 +699,14 @@ function init() {
 }
 
 // Start the app when DOM is ready
+function startApp() {
+    init().catch(error => {
+        console.error('Deck Oracle failed to initialize:', error);
+    });
+}
+
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', startApp);
 } else {
-    init();
+    startApp();
 }

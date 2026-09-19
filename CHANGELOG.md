@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.1] - 2026-09-19
+
+### Changed
+- **Deployment-safe offline cache** — service-worker assets now resolve relative to the worker's registration scope, so the same worker functions at the domain root and beneath the GitHub Pages `/deck-oracle/` path.
+- **Release metadata alignment** — synchronized the package and lockfile versions with the user-facing changelog version.
+
+### Fixed
+- **Deck import proxy validation** — replaced substring checks with exact origin and HTTPS hostname allowlists, rejected credentialed/custom-port targets and non-GET methods, and disabled upstream redirects so an allowed provider cannot redirect the worker to another host.
+- **Custom production domain imports** — allow `https://deck-oracle.xyz` to call the deck-import Worker; the redirect-only `www` hostname remains excluded from the exact-origin allowlist.
+- **Proxy response fidelity** — preserve upstream HTTP status and content type while returning consistent CORS headers and a non-sensitive `502` response on network failure.
+- **Cloudflare subrequest compatibility** — use manually validated redirects instead of `redirect: "error"`, which failed immediately on the deployed Worker runtime; redirects are followed only when their resolved destination remains on the exact provider allowlist.
+- **Complete offline install** — added the shared payback module and LZ-String runtime to the pre-cache, plus regression tests that fail whenever a JavaScript module is missing or a root-relative asset would break project-page deployment.
+- **Shared-link startup race** — application initialization now waits for asynchronous deck and opponent imports before performing the canonical active-tab render.
+
 ## [2.12.0] - 2026-09-19
 
 ### Added

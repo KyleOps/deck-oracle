@@ -3,57 +3,63 @@
  * Provides offline support and faster loading through caching
  */
 
-const CACHE_NAME = 'mtg-calc-v19';
+const CACHE_NAME = 'mtg-calc-v20';
 const STATIC_ASSETS = [
-    '/',
-    '/index.html',
-    '/manifest.json',
-    '/images/icon.svg',
-    '/css/base.css',
-    '/css/components.css',
-    '/css/mobile.css',
-    '/css/ux-enhancements.css',
-    '/js/main.js',
+    './',
+    'index.html',
+    'manifest.json',
+    'images/icon.svg',
+    'css/base.css',
+    'css/components.css',
+    'css/mobile.css',
+    'css/ux-enhancements.css',
+    'js/main.js',
     // Calculators
-    '/js/calculators/abstract.js',
-    '/js/calculators/chimil.js',
-    '/js/calculators/dreamharvest.js',
-    '/js/calculators/lands.js',
-    '/js/calculators/lumra.js',
-    '/js/calculators/mara.js',
-    '/js/calculators/mindsdilation.js',
-    '/js/calculators/mulligan.js',
-    '/js/calculators/portent.js',
-    '/js/calculators/rashmi.js',
-    '/js/calculators/surge.js',
-    '/js/calculators/vortex.js',
-    '/js/calculators/vow.js',
-    '/js/calculators/wave.js',
-    '/js/calculators/wildpair.js',
-    '/js/calculators/versus.js',
+    'js/calculators/abstract.js',
+    'js/calculators/chimil.js',
+    'js/calculators/dreamharvest.js',
+    'js/calculators/lands.js',
+    'js/calculators/lumra.js',
+    'js/calculators/mara.js',
+    'js/calculators/mindsdilation.js',
+    'js/calculators/mulligan.js',
+    'js/calculators/portent.js',
+    'js/calculators/rashmi.js',
+    'js/calculators/surge.js',
+    'js/calculators/vortex.js',
+    'js/calculators/vow.js',
+    'js/calculators/wave.js',
+    'js/calculators/wildpair.js',
+    'js/calculators/versus.js',
     // Utils
-    '/js/utils/analysis.js',
-    '/js/utils/bigSpellComparison.js',
-    '/js/utils/calculatorBase.js',
-    '/js/utils/chartHelpers.js',
-    '/js/utils/components.js',
-    '/js/utils/deckConfig.js',
-    '/js/utils/discover.js',
-    '/js/utils/deckRadar.js',
-    '/js/utils/decklistImport.js',
-    '/js/utils/defaultDeckData.js',
-    '/js/utils/radarPanel.js',
-    '/js/utils/hypergeometric.js',
-    '/js/utils/opponentState.js',
-    '/js/utils/sampleSimulator.js',
-    '/js/utils/share.js',
-    '/js/utils/simulation.js',
-    '/js/utils/tableUtils.js',
-    '/js/utils/ui.js',
+    'js/utils/analysis.js',
+    'js/utils/bigSpellComparison.js',
+    'js/utils/calculatorBase.js',
+    'js/utils/chartHelpers.js',
+    'js/utils/components.js',
+    'js/utils/deckConfig.js',
+    'js/utils/discover.js',
+    'js/utils/deckRadar.js',
+    'js/utils/decklistImport.js',
+    'js/utils/defaultDeckData.js',
+    'js/utils/radarPanel.js',
+    'js/utils/hypergeometric.js',
+    'js/utils/opponentState.js',
+    'js/utils/payback.js',
+    'js/utils/sampleSimulator.js',
+    'js/utils/share.js',
+    'js/utils/simulation.js',
+    'js/utils/tableUtils.js',
+    'js/utils/ui.js',
     // External CDN
     'https://cdn.jsdelivr.net/npm/chart.js',
+    'https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js',
     'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap'
 ];
+
+function resolveAssetUrl(asset) {
+    return new URL(asset, self.registration.scope).href;
+}
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
@@ -65,9 +71,9 @@ self.addEventListener('install', (event) => {
                 console.log('[SW] Caching static assets');
                 // Cache assets individually so one failure doesn't break all
                 return Promise.allSettled(
-                    STATIC_ASSETS.map(url =>
-                        cache.add(url).catch(err => {
-                            console.warn(`[SW] Failed to cache: ${url}`, err.message);
+                    STATIC_ASSETS.map(asset =>
+                        cache.add(resolveAssetUrl(asset)).catch(err => {
+                            console.warn(`[SW] Failed to cache: ${asset}`, err.message);
                             return null;
                         })
                     )
@@ -181,7 +187,7 @@ self.addEventListener('fetch', (event) => {
 
                         // Return offline page for navigation requests
                         if (request.mode === 'navigate') {
-                            return caches.match('/index.html');
+                            return caches.match(resolveAssetUrl('index.html'));
                         }
 
                         throw error;
