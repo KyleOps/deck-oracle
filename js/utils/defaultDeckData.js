@@ -952,6 +952,7 @@ export const DEFAULT_DECK_DATA = {
       "type_line": "Land",
       "cmc": 0,
       "mana_cost": "",
+      "oracle_text": "{T}, Pay 1 life, Sacrifice Misty Rainforest: Search your library for a Forest or Island card, put it onto the battlefield, then shuffle.",
       "category": "lands",
       "allCategories": [
         "lands"

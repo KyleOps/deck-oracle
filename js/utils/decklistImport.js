@@ -672,7 +672,7 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
 
             if (count > 0 && matchedKey) {
                 // For dual-faced cards, use front face data only
-                let typeLine, cmc, power, toughness;
+                let typeLine, cmc, power, toughness, oracleText;
 
                 if (cardData.card_faces && cardData.card_faces.length > 0) {
                     // Dual-faced card - use front face (index 0)
@@ -681,12 +681,14 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
                     cmc = frontFace.cmc !== undefined ? frontFace.cmc : cardData.cmc;
                     power = frontFace.power;
                     toughness = frontFace.toughness;
+                    oracleText = frontFace.oracle_text || cardData.oracle_text || '';
                 } else {
                     // Normal single-faced card
                     typeLine = cardData.type_line;
                     cmc = cardData.cmc;
                     power = cardData.power;
                     toughness = cardData.toughness;
+                    oracleText = cardData.oracle_text || '';
                 }
 
                 // Get all type categories for dual-typed cards (e.g., "Artifact Creature")
@@ -709,6 +711,7 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
                     type_line: typeLine,
                     cmc: cmc,
                     mana_cost: cardData.mana_cost || '',
+                    oracle_text: oracleText,
                     power: power,
                     toughness: toughness,
                     category: primaryCategory,
@@ -918,6 +921,7 @@ function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName)
     let cmc = cardData.cmc;
     let power = cardData.power;
     let toughness = cardData.toughness;
+    let oracleText = cardData.oracle_text || cardData.oracleText || '';
     const name = cardData.name;
 
     // DFC handling
@@ -927,6 +931,7 @@ function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName)
         cmc = face.cmc !== undefined ? face.cmc : cmc;
         power = face.power;
         toughness = face.toughness;
+        oracleText = face.oracle_text || face.oracleText || oracleText;
     }
     
     // Fallback: Construct type_line from component arrays (Archidekt style)
@@ -963,6 +968,7 @@ function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName)
         type_line: safeTypeLine,
         cmc: cmc,
         mana_cost: cardData.mana_cost,
+        oracle_text: oracleText,
         power: power,
         toughness: toughness,
         category: primaryCategory,

@@ -11,6 +11,7 @@ import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderHeroStats, renderRecommendation, renderInsightBox, renderVerdictBadge, renderSweepTable, pBarCell, generateSampleRevealsHTML } from '../utils/components.js';
 import { efficiencyVerdict, formatDelta, deltaColor, recommendKneeX } from '../utils/analysis.js';
 import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
+import { calculateFixedDrawPayback, scoreBattlefieldValue } from '../utils/payback.js';
 
 import {
     buildDeckFromCardData, shuffleDeck, renderDistributionChart,
@@ -292,10 +293,12 @@ export function getDeckConfig() {
     let totalHits = 0;
     let totalLegendaries = 0;
     let totalPermanents = 0;
+    const paybackCards = [];
     
     if (cardData && cardData.cardsByName && Object.keys(cardData.cardsByName).length > 0) {
         Object.values(cardData.cardsByName).forEach(card => {
             const isPermanent = isPermanentType(card.type_line);
+            const analysis = analyzeCardForDisplay(card, Number.MAX_SAFE_INTEGER);
 
             if (isPermanent) totalPermanents += card.count;
 
@@ -308,12 +311,22 @@ export function getDeckConfig() {
             if (isLegendaryPermanent(card)) {
                 totalLegendaries += card.count;
             }
+            paybackCards.push({
+                count: card?.count ?? 0,
+                cmc: card?.cmc ?? 0,
+                isLand: analysis.isLand,
+                isValid: analysis.isValid
+            });
         });
     } else {
         // Fallback: assume only Lands are hits if no import
         distribution[0] = config.lands;
         totalHits = config.lands;
         totalPermanents = config.lands + config.creatures + config.artifacts + config.enchantments + config.planeswalkers;
+        paybackCards.push(
+            { count: config.lands ?? 0, cmc: 0, isLand: true, isValid: true },
+            { count: Math.max(0, deckSize - (config.lands ?? 0)), cmc: 0, isLand: false, isValid: false }
+        );
         // Assume 0 legends in manual mode to encourage import
     }
 
@@ -344,15 +357,21 @@ export function getDeckConfig() {
     }
     const doubleCast = doubleCastCheckbox ? doubleCastCheckbox.checked : false;
 
+    const x = parseInt(document.getElementById('vow-xValue')?.value) || CONFIG.DEFAULT_X_VALUE;
+    const landValue = Math.max(0, parseFloat(document.getElementById('vow-land-value')?.value) || 0);
+    const cardValue = Math.max(0, parseFloat(document.getElementById('vow-card-value')?.value) || 0);
+
     return {
         deckSize,
-        x: parseInt(document.getElementById('vow-xValue').value) || CONFIG.DEFAULT_X_VALUE,
+        x,
         distribution,
         totalHits,
         totalLegendaries,
         totalPermanents,
         cardData,
-        doubleCast
+        doubleCast,
+        paybackCards,
+        paybackSettings: { threshold: x + 2, landValue, cardValue }
     };
 }
 
@@ -380,6 +399,15 @@ export function calculate() {
             expectedManaValue: sim.expectedManaValue,
             cardsRevealed: testX * multiplier
         };
+    }
+
+    const current = results[config.x];
+    if (current) {
+        current.payback = calculateFixedDrawPayback(
+            config.paybackCards.map(card => ({ ...card, eligible: card.isValid && card.cmc <= config.x })),
+            config.x * (config.doubleCast ? 2 : 1),
+            config.paybackSettings
+        );
     }
 
     return { config, results };
@@ -516,12 +544,14 @@ function updateStats(config, results) {
     const next = results[config.x + 1];
     const marginal = next ? next.expectedHits - currentResult.expectedHits : null;
     const verdict = efficiencyVerdict(efficiency);
+    const payback = currentResult.payback;
+    const paybackPercent = (payback?.paybackProbability ?? 0) * 100;
 
     const hero = renderHeroStats([
-        { label: 'E[HITS]', value: formatNumber(currentResult.expectedHits, 1), sub: `land + legend${config.doubleCast ? ' · 2×' : ''}`, color: 'var(--tx-green)', size: 'big' },
-        { label: 'E[LANDS]', value: formatNumber(currentResult.expectedLands, 1), sub: 'ramp onto field', color: 'var(--tx-amber)' },
-        { label: 'E[LEGENDS]', value: formatNumber(currentResult.expectedLegends, 1), sub: 'CMC ≤ X', color: 'var(--tx-blue)' },
-        { label: 'MARGINAL +1X', value: marginal != null ? formatDelta(marginal, 2) : '—', sub: 'extra hits', color: marginal != null ? deltaColor(marginal, 0.001) : 'var(--tx-dim)' }
+        { label: 'PAYBACK CHANCE', value: formatNumber(paybackPercent, 0) + '%', sub: `reach ${config.paybackSettings.threshold} value${config.doubleCast ? ' · 2× reveal' : ''}`, color: paybackPercent >= 50 ? 'var(--tx-green)' : 'var(--tx-amber)', size: 'big' },
+        { label: 'E[EFFECTIVE VALUE]', value: formatNumber(payback?.expectedEffectiveValue ?? 0, 1), sub: `raw MV ${formatNumber(payback?.expectedManaValue ?? 0, 1)}`, color: 'var(--tx-blue)' },
+        { label: 'E[HITS]', value: formatNumber(currentResult.expectedHits, 1), sub: `land + legend${config.doubleCast ? ' · 2×' : ''}`, color: 'var(--tx-green)' },
+        { label: 'E[LANDS]', value: formatNumber(currentResult.expectedLands, 1), sub: 'ramp onto field', color: 'var(--tx-amber)' }
     ]);
 
     const knee = recommendKneeX(computeSweep(config).map(p => ({ x: p.x, value: p.efficiency })), { fraction: 0.92 });
@@ -529,9 +559,12 @@ function updateStats(config, results) {
         ? renderRecommendation(`Efficient cast at <strong>X=${knee.x}</strong> (~${(knee.value * 100).toFixed(0)}% hit rate). ${config.totalLegendaries} legendary permanents and ${formatNumber(legendaryPercent, 0)}% legendary density in the pile.`)
         : '';
 
-    const insight = renderInsightBox('', `Kamahl's Druidic Vow at X=${config.x} reveals ${cardsRevealed} cards and expects <strong style="color:var(--tx-green);">${formatNumber(currentResult.expectedHits, 1)}</strong> lands + legends onto the battlefield. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
+    const insight = renderInsightBox('', `Kamahl's Druidic Vow at X=${config.x} costs ${config.paybackSettings.threshold} mana and reveals ${cardsRevealed} card${cardsRevealed === 1 ? '' : 's'}. The value model expects <strong style="color:var(--tx-blue);">${formatNumber(payback?.expectedEffectiveValue ?? 0, 1)}</strong> effective mana and classifies <strong>${formatNumber(paybackPercent, 0)}%</strong> of reveals as paid-for. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
 
     statsPanel.innerHTML = hero + rec + insight;
+
+    const target = document.getElementById('vow-payback-target');
+    if (target) target.textContent = `${config.paybackSettings.threshold} effective mana`;
 }
 
 /**
@@ -563,6 +596,8 @@ export function runSampleReveals() {
     let totalLands = 0;
     let totalLegends = 0;
     let totalManaValue = 0;
+    let totalEffectiveValue = 0;
+    let paidRuns = 0;
     const hitDistribution = new Array(maxPossibleHits + 1).fill(0);
 
     for (let i = 0; i < numSims; i++) {
@@ -592,6 +627,12 @@ export function runSampleReveals() {
         totalLands += landsInSim;
         totalLegends += legendsInSim;
         totalManaValue += manaValueInSim;
+        const scored = scoreBattlefieldValue(
+            { manaValue: manaValueInSim, lands: landsInSim, cards: hitsInSim },
+            config.paybackSettings
+        );
+        totalEffectiveValue += scored.effectiveValue;
+        if (scored.paidForItself) paidRuns++;
         hitDistribution[hitsInSim]++;
     }
 
@@ -600,6 +641,8 @@ export function runSampleReveals() {
     const avgLands = (totalLands / numSims).toFixed(2);
     const avgLegends = (totalLegends / numSims).toFixed(2);
     const avgManaValue = (totalManaValue / numSims).toFixed(1);
+    const avgEffectiveValue = (totalEffectiveValue / numSims).toFixed(2);
+    const paidPercent = ((paidRuns / numSims) * 100).toFixed(1);
 
     // Add color legend
     let legendHTML = '<div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: var(--spacing-md); padding: var(--spacing-sm); background: var(--panel-bg); border-radius: var(--radius-md); font-size: 0.9em;">';
@@ -626,6 +669,9 @@ export function runSampleReveals() {
     distributionHTML += `<div><strong>Lands:</strong> <span style="color: #55c97f;">${avgLands}</span></div>`;
     distributionHTML += `<div><strong>Legends:</strong> <span style="color: #5b8db8;">${avgLegends}</span></div>`;
     distributionHTML += `<div><strong>Total MV:</strong> ${avgManaValue}</div>`;
+    distributionHTML += `<div><strong>Effective value:</strong> ${avgEffectiveValue}</div>`;
+    distributionHTML += `<div><strong>Paid-for:</strong> ${paidPercent}%</div>`;
+    distributionHTML += `<div><strong>Whiff:</strong> ${(100 - Number(paidPercent)).toFixed(1)}%</div>`;
     distributionHTML += `</div>`;
     if (config.doubleCast) {
         distributionHTML += `<div style="text-align: center; margin-top: var(--spacing-sm); color: var(--text-secondary); font-size: 0.85em;">X=${config.x}, doubled (${cardsToReveal} cards revealed)</div>`;
@@ -681,7 +727,12 @@ export function runSampleReveals() {
                 }
             });
 
-            html += `<div class="sample-reveal ${hitCount > 0 ? 'free-spell' : 'whiff'}">`;
+            const scored = scoreBattlefieldValue(
+                { manaValue: totalManaValue, lands: landCount, cards: hitCount },
+                config.paybackSettings
+            );
+
+            html += `<div class="sample-reveal ${scored.paidForItself ? 'free-spell' : 'whiff'}">`;
             html += `<div><strong>Reveal ${i + 1}`;
             if (config.doubleCast) {
                 html += ` (X=${config.x}, doubled)`;
@@ -704,6 +755,7 @@ export function runSampleReveals() {
             html += `<strong>Result:</strong> ${hitCount} hit${hitCount !== 1 ? 's' : ''} `;
             html += `| <strong>Lands:</strong> ${landCount} `;
             html += `| <strong>Total MV:</strong> ${totalManaValue}`;
+            html += ` | <strong>${scored.effectiveValue.toFixed(2)} / ${config.paybackSettings.threshold} value — ${scored.paidForItself ? 'PAID' : 'WHIFF'}</strong>`;
             html += '</div></div>';
         }
 
@@ -780,6 +832,9 @@ export function init() {
             if (doubleCastCheckbox) {
                 doubleCastCheckbox.addEventListener('change', updateUI);
             }
+            ['vow-land-value', 'vow-card-value'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', updateUI);
+            });
         }
     });
 }

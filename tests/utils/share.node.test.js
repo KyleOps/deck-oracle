@@ -187,7 +187,10 @@ describe('Share URL - Security & Validation', () => {
                 'rashmiCMC': { min: 0, max: 15 },
                 'lands': { min: 0, max: 60 },
                 'lumraGY': { min: 0, max: 30 },
-                'lumraMult': { min: 1, max: 10 }
+                'lumraMult': { min: 1, max: 10 },
+                'surgeThreshold': { min: 0.25, max: 100 },
+                'surgeLand': { min: 0, max: 20 },
+                'surgeCard': { min: 0, max: 20 }
             };
 
             Object.entries(sliderMap).forEach(([param, config]) => {
@@ -433,7 +436,10 @@ describe('Share URL - Integration Tests', () => {
                 rashmiCMC: '5',
                 lands: '40',
                 lumraGY: '3',
-                lumraMult: '2'
+                lumraMult: '2',
+                surgeThreshold: '10',
+                surgeLand: '1',
+                surgeCard: '0.25'
             });
 
             const sliderMap = {
@@ -443,12 +449,15 @@ describe('Share URL - Integration Tests', () => {
                 'rashmiCMC': { min: 0, max: 15 },
                 'lands': { min: 0, max: 60 },
                 'lumraGY': { min: 0, max: 30 },
-                'lumraMult': { min: 1, max: 10 }
+                'lumraMult': { min: 1, max: 10 },
+                'surgeThreshold': { min: 0.25, max: 100 },
+                'surgeLand': { min: 0, max: 20 },
+                'surgeCard': { min: 0, max: 20 }
             };
 
             // Validate each slider is within bounds
             Object.entries(sliderMap).forEach(([param, config]) => {
-                const value = parseInt(urlParams.get(param), 10);
+                const value = parseFloat(urlParams.get(param));
                 assert.ok(!isNaN(value), `${param} should be a valid number`);
                 assert.ok(value >= config.min && value <= config.max, `${param} should be within bounds`);
             });

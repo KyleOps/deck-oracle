@@ -157,19 +157,30 @@ export async function parseShareUrl() {
     const sliderMap = {
         'portentX': { id: 'portent-xSlider', min: 0, max: 20 },
         'waveX': { id: 'wave-xSlider', min: 0, max: 30 },
+        'waveLand': { id: 'wave-land-value', min: 0, max: 20, float: true },
+        'waveCard': { id: 'wave-card-value', min: 0, max: 20, float: true },
         'vowX': { id: 'vow-xSlider', min: 0, max: 30 },
+        'vowLand': { id: 'vow-land-value', min: 0, max: 20, float: true },
+        'vowCard': { id: 'vow-card-value', min: 0, max: 20, float: true },
         'vortexCMC': { id: 'vortex-cmcSlider', min: 5, max: 15 },
         'rashmiCMC': { id: 'rashmi-cmcSlider', min: 0, max: 15 },
         'lands': { id: 'lands-opening-slider', min: 0, max: 60 },
         'lumraGY': { id: 'lumra-gySlider', min: 0, max: 30 },
         'lumraMult': { id: 'lumra-multSlider', min: 1, max: 10 },
+        'lumraFetch': { id: 'lumra-fetchLands', min: 0, max: 100 },
+        'lumraTurn': { id: 'lumra-turnSlider', min: 1, max: 20 },
         'chimilTurns': { id: 'chimil-turnsSlider', min: 1, max: 20 },
         'wpTotal': { id: 'wildpair-totalSlider', min: 0, max: 40 },
+        'surgeThreshold': { id: 'surge-payback-threshold', min: 0.25, max: 100, float: true },
+        'surgeLand': { id: 'surge-land-value', min: 0, max: 20, float: true },
+        'surgeCard': { id: 'surge-card-value', min: 0, max: 20, float: true },
     };
 
     Object.entries(sliderMap).forEach(([param, config]) => {
         if (params.has(param)) {
-            const value = parseInt(params.get(param), 10);
+            const value = config.float
+                ? parseFloat(params.get(param))
+                : parseInt(params.get(param), 10);
             if (!isNaN(value) && value >= config.min && value <= config.max) {
                 const input = document.getElementById(config.id);
                 if (input) {
@@ -263,13 +274,22 @@ export function getShareUrl() {
     const sliders = [
         { id: 'portent-xSlider', param: 'portentX' },
         { id: 'wave-xSlider', param: 'waveX' },
+        { id: 'wave-land-value', param: 'waveLand' },
+        { id: 'wave-card-value', param: 'waveCard' },
         { id: 'vow-xSlider', param: 'vowX' },
+        { id: 'vow-land-value', param: 'vowLand' },
+        { id: 'vow-card-value', param: 'vowCard' },
         { id: 'vortex-cmcSlider', param: 'vortexCMC' },
         { id: 'rashmi-cmcSlider', param: 'rashmiCMC' },
         { id: 'lumra-gySlider', param: 'lumraGY' },
         { id: 'lumra-multSlider', param: 'lumraMult' },
+        { id: 'lumra-fetchLands', param: 'lumraFetch' },
+        { id: 'lumra-turnSlider', param: 'lumraTurn' },
         { id: 'chimil-turnsSlider', param: 'chimilTurns' },
-        { id: 'wildpair-totalSlider', param: 'wpTotal' }
+        { id: 'wildpair-totalSlider', param: 'wpTotal' },
+        { id: 'surge-payback-threshold', param: 'surgeThreshold' },
+        { id: 'surge-land-value', param: 'surgeLand' },
+        { id: 'surge-card-value', param: 'surgeCard' }
     ];
 
     sliders.forEach(({ id, param }) => {

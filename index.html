@@ -268,14 +268,41 @@
             <p class="card-text">"So do you win here or...?"</p>
 
             <div class="main-grid single-column">
+                <section class="panel panel-config" aria-label="Primal Surge payback model">
+                    <div class="tx-h"><span>Payback model</span><span class="tx-h-r">tune what value means</span></div>
+                    <p class="surge-value-intro">A run pays for Primal Surge when its effective value reaches your threshold.</p>
+                    <div class="surge-value-formula" aria-label="Effective value formula">
+                        <span>effective value</span>
+                        <strong>printed MV + land value + card value</strong>
+                    </div>
+                    <div class="surge-value-fields">
+                        <label class="surge-value-field" for="surge-payback-threshold">
+                            <span>Payback threshold</span>
+                            <input type="number" id="surge-payback-threshold" value="10" min="0.25" max="100" step="0.25" inputmode="decimal">
+                            <small>Below this is a whiff</small>
+                        </label>
+                        <label class="surge-value-field" for="surge-land-value">
+                            <span>Extra value per land</span>
+                            <input type="number" id="surge-land-value" value="1" min="0" max="20" step="0.25" inputmode="decimal">
+                            <small>Added on top of printed MV</small>
+                        </label>
+                        <label class="surge-value-field" for="surge-card-value">
+                            <span>Value per card put in play</span>
+                            <input type="number" id="surge-card-value" value="0.25" min="0" max="20" step="0.25" inputmode="decimal">
+                            <small>Deck-thinning, ETB, and board value</small>
+                        </label>
+                    </div>
+                    <p class="surge-value-example">Example: 5 lands + three 1-MV dorks = 3 raw MV + 5 land value + 2 card value = <strong>10 effective value</strong>.</p>
+                </section>
+
                 <section class="panel" aria-label="Expected permanents chart">
-                    <h2>Expected Permanents & Deck Percentage</h2>
+                    <h2>Expected Permanents & Early-stop Risk</h2>
                     <div class="chart-container" style="height: 320px;">
                         <canvas id="surge-chart" role="img" aria-label="Primal Surge chart"></canvas>
                     </div>
                     <div class="chart-legend">
                         <span class="legend-item"><span class="legend-color" style="background: #55c97f;"></span> Expected Permanents</span>
-                        <span class="legend-item"><span class="legend-color" style="background: #e8635c;"></span> % of Deck Played</span>
+                        <span class="legend-item"><span class="legend-color" style="background: #e8635c;"></span> Early stop (&lt;5 permanents)</span>
                     </div>
                 </section>
 
@@ -309,6 +336,26 @@
                             <input type="range" id="wave-xSlider" value="6" min="1" max="30" step="1" aria-label="X value slider">
                             <input type="number" id="wave-xValue" value="6" min="1" max="50" class="x-number" aria-label="X value number input">
                         </div>
+                    </div>
+                    <div class="payback-model" aria-label="Genesis Wave value model">
+                        <div class="tx-h"><span>VALUE MODEL</span><span class="tx-h-r">target = X + 3 mana</span></div>
+                        <div class="payback-formula">
+                            <span>Effective value</span>
+                            <strong>printed MV + land bonus + card bonus</strong>
+                        </div>
+                        <div class="payback-fields">
+                            <label class="payback-field" for="wave-land-value">
+                                <span>Extra value per land</span>
+                                <input type="number" id="wave-land-value" value="1" min="0" max="20" step="0.25" inputmode="decimal">
+                                <small>Values the additional land drop beyond its printed MV of 0.</small>
+                            </label>
+                            <label class="payback-field" for="wave-card-value">
+                                <span>Value per card put in play</span>
+                                <input type="number" id="wave-card-value" value="0.25" min="0" max="20" step="0.25" inputmode="decimal">
+                                <small>Credits deck thinning and card access separately from mana value.</small>
+                            </label>
+                        </div>
+                        <p class="payback-example">At the current X, Wave pays for itself at <strong id="wave-payback-target">9 effective mana</strong>.</p>
                     </div>
                 </section>
 
@@ -370,6 +417,26 @@
                             <span>Double Cast (Sixth Doctor / Magus Lucea Kane)</span>
                         </label>
                         <p class="helper-text">Copies the spell with the same X value, revealing 2X total cards</p>
+                    </div>
+                    <div class="payback-model" aria-label="Kamahl's Druidic Vow value model">
+                        <div class="tx-h"><span>VALUE MODEL</span><span class="tx-h-r">target = X + 2 mana</span></div>
+                        <div class="payback-formula">
+                            <span>Effective value</span>
+                            <strong>printed MV + land bonus + card bonus</strong>
+                        </div>
+                        <div class="payback-fields">
+                            <label class="payback-field" for="vow-land-value">
+                                <span>Extra value per land</span>
+                                <input type="number" id="vow-land-value" value="1" min="0" max="20" step="0.25" inputmode="decimal">
+                                <small>Values the additional land drop beyond its printed MV of 0.</small>
+                            </label>
+                            <label class="payback-field" for="vow-card-value">
+                                <span>Value per card put in play</span>
+                                <input type="number" id="vow-card-value" value="0.25" min="0" max="20" step="0.25" inputmode="decimal">
+                                <small>Credits deck thinning and card access separately from mana value.</small>
+                            </label>
+                        </div>
+                        <p class="payback-example">At the current X, Vow pays for itself at <strong id="vow-payback-target">8 effective mana</strong>.</p>
                     </div>
                 </section>
 
@@ -577,7 +644,7 @@
                 <section class="panel panel-config" aria-label="Configuration">
                     <h2>Calculation Settings</h2>
                     <div class="input-group">
-                        <label for="lumra-gyLands">Lands already in Graveyard</label>
+                        <label for="lumra-gyLands">Other lands already in Graveyard</label>
                         <div class="x-slider-row">
                             <input type="range" id="lumra-gySlider" value="3" min="0" max="30" step="1" aria-label="Lands in Graveyard slider">
                             <input type="number" id="lumra-gyLands" value="3" min="0" max="100" class="x-number" aria-label="Lands in Graveyard number input">
@@ -589,6 +656,19 @@
                             <input type="range" id="lumra-multSlider" value="1" min="1" max="5" step="1" aria-label="Trigger multiplier slider">
                             <input type="number" id="lumra-multiplier" value="1" min="1" max="10" class="x-number" aria-label="Trigger multiplier number input">
                         </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="lumra-fetchLands">Fetch lands in deck</label>
+                        <input type="number" id="lumra-fetchLands" value="0" min="0" max="100" step="1" inputmode="numeric">
+                        <small>Auto-detected on deck import; you can override the count.</small>
+                    </div>
+                    <div class="input-group">
+                        <label for="lumra-turn">Turn Lumra enters</label>
+                        <div class="x-slider-row">
+                            <input type="range" id="lumra-turnSlider" value="6" min="1" max="20" step="1" aria-label="Lumra cast turn slider">
+                            <input type="number" id="lumra-turn" value="6" min="1" max="30" class="x-number" aria-label="Lumra cast turn number input">
+                        </div>
+                        <small>Assumes a seven-card opener, one draw each turn, and that fetches seen can be cracked.</small>
                     </div>
                 </section>
 
@@ -1095,7 +1175,7 @@
             <span><kbd>P</kbd> paste deck</span>
             <span class="tx-footer-right">
                 <button id="share-button" class="tx-footer-btn" title="Copy a link to this calculator and deck">Copy share link</button>
-                <span class="tx-footer-ver">v2.11.0</span>
+                <span class="tx-footer-ver">v2.12.0</span>
             </span>
         </footer>
 

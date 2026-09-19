@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import { assertClose } from '../node-test-helper.js';
-import { calculateLumraStats } from '../../js/calculators/lumra.js';
+import assert from 'node:assert';
+import { calculateFetchLandSetup, calculateLumraStats, isFetchLand } from '../../js/calculators/lumra.js';
 
 describe('Lumra Calculator', () => {
     it('calculates expected milled lands correctly (50% lands)', () => {
@@ -69,5 +70,33 @@ describe('Lumra Calculator', () => {
         const result = calculateLumraStats(deckSize, landCount, gyLands, multiplier);
         
         assertClose(result.expectedMilled, 4.0, 'Expected milled should be 4.0 (2x trigger)');
+    });
+
+    it('adds expected cracked fetches to the lands returned', () => {
+        const result = calculateLumraStats(100, 50, 2, 1, 1.25);
+        assertClose(result.totalReturned, 5.25, '2 existing + 1.25 fetches + 2 milled');
+    });
+
+    it('calculates exact odds and expected fetches seen by a turn', () => {
+        const result = calculateFetchLandSetup(100, 10, 3);
+        assert.equal(result.cardsSeen, 10);
+        assertClose(result.expectedSeen, 1, 'expected fetches seen');
+        assertClose(result.expectedCracked, 1, 'expected cracked fetches');
+        assert.ok(result.probabilityAtLeastOne > 0.65 && result.probabilityAtLeastOne < 0.70);
+    });
+
+    it('caps expected cracked fetches at the number of land drops', () => {
+        const result = calculateFetchLandSetup(20, 20, 2);
+        assertClose(result.expectedCracked, 2, 'turn two permits at most two cracks');
+    });
+
+    it('detects fetch lands from type and rules text', () => {
+        assert.equal(isFetchLand({
+            type_line: 'Land',
+            oracle_text: '{T}, Pay 1 life, Sacrifice this land: Search your library for a Forest or Island card.'
+        }), true);
+        assert.equal(isFetchLand({ type_line: 'Sorcery', oracle_text: 'Search your library for a land card.' }), false);
+        assert.equal(isFetchLand({ type_line: 'Land', oracle_text: '{T}: Add {G}.' }), false);
+        assert.equal(isFetchLand({ name: 'Misty Rainforest', type_line: 'Land' }), true, 'supports older imports without rules text');
     });
 });

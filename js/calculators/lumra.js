@@ -26,6 +26,61 @@ let chart = null;
 let stableSamples = [];
 let lastSampleDeckHash = '';
 let renderedCount = 0;
+let lastFetchDeckRef = null;
+
+// Name fallback for cached/third-party imports that predate stored oracle text.
+const KNOWN_FETCH_LANDS = new Set([
+    'arid mesa', 'bloodstained mire', 'flooded strand', 'marsh flats', 'misty rainforest',
+    'polluted delta', 'scalding tarn', 'verdant catacombs', 'windswept heath', 'wooded foothills',
+    'prismatic vista', 'fabled passage', 'evolving wilds', 'terramorphic expanse', 'escape tunnel',
+    'promising vein', 'bad river', 'flood plain', 'grasslands', 'mountain valley', 'rocky tar pit',
+    'bant panorama', 'esper panorama', 'grixis panorama', 'jund panorama', 'naya panorama',
+    'brokers hideout', 'cabaretti courtyard', 'maestros theater', 'obscura storefront',
+    'riveteers overlook', 'krosan verge', 'myriad landscape'
+]);
+
+/**
+ * Identify a land whose own rules text sacrifices it to search for a land.
+ * This covers traditional fetch lands plus cards such as Evolving Wilds and
+ * Fabled Passage without relying on a hard-coded name list.
+ */
+export function isFetchLand(card = {}) {
+    const name = String(card?.name ?? '').toLowerCase();
+    const typeLine = String(card?.type_line ?? '').toLowerCase();
+    const types = Array.isArray(card?.types) ? card.types.map(type => String(type).toLowerCase()) : [];
+    const facesText = Array.isArray(card?.card_faces)
+        ? card.card_faces.map(face => face?.oracle_text ?? '').join(' ')
+        : '';
+    const oracleText = `${card?.oracle_text ?? ''} ${facesText}`.toLowerCase();
+    const isLand = typeLine.includes('land') || types.includes('land');
+
+    const searchesForLand = oracleText.includes('land card') ||
+        /(?:plains|island|swamp|mountain|forest)(?:\s+or\s+(?:plains|island|swamp|mountain|forest))*\s+card/.test(oracleText);
+
+    return isLand && (KNOWN_FETCH_LANDS.has(name) || (
+        oracleText.includes('sacrifice') && oracleText.includes('search your library') && searchesForLand
+    ));
+}
+
+/**
+ * Estimate fetch access by a given turn from exact without-replacement odds.
+ */
+export function calculateFetchLandSetup(deckSize, fetchCount, turn, openingHand = 7) {
+    const size = Math.max(0, Math.floor(Number(deckSize) || 0));
+    const fetches = Math.min(size, Math.max(0, Math.floor(Number(fetchCount) || 0)));
+    const castTurn = Math.max(0, Math.floor(Number(turn) || 0));
+    const cardsSeen = Math.min(size, Math.max(0, Math.floor(Number(openingHand) || 0)) + castTurn);
+
+    if (size === 0 || fetches === 0 || cardsSeen === 0) {
+        return { cardsSeen, probabilityAtLeastOne: 0, expectedSeen: 0, expectedCracked: 0 };
+    }
+
+    const probabilityAtLeastOne = 1 - drawType(size, fetches, cardsSeen, 0);
+    const expectedSeen = cardsSeen * (fetches / size);
+    const expectedCracked = Math.min(castTurn, expectedSeen);
+
+    return { cardsSeen, probabilityAtLeastOne, expectedSeen, expectedCracked };
+}
 
 /**
  * Generate stable samples from the deck
@@ -81,6 +136,18 @@ export function getDeckConfig() {
         if (calculatedLands > 0) landCount = calculatedLands;
     }
 
+    const fetchInput = document.getElementById('lumra-fetchLands');
+    if (cardData?.cardsByName && cardData.cardsByName !== lastFetchDeckRef) {
+        const detectedFetches = Object.values(cardData.cardsByName).reduce((sum, card) =>
+            sum + (isFetchLand(card) ? Math.max(0, Number(card?.count) || 0) : 0), 0);
+        if (fetchInput) fetchInput.value = String(detectedFetches);
+        lastFetchDeckRef = cardData.cardsByName;
+    }
+    const fetchCount = Math.min(deckSize, Math.max(0, parseInt(fetchInput?.value) || 0));
+    const turnInput = document.getElementById('lumra-turn');
+    const turn = Math.max(1, parseInt(turnInput?.value) || 6);
+    const fetchSetup = calculateFetchLandSetup(deckSize, fetchCount, turn);
+
     // Get user input for GY lands
     const gyLandsInput = document.getElementById('lumra-gyLands');
     const gyLands = parseInt(gyLandsInput?.value) || 0;
@@ -101,7 +168,10 @@ export function getDeckConfig() {
         landCount,
         gyLands,
         multiplier,
-        cardData
+        cardData,
+        fetchCount,
+        turn,
+        fetchSetup
     };
 }
 
@@ -113,8 +183,9 @@ export function getDeckConfig() {
  * @param {number} multiplier - Number of times the ability triggers
  * @returns {Object} - Calculation results
  */
-export function calculateLumraStats(deckSize, landCount, gyLands, multiplier = 1) {
-    const cacheKey = `${deckSize}-${landCount}-${gyLands}-${multiplier}`;
+export function calculateLumraStats(deckSize, landCount, gyLands, multiplier = 1, setupLands = 0) {
+    const safeSetupLands = Math.max(0, Number(setupLands) || 0);
+    const cacheKey = `${deckSize}-${landCount}-${gyLands}-${multiplier}-${safeSetupLands}`;
     const cached = simulationCache.get(cacheKey);
     if (cached) return cached;
 
@@ -131,12 +202,13 @@ export function calculateLumraStats(deckSize, landCount, gyLands, multiplier = 1
         expectedMilled += k * prob;
     }
 
-    const totalReturned = gyLands + expectedMilled;
+    const totalReturned = gyLands + safeSetupLands + expectedMilled;
 
     const result = {
         distribution,
         expectedMilled,
-        totalReturned
+        totalReturned,
+        setupLands: safeSetupLands
     };
 
     simulationCache.set(cacheKey, result);
@@ -155,7 +227,7 @@ export function calculate() {
         return { config, results: null };
     }
 
-    const results = calculateLumraStats(deckSize, landCount, gyLands, multiplier);
+    const results = calculateLumraStats(deckSize, landCount, gyLands, multiplier, config.fetchSetup.expectedCracked);
 
     return {
         config,
@@ -228,12 +300,12 @@ function updateStats(config, expectedMilled, totalReturned) {
 
     const hero = renderHeroStats([
         { label: 'LANDS RETURNED', value: formatNumber(totalReturned, 1), sub: 'onto the battlefield', color: 'var(--tx-green)', size: 'big' },
-        { label: 'MILLED LANDS', value: formatNumber(expectedMilled, 2), sub: `from top ${4 * config.multiplier}`, color: 'var(--tx-amber)' },
-        { label: 'LAND DENSITY', value: `${density.toFixed(0)}%`, sub: `${config.landCount} of ${config.deckSize}`, color: 'var(--tx-blue)' },
-        { label: 'GRAVEYARD', value: config.gyLands, sub: 'lands before cast', color: 'var(--tx-mid)' }
+        { label: 'FETCHES IN GY', value: formatNumber(config.fetchSetup.expectedCracked, 2), sub: `expected by turn ${config.turn}`, color: 'var(--tx-blue)' },
+        { label: 'P(SEE A FETCH)', value: formatNumber(config.fetchSetup.probabilityAtLeastOne * 100, 0) + '%', sub: `${config.fetchSetup.cardsSeen} cards seen`, color: 'var(--tx-amber)' },
+        { label: 'MILLED LANDS', value: formatNumber(expectedMilled, 2), sub: `from top ${4 * config.multiplier}`, color: 'var(--tx-mid)' }
     ]);
 
-    const insight = renderInsightBox('', `Lumra mills ${4 * config.multiplier} and returns every land milled plus those already in your graveyard. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
+    const insight = renderInsightBox('', `With ${config.fetchCount} fetch land${config.fetchCount === 1 ? '' : 's'}, you expect to see ${formatNumber(config.fetchSetup.expectedSeen, 2)} and crack ${formatNumber(config.fetchSetup.expectedCracked, 2)} by turn ${config.turn}. Add ${config.gyLands} other graveyard land${config.gyLands === 1 ? '' : 's'} plus ${formatNumber(expectedMilled, 2)} expected from mill ${4 * config.multiplier}. Library land density is ${density.toFixed(0)}%. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
 
     statsPanel.innerHTML = hero + insight;
 }
@@ -285,7 +357,7 @@ export function runSampleReveals(passedConfig) {
         }
         
         totalLandsMilled += landCount;
-        totalLandsReturned += (config.gyLands + landCount);
+        totalLandsReturned += (config.gyLands + config.fetchSetup.expectedCracked + landCount);
         landDistribution[landCount] = (landDistribution[landCount] || 0) + 1;
         if (landCount > maxLandsFound) maxLandsFound = landCount;
     }
@@ -351,11 +423,11 @@ export function runSampleReveals(passedConfig) {
                 }
             }
 
-            const totalReturned = config.gyLands + landCount;
+            const totalReturned = config.gyLands + config.fetchSetup.expectedCracked + landCount;
             const isGood = landCount >= (2 * config.multiplier);
 
             html += `<div class="sample-reveal ${isGood ? 'free-spell' : 'whiff'}">`;
-            html += `<div><strong>Sample ${i + 1}:</strong> Milled ${landCount} land${landCount !== 1 ? 's' : ''} (Total Return: ${totalReturned})</div>`;
+            html += `<div><strong>Sample ${i + 1}:</strong> Milled ${landCount} land${landCount !== 1 ? 's' : ''} (Expected Return: ${totalReturned.toFixed(2)}, including ${config.fetchSetup.expectedCracked.toFixed(2)} fetches)</div>`;
             html += '<div style="margin: 8px 0;">';
 
             // Render cards
@@ -484,6 +556,21 @@ export function init() {
                     updateUI();
                 });
             }
+
+            const turnSlider = document.getElementById('lumra-turnSlider');
+            const turnNumber = document.getElementById('lumra-turn');
+            if (turnSlider && turnNumber) {
+                turnSlider.addEventListener('input', () => {
+                    turnNumber.value = turnSlider.value;
+                    updateUI();
+                });
+                turnNumber.addEventListener('input', () => {
+                    turnSlider.value = turnNumber.value;
+                    updateUI();
+                });
+            }
+
+            document.getElementById('lumra-fetchLands')?.addEventListener('input', updateUI);
         }
     });
 }

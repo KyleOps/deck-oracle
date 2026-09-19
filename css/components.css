@@ -2173,6 +2173,92 @@ input[type="range"].tx-slider::-moz-range-thumb {
     color: var(--tx-dim);
 }
 
+/* Primal Surge's payoff model is deliberately written as an equation: the
+   tunable assumptions sit beside the result instead of hiding in help text. */
+.surge-value-intro,
+.surge-value-example,
+.payback-example {
+    margin: 0;
+    padding: 12px 14px;
+    color: var(--tx-mid);
+    font-size: var(--t-xs);
+    line-height: 1.55;
+    border-bottom: 1px solid var(--tx-rule);
+}
+
+.surge-value-formula,
+.payback-formula {
+    display: grid;
+    gap: 5px;
+    padding: 14px;
+    background: var(--tx-panel-alt);
+    border-bottom: 1px solid var(--tx-rule);
+}
+
+.surge-value-formula span,
+.surge-value-field > span,
+.payback-formula span,
+.payback-field > span {
+    color: var(--tx-dim);
+    font-size: var(--t-micro);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+}
+
+.surge-value-formula strong,
+.payback-formula strong {
+    color: var(--tx-green);
+    font-size: var(--t-body);
+    font-weight: 600;
+    font-feature-settings: 'tnum' 1;
+}
+
+.surge-value-fields,
+.payback-fields {
+    display: grid;
+}
+
+.surge-value-field,
+.payback-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 76px;
+    gap: 5px 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--tx-rule);
+}
+
+.surge-value-field input,
+.payback-field input {
+    width: 76px;
+    text-align: right;
+}
+
+.surge-value-field small,
+.payback-field small {
+    grid-column: 1 / -1;
+    color: var(--tx-dim);
+    font-size: var(--t-micro);
+    line-height: 1.4;
+}
+
+.surge-value-example,
+.payback-example {
+    border-bottom: 0;
+}
+
+.surge-value-example strong,
+.payback-example strong {
+    color: var(--tx-bright);
+    font-weight: 600;
+}
+
+.payback-model {
+    margin-top: var(--spacing-md);
+    border: 1px solid var(--tx-rule);
+    background: var(--tx-panel);
+}
+
 /* Chrome paints its own light runnable-track over an appearance:none range;
    clear it so the input's own background is the only track. */
 .calculator-content input[type="range"]::-webkit-slider-runnable-track {

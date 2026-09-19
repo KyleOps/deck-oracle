@@ -10,6 +10,7 @@ import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderHeroStats, renderRecommendation, renderInsightBox, renderVerdictBadge, renderSweepTable, pBarCell, generateSampleRevealsHTML } from '../utils/components.js';
 import { efficiencyVerdict, formatDelta, deltaColor, recommendKneeX } from '../utils/analysis.js';
 import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
+import { calculateFixedDrawPayback, scoreBattlefieldValue } from '../utils/payback.js';
 
 import {
     buildDeckFromCardData, shuffleDeck, renderCardBadge, renderDistributionChart,
@@ -143,11 +144,12 @@ export function getDeckConfig() {
 
     // Distribution map: CMC (number) -> count, plus 'nonperm' -> count
     let distribution = {};
+    const paybackCards = [];
     
     if (cardData && cardData.cardsByName && Object.keys(cardData.cardsByName).length > 0) {
         // Use actual CMC data from imported cards
         Object.values(cardData.cardsByName).forEach(card => {
-            const typeLine = card.type_line.toLowerCase();
+            const typeLine = (card?.type_line ?? '').toLowerCase();
             const isPermanent = typeLine.includes('creature') || 
                                 typeLine.includes('artifact') || 
                                 typeLine.includes('enchantment') || 
@@ -161,6 +163,12 @@ export function getDeckConfig() {
                 const cmc = card.cmc !== undefined ? Math.floor(card.cmc) : 0;
                 distribution[cmc] = (distribution[cmc] || 0) + card.count;
             }
+            paybackCards.push({
+                count: card?.count ?? 0,
+                cmc: card?.cmc ?? 0,
+                isLand: typeLine.includes('land'),
+                isPermanent
+            });
         });
     } else {
         // Fallback for manual config
@@ -173,6 +181,16 @@ export function getDeckConfig() {
             6: config.cmc6,
             nonperm: config.instants + config.sorceries
         };
+        paybackCards.push(
+            { count: config.lands ?? 0, cmc: 0, isLand: true, isPermanent: true },
+            { count: config.cmc0 ?? 0, cmc: 0, isLand: false, isPermanent: true },
+            { count: config.cmc2 ?? 0, cmc: 2, isLand: false, isPermanent: true },
+            { count: config.cmc3 ?? 0, cmc: 3, isLand: false, isPermanent: true },
+            { count: config.cmc4 ?? 0, cmc: 4, isLand: false, isPermanent: true },
+            { count: config.cmc5 ?? 0, cmc: 5, isLand: false, isPermanent: true },
+            { count: config.cmc6 ?? 0, cmc: 6, isLand: false, isPermanent: true },
+            { count: (config.instants ?? 0) + (config.sorceries ?? 0), cmc: 0, isLand: false, isPermanent: false }
+        );
     }
 
     // Clear cache if deck changed
@@ -204,13 +222,19 @@ export function getDeckConfig() {
         nonperm: distribution.nonperm || 0,
     };
 
+    const x = parseInt(document.getElementById('wave-xValue')?.value) || 10;
+    const landValue = Math.max(0, parseFloat(document.getElementById('wave-land-value')?.value) || 0);
+    const cardValue = Math.max(0, parseFloat(document.getElementById('wave-card-value')?.value) || 0);
+
     return {
         deckSize,
-        x: parseInt(document.getElementById('wave-xValue').value) || 10,
+        x,
         distribution,
         cmcCounts,
         totalPerms,
-        cardData
+        cardData,
+        paybackCards,
+        paybackSettings: { threshold: x + 3, landValue, cardValue }
     };
 }
 
@@ -235,6 +259,15 @@ export function calculate() {
             expectedPermanents: sim.expectedPermanents,
             cardsRevealed: testX
         };
+    }
+
+    const current = results[config.x];
+    if (current) {
+        current.payback = calculateFixedDrawPayback(
+            config.paybackCards.map(card => ({ ...card, eligible: card.isPermanent && card.cmc <= config.x })),
+            config.x,
+            config.paybackSettings
+        );
     }
 
     return { config, results };
@@ -382,12 +415,14 @@ function updateStats(config, results) {
     const next = results[config.x + 1];
     const marginal = next ? next.expectedPermanents - eperms : null;
     const verdict = efficiencyVerdict(efficiency);
+    const payback = currentResult.payback;
+    const paybackPercent = (payback?.paybackProbability ?? 0) * 100;
 
     const hero = renderHeroStats([
-        { label: 'E[PERMANENTS]', value: formatNumber(eperms, 1), sub: `at X=${config.x}`, color: 'var(--tx-blue)', size: 'big' },
-        { label: 'HIT RATE', value: formatNumber(efficiency * 100, 0) + '%', sub: 'reveals that stick', color: 'var(--tx-green)' },
-        { label: 'DECK PERMANENTS', value: totalPerms, sub: `${formatNumber(permPercent, 0)}% of library`, color: 'var(--tx-amber)' },
-        { label: 'MARGINAL +1X', value: marginal != null ? formatDelta(marginal, 2) : '—', sub: 'extra perms per card', color: marginal != null ? deltaColor(marginal, 0.001) : 'var(--tx-dim)' }
+        { label: 'PAYBACK CHANCE', value: formatNumber(paybackPercent, 0) + '%', sub: `reach ${config.paybackSettings.threshold} value`, color: paybackPercent >= 50 ? 'var(--tx-green)' : 'var(--tx-amber)', size: 'big' },
+        { label: 'E[EFFECTIVE VALUE]', value: formatNumber(payback?.expectedEffectiveValue ?? 0, 1), sub: `raw MV ${formatNumber(payback?.expectedManaValue ?? 0, 1)}`, color: 'var(--tx-blue)' },
+        { label: 'E[PERMANENTS]', value: formatNumber(eperms, 1), sub: `${formatNumber(efficiency * 100, 0)}% hit rate`, color: 'var(--tx-green)' },
+        { label: 'DECK PERMANENTS', value: totalPerms, sub: `${formatNumber(permPercent, 0)}% of library`, color: 'var(--tx-amber)' }
     ]);
 
     const knee = recommendKneeX(computeSweep(config).map(p => ({ x: p.x, value: p.efficiency })), { fraction: 0.92 });
@@ -395,9 +430,12 @@ function updateStats(config, results) {
         ? renderRecommendation(`Efficient cast at <strong>X=${knee.x}</strong> (~${(knee.value * 100).toFixed(0)}% hit rate). Past that, extra mana mostly reveals cards you'd already expect to hit.`)
         : '';
 
-    const insight = renderInsightBox('', `Genesis Wave at X=${config.x} reveals ${config.x} cards and expects <strong style="color:var(--tx-blue);">${formatNumber(eperms, 1)}</strong> permanents to the battlefield. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
+    const insight = renderInsightBox('', `Genesis Wave at X=${config.x} costs ${config.paybackSettings.threshold} mana. The value model expects <strong style="color:var(--tx-blue);">${formatNumber(payback?.expectedEffectiveValue ?? 0, 1)}</strong> effective mana and classifies <strong>${formatNumber(paybackPercent, 0)}%</strong> of reveals as paid-for. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
 
     statsPanel.innerHTML = hero + rec + insight;
+
+    const target = document.getElementById('wave-payback-target');
+    if (target) target.textContent = `${config.paybackSettings.threshold} effective mana`;
 }
 
 // ... (updateComparison and runSampleReveals remain unchanged) ...
@@ -481,6 +519,8 @@ export function runSampleReveals() {
 
     // 1. STATS LOOP (Full Simulation)
     let totalPermanents = 0;
+    let totalEffectiveValue = 0;
+    let paidRuns = 0;
     const permanentDistribution = new Array(config.x + 1).fill(0);
 
     for (let i = 0; i < numSims; i++) {
@@ -509,13 +549,23 @@ export function runSampleReveals() {
         });
 
         const permanentCount = permanentsToBattlefield.length;
+        const manaValue = permanentsToBattlefield.reduce((sum, card) => sum + (Number(card?.cmc) || 0), 0);
+        const lands = permanentsToBattlefield.filter(card => card?.types?.includes('land')).length;
+        const scored = scoreBattlefieldValue(
+            { manaValue, lands, cards: permanentCount },
+            config.paybackSettings
+        );
         totalPermanents += permanentCount;
+        totalEffectiveValue += scored.effectiveValue;
+        if (scored.paidForItself) paidRuns++;
         permanentDistribution[permanentCount]++;
     }
 
     // 2. Build Summary UI
     const avgPermanents = (totalPermanents / numSims).toFixed(2);
     const avgPercent = ((avgPermanents / config.x) * 100).toFixed(1);
+    const avgEffectiveValue = (totalEffectiveValue / numSims).toFixed(2);
+    const paidPercent = ((paidRuns / numSims) * 100).toFixed(1);
 
     let distributionHTML = '<div class="tx-sim">';
     distributionHTML += '<div class="tx-h"><span>Permanents — distribution</span></div>';
@@ -530,6 +580,7 @@ export function runSampleReveals() {
 
     distributionHTML += '</div><div class="tx-sim-block">';
     distributionHTML += `<strong>Average permanents:</strong> ${avgPermanents} out of ${config.x} revealed (${avgPercent}%)`;
+    distributionHTML += `<br><strong>Average effective value:</strong> ${avgEffectiveValue} · <strong>Paid-for:</strong> ${paidPercent}% · <strong>Whiff:</strong> ${(100 - Number(paidPercent)).toFixed(1)}%`;
     distributionHTML += '</div></div>';
 
     // 3. Prepare List Container
@@ -581,8 +632,14 @@ export function runSampleReveals() {
             });
 
             const permanentCount = permanentsToBattlefield.length;
+            const manaValue = permanentsToBattlefield.reduce((sum, card) => sum + (Number(card?.cmc) || 0), 0);
+            const landCount = permanentsToBattlefield.filter(card => card?.types?.includes('land')).length;
+            const scored = scoreBattlefieldValue(
+                { manaValue, lands: landCount, cards: permanentCount },
+                config.paybackSettings
+            );
 
-            html += `<div class="sample-reveal ${permanentCount > 0 ? 'free-spell' : 'whiff'}">`;
+            html += `<div class="sample-reveal ${scored.paidForItself ? 'free-spell' : 'whiff'}">`;
             html += `<div><strong>Reveal ${i + 1} (X=${config.x}):</strong></div>`;
             html += '<div style="margin: 8px 0;">';
 
@@ -609,6 +666,7 @@ export function runSampleReveals() {
             html += '</div>';
             html += `<div class="reveal-summary">`;
             html += `<strong>Result:</strong> ${permanentCount} permanent${permanentCount !== 1 ? 's' : ''} to battlefield`;
+            html += ` · <strong>${scored.effectiveValue.toFixed(2)} / ${config.paybackSettings.threshold} value — ${scored.paidForItself ? 'PAID' : 'WHIFF'}</strong>`;
 
             const toGraveyard = nonPermanents.length + permanentsToGraveyard.length;
             if (toGraveyard > 0) {
@@ -694,6 +752,9 @@ export function init() {
             const btn = document.getElementById('wave-draw-reveals-btn');
             // Use refreshSamples
             if (btn) btn.addEventListener('click', refreshSamples);
+            ['wave-land-value', 'wave-card-value'].forEach(id => {
+                document.getElementById(id)?.addEventListener('input', updateUI);
+            });
         }
     });
 }

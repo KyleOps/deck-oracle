@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] - 2026-09-19
+
+### Added
+- **Primal Surge payback model** — classify a resolution by the value it actually creates, not only by how many permanents appear before the first non-permanent.
+  - Configurable payback threshold (10 by default), extra value per land (1 by default), and value per permanent put into play (0.25 by default)
+  - Effective value is shown transparently as `printed mana value + land value + card value`, while raw mana value remains visible beside it
+  - Exact payback and whiff probabilities calculated from the deck's permanent mana values, land count, and every possible stopping position
+  - Sample distributions and individual reveals now label runs below the chosen threshold as whiffs and runs at or above it as paid back
+  - Share links preserve all three payback-model settings
+  - Added unit coverage for the value formula, strict threshold boundary, exact stopping-position odds, and all-permanent libraries
+- **Genesis Wave and Kamahl's Druidic Vow payback models** — both calculators now report whether the cards put onto the battlefield repay the spell's actual mana investment.
+  - Exact without-replacement payback and whiff probabilities use automatic thresholds of `X + 3` for Genesis Wave and `X + 2` for Vow
+  - Configurable extra value per land and per card put into play capture ramp, deck thinning, and card access beyond printed mana value
+  - Hero stats retain raw mana value beside effective value, while sample summaries and individual reveals label paid-for casts and whiffs
+  - Vow's model includes copied casts as a combined `2X` reveal while keeping the payback target at the mana spent on the original spell
+  - Share links preserve both calculators' value assumptions
+- **Lumra fetch-land setup model** — estimate how many fetch lands will already be in the graveyard when Lumra enters.
+  - Fetch lands are auto-detected from imported card types and rules text, with an editable count for unusual cards or manual deck setup
+  - Exact odds show the chance of seeing at least one fetch by a chosen turn from a seven-card opener plus one draw each turn
+  - Expected fetches cracked are capped by available land drops and added separately to other graveyard lands and lands milled by Lumra
+  - Sample returns include the expected fetch contribution, and share links preserve the fetch count and cast turn
+  - Added unit coverage for fetch detection, exact access odds, land-drop caps, and the combined Lumra return estimate
+
 ## [2.11.0] - 2026-09-02
 
 ### Added

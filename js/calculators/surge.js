@@ -17,7 +17,11 @@ import {
 
 const CONFIG = {
     // Legacy iterations removed, using formula now
-    DEFAULT_SAMPLE_SIZE: 500
+    DEFAULT_SAMPLE_SIZE: 500,
+    DEFAULT_PAYBACK_THRESHOLD: 10,
+    DEFAULT_LAND_VALUE: 1,
+    DEFAULT_CARD_VALUE: 0.25,
+    VALUE_STEP: 0.25
 };
 
 let simulationCache = createCache(50);
@@ -28,6 +32,153 @@ let chart = null;
 let stableSamples = [];
 let lastSampleDeckHash = '';
 let renderedCount = 0;
+
+function clampNumber(value, fallback, min = 0, max = 100) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+}
+
+/** Read the user's quarter-mana value model from the controls. */
+function getPaybackSettings() {
+    const roundToStep = value => Math.round(value / CONFIG.VALUE_STEP) * CONFIG.VALUE_STEP;
+    return {
+        threshold: roundToStep(clampNumber(
+            document.getElementById('surge-payback-threshold')?.value,
+            CONFIG.DEFAULT_PAYBACK_THRESHOLD,
+            CONFIG.VALUE_STEP,
+            100
+        )),
+        landValue: roundToStep(clampNumber(
+            document.getElementById('surge-land-value')?.value,
+            CONFIG.DEFAULT_LAND_VALUE,
+            0,
+            20
+        )),
+        cardValue: roundToStep(clampNumber(
+            document.getElementById('surge-card-value')?.value,
+            CONFIG.DEFAULT_CARD_VALUE,
+            0,
+            20
+        ))
+    };
+}
+
+/**
+ * Score one Primal Surge run using the visible value model.
+ * @param {{manaValue:number, lands:number, permanents:number}} run
+ * @param {{threshold?:number, landValue?:number, cardValue?:number}} settings
+ * @returns {{effectiveValue:number, paidBack:boolean}}
+ */
+export function calculateSurgeRunValue(run, settings = {}) {
+    const threshold = clampNumber(settings.threshold, CONFIG.DEFAULT_PAYBACK_THRESHOLD, 0, 100);
+    const landValue = clampNumber(settings.landValue, CONFIG.DEFAULT_LAND_VALUE, 0, 20);
+    const cardValue = clampNumber(settings.cardValue, CONFIG.DEFAULT_CARD_VALUE, 0, 20);
+    const manaValue = clampNumber(run?.manaValue, 0, 0, Number.MAX_SAFE_INTEGER);
+    const lands = clampNumber(run?.lands, 0, 0, Number.MAX_SAFE_INTEGER);
+    const permanents = clampNumber(run?.permanents, 0, 0, Number.MAX_SAFE_INTEGER);
+    const effectiveValue = manaValue + (lands * landValue) + (permanents * cardValue);
+
+    return { effectiveValue, paidBack: effectiveValue >= threshold };
+}
+
+function combination(n, k) {
+    if (k < 0 || k > n) return 0;
+    const smallerK = Math.min(k, n - k);
+    let result = 1;
+    for (let i = 1; i <= smallerK; i++) {
+        result *= (n - smallerK + i) / i;
+    }
+    return result;
+}
+
+/**
+ * Calculate the exact chance that the permanents before the first non-permanent
+ * meet the user's payoff threshold. Given a run length X, those X cards are a
+ * uniformly random subset of the permanent pool; a capped subset-sum DP finds
+ * the share of those subsets below the threshold.
+ *
+ * @param {Array<{cmc:number, isLand:boolean, count?:number}>} permanentCards
+ * @param {number} nonPermanents
+ * @param {{threshold?:number, landValue?:number, cardValue?:number}} settings
+ * @returns {{paybackProbability:number, whiffProbability:number, expectedEffectiveValue:number}}
+ */
+export function calculateSurgePayback(permanentCards, nonPermanents, settings = {}) {
+    const threshold = clampNumber(settings.threshold, CONFIG.DEFAULT_PAYBACK_THRESHOLD, 0, 100);
+    const landValue = clampNumber(settings.landValue, CONFIG.DEFAULT_LAND_VALUE, 0, 20);
+    const cardValue = clampNumber(settings.cardValue, CONFIG.DEFAULT_CARD_VALUE, 0, 20);
+    const cards = [];
+
+    for (const card of permanentCards ?? []) {
+        const count = Math.max(0, Math.floor(clampNumber(card?.count, 1, 0, 500)));
+        const cmc = clampNumber(card?.cmc, 0, 0, 100);
+        const value = cmc + cardValue + (card?.isLand ? landValue : 0);
+        for (let i = 0; i < count; i++) cards.push(value);
+    }
+
+    const permanents = cards.length;
+    const stops = Math.max(0, Math.floor(clampNumber(nonPermanents, 0, 0, 500)));
+    const deckSize = permanents + stops;
+    const expectedEffectiveValue = cards.reduce((sum, value) => sum + value, 0) / (stops + 1);
+
+    if (threshold <= 0) {
+        return { paybackProbability: 1, whiffProbability: 0, expectedEffectiveValue };
+    }
+    if (deckSize === 0) {
+        return { paybackProbability: 0, whiffProbability: 1, expectedEffectiveValue: 0 };
+    }
+
+    const scale = 1 / CONFIG.VALUE_STEP;
+    const thresholdUnits = Math.max(1, Math.round(threshold * scale));
+    const valueUnits = cards.map(value => Math.max(0, Math.round(value * scale)));
+    const subsetCounts = Array.from(
+        { length: permanents + 1 },
+        () => new Float64Array(thresholdUnits)
+    );
+    subsetCounts[0][0] = 1;
+
+    let processed = 0;
+    for (const value of valueUnits) {
+        processed++;
+        for (let size = processed; size >= 1; size--) {
+            const previous = subsetCounts[size - 1];
+            const current = subsetCounts[size];
+            for (let sum = 0; sum < thresholdUnits; sum++) {
+                const ways = previous[sum];
+                if (!ways) continue;
+                const nextSum = sum + value;
+                if (nextSum < thresholdUnits) current[nextSum] += ways;
+            }
+        }
+    }
+
+    let whiffProbability = 0;
+    let survivesToSize = 1;
+    for (let size = 0; size <= permanents; size++) {
+        const totalSubsets = combination(permanents, size);
+        let whiffSubsets = 0;
+        for (const ways of subsetCounts[size]) whiffSubsets += ways;
+        const conditionalWhiff = totalSubsets > 0 ? whiffSubsets / totalSubsets : 1;
+
+        let exactRunProbability = 0;
+        if (stops === 0) {
+            exactRunProbability = size === permanents ? 1 : 0;
+        } else {
+            exactRunProbability = survivesToSize * (stops / (deckSize - size));
+        }
+        whiffProbability += exactRunProbability * conditionalWhiff;
+
+        if (size < permanents) {
+            survivesToSize *= (permanents - size) / (deckSize - size);
+        }
+    }
+
+    whiffProbability = Math.min(1, Math.max(0, whiffProbability));
+    return {
+        paybackProbability: 1 - whiffProbability,
+        whiffProbability,
+        expectedEffectiveValue
+    };
+}
 
 /**
  * Build deck for sampling, excluding one non-permanent (Primal Surge on stack)
@@ -128,19 +279,22 @@ export function getDeckConfig() {
 
     let lands = 0;
     let totalPermCMC = 0;
+    const permanentCards = [];
 
     if (cardData && cardData.cardsByName && Object.keys(cardData.cardsByName).length > 0) {
         Object.values(cardData.cardsByName).forEach(card => {
-            const typeLine = (card.type_line || '').toLowerCase();
+            const typeLine = (card?.type_line || '').toLowerCase();
             const hasPermType = ['creature', 'artifact', 'enchantment', 'planeswalker', 'battle', 'land'].some(t => typeLine.includes(t));
             
             if (hasPermType) {
-                if (typeLine.includes('land')) {
-                    lands += card.count;
+                const count = Math.max(0, Number(card?.count) || 0);
+                const cmc = Number.isFinite(Number(card?.cmc)) ? Number(card.cmc) : 0;
+                const isLand = typeLine.includes('land');
+                permanentCards.push({ cmc, isLand, count });
+                if (isLand) {
+                    lands += count;
                 }
-                if (card.cmc) {
-                    totalPermCMC += card.cmc * card.count;
-                }
+                totalPermCMC += cmc * count;
             }
         });
     } else {
@@ -153,6 +307,21 @@ export function getDeckConfig() {
                        (config.cmc4 || 0) * 4 +
                        (config.cmc5 || 0) * 5 +
                        (config.cmc6 || 0) * 7;
+
+        // Manual mode only has aggregate mana buckets. Build a best-effort
+        // permanent pool so the same payoff model remains available.
+        permanentCards.push({ cmc: 0, isLand: true, count: Math.min(lands, permanents) });
+        let remaining = Math.max(0, permanents - lands);
+        const buckets = [
+            [0, config.cmc0], [1, config.cmc1], [2, config.cmc2], [3, config.cmc3],
+            [4, config.cmc4], [5, config.cmc5], [7, config.cmc6]
+        ];
+        for (const [cmc, bucketCount] of buckets) {
+            const count = Math.min(remaining, Math.max(0, Number(bucketCount) || 0));
+            if (count > 0) permanentCards.push({ cmc, isLand: false, count });
+            remaining -= count;
+        }
+        if (remaining > 0) permanentCards.push({ cmc: 0, isLand: false, count: remaining });
     }
 
     const deckHash = `${deckSize}-${nonPermanents}-${permanents}-${lands}-${totalPermCMC}`;
@@ -163,7 +332,7 @@ export function getDeckConfig() {
         lastDeckHash = deckHash;
     }
 
-    return { deckSize, nonPermanents, permanents, cardData, lands, totalPermCMC };
+    return { deckSize, nonPermanents, permanents, cardData, lands, totalPermCMC, permanentCards };
 }
 
 /**
@@ -341,16 +510,19 @@ function calcAllPermsProb(deckSize, nonPerms) {
  * Update stats panel (replacing the old table)
  */
 function updateStatsPanel(config, result) {
+    const paybackSettings = getPaybackSettings();
     const avgLands = config.permanents > 0 ? result.expectedPermanents * (config.lands / config.permanents) : 0;
     const avgCMC = config.permanents > 0 ? result.expectedPermanents * (config.totalPermCMC / config.permanents) : 0;
     const allPermsProb = calcAllPermsProb(config.deckSize, config.nonPermanents);
+    const payback = calculateSurgePayback(config.permanentCards, config.nonPermanents, paybackSettings);
 
-    // Verdict tier from expected permanents
+    // Verdict tier from the chance that Surge returns the amount of effective
+    // value the user requires, not merely the number of cards it sees.
     let verdict;
-    if (result.expectedPermanents > 40) verdict = { label: 'LETHAL', color: 'var(--tx-green)', advice: 'Likely plays half your deck or more.' };
-    else if (result.expectedPermanents > 20) verdict = { label: 'EXPLOSIVE', color: 'var(--tx-green)', advice: 'Expect a board-state explosion.' };
-    else if (result.expectedPermanents > 10) verdict = { label: 'SOLID', color: 'var(--tx-amber)', advice: 'Good return on investment for 10 mana.' };
-    else verdict = { label: 'RISKY', color: 'var(--tx-red)', advice: 'High chance of bricking on an early non-permanent.' };
+    if (payback.paybackProbability >= 0.9) verdict = { label: 'RELIABLE', color: 'var(--tx-green)', advice: 'Usually returns the value you require.' };
+    else if (payback.paybackProbability >= 0.7) verdict = { label: 'FAVORED', color: 'var(--tx-green)', advice: 'More often than not, Surge pays for itself.' };
+    else if (payback.paybackProbability >= 0.5) verdict = { label: 'VOLATILE', color: 'var(--tx-amber)', advice: 'The average is attractive, but the miss rate matters.' };
+    else verdict = { label: 'RISKY', color: 'var(--tx-red)', advice: 'Most runs finish below your payback threshold.' };
 
     // Show non-permanents remaining in library (after Surge is cast)
     const nonPermLabel = config.nonPermanents === 0
@@ -358,17 +530,18 @@ function updateStatsPanel(config, result) {
         : `${config.nonPermanents} non-perm${config.nonPermanents > 1 ? 's' : ''} left`;
 
     const hero = renderHeroStats([
-        { label: 'E[PERMANENTS]', value: formatNumber(result.expectedPermanents, 1), sub: 'hit the battlefield', color: 'var(--tx-green)', size: 'big' },
-        { label: 'AVG LANDS', value: formatNumber(avgLands, 1), sub: 'onto battlefield', color: 'var(--tx-amber)' },
-        { label: 'AVG MANA VALUE', value: formatNumber(avgCMC, 1), sub: 'total mana cheated', color: 'var(--tx-mid)' },
-        { label: 'LIBRARY PLAYED', value: formatNumber(result.percentOfDeck, 1) + '%', sub: nonPermLabel, color: result.percentOfDeck > 50 ? 'var(--tx-green)' : 'var(--tx-amber)' }
+        { label: 'PAYBACK CHANCE', value: formatPercentage(payback.paybackProbability, 1), sub: `at least ${formatNumber(paybackSettings.threshold, 2)} effective value`, color: payback.paybackProbability >= 0.5 ? 'var(--tx-green)' : 'var(--tx-red)', size: 'big' },
+        { label: 'AVG EFFECTIVE VALUE', value: formatNumber(payback.expectedEffectiveValue, 1), sub: 'printed MV + lands + cards', color: payback.expectedEffectiveValue >= paybackSettings.threshold ? 'var(--tx-green)' : 'var(--tx-red)' },
+        { label: 'AVG RAW MANA VALUE', value: formatNumber(avgCMC, 1), sub: 'printed MV cheated', color: 'var(--tx-mid)' },
+        { label: 'AVG BOARD', value: formatNumber(result.expectedPermanents, 1), sub: `${formatNumber(avgLands, 1)} lands · ${nonPermLabel}`, color: 'var(--tx-amber)' }
     ]);
 
     const note = config.nonPermanents === 0
         ? `<strong style="color:var(--tx-green);">100% chance to play your entire library.</strong>`
         : `Chance to hit all ${config.permanents} permanents before a non-perm: <strong>${formatPercentage(allPermsProb, 2)}</strong>`;
 
-    const insight = renderInsightBox('', `Primal Surge plays cards off the top until it reveals a non-permanent. ${renderVerdictBadge(verdict)} ${verdict.advice}<br><span style="color:var(--tx-dim);">${note}</span>`);
+    const formula = `Value model: printed MV + ${formatNumber(paybackSettings.landValue, 2)} per land + ${formatNumber(paybackSettings.cardValue, 2)} per permanent.`;
+    const insight = renderInsightBox('', `Primal Surge plays cards off the top until it reveals a non-permanent. ${renderVerdictBadge(verdict)} ${verdict.advice}<br><span style="color:var(--tx-dim);">${formula} A run below ${formatNumber(paybackSettings.threshold, 2)} is a whiff. ${note}</span>`);
 
     const container = document.getElementById('surge-stats-container');
     if (container) container.innerHTML = hero + insight;
@@ -438,6 +611,7 @@ function refreshSamples() {
 export function runSampleReveals() {
     const config = getDeckConfig();
     const cardData = config.cardData;
+    const paybackSettings = getPaybackSettings();
 
     if (!cardData || !cardData.cardsByName || Object.keys(cardData.cardsByName).length === 0) {
         document.getElementById('surge-reveals-display').innerHTML = '<p style="color: var(--text-dim);">Please import a decklist to run simulations.</p>';
@@ -471,6 +645,7 @@ export function runSampleReveals() {
     let minPermanents = Infinity;
     let maxPermanents = 0;
     const permanentCounts = [];
+    const effectiveValues = [];
 
     for (let i = 0; i < statsCount; i++) {
         const shuffled = stableSamples[i];
@@ -493,6 +668,11 @@ export function runSampleReveals() {
         totalManaValue += runManaValue;
         totalLands += runLands;
         permanentCounts.push(permanentCount);
+        effectiveValues.push(calculateSurgeRunValue({
+            manaValue: runManaValue,
+            lands: runLands,
+            permanents: permanentCount
+        }, paybackSettings).effectiveValue);
         minPermanents = Math.min(minPermanents, permanentCount);
         maxPermanents = Math.max(maxPermanents, permanentCount);
     }
@@ -501,42 +681,46 @@ export function runSampleReveals() {
     const deckSize = stableSamples[0].length;
     const fullDeckCount = permanentCounts.filter(c => c === deckSize).length;
     const over20Count = permanentCounts.filter(c => c >= 20).length;
-    const over10Count = permanentCounts.filter(c => c >= 10).length;
-    const under5Count = permanentCounts.filter(c => c < 5).length;
+    const paidBackCount = effectiveValues.filter(value => value >= paybackSettings.threshold).length;
+    const whiffCount = statsCount - paidBackCount;
 
     // 2. Build Summary UI (using statsCount for accurate averages)
     const avgPermanents = (totalPermanents / statsCount).toFixed(1);
     const avgMana = (totalManaValue / statsCount).toFixed(0);
     const avgLands = (totalLands / statsCount).toFixed(1);
+    const avgEffectiveValue = (effectiveValues.reduce((sum, value) => sum + value, 0) / statsCount).toFixed(1);
 
-    // Bucket the permanent counts so the sample section shows the SHAPE of the
-    // outcome, not just its average — a mean of 12 permanents reads very
-    // differently if the spread is 10-14 versus a bimodal 2-or-25.
-    const permDistribution = [];
-    for (const c of permanentCounts) permDistribution[c] = (permDistribution[c] || 0) + 1;
-    for (let i = 0; i < permDistribution.length; i++) if (!permDistribution[i]) permDistribution[i] = 0;
+    // Bucket effective values so the sample section shows the shape of the
+    // payoff, not just an average that can hide a bimodal whiff/explosion deck.
+    const valueDistribution = [];
+    for (const value of effectiveValues) {
+        const bucket = Math.floor(value);
+        valueDistribution[bucket] = (valueDistribution[bucket] || 0) + 1;
+    }
+    for (let i = 0; i < valueDistribution.length; i++) if (!valueDistribution[i]) valueDistribution[i] = 0;
 
     const summaryHTML = renderSimulationSummary({
         title: 'Simulation summary',
         runs: statsCount,
         metrics: [
+            { label: 'Avg effective value', value: avgEffectiveValue, sub: `${paybackSettings.threshold}+ pays back`, color: 'var(--tx-good)' },
             { label: 'Avg permanents', value: avgPermanents, sub: `range ${minPermanents}–${maxPermanents}`, color: 'var(--tx-good)' },
             { label: 'Avg lands', value: avgLands, sub: 'onto the battlefield', color: 'var(--type-land)' },
-            { label: 'Avg mana value', value: avgMana, sub: 'total MV cheated', color: 'var(--tx-accent)' }
+            { label: 'Avg raw mana value', value: avgMana, sub: 'printed MV cheated', color: 'var(--tx-accent)' }
         ],
         distribution: {
-            title: 'Permanents hit — distribution',
-            counts: permDistribution,
+            title: 'Effective value — distribution',
+            counts: valueDistribution,
             totalSims: statsCount,
-            labelFn: (i) => `${i} perm${i === 1 ? '' : 's'}`,
-            markerFn: (i) => (i === deckSize ? 'FULL DECK' : (i < 5 ? 'WHIFF' : null)),
-            toneFn: (i) => (i < 5 ? 'bad' : null)
+            labelFn: (i) => `${i}–<${i + 1} value`,
+            markerFn: (i) => (i < paybackSettings.threshold ? 'WHIFF' : (i === Math.ceil(paybackSettings.threshold) ? 'PAYS BACK' : null)),
+            toneFn: (i) => (i < paybackSettings.threshold ? 'bad' : null)
         },
         outcomes: [
+            { label: `Paid for itself (${paybackSettings.threshold}+)`, value: paidBackCount / statsCount, good: true },
+            { label: `Whiffed (under ${paybackSettings.threshold})`, value: whiffCount / statsCount, good: false },
             { label: 'Full deck emptied', value: fullDeckCount / statsCount, good: true },
-            { label: '20+ permanents', value: over20Count / statsCount, good: true },
-            { label: '10+ permanents', value: over10Count / statsCount, good: true },
-            { label: 'Whiffed (under 5)', value: under5Count / statsCount, good: false }
+            { label: '20+ permanents', value: over20Count / statsCount, good: true }
         ]
     });
 
@@ -585,8 +769,14 @@ export function runSampleReveals() {
             }
 
             const hitNonPermanent = revealedCards[revealedCards.length - 1]?.isNonPermanent;
-            html += `<div class="sample-reveal ${!hitNonPermanent ? 'free-spell' : 'whiff'}">`;
-            html += `<div><strong>Reveal ${i + 1}:</strong> ${permanentCount} perms (${runLands} lands, ${runManaValue} total CMC)</div>`;
+            const payoff = calculateSurgeRunValue({
+                manaValue: runManaValue,
+                lands: runLands,
+                permanents: permanentCount
+            }, paybackSettings);
+            const outcomeClass = payoff.paidBack ? 'free-spell' : 'whiff';
+            html += `<div class="sample-reveal ${outcomeClass}">`;
+            html += `<div><strong>Reveal ${i + 1}:</strong> ${permanentCount} perms · ${runLands} lands · ${runManaValue} raw MV · <strong>${formatNumber(payoff.effectiveValue, 2)} effective</strong></div>`;
             html += '<div style="margin: 8px 0;">';
 
             revealedCards.forEach(card => {
@@ -595,12 +785,12 @@ export function runSampleReveals() {
             });
 
             html += '</div>';
-            html += `<div class="reveal-summary ${!hitNonPermanent ? 'free-spell' : 'whiff'}">`;
+            html += `<div class="reveal-summary ${outcomeClass}">`;
 
-            if (hitNonPermanent) {
-                html += `<strong>✗ Stopped</strong>`;
+            if (payoff.paidBack) {
+                html += `<strong>✓ Paid back${!hitNonPermanent ? ' · Full deck' : ''}</strong>`;
             } else {
-                html += `<strong>✓ Full Deck!</strong>`;
+                html += `<strong>✗ Whiff · stopped below ${formatNumber(paybackSettings.threshold, 2)}</strong>`;
             }
 
             html += '</div></div>';
@@ -676,6 +866,11 @@ export function init() {
             const btn = document.getElementById('surge-draw-reveals-btn');
             // Use refreshSamples here
             if (btn) btn.addEventListener('click', refreshSamples);
+
+            ['surge-payback-threshold', 'surge-land-value', 'surge-card-value'].forEach(id => {
+                const input = document.getElementById(id);
+                if (input) input.addEventListener('input', updateUI);
+            });
         }
     });
 }
