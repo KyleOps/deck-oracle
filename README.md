@@ -21,6 +21,7 @@ evidence.
 | Opening Hands | What do my opening hands actually look like? (sample hands with card images, London mulligan practice) |
 | Mulligan Planner | Which hands should I keep, and how often will I find one? |
 | Land Drops | How reliably will I hit a land drop every turn? |
+| Compare Decks | How do two decks, or two versions of one deck, differ? |
 
 **Engines**: Wild Pair, Monstrous Vortex, Chimil, Rashmi, and Head to Head (Wild Pair vs Vortex)
 
