@@ -1797,3 +1797,5 @@
 }
 
 .finding-link:hover { text-decoration: underline; }
+
+.saved-deck-rename { flex: 1; min-width: 0; height: 40px; margin: 4px; font-size: var(--t-sm); }

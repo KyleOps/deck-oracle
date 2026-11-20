@@ -120,6 +120,9 @@ export function renderSavedDecks() {
                     <span class="saved-deck-meta">${d.cardCount} cards · ${sourceLabel(d.importSource)}${fmt ? ` · ${fmt}` : ''} · ${relativeTime(d.savedAt)}</span>
                 </button>
                 ${active ? '<span class="chip chip-accent">Active</span>' : ''}
+                <button class="icon-btn icon-btn-sm" type="button" data-rename-deck="${escapeHtml(d.id)}" aria-label="Rename ${escapeHtml(d.name)}" data-tip="Rename">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>
+                </button>
                 <button class="icon-btn icon-btn-sm" type="button" data-delete-deck="${escapeHtml(d.id)}" aria-label="Remove ${escapeHtml(d.name)}" data-tip="Remove from saved decks">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>
                 </button>
@@ -210,6 +213,42 @@ function onStatus({ state, message, percentage, warnings = [] }) {
     }
 }
 
+/** Swap a saved deck's name for an inline input; Enter saves, Escape cancels. */
+function startRename(id, row) {
+    const main = row?.querySelector('.saved-deck-main');
+    const snapshot = Library.getDeck(id);
+    if (!main || !snapshot) return;
+    const input = document.createElement('input');
+    input.className = 'field field-sm saved-deck-rename';
+    input.value = snapshot.name ?? '';
+    input.maxLength = 80;
+    input.setAttribute('aria-label', 'Deck name');
+    main.replaceWith(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = save => {
+        if (done) return;
+        done = true;
+        const name = input.value.trim();
+        if (save && name && name !== snapshot.name) {
+            if (DeckConfig.getDeckConfig().deckId === id) DeckConfig.renameDeck(name);
+            else Library.updateDeckMeta(id, { name });
+        }
+        renderSavedDecks();
+    };
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+        else if (e.key === 'Escape') {
+            // Cancel the rename without closing the whole dialog.
+            e.preventDefault();
+            e.stopPropagation();
+            finish(false);
+        }
+    });
+    input.addEventListener('blur', () => finish(true));
+}
+
 async function runExample(id) {
     const example = EXAMPLE_DECKS.find(d => d.id === id);
     if (!example) return;
@@ -277,6 +316,12 @@ export function initDeckDialog() {
                 toast('That saved deck could not be read.', { tone: 'bad' });
                 renderSavedDecks();
             }
+            return;
+        }
+
+        const rename = e.target.closest('[data-rename-deck]');
+        if (rename) {
+            startRename(rename.dataset.renameDeck, rename.closest('.saved-deck'));
             return;
         }
 

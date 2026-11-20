@@ -351,3 +351,28 @@ export function healthChecks(stats, { format = FORMATS.commander } = {}) {
 function colorWord(c) {
     return { W: 'White', U: 'Blue', B: 'Black', R: 'Red', G: 'Green' }[c] ?? c;
 }
+
+/** Community names for every colour combination, keyed in WUBRG order. */
+const COMBO_NAMES = Object.freeze({
+    '': 'Colourless', W: 'Mono-White', U: 'Mono-Blue', B: 'Mono-Black', R: 'Mono-Red', G: 'Mono-Green',
+    WU: 'Azorius', UB: 'Dimir', BR: 'Rakdos', RG: 'Gruul', WG: 'Selesnya',
+    WB: 'Orzhov', UR: 'Izzet', BG: 'Golgari', WR: 'Boros', UG: 'Simic',
+    WUB: 'Esper', UBR: 'Grixis', BRG: 'Jund', WRG: 'Naya', WUG: 'Bant',
+    WBG: 'Abzan', WUR: 'Jeskai', UBG: 'Sultai', WBR: 'Mardu', URG: 'Temur',
+    WUBRG: 'Five-colour'
+});
+
+/** "Simic", "Mono-Red", "Four-colour" … for a WUBRG-ordered identity. */
+export function colorComboName(identity = []) {
+    const key = identity.join('');
+    return COMBO_NAMES[key] ?? (identity.length === 4 ? 'Four-colour' : 'Multicolour');
+}
+
+/**
+ * A readable default name for a deck that arrived without one (pasted lists):
+ * the commander's name, else its colours ("Mono-Red deck").
+ */
+export function suggestDeckName({ cardsByName = {}, commanderName = null } = {}) {
+    if (commanderName) return commanderName;
+    return `${colorComboName(deckColorIdentity(cardsByName))} deck`;
+}

@@ -60,6 +60,7 @@ export const CALCULATORS = Object.freeze({
         question: 'What do my opening hands actually look like?',
         summary: 'Draw real sample hands, practice keep-or-mulligan, and see how often hands are keepable.',
         method: 'exact + simulation', keywords: ['sample hand', 'goldfish', 'draw seven', 'mulligan practice', 'opener'],
+        charts: false,
         load: () => import('../calculators/hands.js'), view: () => import('../views/hands.js')
     },
     mulligan: {

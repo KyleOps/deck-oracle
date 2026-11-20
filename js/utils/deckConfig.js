@@ -15,6 +15,7 @@ import { importDecklistBatch, importDeckFromUrl } from './decklistImport.js';
 import { DEFAULT_DECK_DATA } from './defaultDeckData.js';
 import { resolveFormat } from './format.js';
 import * as Library from './deckLibrary.js';
+import { suggestDeckName } from './deckStats.js';
 
 export const TYPE_FIELDS = Object.freeze(['creatures', 'instants', 'sorceries', 'artifacts', 'enchantments', 'planeswalkers', 'lands', 'battles']);
 export const DEFAULT_DECK_URL = 'https://moxfield.com/decks/BdgPCOK4IUyNd2287K2mvg';
@@ -180,6 +181,16 @@ export function updateDeck(config = {}) {
     notifyUpdates();
 }
 
+/** Rename the active deck (and its saved copy). */
+export function renameDeck(name) {
+    const clean = String(name ?? '').trim().slice(0, 80);
+    if (!clean) return false;
+    deckState.deckName = clean;
+    if (deckState.deckId) Library.updateDeckMeta(deckState.deckId, { name: clean });
+    notifyUpdates();
+    return true;
+}
+
 /** Set the format preference ('auto' or a FORMATS key). */
 export function setFormatPreference(format) {
     deckState.format = format || 'auto';
@@ -333,7 +344,11 @@ export async function importDeckText(text) {
                 status('loading', `Looking up cards… ${progress.processed}/${progress.total}`, { percentage: progress.percentage ?? 0 });
             });
             const commander = result.importMetadata?.commanderName ?? result.commanderName ?? null;
-            applyImport({ ...result, commanderName: commander }, { importUrl: null, source: 'paste', deckName: commander ? `${commander} deck` : 'Pasted deck' });
+            applyImport({ ...result, commanderName: commander }, {
+                importUrl: null,
+                source: 'paste',
+                deckName: suggestDeckName({ cardsByName: result.cardsByName, commanderName: commander })
+            });
             status('success', `Imported ${result.actualCardCount ?? 0} cards.`, {
                 percentage: 100, warnings: importWarnings(result.importMetadata)
             });
