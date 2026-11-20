@@ -1,169 +1,161 @@
 /**
- * Big Spell Comparison Utility
- * Compares Genesis Wave, Kamahl's Druidic Vow, and Primal Surge for a given deck
+ * How the four big spells compare for one deck at the same total mana:
+ * Genesis Wave, Kamahl's Druidic Vow, Primal Surge and Portent of Calamity.
+ *
+ * Everything here is DOM-free. It reads the deck from DeckConfig (or from
+ * explicit options) and calls each calculator's pure entry point, so it is
+ * safe to run from any page — including before the other three pages have
+ * ever been opened, when their inputs don't exist.
  */
 
 import * as DeckConfig from './deckConfig.js';
 import { simulateGenesisWave } from '../calculators/wave.js';
 import { simulateVow } from '../calculators/vow.js';
 import { simulatePrimalSurge } from '../calculators/surge.js';
-import { calculate as calculatePortent } from '../calculators/portent.js';
+import { portentOutcomes } from '../calculators/portent.js';
+import { avg, deckCardList, isPermanentTypeLine, listSize, pct } from './bigSpells.js';
+import { cardRef, escapeHtml } from '../data/glossary.js';
+
+const SURGE_COST = 10;
+const COPYING_COMMANDERS = new Set(['The Sixth Doctor']);
+
+/** Total mana a source page's X stands for. */
+export function totalManaFor(sourceSpell, x) {
+    const n = Math.max(0, Math.floor(Number(x) || 0));
+    switch (sourceSpell) {
+        case 'wave': return n + 3;     // {X}{G}{G}{G}
+        case 'vow': return n + 2;      // {X}{G}{G}
+        case 'portent': return n + 1;  // {X}{U}
+        case 'surge': return SURGE_COST;
+        default: return n;
+    }
+}
 
 /**
- * Analyze which big spell is best for the current deck at a given X
- * @param {number} inputX - X value from the source calculator
- * @param {string} sourceSpell - The calculator initiating the comparison ('wave', 'vow', 'portent', 'surge')
- * @returns {Object} - Comparison results
+ * Compare the four spells for a deck at the mana the source page is spending.
+ *
+ * @param {number} inputX - X on the source page (ignored for Surge)
+ * @param {'wave'|'vow'|'portent'|'surge'|'generic'} [sourceSpell='generic']
+ * @param {{deck?:Object, cards?:Array, commanderName?:string|null, vowDoubleCast?:boolean}} [options]
+ *   deck: a DeckConfig snapshot (default: the live deck); cards: its card list;
+ *   vowDoubleCast: whether Vow is copied (default: true for commanders that copy it)
+ * @returns {Object|null} null when there is no card list to compare
  */
-export function compareBigSpells(inputX, sourceSpell = 'generic') {
-    const cardData = DeckConfig.getImportedCardData();
-    const deckSize = DeckConfig.getDeckSize(true);
-    const config = DeckConfig.getDeckConfig();
-    const commanderName = DeckConfig.getCommanderName();
+export function compareBigSpells(inputX, sourceSpell = 'generic', options = {}) {
+    const deck = options.deck ?? DeckConfig.getDeckConfig();
+    const cards = options.cards ?? deckCardList(deck);
+    if (!cards.length) return null;
 
-    if (!cardData || !cardData.cardsByName || Object.keys(cardData.cardsByName).length === 0) {
-        return null;
-    }
-
-    // Determine target total mana based on source spell
-    let totalMana;
-    if (sourceSpell === 'wave') {
-        totalMana = inputX + 3; // {X}{G}{G}{G}
-    } else if (sourceSpell === 'vow') {
-        totalMana = inputX + 2; // {X}{G}{G}
-    } else if (sourceSpell === 'portent') {
-        totalMana = inputX + 1; // {X}{U}
-    } else if (sourceSpell === 'surge') {
-        totalMana = 10; // Fixed cost
-    } else {
-        totalMana = inputX; // Fallback
-    }
-
-    // Calculate equivalent X for each spell based on total mana
-    // Ensure X is at least 0
+    const commanderName = options.commanderName !== undefined ? options.commanderName : (deck.commanderName ?? null);
+    const vowCopied = options.vowDoubleCast ?? COPYING_COMMANDERS.has(commanderName);
+    const totalMana = totalManaFor(sourceSpell, inputX);
     const waveX = Math.max(0, totalMana - 3);
     const vowX = Math.max(0, totalMana - 2);
     const portentX = Math.max(0, totalMana - 1);
-    
-    // Build distributions for each spell
-    let waveDistribution = {};
-    let vowDistribution = {};
+    const deckSize = listSize(cards);
+
+    const waveDistribution = {};
+    const vowDistribution = {};
     let permanentCount = 0;
     let nonPermanentCount = 0;
     let legendaryPermanentCount = 0;
     let landCount = 0;
+    let permanentManaValue = 0;
+    let waveManaValue = 0;
 
-    Object.values(cardData.cardsByName).forEach(card => {
-        const typeLine = (card.type_line || '').toLowerCase();
-        const cmc = card.cmc !== undefined ? Math.floor(card.cmc) : 0;
-
-        const isPermanent = ['creature', 'artifact', 'enchantment', 'planeswalker', 'battle', 'land']
-            .some(t => typeLine.includes(t));
-        const isLand = typeLine.includes('land');
-        const isLegendary = typeLine.includes('legendary');
-
-        if (isPermanent) {
+    for (const card of cards) {
+        const typeLine = card.type_line.toLowerCase();
+        const mv = Math.floor(card.cmc);
+        if (isPermanentTypeLine(typeLine)) {
+            const isLand = typeLine.includes('land');
+            const isLegendary = typeLine.includes('legendary');
             permanentCount += card.count;
-
-            // Wave: Any permanent with CMC <= waveX
-            waveDistribution[cmc] = (waveDistribution[cmc] || 0) + card.count;
-
-            // Vow: Land OR (Legendary Permanent with CMC <= vowX)
-            if (isLand || isLegendary) {
-                vowDistribution[cmc] = (vowDistribution[cmc] || 0) + card.count;
-                if (isLegendary) legendaryPermanentCount += card.count;
-            }
-
+            permanentManaValue += card.cmc * card.count;
+            waveDistribution[mv] = (waveDistribution[mv] ?? 0) + card.count;
+            if (mv <= waveX) waveManaValue += card.cmc * card.count;
+            if (isLand || isLegendary) vowDistribution[mv] = (vowDistribution[mv] ?? 0) + card.count;
+            if (isLegendary) legendaryPermanentCount += card.count;
             if (isLand) landCount += card.count;
         } else {
             nonPermanentCount += card.count;
-            waveDistribution['nonperm'] = (waveDistribution['nonperm'] || 0) + card.count;
+            waveDistribution.nonperm = (waveDistribution.nonperm ?? 0) + card.count;
         }
-    });
+    }
 
-    // Calculate expected values for each spell using their specific X
-    const waveResult = simulateGenesisWave(deckSize, waveDistribution, waveX);
-    const vowResult = simulateVow(deckSize, vowDistribution, vowX, false, cardData);
+    // Genesis Wave
+    const wave = simulateGenesisWave(deckSize, waveDistribution, waveX);
+    const waveRevealed = Math.min(waveX, deckSize);
 
-    // Remove the cast copy only when the imported list actually contains it.
-    const surgeOnStack = Object.values(cardData.cardsByName).some(card =>
-        String(card?.name ?? '').trim().toLowerCase() === 'primal surge' && Number(card?.count) > 0
-    );
+    // Kamahl's Druidic Vow (the copy looks at the next X cards)
+    const cardsByName = Object.fromEntries(cards.map(card => [card.name, card]));
+    const vow = simulateVow(deckSize, vowDistribution, vowX, vowCopied, { cardsByName });
+
+    // Primal Surge — the cast copy is on the stack, not in the library.
+    const surgeOnStack = cards.some(card => card.name.trim().toLowerCase() === 'primal surge');
     const surgeLibrarySize = surgeOnStack ? deckSize - 1 : deckSize;
     const surgeNonPerms = surgeOnStack ? nonPermanentCount - 1 : nonPermanentCount;
     const surgePerms = surgeLibrarySize - surgeNonPerms;
-    const surgeResult = simulatePrimalSurge(surgeLibrarySize, surgeNonPerms, surgePerms);
-    
-    const portentData = calculatePortent(); 
-    const portentResult = portentData?.results?.[portentX];
+    const surge = simulatePrimalSurge(surgeLibrarySize, surgeNonPerms, surgePerms);
 
-    // Calculate efficiency metrics
-    const waveCMC = waveX + 3;
-    const vowCMC = vowX + 2;
-    const surgeCMC = 10;
-    const portentCMC = portentX + 1;
+    // Portent of Calamity
+    const portent = portentX > 0 ? portentOutcomes({ cards, counts: deck, x: portentX }) : null;
 
-    let waveExpected = waveResult?.expectedPermanents ?? 0;
-    let vowExpected = vowResult?.expectedHits ?? 0;
-    const surgeExpected = surgeResult?.expectedPermanents ?? 0;
-    const portentExpected = portentResult?.expectedTypes ?? 0;
-
-    // Double Vow expected value for "The Sixth Doctor" commander
-    const isSixthDoctor = commanderName === 'The Sixth Doctor';
-    if (isSixthDoctor) {
-        vowExpected *= 2;
-    }
-
-    const waveEfficiency = waveCMC > 0 ? waveExpected / waveCMC : 0;
-    const vowEfficiency = vowCMC > 0 ? vowExpected / vowCMC : 0;
-    const surgeEfficiency = surgeExpected / surgeCMC;
-    const portentEfficiency = portentCMC > 0 ? portentExpected / portentCMC : 0;
-
-    // Determine recommendations
     const spells = [
         {
+            key: 'wave',
             name: 'Genesis Wave',
+            cardName: 'Genesis Wave',
             x: waveX,
-            expected: waveExpected,
-            cmc: waveCMC,
-            efficiency: waveEfficiency,
-            restriction: `Permanents with CMC ≤ ${waveX}`,
-            metric: 'expected permanents',
-            color: '#55c97f'
+            cmc: waveX + 3,
+            expected: wave?.expectedPermanents ?? 0,
+            unit: 'permanents',
+            manaValue: deckSize > 0 ? waveRevealed * waveManaValue / deckSize : 0,
+            restriction: `Permanents with mana value ${waveX} or less`,
+            metric: 'expected permanents'
         },
         {
-            name: isSixthDoctor ? 'Kamahl\'s Druidic Vow (×2)' : 'Kamahl\'s Druidic Vow',
+            key: 'vow',
+            name: vowCopied ? 'Kamahl\'s Druidic Vow (×2)' : 'Kamahl\'s Druidic Vow',
+            cardName: 'Kamahl\'s Druidic Vow',
+            copied: vowCopied,
             x: vowX,
-            expected: vowExpected,
-            cmc: vowCMC,
-            efficiency: vowEfficiency,
-            restriction: isSixthDoctor ? `Lands or Legends CMC ≤ ${vowX} (Doubled)` : `Lands or Legends CMC ≤ ${vowX}`,
-            metric: 'expected permanents',
-            color: '#55c97f'
+            cmc: vowX + 2,
+            expected: vow?.expectedHits ?? 0,
+            unit: 'lands & legends',
+            manaValue: vow?.expectedManaValue ?? 0,
+            restriction: `Lands and legendary permanents with mana value ${vowX} or less${vowCopied ? ', cast twice' : ''}`,
+            metric: 'expected permanents'
         },
         {
+            key: 'surge',
             name: 'Primal Surge',
-            x: null, // N/A
-            expected: surgeExpected,
-            cmc: surgeCMC,
-            efficiency: surgeEfficiency,
-            restriction: 'All permanents until non-permanent',
-            metric: 'expected permanents',
-            color: '#7d8f6a'
+            cardName: 'Primal Surge',
+            x: null,
+            cmc: SURGE_COST,
+            expected: surge?.expectedPermanents ?? 0,
+            unit: 'permanents',
+            manaValue: permanentCount > 0 ? (surge?.expectedPermanents ?? 0) * permanentManaValue / permanentCount : 0,
+            restriction: 'Every permanent until the first instant or sorcery',
+            metric: 'expected permanents'
         },
         {
+            key: 'portent',
             name: 'Portent of Calamity',
+            cardName: 'Portent of Calamity',
             x: portentX,
-            expected: portentExpected,
-            cmc: portentCMC,
-            efficiency: portentEfficiency,
-            restriction: `Exile ${portentX}, draw cards equal to types`,
-            metric: 'expected card types',
-            color: '#9878b8'
+            cmc: portentX + 1,
+            expected: portent?.expectedTypes ?? 0,
+            unit: 'cards',
+            freeChance: portent?.prob4Plus ?? 0,
+            manaValue: null,
+            restriction: `Exile one card of each type from the top ${portentX}`,
+            metric: 'expected cards kept'
         }
     ];
-
-    // Sort by expected value
+    spells.forEach(spell => {
+        spell.affordable = spell.cmc <= totalMana;
+        spell.efficiency = spell.cmc > 0 ? spell.expected / spell.cmc : 0;
+    });
     spells.sort((a, b) => b.expected - a.expected);
 
     return {
@@ -175,136 +167,110 @@ export function compareBigSpells(inputX, sourceSpell = 'generic') {
         legendaryPermanentCount,
         landCount,
         insight: generateDeckInsight(spells, {
-            permanentCount,
-            nonPermanentCount,
-            legendaryPermanentCount,
-            landCount,
-            deckSize,
-            // Pass Surge-specific values for accurate insights
-            surgeNonPerms,
-            surgePerms
+            permanentCount, legendaryPermanentCount, surgeNonPerms, surgePerms
         })
     };
 }
 
 /**
- * Generate a single deck insight based on composition
- * Focus on actionable deck-building advice rather than restating the comparison table
+ * One deck-building observation, based on which spell comes out ahead.
+ * @returns {{text:string}|null}
  */
-function generateDeckInsight(spells, deckStats) {
-    const { permanentCount, nonPermanentCount, legendaryPermanentCount, deckSize, surgeNonPerms, surgePerms } = deckStats;
+function generateDeckInsight(spells, { permanentCount, legendaryPermanentCount, surgeNonPerms, surgePerms }) {
+    const best = spells.find(s => s.affordable) ?? spells[0];
     const legendaryRatio = permanentCount > 0 ? legendaryPermanentCount / permanentCount : 0;
+    const share = `${Math.round(legendaryRatio * 100)}%`;
 
-    // Find best spell
-    const best = spells[0];
-
-    // Primal Surge specific insights - use surgeNonPerms (excluding Surge itself from library)
-    if (best.name === 'Primal Surge') {
-        if (surgeNonPerms === 0) {
-            return {
-                icon: '🏆',
-                text: `All permanents! Primal Surge guarantees your entire library (${surgePerms} cards).`
-            };
-        } else if (surgeNonPerms <= 2) {
-            return {
-                icon: '✓',
-                text: `Only ${surgeNonPerms} other non-permanent${surgeNonPerms > 1 ? 's' : ''} in library — excellent for Primal Surge.`
-            };
-        } else {
-            return {
-                icon: '💡',
-                text: `${surgeNonPerms} other non-permanents in library. Cutting ${Math.min(surgeNonPerms, 5)} could significantly boost Primal Surge.`
-            };
-        }
+    switch (best?.key) {
+        case 'surge':
+            if (surgeNonPerms <= 0) return { text: `With no other instants or sorceries, Primal Surge puts your whole library (${surgePerms} cards) onto the battlefield.` };
+            if (surgeNonPerms <= 2) return { text: `Only ${surgeNonPerms} other instant${surgeNonPerms > 1 ? 's or sorceries' : ' or sorcery'} in the library — ideal for Primal Surge.` };
+            return { text: `Primal Surge stops at any of your ${surgeNonPerms} instants and sorceries; each one you cut makes it go noticeably further.` };
+        case 'wave':
+            return legendaryRatio < 0.15
+                ? { text: `Only ${share} of your permanents are legendary, so Genesis Wave beats the Vow here.` }
+                : { text: 'Genesis Wave hits any permanent, so it gets the most from a deck full of them.' };
+        case 'vow':
+            return legendaryRatio >= 0.4
+                ? { text: `${share} of your permanents are legendary — the Vow’s best case.` }
+                : { text: 'Lands plus your legends give the Vow plenty to hit.' };
+        case 'portent':
+            return { text: 'A wide spread of card types makes Portent the strongest card-for-mana option — though its cards go to your hand, not the battlefield.' };
+        default:
+            return null;
     }
+}
 
-    // Genesis Wave insights
-    if (best.name === 'Genesis Wave') {
-        if (legendaryRatio < 0.15) {
-            return {
-                icon: '💡',
-                text: `Low legendary count (${(legendaryRatio * 100).toFixed(0)}%) makes Genesis Wave outperform Vow here.`
-            };
-        }
-        return {
-            icon: '🌊',
-            text: `Wave hits any permanent — strong with your diverse card types.`
-        };
-    }
+const NAMES = { wave: 'Genesis Wave', vow: 'Kamahl’s Druidic Vow', surge: 'Primal Surge', portent: 'Portent of Calamity' };
 
-    // Vow insights
-    if (best.name.includes('Druidic Vow')) {
-        if (legendaryRatio >= 0.40) {
-            return {
-                icon: '🌟',
-                text: `High legendary density (${(legendaryRatio * 100).toFixed(0)}%) — perfect for Kamahl's Druidic Vow!`
-            };
-        }
-        return {
-            icon: '▲',
-            text: `Legendary tribal synergy makes Vow efficient for your deck.`
-        };
-    }
-
-    // Portent insights
-    if (best.name === 'Portent of Calamity') {
-        return {
-            icon: '🔮',
-            text: `Portent excels with diverse card types in your deck.`
-        };
-    }
-
-    return null;
+function resultText(spell) {
+    return `${avg(spell.expected)} ${spell.unit}`;
 }
 
 /**
- * Render comparison HTML — terminal flat table style
+ * The comparison's one-sentence takeaway, from the source page's point of view.
+ * @param {Object} comparison - compareBigSpells() output
+ * @param {string} [current] - the page asking
+ * @returns {string} HTML
  */
-export function renderComparison(comparison) {
+export function comparisonLead(comparison, current) {
+    if (!comparison?.spells?.length) return '';
+    const ranked = comparison.spells.filter(s => s.affordable);
+    const best = ranked[0] ?? comparison.spells[0];
+    const here = comparison.spells.find(s => s.key === current);
+    const mana = comparison.totalMana;
+    if (!here || here.key === best.key) {
+        const runnerUp = ranked.find(s => s.key !== best.key);
+        return `For ${mana} mana, <strong>${NAMES[best.key]}</strong> gets this deck the most: about <strong>${resultText(best)}</strong>`
+            + (runnerUp ? `, ahead of ${NAMES[runnerUp.key]} (${avg(runnerUp.expected)}).` : '.');
+    }
+    if (!here.affordable) {
+        return `${NAMES[here.key]} needs ${here.cmc} mana. For ${mana}, <strong>${NAMES[best.key]}</strong> does best here: about <strong>${resultText(best)}</strong>.`;
+    }
+    return `For ${mana} mana, <strong>${NAMES[best.key]}</strong> gets this deck more — about <strong>${resultText(best)}</strong>, against ${resultText(here)} from ${NAMES[here.key]}.`;
+}
+
+/**
+ * Render the "How it compares" section.
+ * @param {Object|null} comparison - compareBigSpells() output
+ * @param {{current?:string}} [opts] - the page it is shown on (highlighted)
+ * @returns {string} HTML
+ */
+export function renderComparison(comparison, { current = null } = {}) {
     if (!comparison) {
-        return '<div style="padding:14px; color:var(--tx-dim); font-size:10px; letter-spacing:0.08em; text-align:center;">IMPORT DECK TO SEE SPELL COMPARISON</div>';
+        return '<p class="bsc-empty">Import a decklist to compare the big spells for your deck.</p>';
     }
+    const peak = Math.max(...comparison.spells.map(s => s.expected), 0.0001);
+    const rows = comparison.spells.map(spell => {
+        const isCurrent = spell.key === current;
+        const cast = spell.x == null ? `${spell.cmc} mana` : `X=${spell.x} · ${spell.cmc}`;
+        const detail = spell.key === 'portent'
+            ? `${pct(spell.freeChance)} free spell`
+            : (spell.manaValue != null ? `${avg(spell.manaValue)} mana value` : '');
+        const badges = [
+            isCurrent ? '<span class="bsc-badge">this page</span>' : '',
+            spell.copied ? '<span class="bsc-badge">copied ×2</span>' : '',
+            spell.affordable ? '' : `<span class="bsc-badge">needs ${spell.cmc}</span>`
+        ].join('');
+        const width = Math.max(0, Math.min(100, spell.expected / peak * 100));
+        return `
+            <li class="bsc-row${isCurrent ? ' is-current' : ''}" title="${escapeHtml(spell.restriction)}">
+                <span class="bsc-name">${cardRef(spell.cardName)}${badges}</span>
+                <span class="bsc-cast">${cast}</span>
+                <span class="bsc-result">
+                    <span class="bs-bar"><span style="width:${width.toFixed(1)}%"></span></span>
+                    <span class="bsc-value"><strong>${avg(spell.expected)}</strong> ${spell.unit}${detail ? ` · ${detail}` : ''}</span>
+                </span>
+            </li>`;
+    }).join('');
 
-    const { spells, insight, totalMana } = comparison;
+    const note = [
+        comparison.insight?.text ?? '',
+        'Averages per cast. Portent’s cards go to your hand; the others go onto the battlefield.'
+    ].filter(Boolean).join(' ');
 
-    const shortName = name => name
-        .replace("Kamahl's Druidic Vow", "Druidic Vow")
-        .replace("Portent of Calamity", "Portent")
-        .replace("Genesis Wave", "Gen. Wave")
-        .replace("Primal Surge", "P. Surge");
-
-    const thStyle = 'padding:6px 10px; color:var(--tx-dim); font-size:9px; letter-spacing:0.12em; text-transform:uppercase; border-bottom:1px solid var(--tx-rule); font-weight:500; text-align:right;';
-
-    let html = `<div class="tx-h"><span>08 · BIG SPELL · ${totalMana}MV</span><span class="tx-h-r">vs same mana</span></div>`;
-    html += '<table style="width:100%; border-collapse:collapse; font-size:11px;">';
-    html += `<thead><tr>
-        <th style="${thStyle} text-align:left;">SPELL</th>
-        <th style="${thStyle}">X</th>
-        <th style="${thStyle}">E[HITS]</th>
-        <th style="${thStyle}">EFF</th>
-    </tr></thead><tbody>`;
-
-    spells.forEach((spell, idx) => {
-        const isWinner = idx === 0;
-        const xDisplay = spell.x !== null ? spell.x : '—';
-        const nameColor = isWinner ? spell.color : 'var(--tx-mid)';
-        const valColor = isWinner ? spell.color : 'var(--tx-text)';
-
-        html += `<tr style="border-bottom:1px solid var(--tx-rule);">
-            <td style="padding:7px 10px; color:${nameColor}; font-weight:${isWinner ? '600' : '400'};">
-                ${isWinner ? '<span style="color:var(--tx-amber);">▶</span> ' : '&nbsp;&nbsp;'}${shortName(spell.name)}
-            </td>
-            <td style="text-align:right; padding:7px 10px; color:var(--tx-dim);">${xDisplay}</td>
-            <td style="text-align:right; padding:7px 10px; color:${valColor}; font-weight:${isWinner ? '600' : '400'};">${spell.expected.toFixed(2)}</td>
-            <td style="text-align:right; padding:7px 10px; color:var(--tx-dim);">${spell.efficiency.toFixed(3)}</td>
-        </tr>`;
-    });
-
-    html += '</tbody></table>';
-
-    if (insight) {
-        html += `<div style="padding:8px 10px; border-top:1px solid var(--tx-rule); font-size:10px; color:var(--tx-mid); letter-spacing:0.04em;">${insight.text}</div>`;
-    }
-
-    return html;
+    return `
+        <p class="bsc-lead">${comparisonLead(comparison, current)}</p>
+        <ol class="bsc-list">${rows}</ol>
+        <p class="bsc-note">${note}</p>`;
 }

@@ -2384,20 +2384,11 @@ input[type="range"].tx-slider::-moz-range-thumb {
     text-align: center;
 }
 
-.wp-group-detail.is-empty .wp-detail-key { color: var(--tx-dim); }
 
-.wp-detail-headline {
-    font-size: var(--t-body);
-    color: var(--tx-bright);
-    line-height: 1.5;
-}
 
-.wp-detail-sub {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-    margin-top: 4px;
-    line-height: 1.5;
-}
+
+
+
 
 /* --- The search pool: the full roster at the selected total --- */
 
@@ -2482,39 +2473,15 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 .wp-opt.is-high .wp-opt-mv { color: var(--tx-good); }
 
-/* --- The one derived number for a pool: its widest mana swing --- */
 
-.wp-swing {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--tx-rule);
-}
 
-.wp-swing-label {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
 
-.wp-swing-value {
-    font-size: var(--t-lg);
-    font-weight: 700;
-    line-height: 1;
-    font-feature-settings: 'tnum' 1;
-}
 
-.wp-swing-line {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-    line-height: 1.5;
-}
 
-.wp-swing-line strong { color: var(--tx-text); font-weight: 600; }
+
+
+
+
 
 /* --- All groups: the at-a-glance grid --- */
 
@@ -2589,14 +2556,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
     line-height: 1;
 }
 
-.wp-gc-range {
-    display: block;
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin: 7px 0 0 54px;
-}
+
 
 .wp-gc-cards {
     list-style: none;
@@ -2733,32 +2693,16 @@ input[type="range"].tx-slider::-moz-range-thumb {
     gap: 4px;
 }
 
-/* --- Best lines --- */
 
-.wp-pair-list { display: grid; }
 
-.wp-pair {
-    display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) 18px minmax(0, 1fr) 62px;
-    gap: 10px;
-    align-items: center;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    font-size: var(--t-xs);
-}
 
-.wp-pair:last-child { border-bottom: 0; }
-.wp-pair:hover { background: var(--tx-row-hi); }
 
-.wp-pair-head {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    background: var(--tx-panel-alt);
-}
 
-.wp-pair-head:hover { background: var(--tx-panel-alt); }
+
+
+
+
+
 
 /* The total is the join key, so it gets the fixed column and a tabular figure. */
 .wp-pair-total {
@@ -2770,46 +2714,21 @@ input[type="range"].tx-slider::-moz-range-thumb {
     padding: 2px 0;
 }
 
-.wp-pair-head .wp-pair-total {
-    border-color: transparent;
-    font-weight: 400;
-    color: var(--tx-dim);
-}
 
-.wp-pair-cast,
-.wp-pair-fetch {
-    display: grid;
-    gap: 1px;
-    min-width: 0;
-}
 
-.wp-pair-name {
-    color: var(--tx-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 
-.wp-pair-fetch .wp-pair-name { color: var(--tx-good); }
 
-.wp-pair-meta {
-    font-size: var(--t-micro);
-    color: var(--tx-dim);
-    font-feature-settings: 'tnum' 1;
-}
 
-.wp-pair-arrow {
-    color: var(--tx-dim);
-    text-align: center;
-}
 
-.wp-pair-gain {
-    text-align: right;
-    font-weight: 700;
-    font-feature-settings: 'tnum' 1;
-}
 
-.wp-pair-head .wp-pair-gain { font-weight: 400; }
+
+
+
+
+
+
+
+
 
 /* The pair ladder carries more columns than the other sweep tables, so it is
    the one that runs out of room first. Let it scroll inside its own box rather
@@ -2824,13 +2743,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
     #wildpair-sweepTable .tx-sweep-table td:last-child { display: none; }
 }
 
-/* Compact P/T strip inside the pair-ladder table. */
-.wp-mini {
-    color: var(--tx-dim);
-    font-size: var(--t-micro);
-    font-feature-settings: 'tnum' 1;
-    letter-spacing: 0.04em;
-}
+
 
 @media (max-width: 620px) {
     /* The spread bar is the first thing to go when the row gets tight — the
@@ -2848,11 +2761,11 @@ input[type="range"].tx-slider::-moz-range-thumb {
         grid-template-columns: 42px minmax(0, 1fr) 62px;
         row-gap: 4px;
     }
-    .wp-pair-cast { grid-column: 2 / 3; }
-    .wp-pair-arrow { display: none; }
-    .wp-pair-fetch { grid-column: 2 / 4; }
-    .wp-pair-gain { grid-row: 1; grid-column: 3 / 4; }
-    .wp-pair-head .wp-pair-fetch { display: none; }
+
+
+
+
+
 }
 
 /* ==================== HEAD TO HEAD ====================
@@ -2977,37 +2890,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
     text-align: center;
 }
 
-.vs-verdict {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 14px;
-    border-bottom: 1px solid var(--tx-rule);
-}
 
-.vs-verdict-badge {
-    border: 1px solid;
-    padding: 5px 10px;
-    font-size: var(--t-micro);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    white-space: nowrap;
-}
 
-.vs-verdict-text {
-    font-size: var(--t-xs);
-    color: var(--tx-text);
-    line-height: 1.55;
-}
 
-/* --- Peaks --- */
 
-.vs-peaks-metrics {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    border-bottom: 1px solid var(--tx-rule);
-}
+
+
+
 
 .vs-peak {
     padding: 12px 14px;
@@ -3085,7 +2974,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
     .vs-side.is-leader { box-shadow: inset 2px 0 0 var(--tx-accent); }
 
-    .vs-verdict { flex-direction: column; gap: 8px; }
+
 }
 
 /* ==================== V3 REFRESH — SHARED PRIMITIVES ====================

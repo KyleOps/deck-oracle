@@ -1,134 +1,113 @@
 /**
- * portent — calculator view.
- * Mounted into #portent-tab by the shell the first time the calculator is opened.
+ * Portent of Calamity — view.
+ * Mounted into #portent-tab by the shell the first time the page is opened;
+ * js/calculators/portent.js fills the containers.
  */
 
+import { sharedStyles, xControlHTML } from '../utils/bigSpells.js';
+
 export const template = `
-<div class="portent-grid">
-
-    <!-- LEFT RAIL: inputs -->
-    <div class="portent-left">
-        <div class="tx-h"><span>01 · X PARAM</span><span class="tx-h-r">cards to reveal</span></div>
-        <div style="padding:16px;">
-            <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:10px;">
-                <span id="portent-x-display" style="font-size:56px; font-weight:700; color:var(--tx-bright); line-height:1; letter-spacing:-0.02em; font-feature-settings:'tnum' 1;">7</span>
-                <span style="color:var(--tx-dim); font-size:11px;">/ <span id="portent-n-display">80</span></span>
-                <span style="flex:1;"></span>
-                <span id="portent-pct-display" style="color:var(--tx-mid); font-size:10px;"></span>
+<div class="main-grid single-column">
+    <section class="panel panel-config" aria-label="Settings">
+        ${xControlHTML({
+            key: 'portent',
+            value: 7,
+            max: 30,
+            presets: [5, 7, 9, 12, 15],
+            costLabel: '8 mana · {X}{U}',
+            hint: 'Portent reveals this many cards from the top of your library.'
+        })}
+        <div class="bs-field">
+            <div class="bs-field-head">
+                <span class="bs-label">Card types in your library</span>
+                <span class="bs-cost" id="portent-n-label"></span>
             </div>
-            <input class="tx-slider" type="range" id="portent-xSlider" value="7" min="1" max="20" step="1" aria-label="X value slider">
-            <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:9px; color:var(--tx-dim);">
-                <span>1</span><span>5</span><span>10</span><span>15</span><span>20</span>
-            </div>
-            <div style="display:flex; gap:6px; margin-top:12px;" id="portent-presets">
-                <button class="tx-chip" data-x="5">X=5</button>
-                <button class="tx-chip" data-x="7">X=7</button>
-                <button class="tx-chip" data-x="9">X=9</button>
-                <button class="tx-chip" data-x="12">X=12</button>
-                <button class="tx-chip" data-x="15">X=15</button>
-            </div>
-            <!-- Hidden number input for JS compatibility -->
-            <input type="number" id="portent-xValue" value="7" min="1" max="50" style="position:absolute; opacity:0; pointer-events:none; width:1px; height:1px;" aria-label="X value" tabindex="-1">
+            <div class="por-typebar" id="portent-type-bar" aria-hidden="true"></div>
+            <ul class="por-types" id="portent-type-grid" aria-label="Cards of each type"></ul>
+            <p class="bs-hint">Portent needs four <strong>different</strong> card types among the cards it reveals. A card with two types, like an artifact creature, counts under both here but can fill only one of them.</p>
         </div>
+    </section>
 
-        <div class="tx-h"><span>02 · LIBRARY</span><span class="tx-h-r" id="portent-n-label">N=80</span></div>
-        <div style="padding:16px;">
-            <div class="tx-bar" id="portent-type-bar"></div>
-            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px 12px; font-size:11px; margin-top:8px;" id="portent-type-grid"></div>
-        </div>
+    <section class="panel bs-answer" id="portent-stats" aria-label="Answer"></section>
 
-        <div class="tx-h"><span>03 · TRIGGER RULE</span><span class="tx-h-r">&ge;4 types</span></div>
-        <div style="padding:16px; font-size:11px; color:var(--tx-mid); line-height:1.55;">
-            <div style="margin-bottom:8px;">If reveal contains <span style="color:var(--tx-amber);">&ge;4 distinct types</span>, all X cards go to hand.</div>
-            <div style="color:var(--tx-dim); font-size:10px;">Method: hypergeometric · Monte Carlo 25,000 trials · seed-stable.</div>
-        </div>
-
-        <!-- Big spell comparison (legacy, repurposed as extra rail content) -->
-        <div id="big-spell-comparison-portent"></div>
-
-        <!-- Legacy stats panel, hidden (replaced by hero numerics) -->
-        <div id="portent-stats" style="display:none;"></div>
-    </div>
-
-    <!-- CENTER: hero numerics + chart + sweep table -->
-    <div class="portent-center">
-        <!-- Hero numerics -->
-        <div class="portent-hero" id="portent-hero">
-            <div class="tx-stat">
-                <div class="tx-stat-label">P(FREE SPELL)</div>
-                <div class="tx-stat-value" id="portent-hero-pfree" style="color:var(--tx-green);">—</div>
-                <div class="tx-stat-sub" id="portent-hero-pfree-sub">x=7</div>
-            </div>
-            <div class="tx-stat">
-                <div class="tx-stat-label">E[TYPES EXILED]</div>
-                <div class="tx-stat-value medium" id="portent-hero-types" style="color:var(--tx-amber);">—</div>
-                <div class="tx-stat-sub">avg distinct types</div>
-            </div>
-            <div class="tx-stat" style="border-right:none;">
-                <div class="tx-stat-label">MARGINAL +1X</div>
-                <div class="tx-stat-value medium" id="portent-hero-marginal" style="color:var(--tx-blue);">—</div>
-                <div class="tx-stat-sub" id="portent-hero-marginal-sub">Δ free spell %</div>
-            </div>
-        </div>
-
-        <!-- Chart -->
+    <section class="panel" aria-labelledby="portent-chart-title">
         <div class="tx-h">
-            <span>04 · KERNEL · P(FREE) AND E[TYPES] vs X</span>
-            <span class="tx-h-r"><span style="color:var(--tx-green);">●</span> P(FREE) &nbsp; <span style="color:var(--tx-amber);">▮</span> E[TYPES]</span>
+            <h2 class="bs-h" id="portent-chart-title">Free-spell chance by X</h2>
+            <span class="tx-h-r bs-legend">
+                <span class="bs-key k-accent">your X</span>
+                <span class="bs-key is-line k-dim">9 in 10</span>
+            </span>
         </div>
-        <div class="chart-container" style="height:280px; padding:0;">
-            <canvas id="portent-combinedChart" role="img" aria-label="Portent probability chart"></canvas>
+        <div class="bs-chart">
+            <canvas id="portent-combinedChart" role="img" aria-label="Chance of a free spell for each value of X"></canvas>
         </div>
+        <p class="bs-caption">Each bar is the chance a cast exiles four or more cards at that X. Green bars clear 7 in 10, amber 4 in 10. Click a bar to try that X.</p>
+    </section>
 
-        <!-- X sweep table -->
-        <div class="tx-h"><span>05 · X SWEEP · STEP RESPONSE</span><span class="tx-h-r">P(FREE), E[CARDS], Δ vs prev</span></div>
-        <div style="overflow-x:auto;">
-            <table class="portent-sweep-table" id="portent-sweep-table">
-                <thead>
-                    <tr>
-                        <th style="text-align:left;">x</th>
-                        <th>p(free)</th>
-                        <th class="p-bar-cell" style="text-align:left;">p bar</th>
-                        <th>E[cards]</th>
-                        <th>Δp</th>
-                        <th>verdict</th>
-                    </tr>
-                </thead>
-                <tbody id="portent-sweep-body">
-                    <!-- Populated by portent.js -->
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Legacy comparison table (hidden, kept for JS compatibility) -->
-        <div style="display:none;">
-            <table class="comparison-table" id="portent-comparisonTable"></table>
-        </div>
-    </div>
-
-    <!-- RIGHT RAIL: sample reveals + live tape -->
-    <div class="portent-right">
+    <section class="panel" aria-labelledby="portent-reveal-header">
         <div class="tx-h">
-            <span id="portent-reveal-header">06 · SAMPLE REVEAL · X=7</span>
-            <span class="tx-h-r" id="portent-reshuffle-btn" style="cursor:pointer;">[ ↻ RESHUFFLE ]</span>
+            <h2 class="bs-h" id="portent-reveal-header">Sample casts</h2>
+            <button class="btn btn-ghost btn-sm" type="button" id="portent-reshuffle-btn">Reshuffle</button>
         </div>
-        <div id="portent-trials-container">
-            <!-- 4 trial cards populated by portent.js -->
-            <div class="portent-trial" style="color:var(--tx-dim); font-size:10px; padding:20px 16px;">
-                Import a decklist to see sample reveals.
+        <div class="bs-samples" id="portent-trials-container"></div>
+        <p class="bs-caption">Real shuffles of your list. Each card shows the type it was exiled for; the costliest spell is the one cast free.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="portent-compare-title">
+        <div class="tx-h">
+            <h2 class="bs-h" id="portent-compare-title">How it compares</h2>
+            <span class="tx-h-r">same total mana</span>
+        </div>
+        <div id="big-spell-comparison-portent"><p class="bsc-empty">Comparing with the other big spells…</p></div>
+    </section>
+
+    <section class="panel bs-details" aria-label="More detail">
+        <details class="tx-collapse">
+            <summary class="tx-collapse-head">Every X, side by side</summary>
+            <div class="tx-collapse-body">
+                <p class="bs-caption">Your X is highlighted; the marked row is the cheapest X that gets the free spell 9 times in 10.</p>
+                <div class="bs-table-wrap" id="portent-sweep"></div>
             </div>
-        </div>
-
-        <div class="tx-h"><span>07 · TRIAL FEED</span><span class="tx-h-r">types · FREE / FIZZ</span></div>
-        <div id="portent-live-tape">
-            <!-- 14 tape rows populated by portent.js -->
-        </div>
-
-        <!-- Legacy sample reveals panel (hidden) -->
-        <div id="portent-sample-reveals" style="display:none;"></div>
-        <div id="portent-reveals-display" style="display:none;"></div>
-        <div id="portent-sample-count" style="display:none;"></div>
-    </div>
-
-</div><!-- end portent-grid -->
+        </details>
+        <details class="tx-collapse">
+            <summary class="tx-collapse-head">How many cards you keep <span class="bs-sub" id="portent-dist-sub"></span></summary>
+            <div class="tx-collapse-body" id="portent-dist"></div>
+        </details>
+    </section>
+</div>
 `;
+
+export const styles = `
+${sharedStyles('#portent-tab')}
+#portent-tab .por-typebar { display: flex; gap: 2px; height: 8px; border-radius: var(--radius-full); overflow: hidden; background: var(--tx-rule); }
+#portent-tab .por-typebar > span { min-width: 3px; }
+#portent-tab .por-types { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 4px 18px; }
+#portent-tab .por-types li { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: var(--t-xs); color: var(--tx-mid); }
+#portent-tab .por-type-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#portent-tab .por-type-n { font-family: var(--font-mono); color: var(--tx-bright); text-align: right; }
+`;
+
+export const guide = {
+    intro: 'Portent of Calamity reveals the top X cards and exiles one of each card type it finds. Exile four or more and you may cast one of them free; everything exiled that you don’t cast goes to your hand. This page tells you how often that free spell happens at each X with your list, and how many cards you walk away with.',
+    howToRead: [
+        '<strong>Free-spell chance</strong> is how often a cast exiles four or more cards — one creature, one land, one artifact, and so on.',
+        '<strong>Cards you keep</strong> is the average number exiled: you keep all of them, one as the free spell when you get it.',
+        'The <strong>chart</strong> shows the free-spell chance at every X. Click a bar to move your X there.',
+        '<strong>Sample casts</strong> are real shuffles of your list: green cards are kept, the starred one is cast free, dimmed ones go to the graveyard.',
+        '<strong>How it compares</strong> puts Portent beside Genesis Wave, Kamahl’s Druidic Vow and Primal Surge at the same total mana.'
+    ],
+    method: 'Simulation: your library is shuffled 25,000 times and the top 30 cards are revealed one at a time. After each card the page works out the most cards Portent could exile so far — a card with two types (an artifact creature) can be exiled for only one of them, so it solves a small matching problem rather than just counting types. One pass gives the answer for every X at once, and the results are cached per deck, so moving the slider is instant. Expect the percentages to wobble by about half a point between decks.',
+    assumptions: [
+        'Your library is the full decklist, shuffled — cards already drawn or played are not removed, and the Portent you are casting is not taken out.',
+        'You always exile as many cards as you can, and the free spell is the costliest one exiled.',
+        'The eight card types are creature, artifact, enchantment, planeswalker, battle, land, instant and sorcery. Kindred is ignored.',
+        'Double-faced cards count as their front face, which is what they are in your library.',
+        'With only card-type counts (no imported list) every card is treated as having a single type.'
+    ],
+    tips: [
+        'Four types is the bar, so the cheapest wins come from spreading your nonland cards across creature, instant, sorcery, artifact and enchantment rather than piling into one.',
+        'Lands count as a type — almost every reveal finds one — so you really need three more nonland types.',
+        'Artifact creatures and other dual-typed cards are flexible but can only fill one slot each; they help less than their two types suggest.'
+    ],
+    terms: ['simulation', 'sample', 'mv', 'library']
+};

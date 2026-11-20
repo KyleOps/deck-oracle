@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { assertClose } from '../node-test-helper.js';
-import { simulateVow } from '../../js/calculators/vow.js';
+import { analyze, buildVowLibrary, simulateVow, summarize, vowOutcome } from '../../js/calculators/vow.js';
 
 describe('Kamahl\'s Druidic Vow Calculator', () => {
     // Distribution contains counts of VALID HITS only
@@ -126,5 +126,58 @@ describe('Kamahl\'s Druidic Vow Calculator', () => {
 
         // Only Ragavan should count as legendary
         assertClose(result.expectedLegends, 5 * (10/30), 'Only legendary cards should count');
+    });
+});
+
+describe('Kamahl\'s Druidic Vow outcomes', () => {
+    const cards = [
+        { name: 'Forest', type_line: 'Basic Land — Forest', cmc: 0, count: 30 },
+        { name: 'Gaea\'s Cradle', type_line: 'Legendary Land', cmc: 0, count: 1 },
+        { name: 'Ragavan', type_line: 'Legendary Creature — Monkey', cmc: 1, count: 9 },
+        { name: 'Titania', type_line: 'Legendary Creature — Elemental', cmc: 6, count: 5 },
+        { name: 'Bear', type_line: 'Creature — Bear', cmc: 2, count: 10 },
+        { name: 'Opt', type_line: 'Instant', cmc: 1, count: 5 }
+    ];
+    const library = buildVowLibrary(cards);
+
+    it('counts lands and legends with mana value X or less, a legendary land as a land', () => {
+        const o = vowOutcome(library, 4, {}, 'vow-test');
+        assert.strictEqual(o.eligibleLands, 31);
+        assert.strictEqual(o.eligibleLegends, 9, 'Titania costs more than 4');
+        assertClose(o.expectedHits, 4 * 40 / 60, 'linearity of expectation');
+        assertClose(o.pmf.reduce((s, p, k) => s + p * k, 0), o.expectedHits, 'pmf mean matches');
+    });
+
+    it('looks at 2X cards when copied', () => {
+        const once = vowOutcome(library, 6, { copies: 1 }, 'vow-test');
+        const twice = vowOutcome(library, 6, { copies: 2 }, 'vow-test');
+        assert.strictEqual(twice.seen, 12);
+        assertClose(twice.expectedHits, once.expectedHits * 2, 'twice the cards, twice the hits');
+        assert.ok(twice.payback.paybackProbability > once.payback.paybackProbability);
+    });
+
+    it('counts only lands from type counts, and says so', () => {
+        const counts = buildVowLibrary([], { lands: 36, creatures: 40, instants: 23 });
+        const o = vowOutcome(counts, 8, {}, 'vow-counts');
+        assertClose(o.expectedHits, 8 * 36 / 99, 'lands only');
+        const { html, tone } = summarize(analyze({ 8: o }, 8));
+        assert.strictEqual(tone, 'flat');
+        assert.match(html, /lands only/);
+    });
+
+    it('answers the page question with lands, legends and payback', () => {
+        const sweep = {};
+        for (let x = 1; x <= 12; x++) sweep[x] = vowOutcome(library, x, { copies: 1 }, 'vow-test');
+        const { html, tone } = summarize(analyze(sweep, 5));
+        assert.match(html, /X=5/);
+        assert.match(html, /7 mana/);
+        assert.match(html, /lands and legends/);
+        assert.match(html, /legendary permanents/);
+        assert.ok(['good', 'warn', 'bad'].includes(tone));
+
+        const copied = summarize(analyze(Object.fromEntries(
+            Object.entries(sweep).map(([x]) => [x, vowOutcome(library, Number(x), { copies: 2 }, 'vow-test')])
+        ), 5));
+        assert.match(copied.html, /copied — 10 cards seen/);
     });
 });

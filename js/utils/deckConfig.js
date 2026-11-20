@@ -156,11 +156,39 @@ export function updateField(field, value) {
     if (!(field in deckState) || STRING_FIELDS.has(field)) return;
     deckState[field] = Math.max(0, parseInt(value, 10) || 0);
     if (TYPE_FIELDS.includes(field)) {
-        // Hand-edited counts no longer describe the imported list.
+        // Hand-edited counts no longer describe the imported list, so the deck
+        // becomes a counts-only deck. Keeping the old card records would let
+        // card-based pages silently mix two different decks.
+        if (deckState.importSource !== 'manual') becomeCountsOnly();
         deckState.actualCardCount = null;
-        deckState.importSource = 'manual';
+        scheduleManualSave();
     }
     notifyUpdates();
+}
+
+const MANUAL_NAME = 'Custom counts';
+let manualSaveTimer = 0;
+
+function becomeCountsOnly() {
+    deckState.cardsByName = {};
+    deckState.cardDetails = [];
+    deckState.commanderName = null;
+    deckState.importUrl = null;
+    deckState.deckName = MANUAL_NAME;
+    deckState.importSource = 'manual';
+    deckState.format = 'auto';
+}
+
+/** Persist a counts-only deck (debounced — this runs on every keystroke). */
+function scheduleManualSave() {
+    clearTimeout(manualSaveTimer);
+    manualSaveTimer = setTimeout(() => {
+        const id = Library.saveDeck(getDeckConfig());
+        if (id) {
+            deckState.deckId = id;
+            Library.setActiveDeckId(id);
+        }
+    }, 600);
 }
 
 /** Bulk update. Objects/arrays are taken as-is; string fields as strings. */
@@ -214,6 +242,7 @@ function syncManualInputs() {
  */
 export function loadSnapshot(snapshot, { persistActive = true } = {}) {
     if (!snapshot) return false;
+    clearTimeout(manualSaveTimer);
     const next = initialState();
     Object.assign(next, snapshot.counts ?? {});
     next.actualCardCount = snapshot.actualCardCount ?? null;
@@ -243,6 +272,7 @@ export function loadSavedDeck(id) {
 
 /** Return to the built-in example deck. */
 export function loadExampleDeck() {
+    clearTimeout(manualSaveTimer);
     deckState = initialState();
     Library.setActiveDeckId(null);
     syncManualInputs();
@@ -255,6 +285,7 @@ export function loadExampleDeck() {
  * to the library.
  */
 function applyImport(result, meta) {
+    clearTimeout(manualSaveTimer);
     const next = initialState();
     TYPE_FIELDS.forEach(f => { next[f] = Number(result[f]) || 0; });
     next.actualCardCount = result.actualCardCount ?? null;

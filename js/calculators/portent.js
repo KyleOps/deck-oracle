@@ -1,313 +1,459 @@
 /**
- * Portent of Calamity Calculator
- * Simulates card type diversity for Portent of Calamity spell
+ * Portent of Calamity — {X}{U} sorcery.
+ *
+ * "Reveal the top X cards of your library. For each card type, you may exile a
+ * card of that type from among them. Put the rest into your graveyard. You may
+ * cast a spell from among the exiled cards without paying its mana cost if you
+ * exiled four or more cards this way. Then put the rest of the exiled cards
+ * into your hand."
+ *
+ * A card with several types (an artifact creature) can be exiled for only one
+ * of them, so the number of cards Portent exiles is a maximum matching between
+ * card types and revealed cards — not simply the number of distinct types on
+ * show. With at most eight types the matching is tiny, so each simulated reveal
+ * grows it one card at a time with augmenting paths.
  */
 
-import { createCache, partialShuffle, formatNumber, formatPercentage, debounce } from '../utils/simulation.js';
-import { renderMultiColumnTable } from '../utils/tableUtils.js';
-import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
+import { createCache } from '../utils/simulation.js';
+import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
-import { renderDistributionChart, buildDeckFromCardData, shuffleDeck, createCollapsibleSection, extractCardTypes } from '../utils/sampleSimulator.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
-import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
+import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell } from '../utils/components.js';
+import { cardRef } from '../data/glossary.js';
+import {
+    CARD_TYPES, avg, barsHTML, cardListKey, chanceTone, createSampler, deckCardList, expandCards,
+    noticeHTML, pct, plural, points, pointsShort, renderHowItCompares, sampleCardHTML, toneColor, typeLabel,
+    syncXControl, bindXPresets, readX, fade
+} from '../utils/bigSpells.js';
 
-const CONFIG = {
+const CONFIG = Object.freeze({
     ITERATIONS: 25000,
-    X_RANGE_BEFORE: 3,
-    X_RANGE_AFTER: 4,
     FREE_SPELL_THRESHOLD: 4,
-    DEFAULT_SAMPLE_SIZE: 500
-};
+    MAX_X: 30,
+    TABLE_MAX_X: 20,
+    RELIABLE: 0.9,
+    DEFAULT_X: 7,
+    SAMPLE_COUNT: 4
+});
 
-const COLORS = {
-    primary: '#55c97f',
-    primaryDim: 'rgba(85, 201, 127, 0.08)',
-    danger: '#f0a92c',
-    dangerDim: 'rgba(240, 169, 44, 0.08)',
-    success: '#55c97f',
-    warning: '#f0a92c',
-    white: '#d2d8d4',
-    text: '#808b85',
-    grid: '#1e221f',
-    ...TX.types
-};
+const ALL_TYPES = (1 << CARD_TYPES.length) - 1;
+const COUNT_FIELDS = Object.freeze({
+    creature: 'creatures', artifact: 'artifacts', enchantment: 'enchantments', planeswalker: 'planeswalkers',
+    battle: 'battles', land: 'lands', instant: 'instants', sorcery: 'sorceries'
+});
 
-// Single source of truth for card-type colours (mirrors --type-* in base.css)
-const TX_TYPE_COLORS = TX.types;
-
-let simulationCache = createCache(50);
-let lastDeckHash = '';
+const resultCache = createCache(8);
+const sampler = createSampler(CONFIG.SAMPLE_COUNT);
 let chart = null;
 
-// Stable samples state
-let stableSamples = [];
-let lastSampleDeckHash = '';
-let renderedCount = 0;
+// ── Card types as bitmasks ───────────────────────────────────────────────────
 
-/**
- * Generate stable samples from the deck
- * @param {Array} deck - The source deck
- * @param {number} count - Number of samples to generate
- */
-function generateStableSamples(deck, count) {
-    stableSamples = [];
-    for (let i = 0; i < Math.max(count, CONFIG.DEFAULT_SAMPLE_SIZE); i++) {
-        stableSamples.push(shuffleDeck([...deck]));
-    }
+/** Bitmask of a type line's card types (bit order = CARD_TYPES). */
+export function typeMask(typeLine) {
+    const lower = String(typeLine ?? '').toLowerCase();
+    let mask = 0;
+    CARD_TYPES.forEach((type, bit) => {
+        if (lower.includes(type)) mask |= 1 << bit;
+    });
+    return mask;
 }
 
 /**
- * Force refresh of stable samples
+ * One type mask per card in the library.
+ * @param {Array<{type_line:string, count:number}>} cards - card list (may be empty)
+ * @param {Object} [counts] - DeckConfig type counts, used when there is no list
+ * @returns {Uint8Array}
  */
-function refreshSamples() {
-    const config = getDeckConfig();
-    const cardData = config.cardData;
-
-    if (cardData && cardData.cardsByName && Object.keys(cardData.cardsByName).length > 0) {
-        const countInput = document.getElementById('portent-sample-count');
-        const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
-        
-        // Build full deck object for visual samples
-        const deck = [];
-        Object.values(cardData.cardsByName).forEach(card => {
-            const types = extractCardTypes(card);
-            for (let i = 0; i < card.count; i++) {
-                deck.push({ name: card.name, types, type_line: card.type_line, cmc: card.cmc ?? 0 });
-            }
-        });
-
-        generateStableSamples(deck, numSims);
-        runSampleReveals();
-    }
-}
-
-/**
- * Build deck integer array where each card is a bitmask of its types
- */
-function buildDeckIntArray(typeCounts, cardData) {
-    const types = Object.keys(typeCounts).filter(t => typeCounts[t] > 0);
-    const numTypes = types.length;
-    const tempDeck = [];
-
-    if (cardData && cardData.cardsByName && Object.keys(cardData.cardsByName).length > 0) {
-        Object.values(cardData.cardsByName).forEach(card => {
-            if (card.type_line) {
-                let typeMask = 0;
-                const cardTypes = card.type_line.toLowerCase();
-                types.forEach((type, idx) => {
-                    if (cardTypes.includes(type)) {
-                        typeMask |= (1 << idx);
-                    }
-                });
-                for (let i = 0; i < card.count; i++) {
-                    tempDeck.push(typeMask);
-                }
-            }
-        });
-    } else {
-        types.forEach((type, typeIdx) => {
-            const count = typeCounts[type];
-            const typeMask = 1 << typeIdx;
-            for (let i = 0; i < count; i++) {
-                tempDeck.push(typeMask);
-            }
-        });
-    }
-
-    return { 
-        deck: new Uint32Array(tempDeck),
-        numTypes 
-    };
-}
-
-/**
- * Run Batch Monte Carlo simulation for all X up to maxX
- * Optimized to calculate cumulative stats in a single pass per iteration
- */
-function simulatePortentBatch(deckIntArray, numTypes, deckSize, maxX) {
-    const cacheKey = `batch-${deckSize}-${maxX}-${deckIntArray.length}`;
-    const cached = simulationCache.get(cacheKey);
-    if (cached) return cached;
-
-    const deck = deckIntArray.slice();
-    const iterations = CONFIG.ITERATIONS;
-    
-    const results = new Array(maxX + 1).fill(null).map(() => ({
-        totalUniqueTypes: 0,
-        typeDist: new Uint32Array(numTypes + 1)
-    }));
-
-    for (let iter = 0; iter < iterations; iter++) {
-        let seenTypesMask = 0;
-        let currentUniqueTypes = 0;
-
-        for (let i = 0; i < maxX; i++) {
-            const pick = i + Math.floor(Math.random() * (deckSize - i));
-            const card = deck[pick];
-            deck[pick] = deck[i];
-            deck[i] = card;
-
-            const oldMask = seenTypesMask;
-            seenTypesMask |= card;
-            
-            if (seenTypesMask !== oldMask) {
-                currentUniqueTypes = 0;
-                let n = seenTypesMask;
-                while (n > 0) {
-                    n &= (n - 1);
-                    currentUniqueTypes++;
-                }
-            }
-
-            const res = results[i + 1];
-            res.totalUniqueTypes += currentUniqueTypes;
-            res.typeDist[currentUniqueTypes]++;
+export function buildTypeMasks(cards = [], counts = {}) {
+    const masks = [];
+    if (cards.length > 0) {
+        for (const card of cards) {
+            const mask = typeMask(card.type_line);
+            for (let i = 0; i < (card.count ?? 0); i++) masks.push(mask);
         }
+    } else {
+        CARD_TYPES.forEach((type, bit) => {
+            const n = Math.max(0, Math.floor(Number(counts?.[COUNT_FIELDS[type]]) || 0));
+            for (let i = 0; i < n; i++) masks.push(1 << bit);
+        });
     }
-
-    const processedResults = {};
-    for (let x = 1; x <= maxX; x++) {
-        const r = results[x];
-        const typeDist = Array.from(r.typeDist).map(c => c / iterations);
-        
-        processedResults[x] = {
-            typeDist,
-            expectedTypes: r.totalUniqueTypes / iterations,
-            prob4Plus: typeDist.slice(CONFIG.FREE_SPELL_THRESHOLD).reduce((a, b) => a + b, 0),
-            expectedCardsToHand: 0 
-        };
-    }
-
-    simulationCache.set(cacheKey, processedResults);
-    return processedResults;
+    return Uint8Array.from(masks);
 }
 
 /**
- * Get current deck configuration
+ * Incremental maximum matching between card types and revealed cards.
+ * add() reveals one more card and returns how many cards can now be exiled.
  */
-export function getDeckConfig() {
-    const config = DeckConfig.getDeckConfig();
-    const cardData = DeckConfig.getImportedCardData();
+function createMatcher(capacity) {
+    const cardMask = new Uint8Array(Math.max(1, capacity));
+    const owner = new Int16Array(CARD_TYPES.length).fill(-1);
+    let size = 0;
+    let matched = 0;
+    let usedTypes = 0;
+    let visited = 0;
 
-    const types = {
-        creature: config.creatures,
-        instant: config.instants,
-        sorcery: config.sorceries,
-        artifact: config.artifacts,
-        enchantment: config.enchantments,
-        planeswalker: config.planeswalkers,
-        land: config.lands,
-        battle: config.battles
-    };
-
-    const deckSize = DeckConfig.getDeckSize(true);
-
-    const newHash = JSON.stringify(types);
-    
-    if (newHash !== lastSampleDeckHash && cardData && cardData.cardsByName && Object.keys(cardData.cardsByName).length > 0) {
-        const deck = [];
-        Object.values(cardData.cardsByName).forEach(card => {
-            const t = extractCardTypes(card);
-            for (let i = 0; i < card.count; i++) {
-                deck.push({ name: card.name, types: t, type_line: card.type_line, cmc: card.cmc ?? 0 });
+    function augment(card) {
+        let options = cardMask[card] & ~visited;
+        while (options) {
+            const bit = options & -options;
+            options ^= bit;
+            visited |= bit;
+            const type = 31 - Math.clz32(bit);
+            const holder = owner[type];
+            if (holder < 0 || augment(holder)) {
+                owner[type] = card;
+                usedTypes |= bit;
+                return true;
             }
-        });
-        generateStableSamples(deck, 20);
-        lastSampleDeckHash = newHash;
-    }
-
-    if (newHash !== lastDeckHash) {
-        simulationCache.clear();
-        lastDeckHash = newHash;
-    }
-
-    const xSlider = document.getElementById('portent-xSlider');
-    if (xSlider) {
-        xSlider.max = Math.min(deckSize, 30);
+        }
+        return false;
     }
 
     return {
-        deckSize,
-        x: parseInt(document.getElementById('portent-xValue').value) || 5,
-        types,
-        cardData
+        reset() {
+            owner.fill(-1);
+            size = 0;
+            matched = 0;
+            usedTypes = 0;
+        },
+        add(mask) {
+            const index = size++;
+            cardMask[index] = mask;
+            if (!mask || usedTypes === ALL_TYPES) return matched;
+            const free = mask & ~usedTypes;
+            if (free) {
+                const bit = free & -free;
+                owner[31 - Math.clz32(bit)] = index;
+                usedTypes |= bit;
+                return ++matched;
+            }
+            visited = 0;
+            if (augment(index)) matched++;
+            return matched;
+        },
+        /** type index -> card index (or -1) */
+        owners() {
+            return Array.from(owner);
+        }
+    };
+}
+
+/** How many cards Portent can exile from these revealed type masks. */
+export function maxExiled(masks) {
+    const matcher = createMatcher(masks.length);
+    let exiled = 0;
+    for (const mask of masks) exiled = matcher.add(mask);
+    return exiled;
+}
+
+/**
+ * Monte Carlo over shuffled libraries: for every X up to maxX, the distribution
+ * of cards exiled. One pass per shuffle covers every X at once.
+ *
+ * @param {Uint8Array|number[]} masks - one type mask per library card
+ * @param {number} maxX
+ * @param {{iterations?:number, random?:() => number}} [opts]
+ * @returns {Object<number, {x:number, dist:number[], expectedTypes:number, prob4Plus:number, expectedToHand:number}>}
+ */
+export function simulatePortent(masks, maxX, { iterations = CONFIG.ITERATIONS, random = Math.random } = {}) {
+    const deck = Uint8Array.from(masks ?? []);
+    const size = deck.length;
+    const top = Math.max(0, Math.min(Math.floor(maxX) || 0, size));
+    const results = {};
+    if (top === 0 || iterations <= 0) return results;
+
+    const counts = Array.from({ length: top + 1 }, () => new Uint32Array(CARD_TYPES.length + 1));
+    const matcher = createMatcher(top);
+
+    for (let iter = 0; iter < iterations; iter++) {
+        matcher.reset();
+        for (let i = 0; i < top; i++) {
+            const pick = i + Math.floor(random() * (size - i));
+            const card = deck[pick];
+            deck[pick] = deck[i];
+            deck[i] = card;
+            counts[i + 1][matcher.add(card)]++;
+        }
+    }
+
+    for (let x = 1; x <= top; x++) {
+        const dist = Array.from(counts[x], c => c / iterations);
+        const expectedTypes = dist.reduce((sum, p, k) => sum + p * k, 0);
+        const prob4Plus = dist.slice(CONFIG.FREE_SPELL_THRESHOLD).reduce((a, b) => a + b, 0);
+        results[x] = {
+            x,
+            dist,
+            expectedTypes,
+            prob4Plus,
+            // One exiled card is cast instead of going to hand.
+            expectedToHand: expectedTypes - prob4Plus
+        };
+    }
+    return results;
+}
+
+function masksKey(masks) {
+    const histogram = new Uint32Array(1 << CARD_TYPES.length);
+    for (const mask of masks) histogram[mask]++;
+    let key = `${masks.length}`;
+    histogram.forEach((n, mask) => { if (n) key += `,${mask}:${n}`; });
+    return key;
+}
+
+/** Cached simulation for a library (only the type mix matters, not names). */
+function portentResults(masks, maxX) {
+    const key = `${masksKey(masks)}|${maxX}`;
+    let results = resultCache.get(key);
+    if (!results) {
+        results = simulatePortent(masks, maxX);
+        resultCache.set(key, results);
+    }
+    return results;
+}
+
+/**
+ * Portent's outcome at one X for a deck, without touching the page — the entry
+ * point other calculators (the big-spell comparison) use.
+ *
+ * @param {{cards?:Array, counts?:Object, x:number}} opts
+ * @returns {{x:number, dist:number[], expectedTypes:number, prob4Plus:number, expectedToHand:number}|null}
+ */
+export function portentOutcomes({ cards, counts, x } = {}) {
+    const deck = counts ?? DeckConfig.getDeckConfig();
+    const masks = buildTypeMasks(cards ?? deckCardList(deck), deck);
+    if (masks.length === 0) return null;
+    const want = Math.max(1, Math.floor(Number(x) || 1));
+    const maxX = Math.min(masks.length, Math.max(CONFIG.MAX_X, want));
+    return portentResults(masks, maxX)[Math.min(want, maxX)] ?? null;
+}
+
+// ── Resolving one reveal (sample casts) ──────────────────────────────────────
+
+/**
+ * Resolve one reveal the way a player would: exile as many cards as possible,
+ * making sure the costliest spell is among them, then cast it free if four or
+ * more were exiled.
+ *
+ * @param {Array<{name:string, types:string[], cmc:number}>} revealed
+ * @returns {{exiled:Array<{card:Object, type:string}>, free:Object|null, freeSpell:boolean, toHand:Object[], graveyard:Object[], fateOf:Map}}
+ */
+export function resolvePortent(revealed = []) {
+    const isSpell = card => card.types.some(type => type !== 'land');
+    // Kuhn's matching never unmatches a card once matched, so offering the
+    // costliest spells first guarantees the best free cast is exiled.
+    const order = revealed.map((card, i) => i).sort((a, b) => {
+        const ca = revealed[a];
+        const cb = revealed[b];
+        if (isSpell(ca) !== isSpell(cb)) return isSpell(ca) ? -1 : 1;
+        return (cb.cmc ?? 0) - (ca.cmc ?? 0) || a - b;
+    });
+    const matcher = createMatcher(revealed.length);
+    order.forEach(i => matcher.add(revealed[i].types.reduce((m, t) => m | (1 << CARD_TYPES.indexOf(t)), 0)));
+
+    const typeOfSlot = new Map();
+    matcher.owners().forEach((slot, typeIndex) => {
+        if (slot >= 0) typeOfSlot.set(slot, CARD_TYPES[typeIndex]);
+    });
+    const exiled = [];
+    order.forEach((cardIndex, slot) => {
+        if (typeOfSlot.has(slot)) exiled.push({ index: cardIndex, card: revealed[cardIndex], type: typeOfSlot.get(slot) });
+    });
+
+    const freeSpell = exiled.length >= CONFIG.FREE_SPELL_THRESHOLD;
+    const castable = exiled.filter(e => isSpell(e.card)).sort((a, b) => (b.card.cmc ?? 0) - (a.card.cmc ?? 0));
+    const freeEntry = freeSpell ? castable[0] ?? null : null;
+    const fateOf = new Map();
+    exiled.forEach(e => fateOf.set(e.index, e === freeEntry ? { fate: 'cast', type: e.type } : { fate: 'hand', type: e.type }));
+
+    return {
+        exiled: exiled.map(({ card, type }) => ({ card, type })),
+        free: freeEntry?.card ?? null,
+        freeSpell,
+        toHand: exiled.filter(e => e !== freeEntry).map(e => e.card),
+        graveyard: revealed.filter((card, i) => !fateOf.has(i)),
+        fateOf
+    };
+}
+
+// ── Plain-English answer ─────────────────────────────────────────────────────
+
+/**
+ * Pull the numbers the answer needs out of a results table.
+ * @param {Object} results - simulatePortent() output
+ * @param {number} x
+ * @param {{typesInDeck?:number}} [deck]
+ */
+export function analyze(results, x, { typesInDeck = CARD_TYPES.length } = {}) {
+    const xs = Object.keys(results ?? {}).map(Number).sort((a, b) => a - b);
+    const maxX = xs.length ? xs[xs.length - 1] : 0;
+    const at = results?.[x] ?? null;
+    const reliable = xs.find(k => (results[k]?.prob4Plus ?? 0) >= CONFIG.RELIABLE) ?? null;
+    return {
+        x,
+        mana: x + 1,
+        prob: at?.prob4Plus ?? 0,
+        cards: at?.expectedTypes ?? 0,
+        toHand: at?.expectedToHand ?? 0,
+        next: results?.[x + 1] ?? null,
+        reliableX: reliable,
+        maxX,
+        typesInDeck
     };
 }
 
 /**
- * Calculate probabilities
+ * The bottom line for the page: a deck-specific, plain-English answer to
+ * "How often does Portent reveal four card types for a free spell?"
+ * @param {ReturnType<typeof analyze>} a
+ * @returns {{html:string, tone:'good'|'warn'|'bad'|'flat'}}
+ */
+export function summarize(a) {
+    if (!a || a.maxX === 0) {
+        return { html: 'Add cards to your deck to see how Portent performs.', tone: 'flat' };
+    }
+    if (a.typesInDeck < CONFIG.FREE_SPELL_THRESHOLD) {
+        return {
+            html: `This deck has only <strong>${plural(a.typesInDeck, 'card type')}</strong>, so Portent can never exile four cards — it will never cast a free spell. At X=${a.x} you still keep about <strong>${avg(a.cards)} cards</strong>.`,
+            tone: 'bad'
+        };
+    }
+    const lead = `At <strong>X=${a.x}</strong> (${a.mana} mana), Portent finds four card types and casts one free <strong>${pct(a.prob)}</strong> of the time, and you keep about <strong>${avg(a.cards)} cards</strong>.`;
+    let follow;
+    if (a.reliableX == null) {
+        follow = `Even at X=${a.maxX} it stays under 9 in 10 — the deck leans on too few card types.`;
+    } else if (a.reliableX > a.x) {
+        follow = `It becomes a near-lock (9 in 10) at <strong>X=${a.reliableX}</strong>.`;
+    } else if (a.reliableX < a.x) {
+        follow = `X=${a.reliableX} is already 9 in 10 — ${plural(a.x - a.reliableX, 'mana')} cheaper.`;
+    } else {
+        follow = 'This is the cheapest X that makes it 9 in 10.';
+    }
+    return { html: `${lead} ${follow}`, tone: chanceTone(a.prob) };
+}
+
+// ── Deck and page state ──────────────────────────────────────────────────────
+
+/**
+ * The page's inputs plus the library they apply to. Reads Portent's own X
+ * input when its page is mounted; falls back to the default otherwise.
+ */
+export function getDeckConfig() {
+    const deck = DeckConfig.getDeckConfig();
+    const cards = deckCardList(deck);
+    const masks = buildTypeMasks(cards, deck);
+    const deckSize = masks.length;
+    const maxX = Math.max(1, Math.min(deckSize, CONFIG.MAX_X));
+    const x = Math.min(maxX, readX('portent', CONFIG.DEFAULT_X));
+
+    const types = {};
+    CARD_TYPES.forEach((type, bit) => {
+        let n = 0;
+        for (const mask of masks) if (mask & (1 << bit)) n++;
+        types[type] = n;
+    });
+
+    return { deckSize, x, maxX, types, cards, masks, deckKey: cards.length ? cardListKey(cards) : masksKey(masks) };
+}
+
+/**
+ * Results for every X up to the slider's maximum. Cached per library, so moving
+ * the slider never re-runs the simulation.
  */
 export function calculate() {
     const config = getDeckConfig();
-
-    if (config.deckSize === 0) {
-        return { config, results: {} };
-    }
-
-    const { deck, numTypes } = buildDeckIntArray(config.types, config.cardData);
-    const effectiveDeckSize = deck.length;
-
-    const maxX = Math.min(Math.max(config.x + CONFIG.X_RANGE_AFTER, 20), effectiveDeckSize);
-    const batchResults = simulatePortentBatch(deck, numTypes, effectiveDeckSize, maxX);
-
-    return { config, results: batchResults };
+    if (config.deckSize === 0) return { config, results: {} };
+    return { config, results: portentResults(config.masks, config.maxX) };
 }
 
-function updateChart(config, results) {
-    const minX = Math.max(1, config.x - CONFIG.X_RANGE_BEFORE);
-    const maxX = Math.min(config.x + CONFIG.X_RANGE_AFTER, Object.keys(results).length);
+// ── Rendering ────────────────────────────────────────────────────────────────
 
-    const xValues = [];
-    for (let i = minX; i <= maxX; i++) xValues.push(i);
+function renderAnswer(config, a) {
+    const el = document.getElementById('portent-stats');
+    if (!el) return;
+    const { html, tone } = summarize(a);
+    const next = a.next;
+    const hero = renderHeroStats([
+        {
+            label: 'Free-spell chance', value: pct(a.prob), size: 'big', color: toneColor(chanceTone(a.prob)),
+            sub: `at X=${a.x} · ${a.mana} mana`,
+            tip: 'The chance Portent exiles four or more cards — one per card type — so you may cast one of them without paying its mana cost.'
+        },
+        {
+            label: 'Cards you keep', value: avg(a.cards),
+            sub: `${avg(a.toHand)} to hand, plus the free spell`,
+            tip: 'Portent exiles one card for each card type it reveals, and you keep all of them: one may be cast free, the rest go to your hand. Averaged over every cast.'
+        },
+        next ? {
+            label: `At X=${a.x + 1}`, value: pct(next.prob4Plus),
+            sub: `${points(next.prob4Plus - a.prob)} for one more mana`,
+            tip: 'The free-spell chance if you pay one more mana.'
+        } : null,
+        {
+            label: 'Near-certain from', value: a.reliableX != null ? `X=${a.reliableX}` : '—',
+            sub: a.reliableX != null ? `${a.reliableX + 1} mana for 9 in 10` : 'never 9 in 10 here',
+            tip: 'The smallest X where the free spell happens at least 9 times in 10.'
+        }
+    ].filter(Boolean));
+    const notice = config.cards.length ? '' : noticeHTML('Using your card-type counts. Import a decklist to count dual-typed cards (an artifact creature fills only one type) and to see sample casts.', 'flat');
+    el.innerHTML = renderBottomLine({ html, tone }) + notice + hero;
+}
+
+function renderChart(config, results) {
+    const top = Math.min(config.maxX, Math.max(15, config.x + 5));
+    const xs = Array.from({ length: top }, (_, i) => i + 1);
+    const probs = xs.map(x => +((results[x]?.prob4Plus ?? 0) * 100).toFixed(1));
+    const colors = xs.map((x, i) => x === config.x
+        ? TX_CHART.amber
+        : fade({ good: TX_CHART.green, warn: TX_CHART.amber, bad: TX_CHART.red }[chanceTone(probs[i] / 100)] ?? TX_CHART.blue, 0.38));
 
     chart = createOrUpdateChart(chart, 'portent-combinedChart', {
         type: 'bar',
         data: {
+            labels: xs.map(String),
             datasets: [
                 {
-                    label: 'E[TYPES]',
-                    data: xValues.map(x => ({ x, y: results[x] ? +results[x].expectedTypes.toFixed(3) : 0 })),
-                    backgroundColor: xValues.map(x => x === config.x ? COLORS.danger : COLORS.dangerDim),
-                    borderColor: 'transparent',
-                    yAxisID: 'yTypes',
-                    order: 2,
-                    barThickness: 'flex'
+                    label: 'Free-spell chance',
+                    data: probs,
+                    backgroundColor: colors,
+                    hoverBackgroundColor: colors,
+                    borderRadius: 3,
+                    maxBarThickness: 34,
+                    order: 2
                 },
                 {
-                    label: 'P(FREE) %',
-                    data: xValues.map(x => ({ x, y: results[x] ? +(results[x].prob4Plus * 100).toFixed(2) : 0 })),
-                    borderColor: COLORS.primary,
-                    backgroundColor: 'transparent',
+                    label: '9 in 10',
                     type: 'line',
-                    tension: 0.3,
-                    pointRadius: xValues.map(x => x === config.x ? 6 : 3),
-                    pointBackgroundColor: xValues.map(x => x === config.x ? COLORS.primary : 'transparent'),
-                    pointBorderColor: COLORS.primary,
+                    data: xs.map(() => 90),
+                    borderColor: TX_CHART.dim,
+                    borderWidth: 1,
+                    borderDash: [4, 4],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
                     fill: false,
-                    yAxisID: 'yProb',
                     order: 1
                 }
             ]
         },
         options: {
+            onClick: (event, elements) => {
+                const index = elements?.[0]?.index;
+                if (index != null) setX(index + 1);
+            },
+            onHover: (event, elements) => {
+                const target = event?.native?.target;
+                if (target) target.style.cursor = elements?.length ? 'pointer' : 'default';
+            },
             scales: {
-                x: {
-                    type: 'linear',
-                    ticks: { stepSize: 1, color: COLORS.text, callback: val => `x=${val}` },
-                    grid: { color: COLORS.grid }
-                },
-                yProb: { type: 'linear', position: 'left', beginAtZero: true, max: 100,
-                    grid: { color: COLORS.grid }, ticks: { color: COLORS.primary } },
-                yTypes: { type: 'linear', position: 'right', beginAtZero: true,
-                    grid: { drawOnChartArea: false }, ticks: { color: COLORS.danger } }
+                x: { title: { display: true, text: 'Cards revealed (X)', color: TX_CHART.dim }, grid: { display: false } },
+                y: { min: 0, max: 100, ticks: { stepSize: 25, callback: v => `${v}%` } }
             },
             plugins: {
                 tooltip: {
+                    filter: item => item.datasetIndex === 0,
                     callbacks: {
-                        label: ctx => ctx.datasetIndex === 1
-                            ? `P(free): ${ctx.parsed.y.toFixed(1)}%`
-                            : `E[types]: ${ctx.parsed.y.toFixed(2)}`
+                        title: items => `X=${items[0].label} · ${Number(items[0].label) + 1} mana`,
+                        label: item => `Free spell: ${pct(item.parsed.y / 100)}`,
+                        afterLabel: item => `Cards kept: ${avg(results[Number(item.label)]?.expectedTypes ?? 0)}`
                     }
                 }
             }
@@ -315,475 +461,134 @@ function updateChart(config, results) {
     });
 }
 
-function updateTable(config, results) {
-    const minX = Math.max(1, config.x - CONFIG.X_RANGE_BEFORE);
-    const maxX = Math.min(config.x + CONFIG.X_RANGE_AFTER, Object.keys(results).length);
-    const xValues = [];
-    for (let i = minX; i <= maxX; i++) xValues.push(i);
-
-    const currentResult = results[config.x];
-    
-    // Header with mobile-hide classes
-    const headers = [
-        'X',
-        'P(Free Spell)',
-        { text: 'Δ Prob', class: 'mobile-hide' },
-        'Types Exiled',
-        { text: 'Δ Types', class: 'mobile-hide' }
-    ];
-    
-    const rows = xValues.map(x => {
-        const r = results[x];
-        if (!r) return null;
-        
-        const deltaProb = (r.prob4Plus - currentResult.prob4Plus) * 100;
-        const deltaTypes = r.expectedTypes - currentResult.expectedTypes;
-        const isBaseline = x === config.x;
-        const probClass = deltaProb > 0.01 ? 'marginal-positive' : (deltaProb < -0.01 ? 'marginal-negative' : '');
-        const typesClass = deltaTypes > 0.001 ? 'marginal-positive' : (deltaTypes < -0.001 ? 'marginal-negative' : '');
-
-        return {
-            cells: [
-                x,
-                formatPercentage(r.prob4Plus),
-                { value: isBaseline ? '-' : (deltaProb >= 0 ? '+' : '') + deltaProb.toFixed(1) + '%', class: `${probClass} mobile-hide` },
-                formatNumber(r.expectedTypes, 2),
-                { value: isBaseline ? '-' : (deltaTypes >= 0 ? '+' : '') + formatNumber(deltaTypes, 2), class: `${typesClass} mobile-hide` }
-            ],
-            class: isBaseline ? 'current' : ''
-        };
-    }).filter(r => r !== null);
-
-    renderMultiColumnTable('portent-comparisonTable', headers, rows, { 
-        highlightRowIndex: xValues.indexOf(config.x) 
-    });
+function renderTypeMix(config) {
+    const bar = document.getElementById('portent-type-bar');
+    const list = document.getElementById('portent-type-grid');
+    const label = document.getElementById('portent-n-label');
+    if (label) label.textContent = `${config.deckSize} cards`;
+    const entries = CARD_TYPES.map(type => [type, config.types[type] ?? 0]).filter(([, n]) => n > 0);
+    const total = entries.reduce((sum, [, n]) => sum + n, 0) || 1;
+    if (bar) {
+        bar.innerHTML = entries.map(([type, n]) =>
+            `<span style="flex-grow:${n}; background:var(--type-${type})" title="${typeLabel(type)}: ${n}"></span>`).join('');
+    }
+    if (list) {
+        list.innerHTML = entries.map(([type, n]) => `
+            <li title="${typeLabel(type)}: ${n} cards (${Math.round(n / total * 100)}%)"><span class="bs-dot" style="--dot: var(--type-${type})" aria-hidden="true"></span><span class="por-type-name">${typeLabel(type)}</span><span class="por-type-n">${n}</span></li>`).join('');
+    }
 }
 
-const formatMarginal = (compareResult, currentResult) => {
-    if (!compareResult || !currentResult) return '<span style="color: var(--text-dim);">N/A</span>';
-
-    const probDiff = (compareResult.prob4Plus - currentResult.prob4Plus) * 100;
-    const typesDiff = compareResult.expectedTypes - currentResult.expectedTypes;
-    const probColor = probDiff > 0 ? COLORS.success : COLORS.danger;
-    const typesColor = typesDiff > 0 ? COLORS.success : COLORS.danger;
-
-    return `<span style="color: ${probColor};">${probDiff >= 0 ? '+' : ''}${probDiff.toFixed(1)}%</span> free spell, <span style="color: ${typesColor};">${typesDiff >= 0 ? '+' : ''}${formatNumber(typesDiff, 2)}</span> types exiled`;
-};
-
-// updateStats() removed: it rendered legacy stat cards into #portent-stats,
-// which is display:none — the hero numerics and sweep table replaced it.
-
-/**
- * Run sample Portent reveals
- */
-export function runSampleReveals() {
-    const config = getDeckConfig();
-    const cardData = config.cardData;
-
-    if (!cardData || !cardData.cardsByName || Object.keys(cardData.cardsByName).length === 0) {
-        document.getElementById('portent-reveals-display').innerHTML = '<p style="color: var(--text-dim);">Please import a decklist to run simulations.</p>';
+function renderSamples(config) {
+    const el = document.getElementById('portent-trials-container');
+    const header = document.getElementById('portent-reveal-header');
+    if (header) header.textContent = `Sample casts at X=${config.x}`;
+    if (!el) return;
+    if (!config.cards.length) {
+        el.innerHTML = noticeHTML('Sample casts need a decklist with card names — import one from the deck menu.', 'flat');
         return;
     }
-
-    const countInput = document.getElementById('portent-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || 10);
-
-    // Ensure stable samples exist
-    if (stableSamples.length < numSims) {
-        // Build deck array
-        const deck = [];
-        Object.values(cardData.cardsByName).forEach(card => {
-            const types = extractCardTypes(card);
-            for (let i = 0; i < card.count; i++) {
-                deck.push({ name: card.name, types, type_line: card.type_line, cmc: card.cmc ?? 0 });
-            }
+    const decks = sampler.get(config.deckKey, () => expandCards(config.cards));
+    el.innerHTML = decks.map((library, i) => {
+        const revealed = library.slice(0, config.x);
+        const r = resolvePortent(revealed);
+        const rows = revealed.map((card, index) => {
+            const fate = r.fateOf.get(index);
+            const isLand = !card.types.some(t => t !== 'land');
+            return {
+                name: card.name,
+                type: fate?.type ?? card.types[0] ?? 'land',
+                mv: isLand ? '' : card.cmc,
+                fate: fate ? (fate.fate === 'cast' ? 'cast free' : `${typeLabel(fate.type).toLowerCase()} → hand`) : 'graveyard',
+                state: fate ? (fate.fate === 'cast' ? 'star' : 'hit') : 'miss'
+            };
         });
-        generateStableSamples(deck, numSims);
-    }
-
-    let freeSpellCount = 0;
-    const typeDistribution = new Array(9).fill(0);
-    let totalTypesExiled = 0;
-
-    // 1. STATS LOOP (Full Simulation)
-    for (let i = 0; i < numSims; i++) {
-        const shuffled = stableSamples[i];
-        
-        // Reveal X cards
-        const revealed = shuffled.slice(0, config.x);
-
-        const typesRevealed = new Set();
-        revealed.forEach(card => {
-            card.types.forEach(type => typesRevealed.add(type));
+        const kept = r.exiled.length;
+        const footer = r.freeSpell
+            ? (r.free
+                ? `Cast <strong>${cardRef(r.free.name)}</strong> free · ${plural(r.toHand.length, 'card')} to hand`
+                : `Exiled ${kept}, but none is a spell · ${plural(r.toHand.length, 'card')} to hand`)
+            : `${plural(kept, 'card')} to hand · ${plural(r.graveyard.length, 'card')} to graveyard`;
+        return sampleCardHTML({
+            title: `Shuffle ${i + 1}`,
+            tag: r.freeSpell ? 'Free spell' : `${plural(kept, 'type')} — no free spell`,
+            tone: r.freeSpell ? 'good' : 'bad',
+            rows,
+            footer
         });
-
-        const numTypes = typesRevealed.size;
-        const freeSpell = numTypes >= CONFIG.FREE_SPELL_THRESHOLD;
-        if (freeSpell) freeSpellCount++;
-        typeDistribution[numTypes]++;
-        totalTypesExiled += numTypes;
-    }
-
-    // 2. Build Summary UI
-    const avgTypesExiled = (totalTypesExiled / numSims).toFixed(2);
-
-    let distributionHTML = '<div class="tx-sim">';
-    distributionHTML += '<div class="tx-h"><span>Types revealed — distribution</span></div>';
-    distributionHTML += '<div class="tx-sim-block">';
-
-    
-    distributionHTML += renderDistributionChart(
-        typeDistribution,
-        numSims,
-        (count) => `${count} ${count === 1 ? 'type ' : 'types'}`,
-        (count) => (count >= CONFIG.FREE_SPELL_THRESHOLD && typeDistribution[count] > 0) ? ' ← FREE SPELL' : ''
-    );
-
-    distributionHTML += '</div><div class="tx-sim-block">';
-    distributionHTML += `<strong>Sample Result:</strong> ${freeSpellCount}/${numSims} reveals = ${((freeSpellCount / numSims) * 100).toFixed(1)}% chance of free spell<br>`;
-    distributionHTML += `<strong>Average types exiled:</strong> ${avgTypesExiled}`;
-    distributionHTML += '</div></div>';
-
-    // 3. Prepare List Container
-    const listId = 'portent-samples-list';
-    const btnId = 'portent-load-more';
-    const listHTML = `<div id="${listId}"></div><button id="${btnId}" class="import-btn" style="width: 100%; margin-top: 12px; display: none;">Load More (50)</button>`;
-
-    const revealsSectionHTML = createCollapsibleSection(
-        `Show/Hide Individual Reveals (${numSims} simulations)`,
-        listHTML,
-        true
-    );
-
-    document.getElementById('portent-reveals-display').innerHTML = distributionHTML + revealsSectionHTML;
-
-    // 4. Render Batch Function
-    const listContainer = document.getElementById(listId);
-    const loadMoreBtn = document.getElementById(btnId);
-    renderedCount = 0;
-
-    const renderBatch = (batchSize) => {
-        const start = renderedCount;
-        const end = Math.min(start + batchSize, numSims);
-        let html = '';
-
-        for (let i = start; i < end; i++) {
-            const shuffled = stableSamples[i];
-            const revealed = shuffled.slice(0, config.x);
-
-            const typesRevealed = new Set();
-            revealed.forEach(card => {
-                card.types.forEach(type => typesRevealed.add(type));
-            });
-
-            const numTypes = typesRevealed.size;
-            const freeSpell = numTypes >= CONFIG.FREE_SPELL_THRESHOLD;
-
-            html += `<div class="sample-reveal ${freeSpell ? 'free-spell' : 'whiff'}">`;
-            html += `<div><strong>Reveal ${i + 1} (X=${config.x}):</strong></div>`;
-            html += '<div style="margin: 8px 0;">';
-
-            revealed.forEach(card => {
-                const primaryType = card.types[0] || 'land';
-                const isDual = card.types.length > 1;
-                html += `<span class="reveal-card ${primaryType} ${isDual ? 'dual' : ''}" title="${card.type_line}">${card.name}</span>`;
-            });
-
-            html += '</div>';
-            html += `<div class="reveal-summary ${freeSpell ? 'free-spell' : 'whiff'}">`;
-            html += `<strong>${freeSpell ? '✓ FREE SPELL!' : '✗ No free spell'}</strong> - `;
-            html += `${numTypes} type${numTypes !== 1 ? 's' : ''} exiled: `;
-
-            const sortedTypes = Array.from(typesRevealed).sort();
-            html += sortedTypes.map(type => `<span style="color: ${COLORS[type] || COLORS.primary}; font-weight: 600;">${type}</span>`).join(', ');
-
-            html += '</div></div>';
-        }
-
-        if (listContainer) {
-            listContainer.insertAdjacentHTML('beforeend', html);
-        }
-        
-        renderedCount = end;
-        
-        if (loadMoreBtn) {
-            if (renderedCount < numSims) {
-                loadMoreBtn.style.display = 'block';
-                loadMoreBtn.textContent = `Load More (Showing ${renderedCount}/${numSims})`;
-            } else {
-                loadMoreBtn.style.display = 'none';
-            }
-        }
-    };
-
-    // Initial Render
-    renderBatch(50);
-
-    if (loadMoreBtn) {
-        loadMoreBtn.addEventListener('click', () => renderBatch(50));
-    }
+    }).join('');
 }
 
-function updateTerminalDisplay(config, results) {
-    const x = config.x;
-    const r = results[x];
-    if (!r) return;
-
-    const prob = r.prob4Plus;
-    const eTypes = r.expectedTypes;
-    const rNext = results[x + 1];
-    const marginal = rNext ? (rNext.prob4Plus - prob) * 100 : null;
-
-    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-
-    set('portent-x-display', x);
-    set('portent-n-display', config.deckSize);
-    set('portent-n-label', `N=${config.deckSize}`);
-    set('portent-pct-display', `${(x / config.deckSize * 100).toFixed(1)}%`);
-    set('portent-hero-pfree', (prob * 100).toFixed(2) + '%');
-    set('portent-hero-pfree-sub', `x=${x}`);
-    set('portent-hero-types', eTypes.toFixed(2));
-    if (marginal !== null) {
-        const sign = marginal >= 0 ? '+' : '';
-        set('portent-hero-marginal', sign + marginal.toFixed(2) + '%');
-        set('portent-hero-marginal-sub', `x=${x} → x=${x + 1}`);
-        const margEl = document.getElementById('portent-hero-marginal');
-        if (margEl) margEl.style.color = marginal > 0 ? 'var(--tx-green)' : marginal < 0 ? 'var(--tx-red)' : 'var(--tx-dim)';
-    } else {
-        set('portent-hero-marginal', '—');
-    }
-    set('portent-reveal-header', `06 · SAMPLE REVEAL · X=${x}`);
-}
-
-function updateTypeBar(types, deckSize) {
-    const total = deckSize || Object.values(types).reduce((a, b) => a + b, 0);
-    if (total === 0) return;
-
-    const typeBar = document.getElementById('portent-type-bar');
-    const typeGrid = document.getElementById('portent-type-grid');
-
-    const entries = Object.entries(types).filter(([, v]) => v > 0);
-
-    if (typeBar) {
-        typeBar.innerHTML = entries.map(([type, count]) => {
-            const pct = (count / total * 100).toFixed(2);
-            return `<span class="tx-bar-seg" style="width:${pct}%; background:${TX_TYPE_COLORS[type] || '#939c97'};" title="${type}: ${count}"></span>`;
-        }).join('');
-    }
-
-    if (typeGrid) {
-        typeGrid.innerHTML = entries.map(([type, count]) => `
-            <span style="color:${TX_TYPE_COLORS[type] || '#939c97'}; line-height:1.8;">●</span>
-            <span style="color:var(--tx-mid); text-transform:uppercase; font-size:10px; line-height:1.8;">${type.slice(0, 4)}</span>
-            <span style="color:var(--tx-bright); text-align:right; line-height:1.8;">${count}</span>
-            <span style="color:var(--tx-dim); text-align:right; font-size:10px; line-height:1.8;">${(count / total * 100).toFixed(0)}%</span>
-        `).join('');
-    }
-}
-
-function updateSweepTable(config, results) {
-    const tbody = document.getElementById('portent-sweep-body');
-    if (!tbody) return;
-
-    const getVerdict = (p) => {
-        if (p >= 0.85) return { text: 'CERTAIN', color: '#55c97f' };
-        if (p >= 0.65) return { text: 'STRONG', color: '#55c97f' };
-        if (p >= 0.40) return { text: 'FAIR', color: '#f0a92c' };
-        return { text: 'WEAK', color: '#e8635c' };
-    };
-
-    let prevProb = null;
-    let html = '';
-    let crossedThreshold = false;
-
-    for (let x = 3; x <= 20; x++) {
+function renderDetails(config, results, a) {
+    const rows = [];
+    let prev = null;
+    for (let x = 1; x <= Math.min(config.maxX, CONFIG.TABLE_MAX_X); x++) {
         const r = results[x];
         if (!r) continue;
-        const prob = r.prob4Plus;
-        const eCards = (x * prob).toFixed(2);
-
-        // Insert FREE SPELL threshold separator on first row where P >= 40%
-        if (!crossedThreshold && prob >= 0.40) {
-            crossedThreshold = true;
-            html += `<tr><td colspan="6" style="padding:3px 14px; border-bottom:1px solid var(--tx-green); font-size:9px; color:var(--tx-green); letter-spacing:0.14em; text-align:center; background:rgba(85,201,127,0.04);">▲ FREE SPELL THRESHOLD (≥4 TYPES)</td></tr>`;
-        }
-
-        let deltaP = '—';
-        let deltaPColor = 'var(--tx-dim)';
-        if (prevProb !== null) {
-            const diff = (prob - prevProb) * 100;
-            deltaP = (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%';
-            deltaPColor = diff >= 0.05 ? '#55c97f' : diff < -0.05 ? '#e8635c' : 'var(--tx-dim)';
-        }
-        prevProb = prob;
-
-        const verdict = getVerdict(prob);
-        const isCurrent = x === config.x;
-        const barFill = Math.min(100, +(prob * 100).toFixed(1));
-        const rowStyle = isCurrent ? ' class="current"' : '';
-
-        html += `<tr${rowStyle}>
-            <td style="text-align:left; font-weight:${isCurrent ? '700' : '400'}; color:${isCurrent ? 'var(--tx-bright)' : 'var(--tx-mid)'};">${x}</td>
-            <td style="color:#55c97f;">${(prob * 100).toFixed(2)}%</td>
-            <td class="p-bar-cell"><span class="tx-p-bar"><span class="tx-p-fill" style="width:${barFill}%"></span></span></td>
-            <td style="color:#f0a92c;">${eCards}</td>
-            <td style="color:${deltaPColor};">${deltaP}</td>
-            <td style="color:${verdict.color}; font-weight:600; font-size:10px; letter-spacing:0.08em;">${verdict.text}</td>
-        </tr>`;
+        rows.push({ x, prob: r.prob4Plus, cards: r.expectedTypes, delta: prev == null ? null : r.prob4Plus - prev });
+        prev = r.prob4Plus;
     }
+    renderSweepTable('portent-sweep', {
+        current: config.x,
+        recommended: a.reliableX,
+        rows,
+        columns: [
+            { label: 'X', align: 'left', render: r => `${r.x}` },
+            { label: 'Mana', render: r => `${r.x + 1}` },
+            { label: 'Free-spell chance', align: 'left', render: r => pBarCell(r.prob, toneColor(chanceTone(r.prob))) },
+            { label: '', render: r => `<span style="color:${toneColor(chanceTone(r.prob))}">${pct(r.prob)}</span>` },
+            { label: 'Cards kept', render: r => avg(r.cards) },
+            { label: 'Change', render: r => r.delta == null ? '—' : pointsShort(r.delta) }
+        ]
+    });
 
-    tbody.innerHTML = html;
+    const dist = results[config.x]?.dist ?? [];
+    const distEl = document.getElementById('portent-dist');
+    const sub = document.getElementById('portent-dist-sub');
+    if (sub) sub.textContent = `at X=${config.x}`;
+    if (distEl) {
+        const peak = Math.max(...dist, 0.0001);
+        const bars = dist.map((p, k) => ({ k, p })).filter(({ p }) => p > 0).map(({ k, p }) => ({
+            label: k >= CONFIG.FREE_SPELL_THRESHOLD ? `${plural(k, 'card')} · free spell` : plural(k, 'card'),
+            value: p,
+            tone: k >= CONFIG.FREE_SPELL_THRESHOLD ? 'good' : 'bad'
+        }));
+        distEl.innerHTML = `<p class="bs-caption">How often each cast exiles that many cards, over ${CONFIG.ITERATIONS.toLocaleString('en-US')} simulated casts. Four or more is a free spell.</p>`
+            + barsHTML(bars, { scale: peak });
+    }
 }
 
-function updateTrials(config) {
-    const container = document.getElementById('portent-trials-container');
-    if (!container) return;
-
-    const cardData = config.cardData;
-    if (!cardData || !cardData.cardsByName || Object.keys(cardData.cardsByName).length === 0) {
-        container.innerHTML = '<div class="portent-trial" style="color:var(--tx-dim); font-size:10px; padding:20px 16px;">Import a decklist to see sample reveals.</div>';
-        return;
-    }
-
-    if (stableSamples.length < 4) return;
-
-    let html = '';
-    for (let t = 0; t < 4; t++) {
-        const sample = stableSamples[t];
-        if (!sample) continue;
-        const revealed = sample.slice(0, config.x);
-        const typesSet = new Set();
-        revealed.forEach(card => card.types.forEach(ty => typesSet.add(ty)));
-        const numTypes = typesSet.size;
-        const isFree = numTypes >= CONFIG.FREE_SPELL_THRESHOLD;
-        const typeList = Array.from(typesSet).sort();
-
-        // Find highest CMC non-land spell for free cast display
-        let bestSpell = null;
-        if (isFree) {
-            const spells = revealed.filter(c => !c.types.includes('land'));
-            if (spells.length > 0) {
-                bestSpell = spells.reduce((best, c) => (c.cmc ?? 0) > (best.cmc ?? 0) ? c : best);
-            }
-        }
-
-        const freeLabel = isFree
-            ? bestSpell ? `FREE ✓ · MV=${bestSpell.cmc}` : 'FREE ✓'
-            : 'FIZZ ✗';
-
-        const cardDots = revealed.map(card => {
-            const ty = card.types[0] || 'land';
-            const isBest = bestSpell && card === bestSpell;
-            const nameColor = isBest ? '#55c97f' : 'var(--tx-mid)';
-            const prefix = isBest ? '→ ' : '  ';
-            return `<div style="display:flex; align-items:baseline; gap:6px; line-height:1.6;">
-                <span style="color:${TX_TYPE_COLORS[ty] || '#939c97'}; flex-shrink:0;" title="${card.type_line || ty}">●</span>
-                <span style="color:${nameColor}; font-size:10px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${prefix}${card.name}</span>
-                ${isBest ? `<span style="color:var(--tx-green); font-size:9px; flex-shrink:0; letter-spacing:0.06em;">MV${bestSpell.cmc}</span>` : `<span style="color:var(--tx-dim); font-size:9px; flex-shrink:0;">${card.cmc > 0 ? card.cmc : (card.types.includes('land') ? 'L' : '0')}</span>`}
-            </div>`;
-        }).join('');
-
-        html += `<div class="portent-trial" style="padding:0;">
-            <div style="display:flex; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--tx-rule); font-size:10px; letter-spacing:0.08em;">
-                <span style="color:var(--tx-mid);">TRIAL ${String(t + 1).padStart(3,'0')} · X=${config.x}</span>
-                <span style="color:${isFree ? '#55c97f' : '#e8635c'}; font-weight:600;">${freeLabel}</span>
-            </div>
-            <div style="padding:8px 12px; font-size:11px;">${cardDots}</div>
-            <div style="padding:6px 12px; border-top:1px solid var(--tx-rule); font-size:9px; color:var(--tx-dim); letter-spacing:0.06em; display:flex; justify-content:space-between;">
-                <span>${numTypes} TYPES · ${typeList.map(ty => `<span style="color:${TX_TYPE_COLORS[ty] || '#939c97'};">${ty.slice(0,4).toUpperCase()}</span>`).join(' ')}</span>
-                ${bestSpell ? `<span style="color:var(--tx-green);">CAST: ${bestSpell.name.length > 16 ? bestSpell.name.slice(0,15) + '…' : bestSpell.name}</span>` : ''}
-            </div>
-        </div>`;
-    }
-
-    container.innerHTML = html;
+/** Set X from a preset chip or a chart click. */
+function setX(x) {
+    const slider = document.getElementById('portent-xSlider');
+    const input = document.getElementById('portent-xValue');
+    if (slider) slider.value = x;
+    if (input) input.value = x;
+    updateUI();
 }
 
-function updateLiveTape(config) {
-    const tape = document.getElementById('portent-live-tape');
-    if (!tape) return;
-
-    const now = new Date();
-    let html = '';
-
-    if (stableSamples.length < 14) {
-        for (let i = 0; i < 14; i++) {
-            html += `<div class="portent-tape-row">
-                <span style="color:var(--tx-dim); font-size:9px;">—:—:—</span>
-                <span style="color:var(--tx-dim);">—T</span>
-                <span style="color:var(--tx-dim); font-size:10px;">● ● ●</span>
-                <span style="color:var(--tx-dim);">IMPORT DECK</span>
-            </div>`;
-        }
-        tape.innerHTML = html;
-        return;
-    }
-
-    const count = Math.min(14, stableSamples.length);
-    for (let i = 0; i < count; i++) {
-        const sampleIdx = Math.floor(i * stableSamples.length / count);
-        const sample = stableSamples[sampleIdx];
-        if (!sample) continue;
-
-        const revealed = sample.slice(0, config.x);
-        const typesSet = new Set();
-        revealed.forEach(card => card.types.forEach(ty => typesSet.add(ty)));
-        const numTypes = typesSet.size;
-        const isFree = numTypes >= CONFIG.FREE_SPELL_THRESHOLD;
-
-        const t = new Date(now.getTime() - (count - 1 - i) * 2300);
-        const ts = `${String(t.getUTCHours()).padStart(2,'0')}:${String(t.getUTCMinutes()).padStart(2,'0')}:${String(t.getUTCSeconds()).padStart(2,'0')}`;
-
-        const typeDots = Array.from(typesSet).map(ty =>
-            `<span style="color:${TX_TYPE_COLORS[ty] || '#939c97'};" title="${ty}">●</span>`
-        ).join('');
-
-        html += `<div class="portent-tape-row${isFree ? ' current' : ''}">
-            <span style="color:var(--tx-dim); font-size:9px;">${ts}</span>
-            <span style="color:${isFree ? '#55c97f' : 'var(--tx-dim)'};">${numTypes}T</span>
-            <span style="font-size:12px; letter-spacing:2px;">${typeDots}</span>
-            <span style="color:${isFree ? '#55c97f' : '#e8635c'}; font-weight:${isFree ? '600' : '400'};">${isFree ? 'FREE ✓' : 'FIZZ ✗'}</span>
-        </div>`;
-    }
-
-    tape.innerHTML = html;
-}
-
-/**
- * Update all UI elements
- */
+/** Render the whole page. Cheap after the first run for a deck. */
 export function updateUI() {
     const { config, results } = calculate();
+    syncXControl('portent', config.x, config.maxX, `${config.x + 1} mana · {X}{U}`);
+    renderTypeMix(config);
 
-    if (config.deckSize === 0 || Object.keys(results).length === 0) {
-        if (chart) chart.destroy();
-        document.getElementById('portent-comparisonTable').innerHTML = '';
+    if (config.deckSize === 0 || !results[config.x]) {
+        const el = document.getElementById('portent-stats');
+        if (el) el.innerHTML = renderBottomLine({ html: 'Add cards to your deck to see how Portent performs.', tone: 'flat' });
+        chart?.destroy?.();
+        chart = null;
         return;
     }
 
-    updateChart(config, results);
-    updateTable(config, results);
-    updateTerminalDisplay(config, results);
-    updateTypeBar(config.types, config.deckSize);
-    updateSweepTable(config, results);
-    updateLiveTape(config);
-
-    if (config.cardData && config.cardData.cardsByName && Object.keys(config.cardData.cardsByName).length > 0) {
-        runSampleReveals();
-        updateTrials(config);
-    }
-
-    // Render big spell comparison
-    const comparisonContainer = document.getElementById('big-spell-comparison-portent');
-    if (comparisonContainer) {
-        const comparison = compareBigSpells(config.x, 'portent');
-        comparisonContainer.innerHTML = renderComparison(comparison);
-    }
+    const typesInDeck = CARD_TYPES.filter(type => config.types[type] > 0).length;
+    const a = analyze(results, config.x, { typesInDeck });
+    renderAnswer(config, a);
+    renderChart(config, results);
+    renderSamples(config);
+    renderDetails(config, results, a);
+    renderHowItCompares('big-spell-comparison-portent', { x: config.x, source: 'portent', deckKey: config.deckKey });
 }
 
-/**
- * Initialize Portent calculator
- */
 export function init() {
     registerCalculator({
         name: 'portent',
@@ -791,36 +596,11 @@ export function init() {
         updateUI,
         inputs: ['x'],
         init: () => {
-            const container = document.getElementById('portent-sample-reveals');
-            if (container) {
-                container.innerHTML = generateSampleRevealsHTML('portent', 'Sample Portent Reveals');
-            }
-            const btn = document.getElementById('portent-draw-reveals-btn');
-            if (btn) btn.addEventListener('click', refreshSamples);
-
-            // Preset chips: clicking sets the slider and hidden input then recalcs
-            document.querySelectorAll('#portent-presets .tx-chip').forEach(chip => {
-                chip.addEventListener('click', () => {
-                    const x = parseInt(chip.dataset.x);
-                    const slider = document.getElementById('portent-xSlider');
-                    const hidden = document.getElementById('portent-xValue');
-                    if (slider) slider.value = x;
-                    if (hidden) { hidden.value = x; hidden.dispatchEvent(new Event('input')); }
-                    // Mark active chip
-                    document.querySelectorAll('#portent-presets .tx-chip').forEach(c => c.classList.remove('active'));
-                    chip.classList.add('active');
-                    updateUI();
-                });
+            bindXPresets('portent', setX);
+            document.getElementById('portent-reshuffle-btn')?.addEventListener('click', () => {
+                sampler.reshuffle();
+                renderSamples(getDeckConfig());
             });
-
-            // Reshuffle button
-            const reshuffleBtn = document.getElementById('portent-reshuffle-btn');
-            if (reshuffleBtn) {
-                reshuffleBtn.addEventListener('click', () => {
-                    refreshSamples();
-                    updateUI();
-                });
-            }
         }
     });
 }
