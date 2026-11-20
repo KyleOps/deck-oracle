@@ -2,9 +2,14 @@
 
 ## Project Overview
 
-**MTG Deck Oracle** - A single-page application for Magic: The Gathering probability calculations. Built with vanilla ES6+ modules (no build step), featuring 14 specialized calculators for analyzing deck performance and card interactions.
+**Deck Oracle** — a single-page app of Magic: The Gathering probability tools.
+Vanilla ES modules, no build step. Import a deck (Moxfield, Archidekt, pasted
+list, or bare type counts) and every page answers one question about it in plain
+words, then shows the evidence. Works for Commander, 60-card and 40-card decks.
 
-**Tech Stack**: Vanilla JavaScript (ES6 modules), Chart.js, CSS custom properties, PWA with Service Worker
+**Tech Stack**: Vanilla JavaScript (ES modules, lazy-loaded per page), Chart.js
+(loaded on demand, pinned), CSS custom properties (light + dark themes), PWA
+with a service worker.
 
 ---
 
@@ -12,81 +17,83 @@
 
 ```
 mtgcalcs/
-├── index.html              # SPA entry point (all calculator tabs)
-├── manifest.json           # PWA manifest
-├── sw.js                   # Service Worker for offline support
-├── package.json            # npm scripts & config
-├── CHANGELOG.md            # Version history
+├── index.html              # App shell only: sidebar, top bar, dialogs, drawer (no calculator markup)
+├── manifest.json, sw.js    # PWA (sw.js asset list is GENERATED — npm run sw:manifest)
+├── docs/calculator-anatomy.md  # How a calculator page is built — read before adding one
 │
 ├── js/
-│   ├── main.js             # App initialization, tab switching, event delegation
-│   ├── calculators/        # 14 calculator modules
-│   │   ├── lands.js        # Land drop consistency analysis
-│   │   ├── lumra.js        # Mill 4 ETB trigger simulation
-│   │   ├── mulligan.js     # Optimal mulligan decisions (hypergeometric)
-│   │   ├── portent.js      # Card type reveal probability
-│   │   ├── rashmi.js       # Free cast probability based on curve
-│   │   ├── surge.js        # Primal Surge permanents simulation
-│   │   ├── vortex.js       # Discover chain calculations
-│   │   ├── vow.js          # Kamahl's Vow hits (lands + legendaries)
-│   │   └── wave.js         # Genesis Wave expected permanents
-│   │
-│   └── utils/              # Shared utility modules
-│       ├── deckConfig.js       # Global deck state management (single source of truth)
-│       ├── decklistImport.js   # Scryfall/Moxfield/Archidekt import
-│       ├── simulation.js       # Monte Carlo utilities, caching, debouncing
-│       ├── hypergeometric.js   # Factorial, combinations, probability math
-│       ├── sampleSimulator.js  # Sample simulation, card color mapping
-│       ├── chartHelpers.js     # Chart.js wrapper for standardized charts
-│       ├── components.js       # Reusable UI components (stat cards, grids)
-│       ├── tableUtils.js       # Multi-column comparison tables
-│       ├── calculatorBase.js   # Base infrastructure for calculators
-│       ├── calculatorRegistry.js # Calculator modules, groups, and app lifecycle registry
-│       ├── ui.js               # Collapsible sections, animations, validation
-│       ├── share.js            # URL deep linking, deck encoding
-│       └── bigSpellComparison.js  # Cross-calculator comparison
+│   ├── main.js             # Bootstrap: wires shell, deck state, shortcuts, share links
+│   ├── shell/              # App chrome
+│   │   ├── router.js       # ?tab= routing, history, lazy mount (module + view + Chart.js)
+│   │   ├── sidebar.js      # Navigation, breadcrumbs, deck switcher, mobile drawer
+│   │   ├── pageHeader.js   # Shared page header + "How it works" guide drawer
+│   │   ├── palette.js      # Ctrl/Cmd+K command palette (calculators, cards, actions)
+│   │   ├── deckDialog.js   # Import / saved decks / manual counts dialog
+│   │   ├── overlays.js     # Tooltips, glossary terms, card previews, toasts
+│   │   ├── theme.js        # Light/dark theme
+│   │   └── vendor.js       # On-demand third-party scripts (Chart.js)
+│   ├── calculators/<key>.js  # Page logic: init(), updateUI(), calculate()
+│   ├── views/<key>.js        # Page markup (template), scoped CSS (styles), guide
+│   ├── data/
+│   │   ├── cards.js        # Static card metadata for page headers (Scryfall snapshot)
+│   │   └── glossary.js     # Plain-language terms; term(), cardRef(), escapeHtml()
+│   └── utils/
+│       ├── calculatorRegistry.js  # THE catalog: every page's name, group, question, loaders
+│       ├── deckConfig.js       # Deck state (single source of truth), imports, format, library
+│       ├── deckLibrary.js      # Saved decks in localStorage
+│       ├── decklistImport.js   # Scryfall / Moxfield / Archidekt import + text parsing
+│       ├── format.js           # Commander / 60 / 40 rules (draws, free mulligan)
+│       ├── mana.js             # Mana costs, pips, land colours, colour identity
+│       ├── cardTags.js         # Ramp / draw / removal / … detection from rules text
+│       ├── deckStats.js        # Curve, colour sources, castability, land odds, health checks
+│       ├── deckRadar.js        # Which card calculators apply to a deck
+│       ├── hypergeometric.js   # Exact draw maths
+│       ├── simulation.js       # Shuffling, caching, debounce
+│       ├── components.js       # renderBottomLine, renderHeroStats, sweep tables, sim summaries
+│       ├── chartHelpers.js     # createOrUpdateChart, TX_CHART (theme-synced chart palette)
+│       ├── share.js            # Share links (applyShareUrl / getShareUrl)
+│       └── …                   # discover.js, payback.js, opponentState.js, bigSpellComparison.js, …
 │
 ├── css/
-│   ├── base.css            # Core styles, CSS variables, calculator themes
-│   ├── components.css      # Panels, buttons, navigation, tabs
-│   ├── mobile.css          # Responsive breakpoints, touch optimization
-│   └── ux-enhancements.css # Animations, transitions, accessibility
+│   ├── tokens.css          # ALL colours, type, radii, shadows — dark + light themes
+│   ├── base.css            # Reset, typography, layout primitives
+│   ├── components.css      # Calculator internals (panels, tables, sliders, charts)
+│   ├── shell.css           # Shell, page header, dialogs, palette, drawer, overview
+│   ├── mobile.css          # Viewport-level responsive + print
+│   └── ux-enhancements.css # Collapsibles, skeletons, small animations
 │
-├── tests/
-│   ├── node-test-helper.js     # Mock DOM/window for Node.js testing
-│   ├── calculators/            # Calculator test files (*.node.test.js)
-│   ├── utils/                  # Utility test files
-│   └── performance/            # Benchmark tests
-│
-├── serverless/
-│   └── worker.js           # Cloudflare Worker (serverless functions)
-│
-└── .github/workflows/
-    └── deploy.yml          # CI/CD: tests → GitHub Pages deploy
+├── scripts/update-sw-manifest.mjs  # Regenerates sw.js assets + index.html modulepreloads
+└── tests/
+    ├── node-test-helper.js # DOM mocks for headless tests
+    ├── calculators/ utils/ performance/   # *.node.test.js (node:test)
+    └── e2e/app.spec.js     # Playwright browser tests
 ```
 
 ---
 
 ## Architecture
 
-### Data Flow
+### Data flow
 ```
-DeckListImport → DeckConfig (global state) → Each Calculator
-                                           → Share.js (URL encoding)
-                                           → BigSpellComparison
+decklistImport ─▶ deckConfig (state + format + library) ─▶ calculators (on the visible page)
+                                                        ─▶ shell (deck switcher, nav marks, header badge)
+                                                        ─▶ share.js (links)
 ```
 
-### Calculator Module Pattern
-Each calculator exports three functions:
-- `init()` - Initialize inputs and event listeners
-- `calculate()` - Run probability calculations (cached by deck hash)
-- `updateUI()` - Render results with Chart.js
+### Pages are lazy
+The router renders the shared header, injects `views/<key>.js` → `template`
+into `#<key>-tab .calc-body`, injects `styles`, then calls the module's
+`init()` once and `updateUI()` on every visit. A calculator's DOM does not
+exist until its page has been opened — **never read another calculator's DOM**
+(give it a pure function that takes explicit inputs instead).
 
-### Theme System
-Each calculator has CSS variables in `base.css`:
-- `--[name]-primary`, `--[name]-secondary`, `--[name]-accent`
-- `--[name]-bg-start`, `--[name]-bg-end` (gradient)
-- `--[name]-border`
+### Design system
+Tokens in `css/tokens.css`; charts read the same tokens at runtime
+(`applyChartTheme`). One accent (`--tx-accent`) marks the active / primary /
+recommended thing; `--tx-good` / `--tx-warn` / `--tx-bad` carry meaning about
+results only. Sans (Geist) for reading, mono (Geist Mono) for numbers, serif
+(Crimson Pro) only for card rules text. No hex colours outside tokens.css and
+chartHelpers.js.
 
 ---
 
@@ -139,48 +146,32 @@ When making code changes:
 
 ## Adding New Calculators
 
-When adding a new calculator to this project, you MUST complete ALL of the following steps:
+Complete ALL of these (see docs/calculator-anatomy.md for the details):
 
-1. **Create Calculator File**: `js/calculators/[name].js`
-   - Implement core calculation logic
-   - Export `init()`, `calculate()`, and `updateUI()` functions
-   - Follow existing calculator patterns (see `lumra.js` or `wave.js`)
+1. **Registry entry** in `js/utils/calculatorRegistry.js`: name, 2–3 letter
+   `short`, `group`, `card` (add the card to `js/data/cards.js` if new),
+   `question` (ends in "?"), `summary`, `method`, `keywords`, and the
+   `load` / `view` dynamic imports. Navigation, search, the header and the
+   overview pick it up automatically — do NOT add markup to `index.html`.
+2. **Logic**: `js/calculators/<key>.js` exporting `init()`, `updateUI()` and
+   `calculate()`; use `registerCalculator()` / `isCalculatorActive()`.
+   Lead results with `renderBottomLine()` built by a pure, tested function.
+3. **View**: `js/views/<key>.js` exporting `template`, `styles` (scoped to
+   `#<key>-tab`, tokens only) and `guide` (intro, howToRead, method,
+   assumptions, tips, terms).
+4. **Deck radar**: if it is about a specific card, add it to `TRIGGER_CARDS`
+   and `STRUCTURAL_SIGNALS` in `js/utils/deckRadar.js` and set
+   `cardInDeck: true`.
+5. **Share links**: export `getShareParams()` / `applyShareParams(params)`
+   from the module (validate and clamp). Only legacy inputs live in
+   `SLIDERS` in `js/utils/share.js`.
+6. **Tests**: `tests/calculators/<key>.node.test.js`; the registry test
+   checks the files and metadata exist.
+7. **Regenerate** `npm run sw:manifest` (offline asset list + preloads).
+8. **CHANGELOG.md** entry.
 
-2. **Add HTML Section**: Update `index.html`
-   - Add calculator tab content with unique ID
-   - Add a `.tx-tab` button to the terminal tab row with a 3-letter code and `data-group`
-   - (The legacy sub-nav pills and dropdown selector were removed in v2.8.2 — the
-     terminal tab row is the only navigation. Do not re-add them.)
-
-3. **Register the Calculator**: Update `js/utils/calculatorRegistry.js`
-   - Import the calculator module
-   - Add one `CALCULATORS` entry with its display name, group, and module
-   - Do not add calculator-specific initialization or switching branches to
-     `js/main.js`; the registry drives both operations
-
-4. **Create Theme Styles**: Update `css/base.css`
-   - Add CSS variables for calculator theme (primary, secondary, accent, bg colors, border)
-   - Add `body.theme-[name]` rule with gradient background and CSS variables
-   - Add `.theme-[name] h1` rule with color and text-shadow
-   - Add `.theme-[name] h2` rule with color and border-bottom
-   - Add `.theme-[name] *:focus-visible` rule with outline-color
-
-5. **Update Share Functionality**: Update `js/utils/share.js`
-   - Add calculator name to `VALID_TABS` array
-   - Add any slider parameters to `sliderMap` in `parseShareUrl()`
-   - Add slider entries to `sliders` array in `getShareUrl()`
-
-6. **Write Tests**: Create `tests/calculators/[name].node.test.js`
-   - Cover core calculation functions
-   - Test edge cases and boundary conditions
-   - Ensure all tests pass with `npm test`
-
-7. **Update Documentation**: Update `CHANGELOG.md`
-   - Create new version section following semantic versioning
-   - Document all features under **Added** category
-   - Be specific and descriptive
-
-**CRITICAL**: Do NOT skip any of these steps. Missing CSS or share.js updates will cause the calculator to not work properly.
+**CRITICAL**: Do NOT skip the registry, tests, sw manifest or changelog steps —
+the test suite fails if the registry, files or manifest disagree.
 
 ## Testing Framework
 
@@ -203,6 +194,7 @@ import assert from 'node:assert';
 - `npm run test:e2e` - Run Playwright browser smoke tests
 - `npm run check` - Run lint, unit, and browser suites
 - `npm run test:watch` - Watch mode
+- `npm run sw:manifest` - Regenerate sw.js assets and index.html modulepreloads
 - `npm run dev` - Local dev server
 
 ## Code Quality Standards
@@ -225,8 +217,9 @@ import assert from 'node:assert';
 ## External Dependencies
 
 **CDN:**
-- Chart.js - Data visualization
-- Google Fonts (Cinzel, Crimson Text)
+- Chart.js 4.6.1 (pinned, loaded on demand by js/shell/vendor.js)
+- Google Fonts (Geist, Geist Mono, Crimson Pro)
+- LZ-String (share-link compression)
 
 **APIs:**
 - Scryfall API - Card data lookups
@@ -242,7 +235,10 @@ import assert from 'node:assert';
 | `deckConfig.js` | Global deck state | Always access deck counts through this |
 | `simulation.js` | Shuffling, caching, debounce | Monte Carlo simulations |
 | `hypergeometric.js` | Math functions | Probability calculations |
-| `share.js` | URL encoding | Deep linking, must update for new calculators |
-| `components.js` | UI builders | Stat cards, grids, insight boxes |
+| `share.js` | Share links | Prefer module `getShareParams`/`applyShareParams` hooks |
+| `components.js` | UI builders | renderBottomLine, renderHeroStats, sweep tables, simulation summaries |
 | `chartHelpers.js` | Chart.js wrapper | Creating/updating charts |
-| `calculatorRegistry.js` | Calculator metadata and lifecycle | Registering calculators with the app shell |
+| `calculatorRegistry.js` | Page catalog + lazy loaders | Every page needs one entry |
+| `deckStats.js` / `mana.js` / `cardTags.js` | Exact deck analysis | Curve, colours, castability, roles — any deck |
+| `format.js` | Format rules | Cards seen by turn, free mulligan, play/draw |
+| `glossary.js` | Plain-language terms | `term()` tooltips and `cardRef()` previews in output |

@@ -4,6 +4,7 @@
  */
 
 import { renderDistributionChart } from './sampleSimulator.js';
+import { hasCardList } from './deckConfig.js';
 
 /**
  * Render a horizontal hero-stat row (the big terminal numerics used across the
@@ -310,15 +311,18 @@ export function renderInsightBox(title, content, footer = '') {
  * @returns {string} - HTML string
  */
 export function generateSampleRevealsHTML(prefix, title, options = {}) {
+    // Simulations need real card records. Decided at render time (pages mount
+    // lazily, after any import) and kept in sync by main.js on deck changes.
     const { requiresImport = true } = options;
-    
+    const locked = requiresImport && !hasCardList();
+
     return `
         <div class="tx-h"><span>${title}</span></div>
         <div class="tx-sim-controls">
             <label for="${prefix}-sample-count">Simulations</label>
             <input type="number" id="${prefix}-sample-count" min="1" max="10000" value="500">
-            <button id="${prefix}-draw-reveals-btn" class="import-btn run-sim-btn" ${requiresImport ? 'disabled' : ''}>Run simulations</button>
-            ${requiresImport ? `<span class="sim-import-note">Import a deck to enable</span>` : ''}
+            <button id="${prefix}-draw-reveals-btn" class="import-btn run-sim-btn"${requiresImport ? ' data-requires-import' : ''}${locked ? ' disabled' : ''}>Run simulations</button>
+            ${requiresImport ? `<span class="sim-import-note"${locked ? '' : ' hidden'}>Import a decklist to enable</span>` : ''}
             <span class="tx-sim-controls-hint">1–10,000</span>
         </div>
         <div id="${prefix}-reveals-display"></div>

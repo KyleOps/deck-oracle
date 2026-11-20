@@ -76,6 +76,14 @@ export const CALCULATORS = Object.freeze({
         method: 'exact', keywords: ['lands', 'mana screw', 'flood', 'land count'],
         load: () => import('../calculators/lands.js'), view: () => import('../views/lands.js')
     },
+    compare: {
+        name: 'Compare Decks', short: 'CMP', group: 'deck', card: 'Clone',
+        question: 'How do two decks — or two versions of one deck — differ?',
+        summary: 'Any two saved decks side by side: health checks, curve overlay and a card-by-card diff.',
+        method: 'exact', keywords: ['compare', 'diff', 'versions', 'before after', 'saved decks', 'upgrade'],
+        charts: false,
+        load: () => import('../calculators/compare.js'), view: () => import('../views/compare.js')
+    },
 
     // ── ENGINES — recurring permanents ───────────────────────────────────────
     wildpair: {

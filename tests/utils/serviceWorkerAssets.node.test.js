@@ -58,6 +58,13 @@ describe('service worker asset manifest', () => {
         assert.ok(lz && staticAssets.includes(lz), 'LZ-String is pre-cached');
     });
 
+    it('preloads the whole startup import graph (npm run sw:manifest)', async () => {
+        const { preloadTags } = await import('../../scripts/update-sw-manifest.mjs');
+        const html = readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
+        const block = html.match(/<!-- BEGIN MODULEPRELOAD -->\r?\n([\s\S]*?)\r?\n\s*<!-- END MODULEPRELOAD -->/)?.[1];
+        assert.equal(block?.replace(/\r\n/g, '\n'), preloadTags());
+    });
+
     it('is regenerated from disk (npm run sw:manifest)', async () => {
         const { buildAssetList } = await import('../../scripts/update-sw-manifest.mjs');
         assert.deepEqual(staticAssets, buildAssetList());

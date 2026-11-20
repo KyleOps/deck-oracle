@@ -1,26 +1,24 @@
 {
-  "name": "Deck Oracle",
+  "name": "Deck Oracle — MTG probability tools",
   "short_name": "Deck Oracle",
-  "start_url": "./index.html",
+  "description": "Exact odds for your Magic: The Gathering deck — draws, mana, opening hands, mulligans, land drops and big spells.",
+  "id": "./",
+  "start_url": "./?tab=overview",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#0a0a12",
-  "theme_color": "#0a0a12",
-  "description": "Advanced MTG probability calculators for mulligan strategy, land drops, and card-specific probabilities.",
+  "background_color": "#0b0d0c",
+  "theme_color": "#0b0d0c",
+  "categories": ["games", "utilities"],
   "icons": [
-    {
-      "src": "images/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "images/icon.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "images/icon.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml"
-    }
+    { "src": "images/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "images/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "images/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "images/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Deck Overview", "url": "./?tab=overview", "icons": [{ "src": "images/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Draw Odds", "url": "./?tab=odds", "icons": [{ "src": "images/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Mana Base", "url": "./?tab=manabase", "icons": [{ "src": "images/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Opening Hands", "url": "./?tab=hands", "icons": [{ "src": "images/icon-192.png", "sizes": "192x192" }] }
   ]
 }

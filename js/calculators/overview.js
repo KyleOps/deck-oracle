@@ -9,7 +9,7 @@
 
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
-import { analyzeDeckStats, healthChecks } from '../utils/deckStats.js';
+import { analyzeDeckStats, healthChecks, featuredCardName } from '../utils/deckStats.js';
 import { FORMATS, detectFormat } from '../utils/format.js';
 import { TAGS } from '../utils/cardTags.js';
 import { COLOR_NAMES } from '../utils/mana.js';
@@ -28,7 +28,7 @@ const TYPE_VAR = {
     enchantments: 'enchantment', instants: 'instant', sorceries: 'sorcery', lands: 'land', other: 'artifact'
 };
 const STATUS_LABEL = { good: 'Looks good', warn: 'Worth a look', bad: 'Needs attention', info: 'Note' };
-const GENERIC_TOOLS = ['odds', 'manabase', 'hands', 'mulligan', 'lands'];
+const GENERIC_TOOLS = ['odds', 'manabase', 'hands', 'mulligan', 'lands', 'compare'];
 
 let onPlay = true;
 let debouncedUpdate = null;
@@ -37,13 +37,6 @@ const pct = (p, digits = 0) => `${(p * 100).toFixed(digits)}%`;
 
 function manaPip(color) {
     return `<span class="ms ms-${color.toLowerCase()}" aria-hidden="true">${color}</span>`;
-}
-
-function featuredCard(config) {
-    if (config.commanderName) return config.commanderName;
-    const cards = Object.values(config.cardsByName ?? {}).filter(c => Number(c?.count) > 0 && c.category !== 'lands');
-    const legend = cards.filter(c => /legendary creature/i.test(c.type_line ?? '')).sort((a, b) => (b.cmc ?? 0) - (a.cmc ?? 0))[0];
-    return (legend ?? cards.sort((a, b) => (b.cmc ?? 0) - (a.cmc ?? 0))[0])?.name ?? null;
 }
 
 function artUrl(name) {
@@ -64,15 +57,21 @@ function sourceLink(config) {
 // ── Sections ────────────────────────────────────────────────────────────────
 
 function renderHero(config, stats, format) {
-    const featured = featuredCard(config);
+    const featured = featuredCardName(config);
     const pref = config.format ?? 'auto';
     const detected = FORMATS[detectFormat({ deckSize: stats.deckSize, commanderName: config.commanderName })];
     const name = config.deckName || (config.commanderName ? `${config.commanderName}` : 'Your deck');
     const identity = stats.identity.length
         ? stats.identity.map(manaPip).join('')
         : '<span class="ov-muted">Colourless</span>';
+    const isExample = !config.deckId && config.importUrl === DeckConfig.DEFAULT_DECK_URL;
 
     return `
+        ${isExample ? `
+        <div class="ov-welcome" role="note">
+            <span class="ov-welcome-text"><strong>You’re looking at an example deck.</strong> Load your own from Moxfield, Archidekt or a pasted list — every page updates to match.</span>
+            <button class="btn btn-primary btn-sm" type="button" data-ov-deck>Load your deck</button>
+        </div>` : ''}
         ${featured ? `<div class="ov-hero-art" style="background-image:url('${artUrl(featured)}')" aria-hidden="true"></div>` : ''}
         <div class="ov-hero-body">
             <div class="ov-eyebrow">${escapeHtml(format.label)} deck ${sourceLink(config)}</div>
@@ -119,7 +118,19 @@ function renderFindings(findings) {
                 </div>
                 <h3 class="finding-title">${escapeHtml(f.title)}</h3>
                 <p class="finding-detail">${f.detail}</p>
+                ${findingLink(f.id)}
             </article>`).join('');
+}
+
+/** Each check links to the page that explains it in depth. */
+function findingLink(id) {
+    const tab = id === 'lands' ? 'lands'
+        : id === 'opener' ? 'hands'
+            : id.startsWith('color-') ? 'manabase'
+                : id.startsWith('role-') ? 'odds'
+                    : null;
+    if (!tab || !CALCULATORS[tab]) return '';
+    return `<a class="finding-link" href="?tab=${tab}" data-tab-link="${tab}">${escapeHtml(CALCULATORS[tab].name)} →</a>`;
 }
 
 function renderCurve(stats) {

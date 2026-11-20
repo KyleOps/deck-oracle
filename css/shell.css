@@ -818,9 +818,9 @@
     font-size: 14px;
 }
 
-.bottom-line.tone-good .bottom-line-icon { background: var(--good-soft); color: var(--tx-good); }
-.bottom-line.tone-warn .bottom-line-icon { background: var(--warn-soft); color: var(--tx-warn); }
-.bottom-line.tone-bad .bottom-line-icon { background: var(--bad-soft); color: var(--tx-bad); }
+.bottom-line.tone-good .bottom-line-icon { background: var(--tx-good); color: var(--tx-panel); }
+.bottom-line.tone-warn .bottom-line-icon { background: var(--tx-warn); color: var(--tx-panel); }
+.bottom-line.tone-bad .bottom-line-icon { background: var(--tx-bad); color: var(--tx-panel); }
 
 .bottom-line-text {
     font-size: clamp(14px, 1.2vw, 16px);
@@ -1093,26 +1093,11 @@
 }
 
 .deck-dialog .type-grid {
-    display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 14px;
+    margin: 14px 0 0;
 }
 
-.deck-dialog .type-input { display: grid; gap: 4px; }
-.deck-dialog .type-input label { font-size: var(--t-label); color: var(--tx-mid); font-weight: 600; }
-.deck-dialog .type-input input {
-    height: 38px;
-    padding: 0 10px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule-hi);
-    border-radius: var(--radius-sm);
-    color: var(--tx-bright);
-    font-family: var(--font-mono);
-    width: 100%;
-}
-.deck-dialog .type-input input:focus { outline: none; border-color: var(--tx-accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.deck-dialog .deck-total { margin-top: 12px; font-size: var(--t-xs); color: var(--tx-dim); }
+.deck-dialog .deck-total { margin-top: 14px; }
 
 .import-progress {
     height: 3px;
@@ -1364,6 +1349,22 @@
 :root[data-theme="light"] .ov-hero-art { opacity: 0.38; }
 
 .ov-hero-body { position: relative; max-width: 720px; }
+
+.ov-welcome {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin: calc(-1 * clamp(22px, 3vw, 36px)) calc(-1 * clamp(22px, 3vw, 36px)) 24px;
+    padding: 12px clamp(22px, 3vw, 36px);
+    background: var(--accent-soft);
+    border-bottom: 1px solid color-mix(in srgb, var(--tx-accent) 30%, transparent);
+    font-size: var(--t-sm);
+    color: var(--tx-text);
+}
 
 .ov-eyebrow {
     font-size: var(--t-label);
@@ -1617,10 +1618,12 @@
     transition: width 0.5s var(--ease-out);
 }
 
-.tone-good { background: var(--tx-good); }
-.tone-warn { background: var(--tx-warn); }
-.tone-bad { background: var(--tx-bad); }
-.tone-flat { background: var(--tx-flat); }
+/* Tone fills: only on bar/meter fill elements, so a .tone-* class on a
+   container (e.g. the bottom-line banner) never paints its background. */
+:where([class*="fill"]).tone-good { background: var(--tx-good); }
+:where([class*="fill"]).tone-warn { background: var(--tx-warn); }
+:where([class*="fill"]).tone-bad { background: var(--tx-bad); }
+:where([class*="fill"]).tone-flat { background: var(--tx-flat); }
 
 .ov-hands-split {
     display: grid;
@@ -1631,6 +1634,23 @@
 
 @container shell (max-width: 640px) {
     .ov-hands-split { grid-template-columns: minmax(0, 1fr); }
+
+    /* Health checks become a swipeable row instead of a long stack. */
+    .ov-findings {
+        grid-template-columns: none;
+        grid-auto-flow: column;
+        grid-auto-columns: 84%;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        overscroll-behavior-x: contain;
+        padding-bottom: 6px;
+        margin-inline: calc(-1 * var(--page-pad));
+        padding-inline: var(--page-pad);
+        scroll-padding-inline: var(--page-pad);
+        scrollbar-width: none;
+    }
+    .ov-findings::-webkit-scrollbar { display: none; }
+    .finding { scroll-snap-align: start; }
 }
 
 .mini-table { width: 100%; border-collapse: collapse; font-size: var(--t-xs); }
@@ -1746,3 +1766,24 @@
     .sk-row { grid-template-columns: minmax(0, 1fr); }
     .toasts { left: 16px; right: 16px; align-items: stretch; }
 }
+
+/* Bare <h2> section labels inside legacy panels act as panel header bands. */
+.calc-body .panel > h2:not([class]),
+.calc-body .panel-content > h2:not([class]),
+.calc-body .portent-grid > div > h2:not([class]) {
+    margin: 0;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--tx-rule);
+}
+
+.finding-link {
+    margin-top: auto;
+    padding-top: 4px;
+    align-self: flex-start;
+    font-size: var(--t-xs);
+    font-weight: 600;
+    color: var(--tx-accent);
+    text-decoration: none;
+}
+
+.finding-link:hover { text-decoration: underline; }

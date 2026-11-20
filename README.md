@@ -1,47 +1,78 @@
 # Deck Oracle
 
-A comprehensive suite of probability calculators for **Magic: The Gathering**, designed to help deck builders analyze consistency, optimize land counts, and evaluate the potential value of specific spells and mechanics.
+Exact odds for your Magic: The Gathering deck. Import a list from Moxfield,
+Archidekt or plain text and Deck Oracle tells you, in plain words, how your
+deck actually plays: how often you hit land drops, whether your lands cast
+your spells on curve, what your opening hands look like, and what your big
+payoff cards really do.
 
-## 🌟 Features
+Every page answers one question, says the answer first, then shows the
+evidence.
 
-This application includes specialized calculators for various deck building scenarios:
+## What's inside
 
-*   **⚡ Portent of Calamity:** Analyzes the probability of getting a "free spell" (revealing 4+ distinct card types) and the expected value of X.
-*   **🌿 Primal Surge:** Simulates how much of your deck you can expect to put onto the battlefield before hitting a non-permanent.
-*   **🌊 Genesis Wave:** Calculates the expected number of permanents entering the battlefield for a given X value.
-*   **🌀 Monstrous Vortex:** Simulates the "Discover" mechanic value when casting power 5+ creatures, including chain reactions.
-*   **🌌 Rashmi, Eternities Crafter:** Estimates the probability of casting a spell for free off the top of your library based on your deck's mana curve.
-*   **🏔️ Land Drops:** Analyzes the consistency of hitting land drops on curve and the quality of opening hands.
-*   **🃏 Mulligan Strategy:** Uses hypergeometric distribution to determine optimal mulligan decisions based on specific hand requirements (e.g., "Need 3 Lands and 1 Ramp spell").
+**Your deck** (works with any deck: Commander, 60-card or 40-card)
 
-## 🚀 Usage
+| Page | Answers |
+|------|---------|
+| Deck Overview | How healthy is this deck's mana, curve and card mix? |
+| Draw Odds | What are the chances I draw a card, or one of a group, by a given turn? |
+| Mana Base | Can my lands cast my spells on curve? |
+| Opening Hands | What do my opening hands actually look like? (sample hands with card images, London mulligan practice) |
+| Mulligan Planner | Which hands should I keep, and how often will I find one? |
+| Land Drops | How reliably will I hit a land drop every turn? |
 
-This is a static web application.
+**Engines**: Wild Pair, Monstrous Vortex, Chimil, Rashmi, and Head to Head (Wild Pair vs Vortex)
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/kyleops/deck-oracle.git
-    cd deck-oracle
-    ```
-2.  **Run the application:**
-    *   Simply open `index.html` in your modern web browser.
-    *   OR serve it using a local development server (e.g., `npx serve`, `python3 -m http.server`, or VS Code Live Server).
+**Big spells**: Portent of Calamity, Genesis Wave, Kamahl's Druidic Vow, Primal Surge, Abstract Performance, Lumra
 
-## 📂 Project Structure
+**Multiplayer**: Ensnared by the Mara, Dream Harvest, Mind's Dilation (these read your opponents' decklists)
 
-*   `index.html`: Main entry point and layout.
-*   `css/`: Stylesheets for themes, layout, and components.
-*   `js/`: Application logic.
-    *   `main.js`: Core initialization and tab management.
-    *   `calculators/`: Individual calculator logic modules.
-    *   `utils/`: Shared utility functions (Hypergeometric math, simulation helpers, chart rendering, deck parsing).
+Also included:
 
-## 🛠️ Technologies
+- **Deck library**: every import is saved in your browser; switch decks from the sidebar.
+- **Format aware**: Commander (free first mulligan, everyone draws on turn one), 60-card and 40-card (on the play or the draw).
+- **How it works**: every page has a drawer explaining the method, assumptions and terms.
+- **Search everything**: press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> to jump to any calculator, card or action.
+- Light and dark themes, card image previews on hover, share links, offline support (PWA).
 
-*   **Vanilla JavaScript (ES6+):** No build steps or heavy frameworks required.
-*   **Chart.js:** For data visualization.
-*   **CSS Variables:** For theming (Portent Purple, Surge Green, etc.).
+## Running it
 
-## 🤝 Contributing
+It's a static site: no build step.
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+```bash
+npm install        # dev tooling only (tests, lint, local server)
+npm run dev        # http://localhost:3000
+```
+
+## Development
+
+```bash
+npm test           # unit tests (node:test)
+npm run test:e2e   # browser tests (Playwright, Chromium)
+npm run lint       # ESLint
+npm run check      # all of the above
+npm run sw:manifest  # regenerate the offline asset list and module preloads after adding files
+```
+
+Architecture in one paragraph: `index.html` is only the app shell. `js/main.js`
+wires the shell (`js/shell/`): router, sidebar, command palette, deck dialog,
+guide drawer, overlays, theme. Calculators are listed in
+`js/utils/calculatorRegistry.js` and loaded on first visit: logic in
+`js/calculators/<key>.js`, markup, styles and guide in `js/views/<key>.js`.
+Deck state lives in `js/utils/deckConfig.js`. The pure analysis modules
+(`mana.js`, `cardTags.js`, `deckStats.js`, `format.js`, `hypergeometric.js`)
+are fully unit-tested. See [docs/calculator-anatomy.md](docs/calculator-anatomy.md)
+before adding a calculator.
+
+## Credits
+
+Card data and images come from [Scryfall](https://scryfall.com). Land-count
+guidance uses Frank Karsten's published regressions. Deck Oracle is unofficial
+Fan Content permitted under the Wizards of the Coast Fan Content Policy. It is
+not approved or endorsed by Wizards. Portions of the materials used are property
+of Wizards of the Coast. ©Wizards of the Coast LLC.
+
+## License
+
+MIT

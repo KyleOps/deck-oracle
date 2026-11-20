@@ -224,19 +224,19 @@
     --accent-soft:   rgba(154, 95, 0, 0.1);
     --accent-ink:    #ffffff;
 
-    --tx-good:  #1a7f45;
-    --tx-warn:  #b0611b;
-    --tx-bad:   #c2412d;
+    --tx-good:  #146b3a;
+    --tx-warn:  #9a5414;
+    --tx-bad:   #b23a28;
     --tx-flat:  #66727a;
-    --good-soft: rgba(26, 127, 69, 0.1);
-    --warn-soft: rgba(176, 97, 27, 0.1);
-    --bad-soft:  rgba(194, 65, 45, 0.1);
+    --good-soft: rgba(20, 107, 58, 0.09);
+    --warn-soft: rgba(154, 84, 20, 0.09);
+    --bad-soft:  rgba(178, 58, 40, 0.09);
     --tx-green-dim: #bfe0cb;
 
-    --series-1: #1a7f45;
+    --series-1: #146b3a;
     --series-2: #9a5f00;
     --series-3: #2f6f9f;
-    --series-4: #c2412d;
+    --series-4: #b23a28;
     --series-5: #7457a3;
     --series-6: #2c7f76;
 

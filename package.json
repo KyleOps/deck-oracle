@@ -1,6 +1,6 @@
 {
     "name": "deck-oracle",
-    "version": "2.13.0",
+    "version": "3.0.0",
     "type": "module",
     "description": "Deck Oracle - Magic: The Gathering probability calculators",
     "main": "index.html",
@@ -13,7 +13,7 @@
         "test:e2e": "playwright test",
         "test:watch": "nodemon --watch js --watch tests --exec npm run test:legacy",
         "sw:manifest": "node scripts/update-sw-manifest.mjs",
-        "lint": "eslint js serverless sw.js tests/**/*.node.test.js tests/e2e playwright.config.js eslint.config.js",
+        "lint": "eslint js serverless sw.js scripts tests/**/*.node.test.js tests/e2e playwright.config.js eslint.config.js",
         "check": "npm run lint && npm test && npm run test:e2e",
         "dev": "http-server . -p 3000 -c-1",
         "serve": "http-server . -p 3000 -c-1",

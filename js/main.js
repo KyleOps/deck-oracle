@@ -10,6 +10,7 @@ import * as DeckConfig from './utils/deckConfig.js';
 import * as OpponentState from './utils/opponentState.js';
 import * as Share from './utils/share.js';
 import { analyzeDeck } from './utils/deckRadar.js';
+import { featuredCardName } from './utils/deckStats.js';
 import { FORMATS } from './utils/format.js';
 import { debounce } from './utils/simulation.js';
 import { CALCULATORS, DEFAULT_TAB } from './utils/calculatorRegistry.js';
@@ -37,11 +38,18 @@ function deckSummary(config) {
         || (config.importSource === 'manual' ? 'Custom counts' : 'Untitled deck');
     const parts = [`${size} cards`, format.label.replace(/ \(\d+\)/, '')];
     if (config.importSource === 'manual') parts.push('counts only');
-    return { name, meta: parts.join(' · '), artName: config.commanderName };
+    return { name, meta: parts.join(' · '), artName: featuredCardName(config) };
 }
 
 function syncDeckChrome() {
     const config = DeckConfig.getDeckConfig();
+    // Simulation buttons need card records; manual-count decks have none.
+    const locked = !DeckConfig.hasCardList();
+    document.querySelectorAll('.run-sim-btn[data-requires-import]').forEach(btn => {
+        btn.disabled = locked;
+        const note = btn.parentElement?.querySelector('.sim-import-note');
+        if (note) note.hidden = !locked;
+    });
     renderDeckSwitcher(deckSummary(config));
     markRelevance(analyzeDeck(config));
     const tab = currentTab();

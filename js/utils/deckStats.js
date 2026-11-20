@@ -22,6 +22,20 @@ export function deckCards(cardsByName = {}) {
 }
 
 /**
+ * The card that best represents a deck visually: its commander, else its most
+ * expensive legendary creature, else its most expensive nonland card.
+ * @param {{commanderName?:string, cardsByName?:Object}} deck
+ * @returns {string|null}
+ */
+export function featuredCardName(deck = {}) {
+    if (deck.commanderName) return deck.commanderName;
+    const cards = deckCards(deck.cardsByName).filter(c => !isLand(c));
+    const byCost = (a, b) => (Number(b.cmc) || 0) - (Number(a.cmc) || 0) || a.name.localeCompare(b.name);
+    const legend = cards.filter(c => /legendary creature/i.test(c.type_line ?? '')).sort(byCost)[0];
+    return (legend ?? cards.sort(byCost)[0])?.name ?? null;
+}
+
+/**
  * Mana curve of nonland cards, bucketed 0…6 and 7+, split by primary type.
  * @returns {{buckets: Array<{mv:string, total:number, byType:Record<string,number>}>, average:number, median:number, nonlandCount:number}}
  */
@@ -304,7 +318,7 @@ export function healthChecks(stats, { format = FORMATS.commander } = {}) {
             id: `color-${c.color}`,
             color: c.color,
             status: p >= 0.88 ? 'good' : p >= 0.78 ? 'warn' : 'bad',
-            title: `${c.sources} ${colorWord(c.color)} source${c.sources === 1 ? '' : 's'}`,
+            title: `${c.sources} ${colorWord(c.color).toLowerCase()} source${c.sources === 1 ? '' : 's'}`,
             detail: `Your most demanding ${colorWord(c.color).toLowerCase()} card is ${c.heaviest.name} (${c.heaviest.pips} pip${c.heaviest.pips === 1 ? '' : 's'} at mana value ${c.heaviest.mv}). With your lands it has the colours on curve ${Math.round(p * 100)}% of the time${c.needed != null && c.needed > c.sources ? `; about ${c.needed} sources would reach 90%` : ''}.`,
             value: `${Math.round(p * 100)}%`
         });
@@ -315,7 +329,12 @@ export function healthChecks(stats, { format = FORMATS.commander } = {}) {
         for (const [tag, range] of Object.entries(COMMANDER_GUIDELINES)) {
             const n = stats.tags.counts[tag] ?? 0;
             const status = n >= range.low && n <= range.high ? 'good' : n < range.low ? (n < range.low - 3 ? 'bad' : 'warn') : 'info';
-            const label = { ramp: 'ramp pieces', draw: 'card draw sources', removal: 'targeted removal', wipe: 'board wipes' }[tag];
+            const label = {
+                ramp: n === 1 ? 'ramp piece' : 'ramp pieces',
+                draw: n === 1 ? 'card draw source' : 'card draw sources',
+                removal: 'targeted removal',
+                wipe: n === 1 ? 'board wipe' : 'board wipes'
+            }[tag];
             findings.push({
                 id: `role-${tag}`,
                 status,

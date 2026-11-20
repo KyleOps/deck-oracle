@@ -184,5 +184,14 @@ export const CARD_META = Object.freeze({
         "art": "https://cards.scryfall.io/art_crop/front/4/4/4459499c-099b-47d5-b73d-774ff120230f.jpg",
         "image": "https://cards.scryfall.io/normal/front/4/4/4459499c-099b-47d5-b73d-774ff120230f.jpg",
         "artist": ""
+    },
+    "Clone": {
+        "name": "Clone",
+        "cost": "{3}{U}",
+        "type": "Creature — Shapeshifter",
+        "text": "You may have this creature enter as a copy of any creature on the battlefield.",
+        "art": "https://cards.scryfall.io/art_crop/front/8/8/881f6340-865f-437c-983e-df39aad032ab.jpg",
+        "image": "https://cards.scryfall.io/normal/front/8/8/881f6340-865f-437c-983e-df39aad032ab.jpg",
+        "artist": "Kev Walker"
     }
 });

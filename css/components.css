@@ -543,72 +543,55 @@
 
 .type-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1px;
-    background: var(--tx-rule);
-    border: 1px solid var(--tx-rule);
-    margin: 0 14px 14px;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin: 0 16px 16px;
 }
 
 .type-input {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    background: var(--tx-panel);
-    padding: 10px var(--spacing-md);
-    border: none;
-    transition: background 0.1s;
+    display: grid;
+    gap: 5px;
+    align-content: start;
 }
 
-.type-input:hover { background: var(--tx-panel-alt); }
-
 .type-input label {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin: 0;
-    padding: 0;
+    font-size: var(--t-label);
+    font-weight: 600;
+    color: var(--tx-mid);
 }
 
 .type-input input {
-    width: 72px;
-    padding: 4px 6px;
+    width: 100%;
+    height: 36px;
+    padding: 0 10px;
     background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
+    border: 1px solid var(--tx-rule-hi);
+    border-radius: var(--radius-sm);
     color: var(--tx-bright);
-    font-size: var(--t-xs);
-    text-align: center;
-    font-family: inherit;
-    font-feature-settings: 'tnum' 1;
-    transition: border-color 0.12s;
-    border-radius: 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .type-input input:focus {
     outline: none;
-    border-color: var(--tx-amber);
-    box-shadow: none;
+    border-color: var(--tx-accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* ==================== DECK TOTAL ==================== */
 
 .deck-total {
     margin: 0;
-    padding: 8px 14px;
-    font-size: var(--t-label);
-    letter-spacing: 0.10em;
-    text-transform: uppercase;
+    font-size: var(--t-xs);
     color: var(--tx-dim);
-    border-top: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
 }
 
+.deck-total strong,
 .deck-total span {
-    font-weight: 700;
-    color: var(--tx-amber);
-    font-feature-settings: 'tnum' 1;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--tx-bright);
 }
 
 /* ==================== X SLIDER ROW ==================== */
@@ -3126,3 +3109,218 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
     .vs-verdict { flex-direction: column; gap: 8px; }
 }
+
+/* ==================== V3 REFRESH — SHARED PRIMITIVES ====================
+   The calculator primitives above were built for the square, all-mono
+   terminal skin. These rules restate them in the v3 language (rounded,
+   sentence-case labels, mono only for numbers) in one place, so every
+   calculator inherits the new look without per-page overrides. */
+
+.tx-input,
+.input-group input[type="text"],
+.input-group input[type="number"],
+.input-group textarea,
+.calc-body select {
+    border: 1px solid var(--tx-rule-hi);
+    border-radius: var(--radius-sm);
+    background: var(--tx-bg);
+    color: var(--tx-bright);
+    min-height: 34px;
+    padding: 6px 10px;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.calc-body input[type="number"] { font-family: var(--font-mono); }
+
+.tx-input:focus,
+.input-group input:focus,
+.input-group textarea:focus,
+.calc-body select:focus {
+    outline: none;
+    border-color: var(--tx-accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.input-group label,
+.calculator-content .input-group > label {
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--tx-mid);
+}
+
+.input-group input[type="checkbox"],
+.calc-body input[type="checkbox"],
+.calc-body input[type="radio"] {
+    accent-color: var(--tx-accent);
+}
+
+/* Range slider: a rounded track and a real, grabbable thumb */
+.tx-slider,
+.calc-body input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 6px;
+    background: var(--tx-rule);
+    outline: none;
+    cursor: pointer;
+}
+
+.tx-slider::-webkit-slider-thumb,
+.calc-body input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--tx-accent);
+    border: 3px solid var(--tx-panel);
+    box-shadow: 0 0 0 1px var(--tx-accent), var(--shadow-sm);
+    cursor: grab;
+    transition: transform var(--transition-fast);
+}
+
+.tx-slider::-moz-range-thumb,
+.calc-body input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--tx-accent);
+    border: 3px solid var(--tx-panel);
+    box-shadow: 0 0 0 1px var(--tx-accent);
+    cursor: grab;
+}
+
+.tx-slider:active::-webkit-slider-thumb,
+.calc-body input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
+
+.tx-slider:focus-visible::-webkit-slider-thumb,
+.calc-body input[type="range"]:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 1px var(--tx-accent), 0 0 0 5px var(--accent-soft);
+}
+
+/* Preset chips: pills, sentence case; selected = soft accent, not solid */
+.tx-chip {
+    height: 28px;
+    padding: 0 11px;
+    border: 1px solid var(--tx-rule-hi);
+    border-radius: var(--radius-full);
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--tx-mid);
+}
+
+.tx-chip:hover { color: var(--tx-bright); border-color: var(--tx-dim); background: transparent; }
+
+.tx-chip.active {
+    background: var(--accent-soft);
+    color: var(--tx-accent);
+    border-color: color-mix(in srgb, var(--tx-accent) 50%, transparent);
+}
+
+.calculator-content .preset-btn {
+    border-radius: var(--radius-sm);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.calculator-content .preset-btn.active {
+    background: var(--accent-soft);
+    color: var(--tx-accent);
+    border-color: color-mix(in srgb, var(--tx-accent) 50%, transparent);
+    box-shadow: none;
+}
+
+/* Hero stats */
+.tx-stat { padding: 18px 20px; }
+
+.tx-stat-label {
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: var(--track-label);
+    margin-bottom: 4px;
+}
+
+.tx-stat-value { font-family: var(--font-mono); font-weight: 600; }
+
+/* Verdict pill */
+.tx-verdict {
+    padding: 2px 9px;
+    border-radius: var(--radius-full);
+    font-size: var(--t-micro);
+    letter-spacing: 0.06em;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    border-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+/* Recommendation note */
+.tx-rec {
+    font-size: var(--t-xs);
+    padding: 12px 16px;
+    background: var(--tx-panel-alt);
+}
+
+/* Collapsible detail sections */
+.tx-collapse-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--tx-mid);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.tx-collapse-head::before,
+.tx-collapse[open] > .tx-collapse-head::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.tx-collapse[open] > .tx-collapse-head::before { transform: rotate(45deg); }
+.tx-collapse-head:hover { color: var(--tx-bright); background: var(--tx-panel-alt); }
+
+/* Tables */
+.tx-sweep-table thead th,
+.portent-sweep-table thead th,
+.comparison-table th {
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    color: var(--tx-dim);
+}
+
+.tx-sweep-table tbody td,
+.portent-sweep-table tbody td { font-family: var(--font-mono); font-size: var(--t-xs); }
+.tx-sweep-table tbody td.ta-l { font-family: var(--font-body); }
+
+.tx-sweep-table tbody tr.rec-row td:first-child { box-shadow: inset 3px 0 0 var(--tx-accent); }
+
+/* Probability bars inside tables */
+.tx-p-bar { border-radius: 4px; overflow: hidden; }
+.tx-p-fill { border-radius: 4px; }
+
+/* Sample reveal chips */
+.reveal-card {
+    border-radius: var(--radius-xs);
+}
+
+/* Chart wrapper: breathing room inside the card */
+.calc-body .chart-container { padding: 10px 12px 6px; }
