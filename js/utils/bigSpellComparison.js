@@ -85,9 +85,10 @@ export function compareBigSpells(inputX, sourceSpell = 'generic') {
     const waveResult = simulateGenesisWave(deckSize, waveDistribution, waveX);
     const vowResult = simulateVow(deckSize, vowDistribution, vowX, false, cardData);
 
-    // For Primal Surge: model library state after casting (Surge is on stack, not in library)
-    // If deck has at least 1 non-permanent, subtract 1 from both deck size and non-perm count
-    const surgeOnStack = nonPermanentCount >= 1;
+    // Remove the cast copy only when the imported list actually contains it.
+    const surgeOnStack = Object.values(cardData.cardsByName).some(card =>
+        String(card?.name ?? '').trim().toLowerCase() === 'primal surge' && Number(card?.count) > 0
+    );
     const surgeLibrarySize = surgeOnStack ? deckSize - 1 : deckSize;
     const surgeNonPerms = surgeOnStack ? nonPermanentCount - 1 : nonPermanentCount;
     const surgePerms = surgeLibrarySize - surgeNonPerms;

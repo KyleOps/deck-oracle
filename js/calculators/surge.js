@@ -181,23 +181,22 @@ export function calculateSurgePayback(permanentCards, nonPermanents, settings = 
 }
 
 /**
- * Build deck for sampling, excluding one non-permanent (Primal Surge on stack)
+ * Build the sampled library with the cast copy of Primal Surge on the stack.
+ * A list without a named copy already represents a library without Surge;
+ * removing an unrelated instant or sorcery would change the stop odds.
  * @param {Object} cardData - Card data from deck import
- * @returns {Array} - Deck array without one sorcery/instant
+ * @returns {Array} - Deck array without one named Primal Surge, if present
  */
-function buildDeckExcludingSurge(cardData) {
+export function buildDeckExcludingSurge(cardData) {
     const deck = buildDeckFromCardData(cardData);
-
-    // Find and remove one non-permanent (representing Surge on the stack)
-    const nonPermIndex = deck.findIndex(card =>
-        card.types.includes('instant') || card.types.includes('sorcery')
-    );
-
-    if (nonPermIndex !== -1) {
-        deck.splice(nonPermIndex, 1);
-    }
+    const surgeIndex = deck.findIndex(card => isPrimalSurge(card?.name));
+    if (surgeIndex !== -1) deck.splice(surgeIndex, 1);
 
     return deck;
+}
+
+function isPrimalSurge(name) {
+    return String(name ?? '').trim().toLowerCase() === 'primal surge';
 }
 
 /**
@@ -254,10 +253,9 @@ export function simulatePrimalSurge(deckSize, nonPermanents, permanents) {
  * Get current deck configuration from shared config
  * @returns {Object} - Deck configuration
  *
- * NOTE: This models the library state AFTER casting Primal Surge.
- * Surge is on the stack, so:
- * - Library size = deck size - 1
- * - Non-permanents in library = total non-perms - 1 (Surge itself)
+ * For a named decklist, remove a Surge copy only when that copy is listed.
+ * Manual type counts have no card names, so one non-permanent is assumed to
+ * represent the Surge being cast.
  */
 export function getDeckConfig() {
     const config = DeckConfig.getDeckConfig();
@@ -269,10 +267,11 @@ export function getDeckConfig() {
     // For simulation purposes, count instants and sorceries as non-permanents
     const totalNonPermanents = config.instants + config.sorceries;
 
-    // Model the library AFTER casting Surge:
-    // - Surge is on the stack (not in library)
-    // - If deck has at least 1 non-permanent (Surge), subtract it
-    const surgeOnStack = totalNonPermanents >= 1;
+    const namedCards = Object.values(cardData?.cardsByName ?? {});
+    const hasNamedDeck = namedCards.length > 0;
+    const surgeOnStack = hasNamedDeck
+        ? namedCards.some(card => isPrimalSurge(card?.name) && Number(card?.count) > 0)
+        : totalNonPermanents >= 1;
     const deckSize = surgeOnStack ? fullDeckSize - 1 : fullDeckSize;
     const nonPermanents = surgeOnStack ? totalNonPermanents - 1 : totalNonPermanents;
     const permanents = deckSize - nonPermanents;
@@ -332,7 +331,80 @@ export function getDeckConfig() {
         lastDeckHash = deckHash;
     }
 
-    return { deckSize, nonPermanents, permanents, cardData, lands, totalPermCMC, permanentCards };
+    return { deckSize, nonPermanents, permanents, cardData, lands, totalPermCMC, permanentCards, surgeOnStack };
+}
+
+/**
+ * Group every sampled effective value into a small set of contiguous ranges.
+ * The payback threshold is always a range boundary, so a range never mixes
+ * whiffs with paid-back runs. Counts, rather than rounded percentages, drive
+ * the chart and sum exactly to the number of samples.
+ */
+export function buildSurgeValueRanges(values, threshold) {
+    const samples = (values ?? []).filter(Number.isFinite).map(value => Math.max(0, value));
+    if (samples.length === 0) return [];
+
+    const boundary = Math.max(0, Number.isFinite(threshold) ? threshold : CONFIG.DEFAULT_PAYBACK_THRESHOLD);
+    const sortedValues = [...samples].sort((a, b) => a - b);
+    const maxValue = sortedValues.at(-1);
+    // Keep the common outcomes legible even when a rare full-library run is
+    // much larger. The open-ended tail still counts every such result.
+    const coreMax = sortedValues[Math.floor((sortedValues.length - 1) * 0.95)];
+    const niceWidth = (span, targetBins) => {
+        if (span <= 0) return 1;
+        const rough = span / targetBins;
+        const magnitude = 10 ** Math.floor(Math.log10(rough));
+        return [1, 2, 5, 10].map(step => step * magnitude).find(width => width >= rough) ?? 10 * magnitude;
+    };
+
+    const ranges = [];
+    if (boundary > 0) {
+        const width = niceWidth(boundary, 4);
+        for (let i = 0; i < Math.ceil(boundary / width); i++) {
+            ranges.push({ start: i * width, end: Math.min(boundary, (i + 1) * width), count: 0, paidBack: false });
+        }
+    }
+
+    const paidWidth = niceWidth(Math.max(0, coreMax - boundary), 7);
+    const paidBins = coreMax >= boundary ? Math.floor((coreMax - boundary) / paidWidth) + 1 : 1;
+    for (let i = 0; i < paidBins; i++) {
+        ranges.push({ start: boundary + i * paidWidth, end: boundary + (i + 1) * paidWidth, count: 0, paidBack: true });
+    }
+    const tailStart = boundary + paidBins * paidWidth;
+    if (maxValue >= tailStart) {
+        ranges.push({ start: tailStart, end: Infinity, count: 0, paidBack: true });
+    }
+
+    for (const value of samples) {
+        const range = ranges.find(item => value >= item.start && value < item.end);
+        if (range) range.count++;
+    }
+    return ranges;
+}
+
+function renderSurgeValueRanges(ranges, total) {
+    const label = range => Number.isFinite(range.end)
+        ? `${formatNumber(range.start, 2)}–<${formatNumber(range.end, 2)}`
+        : `${formatNumber(range.start, 2)}+`;
+    const whiffs = ranges.filter(range => !range.paidBack).reduce((sum, range) => sum + range.count, 0);
+    const paid = total - whiffs;
+    const segments = ranges.filter(range => range.count > 0).map(range =>
+        `<span class="surge-range-segment ${range.paidBack ? 'is-paid' : 'is-whiff'}" style="flex-grow:${range.count}" title="${label(range)} value: ${formatPercentage(range.count / total, 1)} (${range.count}/${total} runs)"></span>`
+    ).join('');
+    const legend = ranges.map(range => `
+        <li class="surge-range-item ${range.paidBack ? 'is-paid' : 'is-whiff'}">
+            <span class="surge-range-swatch" aria-hidden="true"></span>
+            <span class="surge-range-label">${label(range)} value</span>
+            <span class="surge-range-count">${range.count} runs</span>
+            <strong>${formatPercentage(range.count / total, 1)}</strong>
+        </li>`).join('');
+
+    return `
+        <div class="surge-range-band" aria-hidden="true">${segments}</div>
+        <div class="surge-range-axis" aria-hidden="true"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+        <div class="surge-range-totals"><span class="is-whiff">Whiff ${formatPercentage(whiffs / total, 1)}</span><span class="is-paid">Pays back ${formatPercentage(paid / total, 1)}</span></div>
+        <ul class="surge-range-list" aria-label="All effective value ranges">${legend}</ul>
+        <p class="surge-range-note">All ${total} sampled runs are counted once. Ranges meet at the payback threshold; percentages are rounded.</p>`;
 }
 
 /**
@@ -596,12 +668,8 @@ function refreshSamples() {
     const cardData = config.cardData;
 
     if (cardData && cardData.cardsByName && Object.keys(cardData.cardsByName).length > 0) {
-        const countInput = document.getElementById('surge-sample-count');
-        const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
-        // Exclude Surge from samples (it's on the stack when resolving)
-        const deck = buildDeckExcludingSurge(cardData);
-        generateStableSamples(deck, numSims);
-        runSampleReveals(); // Re-render
+        lastSampleDeckHash = '';
+        runSampleReveals();
     }
 }
 
@@ -623,7 +691,9 @@ export function runSampleReveals() {
     const displayCount = Math.max(1, parseInt(countInput?.value) || 10);
 
     // Create hash to detect deck changes
-    const currentDeckHash = `${config.deckSize}-${config.nonPermanents}`;
+    const currentDeckHash = JSON.stringify(Object.entries(cardData.cardsByName)
+        .map(([name, card]) => [name, card?.count, card?.cmc, card?.type_line])
+        .sort(([nameA], [nameB]) => nameA.localeCompare(nameB)));
     const deckChanged = currentDeckHash !== lastSampleDeckHash;
 
     // Ensure we have enough samples - always generate at least DEFAULT_SAMPLE_SIZE for accurate stats
@@ -690,14 +760,7 @@ export function runSampleReveals() {
     const avgLands = (totalLands / statsCount).toFixed(1);
     const avgEffectiveValue = (effectiveValues.reduce((sum, value) => sum + value, 0) / statsCount).toFixed(1);
 
-    // Bucket effective values so the sample section shows the shape of the
-    // payoff, not just an average that can hide a bimodal whiff/explosion deck.
-    const valueDistribution = [];
-    for (const value of effectiveValues) {
-        const bucket = Math.floor(value);
-        valueDistribution[bucket] = (valueDistribution[bucket] || 0) + 1;
-    }
-    for (let i = 0; i < valueDistribution.length; i++) if (!valueDistribution[i]) valueDistribution[i] = 0;
+    const valueRanges = buildSurgeValueRanges(effectiveValues, paybackSettings.threshold);
 
     const summaryHTML = renderSimulationSummary({
         title: 'Simulation summary',
@@ -709,12 +772,8 @@ export function runSampleReveals() {
             { label: 'Avg raw mana value', value: avgMana, sub: 'printed MV cheated', color: 'var(--tx-accent)' }
         ],
         distribution: {
-            title: 'Effective value — distribution',
-            counts: valueDistribution,
-            totalSims: statsCount,
-            labelFn: (i) => `${i}–<${i + 1} value`,
-            markerFn: (i) => (i < paybackSettings.threshold ? 'WHIFF' : (i === Math.ceil(paybackSettings.threshold) ? 'PAYS BACK' : null)),
-            toneFn: (i) => (i < paybackSettings.threshold ? 'bad' : null)
+            title: 'Effective value — share of sampled runs',
+            html: renderSurgeValueRanges(valueRanges, statsCount)
         },
         outcomes: [
             { label: `Paid for itself (${paybackSettings.threshold}+)`, value: paidBackCount / statsCount, good: true },

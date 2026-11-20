@@ -226,7 +226,13 @@ export function renderSimulationSummary(opts = {}) {
         </div>` : '';
 
     let distHTML = '';
-    if (distribution && Array.isArray(distribution.counts) && distribution.totalSims > 0) {
+    if (distribution && typeof distribution.html === 'string') {
+        distHTML = `
+            <div class="tx-sim-block">
+                <div class="tx-sim-block-title">${distribution.title ?? 'Distribution'}</div>
+                ${distribution.html}
+            </div>`;
+    } else if (distribution && Array.isArray(distribution.counts) && distribution.totalSims > 0) {
         const { counts, totalSims, labelFn, markerFn = () => null, toneFn = null, title: distTitle = 'Distribution' } = distribution;
         distHTML = `
             <div class="tx-sim-block">

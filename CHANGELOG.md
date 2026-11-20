@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2026-09-23
+
+### Added
+- **Complete Primal Surge sample distribution** — a horizontal 100% probability band and compact value ranges show every simulated run, including rare high-value outcomes in an open-ended tail range. Ranges meet at the configured payback threshold so whiffs and paid-back results never share a bucket; the counts add to the full sample size.
+
+### Fixed
+- **Cast Surge in sample libraries** — remove one card named Primal Surge instead of the first arbitrary instant or sorcery. Imported lists without a named Surge are sampled as given, and the exact statistics and big-spell comparison use the same rule.
+- **Stale Surge samples after deck imports** — regenerates stable samples when card names, counts, mana values, or types change, even if the total deck size and non-permanent count stay the same.
+
 ## [2.12.2] - 2026-09-19
 
 ### Added

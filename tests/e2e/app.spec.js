@@ -62,3 +62,35 @@ test('updates the visible calculator after a deck edit', async ({ page }) => {
     await expect(page.locator('#wave-tab')).toHaveClass(/active/);
     expect(errors).toEqual([]);
 });
+
+test('Surge excludes its cast copy and accounts for every sampled outcome', async ({ page }) => {
+    const errors = capturePageErrors(page);
+    await page.goto('/?tab=surge');
+    await expect(page.locator('#surge-tab')).toHaveClass(/active/);
+
+    await page.evaluate(async () => {
+        const DeckConfig = await import('/js/utils/deckConfig.js');
+        DeckConfig.updateDeck({
+            creatures: 2, artifacts: 0, enchantments: 0, planeswalkers: 0,
+            battles: 0, instants: 0, sorceries: 2, lands: 3,
+            actualCardCount: 7,
+            cardsByName: {
+                Cultivate: { name: 'Cultivate', type_line: 'Sorcery', cmc: 3, count: 1 },
+                Surge: { name: 'Primal Surge', type_line: 'Sorcery', cmc: 10, count: 1 },
+                Forest: { name: 'Forest', type_line: 'Basic Land — Forest', cmc: 0, count: 3 },
+                Elves: { name: 'Llanowar Elves', type_line: 'Creature — Elf Druid', cmc: 1, count: 2 }
+            }
+        });
+    });
+
+    const summary = page.locator('#surge-reveals-display');
+    await expect(summary.locator('.surge-range-band')).toBeVisible();
+    await expect(summary.locator('.surge-range-note')).toContainText('All 500 sampled runs are counted once');
+    await expect(summary.locator('.surge-range-item').first()).toBeVisible();
+    expect(await summary.locator('.surge-range-item').evaluateAll(items =>
+        items.reduce((sum, item) => sum + Number(item.querySelector('.surge-range-count').textContent.split(' ')[0]), 0)
+    )).toBe(500);
+    await expect(page.locator('#surge-stats-container')).toContainText('1 non-perm left');
+    expect(await summary.locator('#surge-samples-list .reveal-card').allTextContents()).not.toContain('Primal Surge');
+    expect(errors).toEqual([]);
+});

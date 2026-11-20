@@ -134,4 +134,29 @@ describe('Big Spell Comparison Integration', () => {
         // The expected value should be exactly double
         assert.strictEqual(vow.expected, vowNormal.expected * 2, "Expected value should be exactly double");
     });
+
+    it('uses the same cast-Surge library as the Surge calculator', () => {
+        const original = DeckConfig.getDeckConfig();
+        try {
+            const cardsByName = {
+                Forest: { name: 'Forest', type_line: 'Basic Land — Forest', cmc: 0, count: 2 },
+                Cultivate: { name: 'Cultivate', type_line: 'Sorcery', cmc: 3, count: 1 },
+                Surge: { name: 'Primal Surge', type_line: 'Sorcery', cmc: 10, count: 1 }
+            };
+            DeckConfig.updateDeck({
+                commanderName: 'None', creatures: 0, artifacts: 0, enchantments: 0,
+                planeswalkers: 0, battles: 0, instants: 0, sorceries: 2,
+                lands: 2, actualCardCount: 4, cardsByName, cardDetails: []
+            });
+            const withSurge = compareBigSpells(10, 'surge').spells.find(spell => spell.name === 'Primal Surge');
+            assert.strictEqual(withSurge.expected, 1, 'one remaining stop among two permanents');
+
+            cardsByName.Surge = { name: 'Impulse', type_line: 'Instant', cmc: 2, count: 1 };
+            DeckConfig.updateDeck({ cardsByName });
+            const withoutSurge = compareBigSpells(10, 'surge').spells.find(spell => spell.name === 'Primal Surge');
+            assert.strictEqual(withoutSurge.expected, 2 / 3, 'both nonpermanents remain when Surge is absent');
+        } finally {
+            DeckConfig.updateDeck(original);
+        }
+    });
 });

@@ -3,7 +3,7 @@
  * Provides offline support and faster loading through caching
  */
 
-const CACHE_NAME = 'mtg-calc-v21';
+const CACHE_NAME = 'mtg-calc-v22';
 const STATIC_ASSETS = [
     './',
     'index.html',
