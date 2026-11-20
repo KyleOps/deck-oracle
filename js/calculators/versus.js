@@ -1,7 +1,7 @@
 /**
  * Head to Head — payoff engine comparison
  *
- * Every other tab asks "how good is this card in my deck". This one asks the
+ * Every other page asks "how good is this card in my deck". This one asks the
  * question that actually decides a slot: *given these two cards, which one does
  * more for this deck, and when?*
  *
@@ -24,9 +24,9 @@
  *   because discover *casts* what it finds, a discovered power-5+ creature
  *   triggers it again. That chain is the long tail, and no average will show it.
  *
- * So a mean alone would be an unfair summary of Vortex and a misleadingly modest
- * one for Wild Pair. Both get a mean *and* a spread, and the chain distribution
- * is reported on its own.
+ * So no single number summarises the pair: each side reports how often it fires,
+ * what it gives when it does, and (for the random one) its spread, and the
+ * bottom line says all three.
  *
  * Note the two do not feed each other: Wild Pair puts its creature onto the
  * battlefield without casting it, so it never triggers Vortex, and a creature
@@ -38,19 +38,11 @@ import { formatNumber, formatPercentage } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderHeroStats, renderRecommendation, renderSweepTable } from '../utils/components.js';
-import { buildDeckFromCardData, shuffleDeck, renderDistributionChart } from '../utils/sampleSimulator.js';
-import { sampleDiscover, isPower5Plus, percentileFromDist, mergeDists } from '../utils/discover.js';
-import { cardTotalPT, bucketByTotalPT } from './wildpair.js';
-
-/**
- * Discover runs per distinct mana value.
- *
- * Sized for the percentiles the UI quotes rather than for the mean. At 400 the
- * p95 was already steady to about a mana, but p99 still wandered; the maximum
- * never settles at any sample size, which is why it is no longer reported.
- */
-export const DISCOVER_RUNS = 800;
+import { renderBottomLine, renderSweepTable } from '../utils/components.js';
+import { buildDeckFromCardData, renderDistributionChart } from '../utils/sampleSimulator.js';
+import { discoverForCreature, isPower5Plus, percentileFromDist, mergeDists, foldTail } from '../utils/discover.js';
+import { cardTotalPT, bucketByTotalPT, isCreatureEntry } from './wildpair.js';
+import { cardRef, term, escapeHtml } from '../data/glossary.js';
 
 let curveChart = null;
 
@@ -62,7 +54,8 @@ let curveChart = null;
  * Each exposes `prepare(ctx)` — any deck-wide precomputation — and
  * `evaluate(creature, prepared)`, which returns what casting THAT creature is
  * worth. Adding a third engine means adding one entry here, not a new branch
- * through the rendering.
+ * through the rendering. `series` is the engine's identity colour: an index
+ * into TX_CHART.series for charts and the matching --series-N token for HTML.
  */
 export const ENGINES = {
     wildpair: {
@@ -70,14 +63,13 @@ export const ENGINES = {
         name: 'Wild Pair',
         cost: 6,
         kind: 'tutor',
-        trigger: 'any creature you cast from hand',
-        blurb: 'Search up a creature with the same total power + toughness and put it onto the battlefield.',
+        series: 3,
 
         prepare(ctx) {
             // One lookup from total power + toughness to the members at it.
             const byTotal = new Map();
             for (const row of ctx.groups) byTotal.set(row.total, row);
-            return { byTotal };
+            return { byTotal, groupCardOf: ctx.groupCardOf ?? new Map() };
         },
 
         /**
@@ -95,7 +87,8 @@ export const ENGINES = {
                 };
             }
             // The best OTHER member: the dearest, unless this creature is it.
-            const others = group.cards.filter(c => c !== creature.__groupCard);
+            const self = prepared.groupCardOf.get(creature);
+            const others = group.cards.filter(c => c !== self);
             const pool = others.length ? others : group.cards;
             const best = pool.reduce((m, c) => (c.cmc > m.cmc ? c : m), pool[0]);
             return {
@@ -116,26 +109,22 @@ export const ENGINES = {
         name: 'Monstrous Vortex',
         cost: 4,
         kind: 'discover',
-        trigger: 'creature spells with power 5 or greater',
-        blurb: 'Discover X, where X is that spell\'s mana value — and a discovered power-5+ creature discovers again.',
+        series: 5,
 
         prepare(ctx) {
-            // Discover is random, so its value has to be sampled. Sampling is
-            // keyed by the discover size (the cast creature's mana value), since
-            // that is the only input the mechanic sees.
-            const byCMC = new Map();
-            const distinct = [...new Set(ctx.creatures
-                .filter(c => isPower5Plus(c.power, ctx.treatStarAs5Plus))
-                .map(c => Math.max(0, Math.round(c.cmc))))];
-
-            for (const cmc of distinct) {
-                byCMC.set(cmc, sampleDiscover(
-                    () => shuffleDeck([...ctx.library]),
-                    cmc,
-                    { runs: DISCOVER_RUNS, treatStarAs5Plus: ctx.treatStarAs5Plus }
-                ));
+            // Discover is random, so its value is sampled — once per distinct
+            // creature, with that creature removed from the library (it is on
+            // the stack). discoverForCreature is the same call, library and seed
+            // the Monstrous Vortex page uses, so both pages agree exactly.
+            const byCreature = new Map();
+            for (const c of ctx.creatures) {
+                if (!isPower5Plus(c.power, ctx.treatStarAs5Plus)) continue;
+                const key = creatureKey(c);
+                if (!byCreature.has(key)) {
+                    byCreature.set(key, discoverForCreature(ctx.library, c, { treatStarAs5Plus: ctx.treatStarAs5Plus }));
+                }
             }
-            return { byCMC, treatStarAs5Plus: ctx.treatStarAs5Plus };
+            return { byCreature, treatStarAs5Plus: ctx.treatStarAs5Plus };
         },
 
         /**
@@ -147,12 +136,14 @@ export const ENGINES = {
             if (!isPower5Plus(creature.power, prepared.treatStarAs5Plus)) {
                 return { triggers: false, mean: 0, best: 0, worst: 0, p95: 0, certain: false, detail: 'power under 5' };
             }
-            const stats = prepared.byCMC.get(Math.max(0, Math.round(creature.cmc)));
+            const stats = prepared.byCreature.get(creatureKey(creature));
             if (!stats) return { triggers: false, mean: 0, best: 0, worst: 0, p95: 0, certain: false, detail: 'no sample' };
             return {
                 triggers: true,
                 mean: stats.avgMana,
-                best: stats.bestMana,
+                // A great turn (p99), never the largest run seen: a sampled
+                // maximum grows with the number of shuffles, not with the deck.
+                best: stats.p99Mana,
                 worst: 0,
                 p95: stats.p95Mana,
                 certain: false,
@@ -162,6 +153,10 @@ export const ENGINES = {
         }
     }
 };
+
+function creatureKey(c) {
+    return `${c?.name ?? ''}|${Math.max(0, Math.round(Number(c?.cmc) || 0))}`;
+}
 
 // ==================== ANALYSIS ====================
 
@@ -175,25 +170,30 @@ export const ENGINES = {
  */
 export function buildContext(deck, cardData, treatStarAs5Plus = false) {
     const details = Array.isArray(deck?.cardDetails) ? deck.cardDetails : [];
-    const creatures = details.filter(c =>
-        Array.isArray(c?.allTypes) ? c.allTypes.includes('creatures') : c?.type === 'creatures');
+    const creatures = details.filter(isCreatureEntry);
 
     if (creatures.length === 0) return null;
 
     const { groups } = bucketByTotalPT(details);
 
-    // Link each creature copy to its entry inside its group, so Wild Pair can
-    // exclude the card being cast from its own search without matching by name
-    // (a deck may run two copies with the same name).
-    const cursor = new Map();
+    // Link each creature copy to its own entry inside its group, so Wild Pair
+    // can exclude the card being cast from its own search. Matched on name and
+    // mana value, claiming each entry once, so two copies of one card link to
+    // two entries. (Group entries are sorted by mana value, not deck order, so
+    // linking by position paired creatures with the wrong entry and let a
+    // creature search up itself.) Kept in a map rather than written onto the
+    // cards, which belong to the shared deck state.
+    const groupCardOf = new Map();
+    const claimed = new Set();
+    const byTotal = new Map(groups.map(g => [g.total, g]));
     for (const c of creatures) {
         const total = cardTotalPT(c);
-        if (total === null) continue;
-        const group = groups.find(g => g.total === total);
+        const group = total === null ? null : byTotal.get(total);
         if (!group) continue;
-        const i = cursor.get(total) ?? 0;
-        c.__groupCard = group.cards[i] ?? null;
-        cursor.set(total, i + 1);
+        const cmc = Number.isFinite(c.cmc) ? c.cmc : 0;
+        const entry = group.cards.find(e => !claimed.has(e) && e.name === c.name && e.cmc === cmc) ?? null;
+        if (entry) claimed.add(entry);
+        groupCardOf.set(c, entry);
     }
 
     const library = cardData?.cardsByName ? buildDeckFromCardData(cardData) : [];
@@ -201,6 +201,7 @@ export function buildContext(deck, cardData, treatStarAs5Plus = false) {
     return {
         creatures,
         groups: groups.map(g => ({ total: g.total, count: g.cards.length, cards: g.cards })),
+        groupCardOf,
         library,
         treatStarAs5Plus,
         hasLibrary: library.length > 0
@@ -293,6 +294,47 @@ export function contestedOdds(rows) {
 }
 
 /**
+ * One cast's outcome as a weighted distribution part, for pooling. A miss is a
+ * zero, a certain engine a point mass, and a sampled spread is normalised to
+ * weight 1 so a creature with more samples does not count for more than one cast.
+ */
+function castPart(v) {
+    if (!v.triggers) return { dist: [1], weight: 1 };
+    if (v.certain) {
+        const d = [];
+        d[Math.max(0, Math.round(v.mean))] = 1;
+        return { dist: d, weight: 1 };
+    }
+    return { dist: v.stats?.manaDist || [], weight: 1 / (v.stats?.runs || 1) };
+}
+
+/** Deck-wide figures for one side of the comparison. */
+function sideSummary(rows, side, engine) {
+    const n = rows.length || 1;
+    const fired = rows.filter(r => r[side].triggers);
+    const dist = mergeDists(rows.map(r => castPart(r[side])));
+    // The same spread, but only over the casts where the engine fires: "what
+    // you get WHEN it goes off", without the misses dragging it to zero.
+    const firedDist = mergeDists(fired.map(r => castPart(r[side])));
+    return {
+        engine,
+        fires: fired.length,
+        perCast: rows.reduce((s, r) => s + r[side].mean, 0) / n,
+        perTrigger: fired.length ? fired.reduce((s, r) => s + r[side].mean, 0) / fired.length : 0,
+        coverage: fired.length / n,
+        // Tutor: its true best card. Discover: a great turn (p99), never a
+        // sampled maximum. Kept for the peaks section's "tutor's cap" marker.
+        best: rows.reduce((m, r) => Math.max(m, r[side].best), 0),
+        p95: percentileFromDist(dist, 0.95),
+        median: percentileFromDist(dist, 0.5),
+        firedMedian: percentileFromDist(firedDist, 0.5),
+        firedP95: percentileFromDist(firedDist, 0.95),
+        dist,
+        certain: engine.kind !== 'discover'
+    };
+}
+
+/**
  * Evaluate both engines across every creature in the deck.
  *
  * @param {Object} ctx - Result of buildContext
@@ -330,65 +372,7 @@ export function compareEngines(ctx, idA, idB) {
         };
     }).sort((p, q) => p.cmc - q.cmc || p.name.localeCompare(q.name));
 
-    const n = rows.length || 1;
-    const sum = (f) => rows.reduce((acc, r) => acc + f(r), 0);
-
-    const trigA = rows.filter(r => r.a.triggers);
-    const trigB = rows.filter(r => r.b.triggers);
-
-    // Distribution of "value from one creature cast", pooled over the creature
-    // base, for each side. Built the same way for both so the percentiles are
-    // genuinely comparable: a certain engine contributes a point mass, a random
-    // one contributes its whole sampled spread, and a cast that triggers nothing
-    // contributes a zero.
-    const distFor = (side) => mergeDists(rows.map(r => {
-        const v = r[side];
-        if (!v.triggers) return { dist: [1], weight: 1 };
-        if (v.certain) {
-            const d = [];
-            d[Math.max(0, Math.round(v.mean))] = 1;
-            return { dist: d, weight: 1 };
-        }
-        // Normalise each sampled spread to weight 1 so a creature with more
-        // samples does not count for more than one cast.
-        const runs = v.stats?.runs || 1;
-        return { dist: v.stats?.manaDist || [], weight: 1 / runs };
-    }));
-
-    const distA = distFor('a');
-    const distB = distFor('b');
-
-    // Value per creature cast, averaged over the whole creature base — a cast
-    // that triggers nothing counts as the zero it is.
-    const summary = {
-        a: {
-            engine: A,
-            perCast: sum(r => r.a.mean) / n,
-            perTrigger: trigA.length ? trigA.reduce((s, r) => s + r.a.mean, 0) / trigA.length : 0,
-            coverage: trigA.length / n,
-            best: rows.reduce((m, r) => Math.max(m, r.a.best), 0),
-            p95: percentileFromDist(distA, 0.95),
-            median: percentileFromDist(distA, 0.5),
-            dist: distA,
-            certain: A.kind !== 'discover'
-        },
-        b: {
-            engine: B,
-            perCast: sum(r => r.b.mean) / n,
-            perTrigger: trigB.length ? trigB.reduce((s, r) => s + r.b.mean, 0) / trigB.length : 0,
-            coverage: trigB.length / n,
-            // For a discover engine this is a SAMPLED maximum: it grows with the
-            // sample size and is not monotonic in the discover size, so it must
-            // not be displayed or compared against the tutor's true maximum.
-            // Kept only so the tutor's genuine cap has something to be read
-            // against in the peaks section.
-            best: rows.reduce((m, r) => Math.max(m, r.b.best), 0),
-            p95: percentileFromDist(distB, 0.95),
-            median: percentileFromDist(distB, 0.5),
-            dist: distB,
-            certain: B.kind !== 'discover'
-        }
-    };
+    const summary = { a: sideSummary(rows, 'a', A), b: sideSummary(rows, 'b', B) };
 
     // The curve that answers "at which point in the game": one point per mana
     // value present in the creature base.
@@ -398,17 +382,7 @@ export function compareEngines(ctx, idA, idB) {
         if (!byCMC.has(k)) byCMC.set(k, []);
         byCMC.get(k).push(r);
     }
-    /** Pooled per-cast distribution for one side across a set of rows. */
-    const groupDist = (group, side) => mergeDists(group.map(r => {
-        const v = r[side];
-        if (!v.triggers) return { dist: [1], weight: 1 };
-        if (v.certain) {
-            const d = [];
-            d[Math.max(0, Math.round(v.mean))] = 1;
-            return { dist: d, weight: 1 };
-        }
-        return { dist: v.stats?.manaDist || [], weight: 1 / (v.stats?.runs || 1) };
-    }));
+    const groupDist = (group, side) => mergeDists(group.map(r => castPart(r[side])));
 
     const curve = [...byCMC.entries()]
         .sort((p, q) => p[0] - q[0])
@@ -418,10 +392,9 @@ export function compareEngines(ctx, idA, idB) {
             count: group.length,
             a: group.reduce((s, r) => s + r.a.mean, 0) / group.length,
             b: group.reduce((s, r) => s + r.b.mean, 0) / group.length,
-            // The spread worth plotting is a percentile, not a maximum. Discover
-            // N+1 can hit everything discover N can, so every true statistic
-            // rises with the cast creature's mana value — but a sampled maximum
-            // does not, and plotting it drew dips that were pure noise.
+            // The spread worth plotting is a percentile, not a maximum: a
+            // sampled maximum bounces between identical runs and invites
+            // reading structure into noise.
             aP95: percentileFromDist(groupDist(group, 'a'), 0.95),
             bP95: percentileFromDist(groupDist(group, 'b'), 0.95)
         }));
@@ -435,23 +408,21 @@ export function compareEngines(ctx, idA, idB) {
         winsB: rows.filter(r => r.winner === 'b').length,
         ties: rows.filter(r => r.winner === 'tie').length,
         creatures: rows.length,
-        preparedB
+        prepared: { a: preparedA, b: preparedB }
     };
 }
 
 /**
- * The plain-English read of a comparison.
- *
- * Deliberately weighs three things separately, because they can disagree and a
- * single score would hide it: which engine is worth more per cast on average,
- * which fires more often, and which has the bigger ceiling.
+ * The verdict behind the bottom line: which engine is worth more per cast on
+ * average, weighed against how often each fires and which has the bigger
+ * good turn — three things that can disagree, so a single score would hide it.
  *
  * @param {Object} cmp - Result of compareEngines
- * @returns {{leader:'a'|'b'|'tie', label:string, color:string, advice:string}}
+ * @returns {{leader:'a'|'b'|'tie', label:string, tone:string, color:string, advice:string}}
  */
 export function verdict(cmp) {
     if (!cmp || cmp.creatures === 0) {
-        return { leader: 'tie', label: 'NO DATA', color: 'var(--tx-dim)', advice: 'Import a decklist with creatures to compare.' };
+        return { leader: 'tie', label: 'No data', tone: 'flat', color: 'var(--tx-dim)', advice: 'Import a decklist with creatures to compare.' };
     }
     const a = cmp.summary.a;
     const b = cmp.summary.b;
@@ -462,7 +433,7 @@ export function verdict(cmp) {
 
     if (Math.abs(gap) < 0.25) {
         return {
-            leader: 'tie', label: 'TOO CLOSE TO CALL', color: 'var(--tx-accent)',
+            leader: 'tie', label: 'Too close to call', tone: 'flat', color: 'var(--tx-flat)',
             advice: `${a.engine.name} and ${b.engine.name} produce about the same value per creature cast in this deck. Pick on shape: ${a.engine.name} is certain, ${b.engine.name} swings.`
         };
     }
@@ -479,16 +450,81 @@ export function verdict(cmp) {
         advice += ` ${b.engine.name} still has the bigger good turn — its top 5% of casts reach ${b.p95} mana against ${a.p95}.`;
     }
     if (cmp.contested?.casts > 0) {
-        const bWins = cmp.contested.bWins;
-        advice += ` On the ${cmp.contested.casts} casts both fire on, ${b.engine.name} out-rolls ${a.engine.name} ${formatPercentage(bWins, 0)} of the time.`;
+        advice += ` On the ${cmp.contested.casts} casts both fire on, ${b.engine.name} out-rolls ${a.engine.name} ${formatPercentage(cmp.contested.bWins, 0)} of the time.`;
     }
 
-    return {
-        leader,
-        label: `${lead.engine.name.toUpperCase()} LEADS`,
-        color: 'var(--tx-good)',
-        advice
+    return { leader, label: `${lead.engine.name} leads`, tone: 'good', color: 'var(--tx-good)', advice };
+}
+
+/**
+ * The bottom line, in words a player could repeat at the table. Never one
+ * number: it says who does more per cast, then each engine's shape — how often
+ * it fires and what it gives when it does — and, where both fire, who wins.
+ *
+ * @param {Object} cmp - Result of compareEngines
+ * @returns {{html:string, tone:'good'|'warn'|'bad'|'flat'}}
+ */
+export function summarize(cmp) {
+    if (!cmp || !cmp.creatures) {
+        return { tone: 'flat', html: 'Import a decklist with creatures to compare the two engines.' };
+    }
+    const { a, b } = cmp.summary;
+    const n = cmp.creatures;
+    const nameA = escapeHtml(a.engine.name);
+    const nameB = escapeHtml(b.engine.name);
+
+    if (a.fires === 0 && b.fires === 0) {
+        return { tone: 'bad', html: `Neither engine does anything here: ${nameA} and ${nameB} fire on none of your ${n} creatures.` };
+    }
+
+    const v = verdict(cmp);
+    const gap = Math.abs(a.perCast - b.perCast);
+    let html = v.leader === 'tie'
+        ? `Too close to call: both average about <strong>${formatNumber((a.perCast + b.perCast) / 2, 1)} mana</strong> per creature cast.`
+        : `<strong>${v.leader === 'a' ? nameA : nameB}</strong> does more for this deck — about <strong>${formatNumber(gap, 1)} more mana</strong> per creature cast.`;
+
+    const shape = (s, name) => {
+        if (s.fires === 0) return `${name} never fires`;
+        const base = `${name} fires on <strong>${s.fires} of ${n}</strong>`;
+        return s.certain
+            ? `${base} and you pick the result (<strong>${formatNumber(s.perTrigger, 1)} mana</strong> on average)`
+            : `${base} and rolls for it — typically <strong>${s.firedMedian} mana</strong>, <strong>${s.firedP95}</strong> on a ${term('p95', 'good turn')}`;
     };
+    html += ` ${shape(a, nameA)}; ${shape(b, nameB)}.`;
+
+    const c = cmp.contested;
+    if (c?.casts > 0) {
+        const certainIsA = a.certain && !b.certain;
+        const certainIsB = b.certain && !a.certain;
+        if (certainIsA || certainIsB) {
+            const sure = certainIsA ? nameA : nameB;
+            const sureWins = certainIsA ? c.aWins : c.bWins;
+            html += ` Where both fire (${c.casts} creature${c.casts === 1 ? '' : 's'}), ${sure}’s pick beats the roll ${formatPercentage(sureWins, 0)} of the time.`;
+        }
+    }
+
+    return { tone: v.leader === 'tie' ? 'flat' : 'good', html };
+}
+
+/**
+ * Early-game versus late-game value: casts of mana value 4 or less against 6
+ * or more, weighted by how many creatures sit at each mana value.
+ *
+ * @param {Array<{cmc:number, count:number, a:number, b:number}>} curve
+ * @returns {{early:{a:number,b:number,count:number}, late:{a:number,b:number,count:number}}}
+ */
+export function curveSplit(curve) {
+    const band = (points) => {
+        const count = points.reduce((s, p) => s + p.count, 0);
+        if (!count) return { a: 0, b: 0, count: 0 };
+        return {
+            a: points.reduce((s, p) => s + p.a * p.count, 0) / count,
+            b: points.reduce((s, p) => s + p.b * p.count, 0) / count,
+            count
+        };
+    };
+    const pts = Array.isArray(curve) ? curve : [];
+    return { early: band(pts.filter(p => p.cmc <= 4)), late: band(pts.filter(p => p.cmc >= 6)) };
 }
 
 // ==================== CONFIG ====================
@@ -500,221 +536,251 @@ export function getConfig() {
     return { a, b: b === a ? (a === 'wildpair' ? 'vortex' : 'wildpair') : b, treatStarAs5Plus: star };
 }
 
+/** Last comparison, keyed on the deck objects and settings that produced it. */
+let cache = { key: null, deck: null, cards: null, result: null };
+
+/**
+ * Compare the two engines — once per deck and settings. Revisiting the page,
+ * or any re-render that changes nothing, reuses the last result instead of
+ * re-sampling every big creature.
+ */
 export function calculate() {
     const config = getConfig();
     const deck = DeckConfig.getDeckConfig();
     const cardData = DeckConfig.getImportedCardData();
+    const key = `${config.a}|${config.b}|${config.treatStarAs5Plus}`;
+
+    if (cache.result && cache.key === key && cache.deck === deck.cardDetails && cache.cards === cardData.cardsByName) {
+        return cache.result;
+    }
     const ctx = buildContext(deck, cardData, config.treatStarAs5Plus);
     const cmp = ctx ? compareEngines(ctx, config.a, config.b) : null;
-    return { config, ctx, cmp, verdict: verdict(cmp) };
+    const result = { config, ctx, cmp, verdict: verdict(cmp) };
+    cache = { key, deck: deck.cardDetails, cards: cardData.cardsByName, result };
+    return result;
 }
 
 // ==================== UI ====================
 
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const seriesVar = (engine) => `var(--series-${engine.series ?? 1})`;
+const seriesHex = (engine) => TX.series[(engine.series ?? 1) - 1] ?? TX.blue;
+
+/** Bottom line plus the two-sided scoreboard. */
+function renderAnswer(cmp, v) {
+    const el = document.getElementById('versus-scoreboard');
+    if (!el) return;
+    const line = summarize(cmp);
+    if (!cmp) { el.innerHTML = renderBottomLine(line); return; }
+
+    const { a, b } = cmp.summary;
+    const n = cmp.creatures;
+    const tip = (text, label) => `<span class="term" data-tip="${escapeHtml(text)}" tabindex="0">${label}</span>`;
+
+    const side = (s, isLeader) => `
+        <div class="vs-side${isLeader ? ' is-leader' : ''}" style="--vs-engine:${seriesVar(s.engine)}">
+            <div class="vs-side-top">
+                <span class="vs-side-name">${escapeHtml(s.engine.name)}</span>
+                ${isLeader ? '<span class="vs-lead-chip">does more</span>' : ''}
+            </div>
+            <div class="vs-side-kind">${s.engine.cost} mana · ${s.certain ? 'tutor — you pick' : 'discover — random, can chain'}</div>
+            <div class="vs-side-value">${formatNumber(s.perCast, 1)}</div>
+            <div class="vs-side-unit">${tip('Free mana value from one creature cast, averaged over every creature in the deck. A cast it does not fire on counts as zero.', 'mana per creature cast')}</div>
+            <dl class="vs-side-rows">
+                <div><dt>${tip('How many of your creatures trigger it when you cast them.', 'Fires on')}</dt><dd>${s.fires} of ${n} creatures</dd></div>
+                <div><dt>${tip('Average free mana value on the casts where it fires.', 'When it fires')}</dt><dd>${formatNumber(s.perTrigger, 1)} mana</dd></div>
+                <div><dt><span class="term" data-term="p95" tabindex="0">Good turn</span></dt><dd>${s.fires ? `${s.firedP95} mana` : '—'}</dd></div>
+            </dl>
+        </div>`;
+
+    el.innerHTML = `
+        ${renderBottomLine(line)}
+        <div class="vs-board">
+            ${side(a, v.leader === 'a')}
+            <div class="vs-mid">
+                <span class="vs-mid-vs">vs</span>
+                <span class="vs-mid-tally"><span>${cmp.winsA}</span><span class="vs-mid-sep">–</span><span>${cmp.winsB}</span></span>
+                <span class="vs-mid-label">${tip('For each creature, which engine gives more on average when you cast it.', 'creatures won')}${cmp.ties ? `<span class="vs-mid-ties">${cmp.ties} tied</span>` : ''}</span>
+            </div>
+            ${side(b, v.leader === 'b')}
+        </div>`;
+}
 
 /**
- * The chart that answers the actual question: expected free mana value against
- * the mana value of the creature you cast, which is what "point in the game"
- * means in practice. The dashed line is the leader's ceiling, so the shape of
- * the swing is visible next to the average rather than only in a footnote.
+ * The chart that answers the actual question: average free mana against the
+ * mana value of the creature you cast, which is what "point in the game" means
+ * in practice. Each engine keeps its identity colour; the dashed line is the
+ * random engine's good turn, so the swing shows next to the average.
  */
 function updateCurveChart(cmp) {
     if (!document.getElementById('versus-curve-chart') || !cmp) return;
     const { curve, summary } = cmp;
     if (curve.length === 0) return;
 
+    const line = (s, key, extra = {}) => ({
+        label: s.engine.name,
+        data: curve.map(p => p[key]),
+        borderColor: seriesHex(s.engine),
+        backgroundColor: seriesHex(s.engine),
+        borderWidth: 2,
+        fill: false,
+        cubicInterpolationMode: 'monotone',
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        ...extra
+    });
+    const random = [summary.a, summary.b].find(s => !s.certain);
+    const datasets = [line(summary.a, 'a'), line(summary.b, 'b')];
+    if (random) {
+        datasets.push(line(random, random === summary.a ? 'aP95' : 'bP95', {
+            label: `${random.engine.name} — good turn`,
+            backgroundColor: 'transparent',
+            borderWidth: 1.5,
+            borderDash: [5, 4],
+            pointRadius: 0
+        }));
+    }
+
     curveChart = createOrUpdateChart(curveChart, 'versus-curve-chart', {
         type: 'line',
-        data: {
-            labels: curve.map(p => `MV ${p.cmc}`),
-            datasets: [
-                {
-                    label: summary.a.engine.name,
-                    data: curve.map(p => p.a),
-                    borderColor: TX.green,
-                    backgroundColor: TX.greenFill,
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
-                },
-                {
-                    label: summary.b.engine.name,
-                    data: curve.map(p => p.b),
-                    borderColor: TX.amber,
-                    backgroundColor: 'transparent',
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
-                },
-                {
-                    // A stable percentile rather than the largest run seen. The
-                    // maximum bounced by 20 mana between identical runs and was
-                    // not even monotonic in the discover size, so as a line it
-                    // invited reading structure into sampling noise. p95 is
-                    // steady to about a mana and sits on the same scale as the
-                    // means, which also removes the need for a second axis.
-                    label: `${summary.b.engine.name} — good turn (top 5%)`,
-                    data: curve.map(p => p.bP95),
-                    borderColor: TX.amber,
-                    backgroundColor: 'transparent',
-                    borderWidth: 1,
-                    borderDash: [4, 3],
-                    fill: false,
-                    tension: 0,
-                    pointRadius: 0
-                }
-            ]
-        },
+        data: { labels: curve.map(p => String(p.cmc)), datasets },
         options: {
             plugins: {
                 legend: {
                     display: true,
                     position: 'top',
-                    labels: { color: TX.mid, font: { size: 10 }, boxWidth: 10, boxHeight: 2 }
+                    align: 'end',
+                    labels: { color: TX.mid, font: { size: 11 }, boxWidth: 14, boxHeight: 2 }
+                },
+                tooltip: {
+                    callbacks: {
+                        title: (items) => `Casting a ${items[0]?.label ?? ''}-mana creature`,
+                        label: (item) => `${item.dataset.label}: ${formatNumber(item.parsed.y, 1)} mana`
+                    }
                 }
             },
             scales: {
                 y: {
                     beginAtZero: true,
-                    title: { display: true, text: 'Free mana value from the trigger', color: TX.dim, font: { size: 9 } },
+                    title: { display: true, text: 'Free mana per creature cast', color: TX.dim, font: { size: 11 } },
                     grid: { color: TX.rule },
-                    ticks: { color: TX.dim, font: { size: 9 } }
+                    ticks: { color: TX.dim, precision: 0 }
                 },
                 x: {
-                    title: { display: true, text: 'Mana value of the creature you cast', color: TX.dim, font: { size: 9 } },
-                    grid: { color: TX.rule },
-                    ticks: { color: TX.dim, font: { size: 9 } }
+                    title: { display: true, text: 'Mana value of the creature you cast', color: TX.dim, font: { size: 11 } },
+                    grid: { display: false },
+                    ticks: { color: TX.dim }
                 }
             }
         }
     });
 }
 
-function renderScoreboard(cmp, v) {
-    const el = document.getElementById('versus-scoreboard');
+/** Early versus late, in one sentence under the chart. */
+function renderCurveNote(cmp) {
+    const el = document.getElementById('versus-recommendation');
     if (!el) return;
-
-    if (!cmp) {
-        el.innerHTML = `
-            <div class="tx-h"><span>Head to head</span><span class="tx-h-r">no deck</span></div>
-            <div class="tx-empty">Import a decklist with creatures to compare two payoff engines.</div>`;
-        return;
-    }
-
+    if (!cmp) { el.innerHTML = ''; return; }
     const { a, b } = cmp.summary;
-    const side = (s, isLeader) => `
-        <div class="vs-side${isLeader ? ' is-leader' : ''}">
-            <div class="vs-side-name">${esc(s.engine.name)}</div>
-            <div class="vs-side-cost">{${s.engine.cost}} · ${esc(s.engine.kind)}</div>
-            <div class="vs-side-value">${formatNumber(s.perCast, 2)}</div>
-            <div class="vs-side-unit">mana per creature cast</div>
-            <div class="vs-side-rows">
-                <div><span>Fires on</span><span>${formatPercentage(s.coverage, 0)} of casts</span></div>
-                <div><span>When it fires</span><span>${formatNumber(s.perTrigger, 2)} mana</span></div>
-                <div><span>Typical cast</span><span>${s.median} mana</span></div>
-                <div><span>Good turn (top 5%)</span><span>${s.p95} mana</span></div>
-                <div><span>Outcome</span><span>${s.certain ? 'you choose' : 'random'}</span></div>
-            </div>
-        </div>`;
-
-    el.innerHTML = `
-        <div class="tx-h">
-            <span>Head to head</span>
-            <span class="tx-h-r">${cmp.creatures} creature casts · averaged over the whole creature base</span>
-        </div>
-        <div class="vs-board">
-            ${side(a, v.leader === 'a')}
-            <div class="vs-mid">
-                <div class="vs-mid-vs">VS</div>
-                <div class="vs-mid-tally">
-                    <span style="color:var(--tx-good);">${cmp.winsA}</span>
-                    <span class="vs-mid-sep">/</span>
-                    <span style="color:var(--tx-accent);">${cmp.winsB}</span>
-                </div>
-                <div class="vs-mid-label">creatures won${cmp.ties ? ` · ${cmp.ties} tied` : ''}</div>
-            </div>
-            ${side(b, v.leader === 'b')}
-        </div>
-        <div class="vs-verdict">
-            <span class="vs-verdict-badge" style="color:${v.color}; border-color:${v.color};">${v.label}</span>
-            <span class="vs-verdict-text">${v.advice}</span>
-        </div>`;
+    const { early, late } = curveSplit(cmp.curve);
+    const nameA = escapeHtml(a.engine.name);
+    const nameB = escapeHtml(b.engine.name);
+    const bits = [];
+    if (early.count) bits.push(`Casting creatures of mana value 4 or less, ${nameA} gives <strong>${formatNumber(early.a, 1)}</strong> against ${nameB}’s <strong>${formatNumber(early.b, 1)}</strong>.`);
+    if (late.count) {
+        bits.push(`At 6 and up it is <strong>${formatNumber(late.a, 1)}</strong> against <strong>${formatNumber(late.b, 1)}</strong>.`);
+        const randomLate = !b.certain ? late.b > late.a : late.a > late.b;
+        bits.push(randomLate
+            ? 'Discover scales with the creature you cast, while a tutor is capped by the best card in the group.'
+            : `${late.a >= late.b ? nameA : nameB} holds up at the top of the curve too.`);
+    }
+    el.innerHTML = bits.length ? `<p class="vs-note">${bits.join(' ')}</p>` : '';
 }
 
 /**
- * The chain distribution — the part of Vortex that no average can express, and
- * the direct test of "higher peaks". Shown only for a discover engine, because
- * a tutor has no distribution to show.
+ * The random engine's spread — the part no average can express, and the
+ * direct test of "higher peaks". Shown only for a discover engine; a tutor has
+ * no spread to show.
  */
 function renderPeaks(cmp) {
     const el = document.getElementById('versus-peaks');
+    const head = document.getElementById('versus-peaks-summary');
     if (!el) return;
-
     if (!cmp) { el.innerHTML = ''; return; }
 
-    const discoverSide = [cmp.summary.a, cmp.summary.b].find(s => s.engine.kind === 'discover');
-    const tutorSide = [cmp.summary.a, cmp.summary.b].find(s => s.engine.kind === 'tutor');
-    if (!discoverSide || !cmp.preparedB?.byCMC) { el.innerHTML = ''; return; }
+    const sides = [cmp.summary.a, cmp.summary.b];
+    const discoverSide = sides.find(s => s.engine.kind === 'discover');
+    const tutorSide = sides.find(s => s.engine.kind === 'tutor');
+    const prepared = discoverSide === cmp.summary.a ? cmp.prepared?.a : cmp.prepared?.b;
+    if (!discoverSide || !prepared?.byCreature) { el.innerHTML = ''; return; }
+    if (head) head.textContent = `How ${discoverSide.engine.name}’s results spread`;
 
-    // Pool every sampled discover together: across the deck's power-5+ creatures,
+    // Pool every sampled creature together: across the deck's big creatures,
     // how often does one trigger chain, and how big does it get?
-    const pooled = [...cmp.preparedB.byCMC.values()];
+    const pooled = [...prepared.byCreature.values()];
     if (pooled.length === 0) {
-        el.innerHTML = `
-            <div class="tx-h"><span>Peaks</span><span class="tx-h-r">no power-5+ creatures</span></div>
-            <div class="tx-empty">${esc(discoverSide.engine.name)} never triggers in this deck — no creature has power 5 or greater.</div>`;
+        el.innerHTML = `<div class="tx-empty">${escapeHtml(discoverSide.engine.name)} never triggers in this deck — no creature has power 5 or more.</div>`;
         return;
     }
 
-    const chainDist = [];
-    const manaDist = [];
-    let runs = 0;
-    for (const s of pooled) {
-        runs += s.runs;
-        s.chainDist.forEach((n, i) => { chainDist[i] = (chainDist[i] || 0) + n; });
-        s.manaDist.forEach((n, i) => { manaDist[i] = (manaDist[i] || 0) + n; });
-    }
-    for (let i = 0; i < chainDist.length; i++) if (!chainDist[i]) chainDist[i] = 0;
-    for (let i = 0; i < manaDist.length; i++) if (!manaDist[i]) manaDist[i] = 0;
-
-    const chained = chainDist.slice(2).reduce((a, b) => a + b, 0);
+    const chainDist = mergeDists(pooled.map(s => ({ dist: s.chainDist })));
+    const manaDist = mergeDists(pooled.map(s => ({ dist: s.manaDist })));
+    const runs = pooled.reduce((t, s) => t + s.runs, 0);
+    const chained = chainDist.slice(2).reduce((t, v) => t + v, 0);
     const tutorCap = tutorSide ? tutorSide.best : 0;
     const contested = cmp.contested;
-    const discoverIsB = cmp.summary.b.engine.kind === 'discover';
-    // Orient the odds so they always read "how often the random engine wins".
+    const discoverIsB = discoverSide === cmp.summary.b;
     const discoverWins = discoverIsB ? contested.bWins : contested.aWins;
     const tutorWins = discoverIsB ? contested.aWins : contested.bWins;
 
-    el.innerHTML = `
-        <div class="tx-h">
-            <span>Randomness against certainty — where ${esc(discoverSide.engine.name)} actually wins</span>
-            <span class="tx-h-r">${runs.toLocaleString('en-US')} sampled triggers · ${esc(tutorSide ? tutorSide.engine.name : 'the tutor')} has no spread to show</span>
-        </div>
-        <div class="vs-peaks-metrics">
-            ${tutorSide && contested.casts > 0 ? `
-            <div class="vs-peak is-headline">
-                <div class="vs-peak-label">Out-rolls ${esc(tutorSide.engine.name)}</div>
-                <div class="vs-peak-value" style="color:${discoverWins > 0.5 ? 'var(--tx-accent)' : 'var(--tx-mid)'};">${formatPercentage(discoverWins, 1)}</div>
-                <div class="vs-peak-sub">of the ${contested.casts} casts both fire on · ${formatPercentage(tutorWins, 1)} to ${esc(tutorSide.engine.name)}${contested.tie > 0.005 ? `, ${formatPercentage(contested.tie, 1)} level` : ''}</div>
-            </div>` : ''}
-            <div class="vs-peak"><div class="vs-peak-label">Chains 2+ spells</div><div class="vs-peak-value" style="color:var(--tx-accent);">${formatPercentage(chained / runs, 1)}</div><div class="vs-peak-sub">of triggers</div></div>
-            <div class="vs-peak"><div class="vs-peak-label">Good turn (top 5%)</div><div class="vs-peak-value" style="color:var(--tx-accent);">${discoverSide.p95}</div><div class="vs-peak-sub">mana off one cast</div></div>
-            <div class="vs-peak"><div class="vs-peak-label">Great turn (top 1%)</div><div class="vs-peak-value" style="color:var(--tx-mid);">${percentileFromDist(manaDist, 0.99)}</div><div class="vs-peak-sub">mana, once in a hundred triggers</div></div>
-            <div class="vs-peak"><div class="vs-peak-label">Whiffs</div><div class="vs-peak-value" style="color:var(--tx-bad);">${formatPercentage((chainDist[0] || 0) / runs, 1)}</div><div class="vs-peak-sub">find nothing at all</div></div>
-        </div>
-        <div class="tx-sim-block">
-            <div class="tx-sim-block-title">Spells cast per trigger</div>
-            ${renderDistributionChart(chainDist, runs, (i) => `${i} spell${i === 1 ? '' : 's'}`, (i) => (i >= 2 ? 'CHAIN' : null), (i) => (i === 0 ? 'bad' : null))}
-        </div>
-        <div class="tx-sim-block">
-            <div class="tx-sim-block-title">Mana cheated per trigger${tutorSide ? ` — ${esc(tutorSide.engine.name)}'s best possible is ${tutorCap}` : ''}</div>
-            ${renderDistributionChart(manaDist, runs, (i) => `${i} mana`, (i) => (tutorSide && i === tutorCap ? `${tutorSide.engine.name.toUpperCase()} CAP` : null), (i) => (i === 0 ? 'bad' : (tutorSide && i > tutorCap ? 'warn' : null)))}
+    const stat = (label, value, sub, tipText) => `
+        <div class="vs-peak">
+            <div class="vs-peak-label">${tipText ? `<span class="term" ${tipText.startsWith('term:') ? `data-term="${tipText.slice(5)}"` : `data-tip="${escapeHtml(tipText)}"`} tabindex="0">${label}</span>` : label}</div>
+            <div class="vs-peak-value">${value}</div>
+            <div class="vs-peak-sub">${sub}</div>
         </div>`;
+
+    el.innerHTML = `
+        <div class="vs-peaks">
+            ${tutorSide && contested.casts > 0 ? stat(
+                `Beats ${escapeHtml(tutorSide.engine.name)}`,
+                formatPercentage(discoverWins, 0),
+                `on the ${contested.casts} creature${contested.casts === 1 ? '' : 's'} both fire on · loses ${formatPercentage(tutorWins, 0)}`,
+                'How often the random roll comes out ahead of the tutor’s certain pick, on the casts where both trigger.'
+            ) : ''}
+            ${stat('Chains', formatPercentage(chained / runs, 0), 'of triggers cast 2+ spells', 'How often the free spell is itself a power-5+ creature, which triggers Vortex again.')}
+            ${stat('Good turn', percentileFromDist(manaDist, 0.95), 'mana, 1 trigger in 20', 'term:p95')}
+            ${stat('Great turn', percentileFromDist(manaDist, 0.99), 'mana, 1 trigger in 100', 'term:p99')}
+            ${stat('Finds nothing', formatPercentage((chainDist[0] || 0) / runs, 0), 'of triggers', 'Triggers where nothing in the library costs little enough.')}
+        </div>
+        <div class="vs-dists">
+            <div>
+                <div class="tx-sim-block-title">Free spells per trigger</div>
+                ${spellsChart(chainDist, runs)}
+            </div>
+            <div>
+                <div class="tx-sim-block-title">Free mana per trigger${tutorSide ? ` · ${escapeHtml(tutorSide.engine.name)}’s best is ${tutorCap}` : ''}</div>
+                ${manaChart(manaDist, runs, {
+                    marker: (i) => (tutorSide && i === tutorCap ? `${tutorSide.engine.name} best` : null),
+                    tone: (i) => (i === 0 ? 'bad' : (tutorSide && i > tutorCap ? 'warn' : null))
+                })}
+            </div>
+        </div>
+        <p class="vs-note">Pooled over ${pooled.length} big creature${pooled.length === 1 ? '' : 's'}, ${runs.toLocaleString('en-US')} shuffles. Bars past ${tutorSide ? `${escapeHtml(tutorSide.engine.name)}’s best` : 'the cap'} are turns the tutor can never match.</p>`;
+}
+
+/**
+ * Spread charts with the far tail folded into one "N+" row, so the last row is
+ * never the largest run seen (a sampled maximum).
+ */
+function spellsChart(dist, runs) {
+    const { counts, cut, folded } = foldTail(dist);
+    const label = (i) => `${i}${folded && i === cut ? '+' : ''} spell${i === 1 && !(folded && i === cut) ? '' : 's'}`;
+    return renderDistributionChart(counts, runs, label, (i) => (i >= 2 ? 'chain' : null), (i) => (i === 0 ? 'bad' : null));
+}
+
+function manaChart(dist, runs, { marker = () => null, tone = () => null } = {}) {
+    const { counts, cut, folded } = foldTail(dist);
+    return renderDistributionChart(counts, runs, (i) => `${i}${folded && i === cut ? '+' : ''} mana`, marker, tone);
 }
 
 function updateTable(cmp) {
@@ -722,42 +788,38 @@ function updateTable(cmp) {
         renderSweepTable('versus-table', { columns: [], rows: [], emptyText: 'Import a decklist to compare creature by creature.' });
         return;
     }
-    const nameA = cmp.summary.a.engine.name;
-    const nameB = cmp.summary.b.engine.name;
+    const sideA = cmp.summary.a;
+    const sideB = cmp.summary.b;
+
+    const cell = (v, s) => {
+        if (!v.triggers) return `<span class="vs-detail">— ${escapeHtml(v.detail)}</span>`;
+        const value = `<span class="vs-val" style="--vs-engine:${seriesVar(s.engine)}">${formatNumber(v.mean, v.certain ? 0 : 1)}</span>`;
+        return v.certain
+            ? `${value} <span class="vs-detail">${v.card ? cardRef(v.card.name) : escapeHtml(v.detail)}</span>`
+            : `${value} <span class="vs-detail">avg · ${escapeHtml(v.detail)}</span>`;
+    };
 
     renderSweepTable('versus-table', {
         columns: [
+            { label: 'Creature', align: 'left', render: r => cardRef(r.name) },
             { label: 'MV', render: r => r.cmc },
-            { label: 'CREATURE', align: 'left', render: r => `<span class="vs-name">${esc(r.name)}</span>` },
-            { label: 'P/T', render: r => `<span class="vs-pt">${esc(r.power)}/${esc(r.toughness)}</span>` },
-            {
-                label: nameA.toUpperCase(),
-                render: r => r.a.triggers
-                    ? `<span style="color:var(--tx-good);">${formatNumber(r.a.mean, 0)}</span> <span class="vs-detail">${esc(r.a.detail)}</span>`
-                    : `<span class="vs-detail">— ${esc(r.a.detail)}</span>`
-            },
-            {
-                label: nameB.toUpperCase(),
-                render: r => r.b.triggers
-                    ? `<span style="color:var(--tx-accent);">${formatNumber(r.b.mean, 1)}</span> <span class="vs-detail">avg, ${esc(r.b.detail)}</span>`
-                    : `<span class="vs-detail">— ${esc(r.b.detail)}</span>`
-            },
+            { label: 'P/T', render: r => `<span class="vs-pt">${escapeHtml(r.power)}/${escapeHtml(r.toughness)}</span>` },
+            { label: escapeHtml(sideA.engine.name), align: 'left', render: r => cell(r.a, sideA) },
+            { label: escapeHtml(sideB.engine.name), align: 'left', render: r => cell(r.b, sideB) },
             {
                 // One column rather than two: where both engines fire, the odds
                 // already say who wins and by how much, and where only one fires
                 // there is no contest to put a percentage on.
-                label: 'WINS THE CAST',
+                label: 'Better here',
                 align: 'left',
                 render: (r) => {
+                    const named = (s) => `<span class="vs-win" style="--vs-engine:${seriesVar(s.engine)}">${escapeHtml(s.engine.name)}</span>`;
                     if (r.contested) {
                         const aAhead = r.odds.aWins >= r.odds.bWins;
-                        const name = aAhead ? nameA : nameB;
-                        const share = aAhead ? r.odds.aWins : r.odds.bWins;
-                        return `<span style="color:${aAhead ? 'var(--tx-good)' : 'var(--tx-accent)'};">${esc(name)}</span>`
-                            + ` <span class="vs-detail">${formatPercentage(share, 0)} of the time</span>`;
+                        return `${named(aAhead ? sideA : sideB)} <span class="vs-detail">${formatPercentage(aAhead ? r.odds.aWins : r.odds.bWins, 0)} of the time</span>`;
                     }
-                    if (r.a.triggers) return `<span style="color:var(--tx-good);">${esc(nameA)}</span> <span class="vs-detail">only it fires</span>`;
-                    if (r.b.triggers) return `<span style="color:var(--tx-accent);">${esc(nameB)}</span> <span class="vs-detail">only it fires</span>`;
+                    if (r.a.triggers) return `${named(sideA)} <span class="vs-detail">only one that fires</span>`;
+                    if (r.b.triggers) return `${named(sideB)} <span class="vs-detail">only one that fires</span>`;
                     return '<span class="vs-detail">neither fires</span>';
                 }
             }
@@ -767,54 +829,68 @@ function updateTable(cmp) {
     });
 }
 
+
+/** Show or hide the evidence panels; without a deck only the answer remains. */
+function showPanels(ids, visible) {
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) el.hidden = !visible;
+    }
+}
+
 export function updateUI() {
     const { cmp, verdict: v } = calculate();
-
-    renderScoreboard(cmp, v);
+    showPanels(['versus-curve-panel', 'versus-table-panel', 'versus-more-panel'], Boolean(cmp));
+    renderAnswer(cmp, v);
     updateCurveChart(cmp);
-    renderPeaks(cmp);
+    renderCurveNote(cmp);
     updateTable(cmp);
-
-    const recEl = document.getElementById('versus-recommendation');
-    if (recEl) {
-        if (!cmp) {
-            recEl.innerHTML = renderRecommendation('Import a decklist to compare two payoff engines across your creature base.');
-        } else {
-            const { a, b } = cmp.summary;
-            const cheap = cmp.curve.filter(p => p.cmc <= 4);
-            const big = cmp.curve.filter(p => p.cmc >= 6);
-            const cheapA = cheap.length ? cheap.reduce((s, p) => s + p.a * p.count, 0) / cheap.reduce((s, p) => s + p.count, 0) : 0;
-            const cheapB = cheap.length ? cheap.reduce((s, p) => s + p.b * p.count, 0) / cheap.reduce((s, p) => s + p.count, 0) : 0;
-            const bigA = big.length ? big.reduce((s, p) => s + p.a * p.count, 0) / big.reduce((s, p) => s + p.count, 0) : 0;
-            const bigB = big.length ? big.reduce((s, p) => s + p.b * p.count, 0) / big.reduce((s, p) => s + p.count, 0) : 0;
-
-            recEl.innerHTML = renderRecommendation(
-                `Early, casting creatures of mana value 4 or less, ${esc(a.engine.name)} gives ${formatNumber(cheapA, 2)} against ${esc(b.engine.name)}'s ${formatNumber(cheapB, 2)}. ` +
-                `Late, at mana value 6 and up, it is ${formatNumber(bigA, 2)} against ${formatNumber(bigB, 2)}. ` +
-                `${bigB > bigA ? `${esc(b.engine.name)} overtakes on the big end — discover scales with the creature you cast, while a tutor is capped by the best card in the group.` : `${esc(a.engine.name)} holds up at both ends of the curve.`}`
-            );
-        }
-    }
-
-    const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
-    setText('versus-creatures-display', cmp ? cmp.creatures : '—');
-    setText('versus-lead-display', cmp
-        ? (v.leader === 'tie' ? 'Level' : (v.leader === 'a' ? cmp.summary.a.engine.name : cmp.summary.b.engine.name))
-        : '—');
+    renderPeaks(cmp);
+    const count = document.getElementById('versus-table-count');
+    if (count) count.textContent = cmp ? `${cmp.creatures} creatures · sorted by mana value` : '';
 }
+
+// ==================== SHARE LINKS ====================
+
+export function getShareParams() {
+    const { a, b, treatStarAs5Plus } = getConfig();
+    return { vsA: a, vsB: b, vsStar: treatStarAs5Plus ? 1 : 0 };
+}
+
+export function applyShareParams(params) {
+    const pick = (name, id) => {
+        const value = params?.get?.(name);
+        const el = document.getElementById(id);
+        if (el && value && Object.prototype.hasOwnProperty.call(ENGINES, value)) el.value = value;
+    };
+    pick('vsA', 'versus-engine-a');
+    pick('vsB', 'versus-engine-b');
+    const star = params?.get?.('vsStar');
+    const box = document.getElementById('versus-star-power');
+    if (box && (star === '0' || star === '1')) box.checked = star === '1';
+    updateUI();
+}
+
+// ==================== INIT ====================
 
 export function init() {
     // Populate both selectors from the engine registry, so a third engine needs
     // no markup change.
     const options = Object.values(ENGINES)
-        .map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+        .map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
     const selA = document.getElementById('versus-engine-a');
     const selB = document.getElementById('versus-engine-b');
     if (selA && !selA.options.length) { selA.innerHTML = options; selA.value = 'wildpair'; }
     if (selB && !selB.options.length) { selB.innerHTML = options; selB.value = 'vortex'; }
 
     [selA, selB, document.getElementById('versus-star-power')].forEach(el => {
-        if (el) el.addEventListener('change', () => updateUI());
+        el?.addEventListener('change', () => updateUI());
+    });
+
+    document.getElementById('versus-swap')?.addEventListener('click', () => {
+        if (!selA || !selB) return;
+        [selA.value, selB.value] = [selB.value, selA.value];
+        updateUI();
     });
 
     registerCalculator({ name: 'versus', calculate, updateUI, inputs: [] });

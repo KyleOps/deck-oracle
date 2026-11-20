@@ -1,838 +1,704 @@
 /**
- * Monstrous Vortex Calculator
- * Simulates discover value from casting creatures with power 5+
+ * Monstrous Vortex
  *
- * Card text: "Whenever you cast a creature spell with power 5 or greater,
- * discover X, where X is that spell's mana value."
+ * {3}{G} Enchantment — "Whenever you cast a creature spell with power 5 or
+ * greater, discover X, where X is that spell's mana value."
+ *
+ * Discover casts what it finds, so a discovered power-5+ creature triggers
+ * Vortex again at its own mana value. That chain makes the outcome genuinely
+ * random with a long tail, so this page samples it rather than solving it:
+ * every number comes from `discoverForCreature()` / `sampleDiscoverFrom()` in
+ * js/utils/discover.js — the same model, library, run count and seed the Head
+ * to Head page uses, so the same creature gets the same answer on both pages.
+ *
+ * The page answers "how much free mana does each big creature discover?" in
+ * three layers: one line for the deck, one row per big creature, and a detailed
+ * look (percentiles, value by mana value, real sample triggers) at whichever
+ * mana value the slider picks.
+ *
+ * Earlier versions solved the average with a recursion that drew WITH
+ * replacement — a chaining creature could discover itself again — and divided by
+ * zero (then multiplied by 100) when every eligible card chained at the same
+ * mana value. Both are gone with the move to the shared simulation.
  */
 
-import { createCache, formatNumber, debounce } from '../utils/simulation.js';
+import { formatNumber, formatPercentage } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderHeroStats, renderRecommendation, renderInsightBox, renderVerdictBadge, renderSweepTable, pBarCell, generateSampleRevealsHTML } from '../utils/components.js';
-import { formatDelta, deltaColor } from '../utils/analysis.js';
+import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
+import { buildDeckFromCardData, renderDistributionChart } from '../utils/sampleSimulator.js';
 import {
-    buildDeckFromCardData, shuffleDeck, renderCardBadge, renderDistributionChart,
-    createCollapsibleSection
-} from '../utils/sampleSimulator.js';
-import { simulateDiscoverChain } from '../utils/discover.js';
+    DISCOVER_RUNS, isBigCreature, discoverForCreature, sampleDiscoverFrom,
+    simulateDiscoverChain, seededShuffle, mulberry32, hashSeed, withoutOne, foldTail
+} from '../utils/discover.js';
+import { cardRef, term, escapeHtml } from '../data/glossary.js';
+
+/** Monstrous Vortex's own mana value — the bar a trigger is measured against. */
+export const VORTEX_COST = 4;
+export const DEFAULT_MV = 6;
+
+/** Sample triggers shown at first, and added per "show more". */
+const SAMPLE_BATCH = 5;
+const SAMPLE_MAX = 30;
+
+// ==================== PURE ANALYSIS ====================
 
 /**
- * Check if power is 5 or greater, optionally treating * or X as 5+
- * @param {string|number} powerStr - Power string (e.g. "5", "*", "1+*", "X") or number
- * @param {boolean} treatStarAs5Plus - Whether to treat * or X as 5+
- * @returns {boolean}
+ * The distinct power-5+ creatures in a library, with their copy counts.
+ *
+ * @param {Array} library - simulation-deck cards (buildDeckFromCardData shape)
+ * @param {boolean} [treatStarAs5Plus=false]
+ * @returns {Array<{name:string, cmc:number, power:*, toughness:*, count:number, variable:boolean}>}
+ *          sorted by mana value, then name
  */
-function isCreaturePower5Plus(powerStr, treatStarAs5Plus) {
-    if (powerStr === undefined || powerStr === null) return false;
-    const str = String(powerStr);
-    // Check for * or X
-    if (str.includes('*') || str.includes('X')) {
-        return treatStarAs5Plus;
+export function findBigCreatures(library, treatStarAs5Plus = false) {
+    const byName = new Map();
+    for (const card of (Array.isArray(library) ? library : [])) {
+        if (!isBigCreature(card, treatStarAs5Plus)) continue;
+        const entry = byName.get(card.name);
+        if (entry) { entry.count += 1; continue; }
+        const p = String(card.power ?? '');
+        byName.set(card.name, {
+            name: card.name,
+            cmc: Math.max(0, Math.round(Number(card.cmc) || 0)),
+            power: card.power,
+            toughness: card.toughness,
+            count: 1,
+            variable: p.includes('*') || p.includes('X')
+        });
     }
-    const p = parseInt(str);
-    return !isNaN(p) && p >= 5;
+    return [...byName.values()].sort((a, b) => a.cmc - b.cmc || a.name.localeCompare(b.name));
 }
 
-const CONFIG = {
-    CMC_RANGE: [3, 4, 5, 6, 7, 8, 9, 10], // Test different CMCs for creatures cast
-    DEFAULT_SAMPLE_SIZE: 500
-};
+/**
+ * The cards a discover of `mv` can hit: nonlands at or under it, minus the
+ * creature being cast. Grouped by mana value for display.
+ *
+ * @param {Array} library
+ * @param {number} mv
+ * @param {string|null} [castName]
+ * @param {boolean} [treatStarAs5Plus=false]
+ * @returns {{total:number, chainers:number, groups:Array<{mv:number, cards:Array<{name:string, count:number, chains:boolean}>}>}}
+ */
+export function discoverPool(library, mv, castName = null, treatStarAs5Plus = false) {
+    const byMv = new Map();
+    let total = 0;
+    let chainers = 0;
+    for (const card of withoutOne(library, castName)) {
+        const types = Array.isArray(card?.types) ? card.types : [];
+        if (types.includes('land')) continue;
+        const cmc = Number.isFinite(card?.cmc) ? card.cmc : 0;
+        if (cmc > mv) continue;
+        total += 1;
+        const chains = isBigCreature(card, treatStarAs5Plus);
+        if (chains) chainers += 1;
+        if (!byMv.has(cmc)) byMv.set(cmc, new Map());
+        const names = byMv.get(cmc);
+        const entry = names.get(card.name) ?? { name: card.name, count: 0, chains };
+        entry.count += 1;
+        names.set(card.name, entry);
+    }
+    const groups = [...byMv.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .map(([cost, names]) => ({
+            mv: cost,
+            cards: [...names.values()].sort((a, b) => Number(b.chains) - Number(a.chains) || a.name.localeCompare(b.name))
+        }));
+    return { total, chainers, groups };
+}
 
-let simulationCache = createCache(50);
-let lastDeckHash = '';
+/**
+ * Everything the page shows, for one library and star-power reading.
+ *
+ * Each big creature is sampled with itself removed from the library. Each
+ * mana value on the chart reuses a deck creature's result where one exists
+ * (so the chart, the table and the sample triggers agree) and samples a
+ * hypothetical caster otherwise.
+ *
+ * @param {Array} library
+ * @param {Object} [opts]
+ * @param {boolean} [opts.treatStarAs5Plus=false]
+ * @param {number} [opts.runs=DISCOVER_RUNS]
+ */
+export function analyzeVortex(library, opts = {}) {
+    const { treatStarAs5Plus = false, runs = DISCOVER_RUNS } = opts;
+    const lib = Array.isArray(library) ? library : [];
+
+    const creatures = findBigCreatures(lib, treatStarAs5Plus).map(c => ({
+        ...c,
+        stats: discoverForCreature(lib, c, { treatStarAs5Plus, runs })
+    }));
+
+    // Creatures with a variable power box that the current reading leaves out.
+    const starSkipped = treatStarAs5Plus
+        ? 0
+        : findBigCreatures(lib, true).filter(c => c.variable).length;
+
+    const costs = creatures.map(c => c.cmc);
+    const minMV = Math.max(1, Math.min(3, ...costs));
+    const maxMV = Math.max(10, ...costs);
+
+    const byMV = [];
+    for (let mv = minMV; mv <= maxMV; mv++) {
+        const here = creatures.filter(c => c.cmc === mv);
+        const cast = here[0] ?? null;
+        const stats = cast
+            ? cast.stats
+            : sampleDiscoverFrom(lib, mv, { runs, treatStarAs5Plus, seed: hashSeed(`mv|${mv}`) });
+        byMV.push({
+            x: mv,
+            mv,
+            castName: cast?.name ?? null,
+            names: here.map(c => c.name),
+            pool: discoverPool(lib, mv, cast?.name ?? null, treatStarAs5Plus).total,
+            stats
+        });
+    }
+
+    // Deck-wide figures weight each creature by its copies.
+    const copies = creatures.reduce((s, c) => s + c.count, 0);
+    const weighted = (f) => copies ? creatures.reduce((s, c) => s + f(c.stats) * c.count, 0) / copies : 0;
+    const byValue = [...creatures].sort((a, b) => a.stats.avgMana - b.stats.avgMana);
+
+    return {
+        hasLibrary: lib.length > 0,
+        librarySize: lib.length,
+        treatStarAs5Plus,
+        runs,
+        creatures,
+        copies,
+        starSkipped,
+        avgMana: weighted(s => s.avgMana),
+        chainRate: weighted(s => s.chainRate),
+        whiffRate: weighted(s => s.whiffRate),
+        worst: byValue[0] ?? null,
+        best: byValue[byValue.length - 1] ?? null,
+        minMV,
+        maxMV,
+        byMV
+    };
+}
+
+/** The chart/hero point for a mana value, clamped into the analysed range. */
+export function pointAt(analysis, mv) {
+    const rows = analysis?.byMV ?? [];
+    if (rows.length === 0) return null;
+    const clamped = Math.min(analysis.maxMV, Math.max(analysis.minMV, Math.round(Number(mv) || DEFAULT_MV)));
+    return rows.find(r => r.mv === clamped) ?? rows[0];
+}
+
+/** "about 1 trigger in 8 chains…" — chain frequency in words. */
+export function chainPhrase(rate) {
+    if (!(rate > 0)) return 'Nothing it can find is big enough to chain into another trigger.';
+    if (rate < 0.01) return 'Chains into a second free spell are rare — under 1 trigger in 100.';
+    if (rate < 0.5) return `About <strong>1 trigger in ${Math.round(1 / rate)}</strong> chains into a second free spell.`;
+    return `<strong>${formatPercentage(rate, 0)}</strong> of triggers chain into a second free spell.`;
+}
+
+/**
+ * The bottom line: what this deck's big creatures discover, in one or two
+ * sentences, with a tone for what that means against Vortex's own cost.
+ *
+ * @param {ReturnType<typeof analyzeVortex>} analysis
+ * @returns {{html:string, tone:'good'|'warn'|'bad'|'flat'}}
+ */
+export function summarize(analysis) {
+    if (!analysis?.hasLibrary) {
+        return { tone: 'flat', html: 'Import a decklist to see what your big creatures discover.' };
+    }
+    const n = analysis.creatures.length;
+    if (n === 0) {
+        const hint = analysis.starSkipped > 0
+            ? ` ${analysis.starSkipped} creature${analysis.starSkipped === 1 ? ' has' : 's have'} a variable power — tick “Count * power as 5 or more” if ${analysis.starSkipped === 1 ? 'it is' : 'they are'} big when you cast ${analysis.starSkipped === 1 ? 'it' : 'them'}.`
+            : ' Add creatures with power 5 or more to give it something to do.';
+        return { tone: 'bad', html: `No creature in this deck has power 5 or more, so Monstrous Vortex never triggers.${hint}` };
+    }
+
+    const avg = analysis.avgMana;
+    let html;
+    if (n === 1) {
+        const c = analysis.creatures[0];
+        html = `Your only big creature, ${cardRef(c.name)}, discovers about <strong>${formatNumber(c.stats.avgMana, 1)} mana</strong> of free spells when you cast it — typically ${c.stats.medianMana}, and <strong>${c.stats.p95Mana}</strong> on a ${term('p95', 'good turn')}.`;
+    } else {
+        const lo = analysis.worst;
+        const hi = analysis.best;
+        html = `Your <strong>${n} big creatures</strong> discover about <strong>${formatNumber(avg, 1)} mana</strong> of free spells per cast — from ${formatNumber(lo.stats.avgMana, 1)} off ${cardRef(lo.name)} up to <strong>${formatNumber(hi.stats.avgMana, 1)}</strong> off ${cardRef(hi.name)}.`;
+    }
+    html += ` ${chainPhrase(analysis.chainRate)}`;
+
+    let tone = avg >= VORTEX_COST ? 'good' : avg >= 2.5 ? 'warn' : 'bad';
+    if (analysis.copies <= 3 && tone === 'good') {
+        tone = 'warn';
+        html += ` With only ${analysis.copies} to cast, though, it will not trigger often.`;
+    }
+    return { html, tone };
+}
+
+/**
+ * Real shuffled examples of one trigger at a mana value.
+ *
+ * Seeded by mana value, caster and round, so a sample set is stable until the
+ * player asks for a new one. Each step lists exactly what discover exiled
+ * before its hit.
+ *
+ * @returns {Array<{chainCount:number, chainMana:number, steps:Array<{discoverCMC:number, passed:Array, hit:Object|null, chains:boolean}>}>}
+ */
+export function drawSamples(library, mv, { castName = null, count = SAMPLE_BATCH, round = 0, treatStarAs5Plus = false } = {}) {
+    const lib = withoutOne(library, castName);
+    const rng = mulberry32(hashSeed(`sample|${mv}|${castName ?? ''}|${round}`));
+    const out = [];
+    for (let i = 0; i < count; i++) {
+        const shuffled = seededShuffle(lib, rng);
+        const r = simulateDiscoverChain(shuffled, mv, { treatStarAs5Plus });
+        out.push({
+            chainCount: r.chainCount,
+            chainMana: r.chainMana,
+            steps: r.steps.map(s => ({
+                discoverCMC: s.discoverCMC,
+                passed: shuffled.slice(s.start, s.start + s.dug),
+                hit: s.hit,
+                chains: s.chains
+            }))
+        });
+    }
+    return out;
+}
+
+// ==================== STATE ====================
+
 let chart = null;
+let cache = { cardsByName: null, star: null, library: [], analysis: null, version: 0 };
+/** Mana value being inspected; null until the player (or a share link) moves the slider. */
+let selectedMV = null;
+let sampleRound = 0;
+let samplesShown = SAMPLE_BATCH;
+let lastSampleKey = '';
 
-// Stable samples state
-let stableSamples = [];
-let lastSampleDeckHash = '';
-let renderedCount = 0;
-
-/**
- * Generate stable samples from the deck
- * @param {Array} deck - The source deck
- * @param {number} count - Number of samples to generate
- */
-function generateStableSamples(deck, count) {
-    stableSamples = [];
-    // For Vortex, a sample is a full shuffle because discover goes deep into the deck.
-    for (let i = 0; i < Math.max(count, CONFIG.DEFAULT_SAMPLE_SIZE); i++) {
-        stableSamples.push(shuffleDeck([...deck]));
-    }
+/** Read the inputs and the deck. */
+export function getConfig() {
+    const raw = selectedMV ?? parseInt(document.getElementById('vortex-cmcSlider')?.value, 10);
+    const data = DeckConfig.getImportedCardData();
+    return {
+        mv: Number.isFinite(raw) ? raw : DEFAULT_MV,
+        treatStarAs5Plus: document.getElementById('vortex-star-power')?.checked ?? true,
+        cardsByName: data?.cardsByName ?? {}
+    };
 }
 
 /**
- * Force refresh of stable samples (e.g., when user clicks Redraw)
+ * Analyse the deck — once per deck and star reading. Moving the slider only
+ * picks a different row of the cached result, so it never re-simulates.
  */
-function refreshSamples() {
-    const config = getDeckConfig();
-    const cardData = { cardsByName: DeckConfig.getImportedCardData().cardsByName };
+export function calculate() {
+    const config = getConfig();
+    if (cache.cardsByName !== config.cardsByName || cache.star !== config.treatStarAs5Plus || !cache.analysis) {
+        const library = buildDeckFromCardData({ cardsByName: config.cardsByName });
+        cache = {
+            cardsByName: config.cardsByName,
+            star: config.treatStarAs5Plus,
+            library,
+            analysis: analyzeVortex(library, { treatStarAs5Plus: config.treatStarAs5Plus }),
+            version: cache.version + 1
+        };
+    }
+    const point = pointAt(cache.analysis, config.mv);
+    return { config, library: cache.library, analysis: cache.analysis, point };
+}
 
-    if (config.cardDetails && config.cardDetails.length > 0) {
-        const countInput = document.getElementById('vortex-sample-count');
-        const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
-        const deck = buildDeckFromCardData(cardData);
-        generateStableSamples(deck, numSims);
-        runSampleReveals(); // Re-render
+// ==================== RENDERING ====================
+
+const pct = (v) => formatPercentage(v, 0);
+/** "a 6-mana", "an 8-mana", "an 11-mana". */
+const aMana = (n) => `${/^(8|11|18)/.test(String(n)) ? 'an' : 'a'} ${n}-mana`;
+
+/** Keep the slider's range on the analysed mana values and its readout current. */
+function syncSlider(analysis, point) {
+    const slider = document.getElementById('vortex-cmcSlider');
+    if (slider && analysis.byMV.length) {
+        slider.min = String(analysis.minMV);
+        slider.max = String(analysis.maxMV);
+    }
+    if (point && slider) {
+        slider.value = String(point.mv);
+        slider.setAttribute('aria-valuetext', `mana value ${point.mv}`);
+    }
+    const display = document.getElementById('vortex-mv-display');
+    if (display) display.textContent = point ? String(point.mv) : '—';
+
+    const scale = document.getElementById('vortex-mv-scale');
+    if (scale) scale.innerHTML = `<span>${analysis.minMV}</span><span>${analysis.maxMV}</span>`;
+
+    const who = document.getElementById('vortex-mv-who');
+    if (who) {
+        who.innerHTML = !point ? ''
+            : point.names.length
+                ? `In your deck: ${point.names.map(n => cardRef(n)).join(', ')}`
+                : 'No big creature of yours costs this — the numbers show what one would discover.';
     }
 }
 
-/**
- * Run sample Discover reveals using stable samples
- */
-export function runSampleReveals() {
-    const config = getDeckConfig();
-    const cardData = { cardsByName: DeckConfig.getImportedCardData().cardsByName };
+/** The answer: bottom line plus one row per big creature. */
+function renderAnswer(analysis, point) {
+    const el = document.getElementById('vortex-answer');
+    if (!el) return;
+    const line = summarize(analysis);
 
-    if (!config.cardDetails || config.cardDetails.length === 0) {
-        document.getElementById('vortex-reveals-display').innerHTML = '<p style="color: var(--text-dim);">Please import a decklist to run simulations.</p>';
+    if (!analysis.hasLibrary || analysis.creatures.length === 0) {
+        el.innerHTML = renderBottomLine(line);
         return;
     }
 
-    // Get number of simulations
-    const countInput = document.getElementById('vortex-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || 10);
+    const rows = analysis.creatures.map(c => `
+        <tr class="${point && c.cmc === point.mv ? 'active-row' : ''}" data-mv="${c.cmc}" tabindex="0" aria-label="Inspect mana value ${c.cmc}">
+            <td class="ta-l">${cardRef(c.name)}${c.count > 1 ? ` <span class="vx-copies">×${c.count}</span>` : ''}</td>
+            <td>${c.cmc}</td>
+            <td class="vx-strong">${formatNumber(c.stats.avgMana, 1)}</td>
+            <td>${c.stats.medianMana}</td>
+            <td>${c.stats.p95Mana}</td>
+            <td>${pct(c.stats.chainRate)}</td>
+        </tr>`).join('');
 
-    // Build deck if needed for generating samples
-    const deck = buildDeckFromCardData(cardData);
+    el.innerHTML = `
+        ${renderBottomLine(line)}
+        <div class="tx-h">
+            <span>Your big creatures</span>
+            <span class="tx-h-r">free mana from one cast · pick a row to look closer</span>
+        </div>
+        <div class="vx-table-wrap">
+            <table class="tx-sweep-table vx-creatures">
+                <thead><tr>
+                    <th class="ta-l">Creature</th>
+                    <th>MV</th>
+                    <th><span class="term" data-term="ev" tabindex="0">Average</span></th>
+                    <th><span class="term" data-term="p50" tabindex="0">Typical</span></th>
+                    <th><span class="term" data-term="p95" tabindex="0">Good turn</span></th>
+                    <th><span class="term" data-tip="How often a trigger finds another power-5+ creature, which triggers Vortex again." tabindex="0">Chains</span></th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>`;
+}
 
-    // Ensure we have stable samples
-    if (stableSamples.length < numSims) {
-        generateStableSamples(deck, numSims);
+/** Hero stats and chart for the selected mana value. */
+function renderSelected(analysis, point) {
+    const head = document.getElementById('vortex-selected-head');
+    const hero = document.getElementById('vortex-stats');
+    if (!point || !analysis.hasLibrary) {
+        if (head) head.innerHTML = '<span>One trigger, up close</span>';
+        if (hero) hero.innerHTML = '<div class="tx-empty">Import a decklist to simulate discover against your library.</div>';
+        return;
     }
-
-    // 1. STATS LOOP (Full Simulation)
-    let totalFreeMana = 0;
-    let totalSpells = 0;
-    const spellsCastDist = new Array(10).fill(0); // Track chains 0-9+
-
-    // The chain walk itself lives in utils/discover.js, shared with the
-    // head-to-head comparison. Two copies of this mechanic would eventually
-    // disagree, and the same deck would then get two different answers on two
-    // tabs of the same site.
-    const statsTreatStarAs5Plus = document.getElementById('vortex-star-power')?.checked || false;
-
-    for (let i = 0; i < numSims; i++) {
-        const { chainCount, chainMana } = simulateDiscoverChain(
-            stableSamples[i],
-            config.creatureCMC,
-            { treatStarAs5Plus: statsTreatStarAs5Plus }
-        );
-
-        totalSpells += chainCount;
-        totalFreeMana += chainMana;
-        spellsCastDist[Math.min(chainCount, 9)]++;
+    const s = point.stats;
+    if (head) {
+        head.innerHTML = `
+            <span>Casting ${aMana(point.mv)} big creature</span>
+            <span class="tx-h-r">discover ${point.mv} · ${point.pool} cards it can hit · ${s.runs.toLocaleString('en-US')} shuffles</span>`;
     }
-
-    // 2. Build Summary UI
-    let distributionHTML = '<div class="tx-sim">';
-    distributionHTML += '<div class="tx-h"><span>Spells cast — distribution</span></div>';
-    distributionHTML += '<div class="tx-sim-block">';
-
-    
-    distributionHTML += renderDistributionChart(
-        spellsCastDist,
-        numSims,
-        (count) => `${count} ${count === 1 ? 'spell ' : 'spells'}`,
-        (count) => count >= 2 ? ' ⚡ CHAIN' : ''
-    );
-
-    distributionHTML += '</div><div class="tx-sim-block">';
-    distributionHTML += `<strong>Average:</strong> ${(totalSpells / numSims).toFixed(2)} spells, ${(totalFreeMana / numSims).toFixed(1)} mana per trigger`;
-    distributionHTML += '</div></div>';
-
-    // 3. Prepare List Container
-    const listId = 'vortex-samples-list';
-    const btnId = 'vortex-load-more';
-    const listHTML = `<div id="${listId}"></div><button id="${btnId}" class="import-btn" style="width: 100%; margin-top: 12px; display: none;">Load More (50)</button>`;
-
-    const revealsSectionHTML = createCollapsibleSection(
-        `Show/Hide Individual Reveals (${numSims} simulations)`,
-        listHTML,
-        true
-    );
-
-    document.getElementById('vortex-reveals-display').innerHTML = distributionHTML + revealsSectionHTML;
-
-    // 4. Render Batch Function
-    const listContainer = document.getElementById(listId);
-    const loadMoreBtn = document.getElementById(btnId);
-    renderedCount = 0;
-
-    const renderBatch = (batchSize) => {
-        const start = renderedCount;
-        const end = Math.min(start + batchSize, numSims);
-        let html = '';
-
-        for (let i = start; i < end; i++) {
-            const shuffled = stableSamples[i];
-            let currentDiscoverCMC = config.creatureCMC;
-            let deckIndex = 0;
-            let chainCount = 0;
-            let chainMana = 0;
-            let revealStepsHTML = '';
-            let openDivs = 0;
-            
-            // Chain loop
-            while (chainCount < 10 && deckIndex < shuffled.length) {
-                // Reveal cards until hit
-                const revealedCards = [];
-                let hitCard = null;
-
-                for (; deckIndex < shuffled.length; deckIndex++) {
-                    const card = shuffled[deckIndex];
-                    
-                    // Determine if land (CMC 0 and type land)
-                    const isLand = card.types.includes('land');
-                    
-                    if (isLand) {
-                        revealedCards.push({ ...card, status: 'skipped' }); // Lands skipped by discover
-                        continue;
-                    }
-
-                    // Non-land. Check CMC.
-                    if (card.cmc <= currentDiscoverCMC) {
-                        hitCard = card;
-                        deckIndex++; // Consume this card
-                        break;
-                    } else {
-                        revealedCards.push({ ...card, status: 'skipped' }); // Too high CMC
-                    }
-                }
-
-                // Render this step
-                revealStepsHTML += `<div style="margin-top: 8px; border-left: 2px solid var(--accent); padding-left: 8px;">`;
-                openDivs++;
-
-                revealStepsHTML += `<div style="font-size: 0.85em; color: var(--text-dim); margin-bottom: 4px;">Discover ${currentDiscoverCMC}:</div>`;
-                revealStepsHTML += `<div>`;
-                
-                // Show skipped cards (limit to first few and last few if too many?)
-                revealedCards.forEach(c => {
-                     revealStepsHTML += `<span class="reveal-card dimmed" style="opacity: 0.5; transform: scale(0.9);" title="${c.name} (Skipped)">${c.name}</span>`;
-                });
-
-                if (hitCard) {
-                    // Determine if it chains
-                    const treatStarAs5Plus = document.getElementById('vortex-star-power')?.checked || false;
-                    const isCreature = hitCard.types.includes('creature');
-                    const isPower5Plus = isCreature && isCreaturePower5Plus(hitCard.power, treatStarAs5Plus);
-
-                    const chainClass = isPower5Plus ? 'chain-trigger' : '';
-                    const chainIcon = isPower5Plus ? ' ⚡' : '';
-                    
-                    revealStepsHTML += renderCardBadge(hitCard);
-                    revealStepsHTML += `<span style="margin-left: 8px; color: ${isPower5Plus ? '#9878b8' : '#55c97f'}; font-weight: bold;">
-                        ${isPower5Plus ? 'CAST & CHAIN!' : 'CAST'}
-                    </span>`;
-
-                    chainCount++;
-                    chainMana += hitCard.cmc;
-                    
-                    revealStepsHTML += `</div>`; // Close content div
-
-                    if (isPower5Plus) {
-                        currentDiscoverCMC = hitCard.cmc;
-                        // Prepare for next nested step
-                        revealStepsHTML += `<div style="margin-left: 16px; border-left: 1px dashed rgba(255,255,255,0.1);">`;
-                        openDivs++;
-                    } else {
-                        break; // End of chain
-                    }
-
-                } else {
-                    revealStepsHTML += `<span style="color: #e8635c;">Exiled rest of deck (Whiff)</span>`;
-                    revealStepsHTML += `</div>`; // Close content div
-                    break;
-                }
+    if (hero) {
+        hero.innerHTML = renderHeroStats([
+            {
+                label: 'Free mana', value: formatNumber(s.avgMana, 1), size: 'big', term: 'ev',
+                sub: `average per trigger, against Vortex’s own ${VORTEX_COST}`,
+                color: s.avgMana >= VORTEX_COST ? 'var(--tx-good)' : 'var(--tx-bright)'
+            },
+            { label: 'Typical trigger', value: s.medianMana, sub: 'mana — half do better', term: 'p50' },
+            { label: 'Good turn', value: s.p95Mana, sub: 'mana — 1 trigger in 20 beats it', term: 'p95' },
+            {
+                label: 'Chains', value: pct(s.chainRate),
+                sub: s.whiffRate > 0.005 ? `cast 2+ spells · ${pct(s.whiffRate)} find nothing` : 'of triggers cast 2+ spells',
+                tip: 'How often the free spell is itself a power-5+ creature, which triggers Vortex again at its own mana value.'
             }
-
-            // Close all open divs
-            for (let k = 0; k < openDivs; k++) {
-                revealStepsHTML += `</div>`;
-            }
-
-            // Reveal container
-            const isWhiff = chainCount === 0;
-            html += `<div class="sample-reveal ${!isWhiff ? 'free-spell' : 'whiff'}" style="margin-bottom: 16px; padding: 12px; border: 1px solid var(--border-color, #333); border-radius: 8px;">`;
-            html += `<div><strong>Reveal ${i + 1}:</strong> ${chainCount} spell${chainCount !== 1 ? 's' : ''} (${chainMana} mana)</div>`;
-            html += revealStepsHTML;
-            html += `</div>`;
-        }
-
-        if (listContainer) {
-            listContainer.insertAdjacentHTML('beforeend', html);
-        }
-        
-        renderedCount = end;
-        
-        if (loadMoreBtn) {
-            if (renderedCount < numSims) {
-                loadMoreBtn.style.display = 'block';
-                loadMoreBtn.textContent = `Load More (Showing ${renderedCount}/${numSims})`;
-            } else {
-                loadMoreBtn.style.display = 'none';
-            }
-        }
-    };
-
-    // Initial Render
-    renderBatch(50);
-
-    if (loadMoreBtn) {
-        loadMoreBtn.addEventListener('click', () => renderBatch(50));
+        ]);
     }
+    updateChart(analysis, point);
 }
 
 /**
- * Pre-calculate Expected Values for all CMCs using Dynamic Programming
- * @param {Array} cardDetails - Full card details
- * @param {Object} castCreature - Creature being cast (to exclude)
- * @returns {Object} - Map of CMC -> Expected Value Stats
+ * Value by mana value. Percentile lines, never a sampled maximum: the maximum
+ * is a property of how many shuffles were run, not of the deck.
  */
-function precalculateExpectedValues(cardDetails, castCreature = null) {
-    // 1. Filter out the cast creature from the potential pool
-    // (This mimics the "rest of deck" state)
-    let pool = cardDetails;
-    if (castCreature && castCreature.isPower5Plus) {
-        const idx = pool.findIndex(c => 
-            c.name === castCreature.name && 
-            c.cmc === castCreature.cmc && 
-            c.isPower5Plus
-        );
-        if (idx !== -1) {
-            // Remove one instance
-            pool = [...pool.slice(0, idx), ...pool.slice(idx + 1)];
-        }
-    }
-
-    // 3. DP Table
-    // We compute E[cmc] for cmc = 0 to MaxCMC
-    const maxDeckCMC = pool.reduce((max, c) => Math.max(max, c.cmc), 0);
-    const dp = new Array(maxDeckCMC + 1).fill(null);
-
-    // Helper: Valid cards for Discover(X) are all non-lands with CMC <= X
-    
-    let validCards = [];
-    
-    // Iterate from 0 to Max
-    for (let x = 0; x <= maxDeckCMC; x++) {
-        // Update valid set: add cards with CMC == x
-        const newCards = pool.filter(c => c.cmc === x);
-        validCards = validCards.concat(newCards);
-
-        const count = validCards.length;
-        if (count === 0) {
-            dp[x] = {
-                avgFreeMana: 0,
-                avgSpells: 0,
-                avgSpellCMC: 0,
-                probChain: 0,
-                poolCount: 0,
-                chainCount: 0
-            };
-            continue;
-        }
-
-        // Compute E[X]
-        // E[X] = (1/N) * Sum( Value(c) + (IsChain(c) ? E[c.cmc] : 0) )
-        // Value(c) = c.cmc (free mana) or 1 (spell count)
-        
-        let accumulatedMana = 0;
-        let accumulatedSpells = 0;
-        let accumulatedSpellCMC = 0;
-        let accumulatedProbChain = 0; // Probability of >1 spell (immediate chain)
-        
-        let countChainAtX = 0;
-        let chainManaAtX = 0; // For free mana calc loop
-        let chainSpellsAtX = 0; // For spells calc loop
-        
-        validCards.forEach(c => {
-            // Immediate values
-            accumulatedMana += c.cmc;
-            accumulatedSpells += 1;
-            accumulatedSpellCMC += c.cmc;
-            
-            if (c.isPower5Plus) {
-                if (c.cmc < x) {
-                    // Chained into lower CMC - fully resolved
-                    const nested = dp[c.cmc];
-                    accumulatedMana += nested.avgFreeMana;
-                    accumulatedSpells += nested.avgSpells;
-                    // For probChain: if we hit a chain starter, we successfully chained.
-                    accumulatedProbChain += 1; 
-                } else {
-                    // Chained into same CMC (c.cmc === x)
-                    // We'll handle the multiplier after
-                    countChainAtX++;
-                    accumulatedProbChain += 1;
-                    
-                    // Note: E[X] includes itself?
-                    // E[X] = AvgImmediate + (ChainAtX_Count/N) * E[X] + (ChainLower_Sum/N)
-                    // The ChainLower_Sum is already in accumulatedMana.
-                    // The Immediate Sum is already in accumulatedMana.
-                    // The missing part is (ChainAtX_Count/N) * E[X].
-                    // So: E[X] = (Accumulated_So_Far / N) + (CountX / N) * E[X]
-                    // E[X] * (1 - CountX/N) = Accumulated / N
-                    // E[X] = (Accumulated / N) / (1 - CountX/N)
-                    // E[X] = Accumulated / (N - CountX)
-                }
-            }
-        });
-
-        const N = validCards.length;
-        // Avoid division by zero if all cards are CMC X chains (N - CountX = 0)
-        // If N == CountX, it means EVERY valid card triggers a chain at the same CMC.
-        // Infinite loop. Cap at reasonable number.
-        const divisor = (N - countChainAtX);
-        const multiplier = divisor > 0 ? (1 / divisor) : 100; // if infinite loop, just return big number
-        
-        // E[X] = Accumulated_Non_X_Chain_Parts / (1 - p) = Accumulated / (N * (1 - CountX/N)) = Accumulated / (N - CountX)
-        // Wait, accumulatedMana contains the Base Value for ALL cards (N cards).
-        // Let's re-verify algebra.
-        // Sum = Sum_Base + Sum_Lower_Chain_EV + Sum_Same_Chain_EV
-        // Sum_Same_Chain_EV = CountX * E[X]
-        // E[X] = (Sum_Base + Sum_Lower_Chain_EV + CountX * E[X]) / N
-        // N * E[X] = Sum_Partial + CountX * E[X]
-        // (N - CountX) * E[X] = Sum_Partial
-        // E[X] = Sum_Partial / (N - CountX)
-        
-        // My `accumulatedMana` variable contains `Sum_Base + Sum_Lower_Chain_EV`.
-        // It does NOT contain CountX * E[X].
-        // So the formula `accumulatedMana / (N - CountX)` is correct.
-        
-        dp[x] = {
-            avgFreeMana: accumulatedMana * multiplier,
-            avgSpells: accumulatedSpells * multiplier,
-            avgSpellCMC: accumulatedSpellCMC / N, // Average CMC of the *immediate* hit (not recursive)
-            probChain: accumulatedProbChain / N, // Chance that the immediate hit triggers a chain
-            poolCount: N,
-            chainCount: validCards.filter(c => c.isPower5Plus).length
-        };
-    }
-    
-    return dp;
-}
-
-/**
- * Simulate discover for a given creature CMC using mathematical EV
- */
-function simulateDiscoverForCMC(cardDetails, creatureCMC, lands, castCreature = null, treatStarAs5Plus = false) {
-    const cacheKey = `EV-${creatureCMC}-${cardDetails.length}-${lands}-${castCreature ? castCreature.name : 'none'}-${treatStarAs5Plus}`;
-    const cached = simulationCache.get(cacheKey);
-    if (cached) return cached;
-
-    const dpTable = precalculateExpectedValues(cardDetails, castCreature);
-    
-    // Safety for CMC > max in deck
-    const safeCMC = Math.min(creatureCMC, dpTable.length - 1);
-    const stats = dpTable[safeCMC] || { avgFreeMana: 0, avgSpells: 0, avgSpellCMC: 0, probChain: 0, poolCount: 0, chainCount: 0 };
-    
-    // Discoverable cards list (for UI breakdown)
-    // We need to reconstruct this list (filtered by CMC <= creatureCMC, excluding castCreature)
-    let discoverableCards = cardDetails.filter(c => c.cmc <= creatureCMC);
-    if (castCreature && castCreature.isPower5Plus) {
-        const idx = discoverableCards.findIndex(c => 
-            c.name === castCreature.name && 
-            c.cmc === castCreature.cmc && 
-            c.isPower5Plus
-        );
-        if (idx !== -1) {
-            discoverableCards = [...discoverableCards.slice(0, idx), ...discoverableCards.slice(idx + 1)];
-        }
-    }
-
-    const castableCards = discoverableCards.length;
-    const power5PlusInRange = discoverableCards.filter(c => c.isPower5Plus).length;
-    
-    // Determine successful discoveries (Hit Rate)
-    // Discover always hits unless deck is empty of valid targets.
-    // In math model, hit rate is 1.0 if pool > 0, else 0.
-    const successfulDiscoveries = castableCards > 0 ? 20000 : 0; // Mocking iterations for compatibility
-
-    const result = {
-        avgSpellCMC: stats.avgSpellCMC,
-        avgFreeMana: stats.avgFreeMana,
-        avgSpellsPerTrigger: stats.avgSpells,
-        multiDiscoverRate: stats.probChain, // This is approx probability of at least 1 chain
-        successfulDiscoveries: successfulDiscoveries,
-        castableCards: castableCards,
-        power5PlusInRange: power5PlusInRange,
-        discoverableCards: discoverableCards
-    };
-
-    simulationCache.set(cacheKey, result);
-    return result;
-}
-
-/**
- * Get current deck configuration with card details
- */
-export function getDeckConfig() {
-    const config = DeckConfig.getDeckConfig();
-    const treatStarAs5Plus = document.getElementById('vortex-star-power')?.checked || false;
-
-    // Check if we have card details (new format) or need to fall back to old format
-    // Map details to update isPower5Plus based on checkbox
-    let cardDetails = config.cardDetails || [];
-    
-    if (cardDetails.length > 0) {
-        cardDetails = cardDetails.map(c => ({
-            ...c,
-            isPower5Plus: isCreaturePower5Plus(c.power, treatStarAs5Plus)
-        }));
-    }
-
-    const lands = config.lands || 0;
-    // Recalculate creaturesPower5Plus count based on new logic
-    const creaturesPower5Plus = cardDetails.filter(c => c.isPower5Plus).length;
-
-    // Clear cache if deck changed
-    // Include checkbox state in hash
-    const newHash = JSON.stringify(cardDetails) + lands + treatStarAs5Plus;
-    
-    // Check if we need to refresh stable samples
-    const sampleHash = newHash; // Use same hash for simplicity
-    if (sampleHash !== lastSampleDeckHash && cardDetails.length > 0) {
-        const deck = buildDeckFromCardData({ cardsByName: DeckConfig.getImportedCardData().cardsByName });
-        generateStableSamples(deck, 20);
-        lastSampleDeckHash = sampleHash;
-    }
-
-    if (newHash !== lastDeckHash) {
-        simulationCache.clear();
-        lastDeckHash = newHash;
-    }
-
-    // Get current creature CMC from slider
-    const creatureCMC = parseInt(document.getElementById('vortex-cmcValue')?.value) || 6;
-
-    // Find power 5+ creatures at this CMC (these could be the creature being cast)
-    const power5PlusAtCMC = cardDetails.filter(c => c.cmc === creatureCMC && c.isPower5Plus);
-
-    // If there's exactly one power 5+ creature at this CMC, use it as the cast creature
-    // Otherwise, we'll simulate as if we're casting a generic power 5+ creature at this CMC
-    const castCreature = power5PlusAtCMC.length > 0 ? power5PlusAtCMC[0] : null;
-
-    return {
-        cardDetails,
-        lands,
-        creaturesPower5Plus,
-        creatureCMC,
-        castCreature,
-        power5PlusAtCMC, // All power 5+ creatures at this CMC
-        deckSize: cardDetails.length + lands,
-        treatStarAs5Plus
-    };
-}
-
-/**
- * Calculate results for different creature CMCs
- */
-export function calculate() {
-    const config = getDeckConfig();
-
-    if (config.deckSize === 0 || config.creaturesPower5Plus === 0 || config.cardDetails.length === 0) {
-        return { config, results: {} };
-    }
-
-    const results = {};
-
-    // Calculate for each CMC in range
-    CONFIG.CMC_RANGE.forEach(cmc => {
-        // Find if there's a power 5+ creature at this CMC to exclude from the pool
-        const power5PlusAtThisCMC = config.cardDetails.filter(c => c.cmc === cmc && c.isPower5Plus);
-        const creatureToExclude = power5PlusAtThisCMC.length > 0 ? power5PlusAtThisCMC[0] : null;
-
-        const stats = simulateDiscoverForCMC(config.cardDetails, cmc, config.lands, creatureToExclude, config.treatStarAs5Plus);
-        results[cmc] = {
-            creatureCMC: cmc,
-            ...stats
-        };
-    });
-
-    return { config, results };
-}
-
-/**
- * Update chart visualization
- */
-function updateChart(config, results) {
-    const cmcValues = CONFIG.CMC_RANGE;
-    const freeManaData = cmcValues.map(cmc => results[cmc]?.avgFreeMana || 0);
-    const avgSpellCMCData = cmcValues.map(cmc => results[cmc]?.avgSpellCMC || 0);
-    const avgSpellsCastData = cmcValues.map(cmc => results[cmc]?.avgSpellsPerTrigger || 0);
+function updateChart(analysis, point) {
+    if (!document.getElementById('vortex-chart')) return;
+    const rows = analysis.byMV;
+    const has = new Set(analysis.creatures.map(c => c.cmc));
+    const colour = TX.series[4] ?? TX.blue;
+    const radius = rows.map(r => (r.mv === point?.mv ? 6 : has.has(r.mv) ? 3.5 : 0));
+    const fill = rows.map(r => (r.mv === point?.mv ? TX.amber : colour));
 
     chart = createOrUpdateChart(chart, 'vortex-chart', {
         type: 'line',
         data: {
-            labels: cmcValues.map(cmc => `${cmc} CMC`),
+            labels: rows.map(r => String(r.mv)),
             datasets: [
                 {
-                    label: 'Avg Free Mana Value',
-                    data: freeManaData,
-                    borderColor: '#f0a92c',
-                    backgroundColor: 'rgba(240, 169, 44, 0.1)',
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: cmcValues.map(cmc => cmc === config.creatureCMC ? 8 : 4),
-                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.creatureCMC ? '#fff' : '#f0a92c'),
-                    yAxisID: 'yMana'
+                    label: 'Average',
+                    data: rows.map(r => r.stats.avgMana),
+                    borderColor: colour,
+                    backgroundColor: colour,
+                    borderWidth: 2,
+                    cubicInterpolationMode: 'monotone',
+                    pointRadius: radius,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: fill,
+                    pointBorderColor: fill
                 },
                 {
-                    label: 'Avg Spell CMC Found',
-                    data: avgSpellCMCData,
-                    borderColor: TX.green,
-                    backgroundColor: TX.greenFill,
-                    fill: false,
-                    tension: 0,
-                    pointRadius: cmcValues.map(cmc => cmc === config.creatureCMC ? 6 : 0),
-                    pointHoverRadius: 5,
-                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.creatureCMC ? TX.bright : TX.green),
-                    yAxisID: 'yMana'
+                    label: 'Good turn (1 in 20)',
+                    data: rows.map(r => r.stats.p95Mana),
+                    borderColor: colour,
+                    backgroundColor: 'transparent',
+                    borderWidth: 1.5,
+                    borderDash: [5, 4],
+                    cubicInterpolationMode: 'monotone',
+                    pointRadius: 0,
+                    pointHoverRadius: 4
                 },
                 {
-                    label: 'Avg Spells Cast',
-                    data: avgSpellsCastData,
-                    borderColor: TX.blue,
-                    backgroundColor: TX.blueFill,
-                    fill: false,
-                    tension: 0,
-                    pointRadius: cmcValues.map(cmc => cmc === config.creatureCMC ? 6 : 0),
-                    pointHoverRadius: 5,
-                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.creatureCMC ? TX.bright : TX.blue),
-                    yAxisID: 'ySpells'
+                    label: 'Typical',
+                    data: rows.map(r => r.stats.medianMana),
+                    borderColor: TX.dim,
+                    backgroundColor: 'transparent',
+                    borderWidth: 1,
+                    borderDash: [2, 3],
+                    cubicInterpolationMode: 'monotone',
+                    pointRadius: 0,
+                    pointHoverRadius: 3
                 }
             ]
         },
         options: {
-            scales: {
-                yMana: {
-                    type: 'linear',
-                    position: 'left',
-                    beginAtZero: true,
-                    title: { display: true, text: 'Mana Value', color: TX.green, font: { size: 9 } },
-                    grid: { color: TX.rule },
-                    ticks: { color: TX.dim, font: { size: 9 } }
+            onClick: (_e, elements) => {
+                const idx = elements?.[0]?.index;
+                if (Number.isInteger(idx) && rows[idx]) selectMV(rows[idx].mv);
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    align: 'end',
+                    labels: { color: TX.mid, boxWidth: 14, boxHeight: 2, font: { size: 11 } }
                 },
-                ySpells: {
-                    type: 'linear',
-                    position: 'right',
+                tooltip: {
+                    callbacks: {
+                        title: (items) => `Creature with mana value ${items[0]?.label ?? ''}`,
+                        label: (item) => `${item.dataset.label}: ${formatNumber(item.parsed.y, item.datasetIndex === 0 ? 1 : 0)} mana`
+                    }
+                }
+            },
+            scales: {
+                y: {
                     beginAtZero: true,
-                    title: { display: true, text: 'Spells Cast', color: TX.blue, font: { size: 9 } },
-                    grid: { display: false },
-                    ticks: { color: TX.dim, font: { size: 9 } }
+                    title: { display: true, text: 'Free mana per trigger', color: TX.dim, font: { size: 11 } },
+                    grid: { color: TX.rule },
+                    ticks: { color: TX.dim, precision: 0 }
                 },
                 x: {
-                    grid: { color: TX.rule },
-                    ticks: { color: TX.dim, font: { size: 9 } }
+                    title: { display: true, text: 'Mana value of the creature you cast', color: TX.dim, font: { size: 11 } },
+                    grid: { display: false },
+                    ticks: { color: TX.dim }
                 }
             }
         }
     });
 }
 
-/**
- * Map average spells-per-trigger to a verdict tier.
- */
-function discoverVerdict(avgSpells, castable) {
-    if (!castable) return { label: 'NO TARGETS', color: 'var(--tx-red)', advice: 'No spells at or below this mana value.' };
-    if (avgSpells >= 1.5) return { label: 'EXPLOSIVE', color: 'var(--tx-green)', advice: 'Frequently chains into multiple spells.' };
-    if (avgSpells >= 1.25) return { label: 'STRONG', color: 'var(--tx-green)', advice: 'Chains often for strong value.' };
-    if (avgSpells >= 1.10) return { label: 'SOLID', color: 'var(--tx-blue)', advice: 'Reliable value with the odd chain.' };
-    return { label: 'FLAT', color: 'var(--tx-amber)', advice: 'Reliable single hits; chains are rare.' };
+/** Chip for one card in a sample: hover previews the card. */
+function chip(card, extraClass = '') {
+    const type = card?.types?.[0] ?? 'land';
+    const name = escapeHtml(card?.name ?? '');
+    return `<span class="reveal-card ${type} ${extraClass}" data-card="${name}" tabindex="0">${name}</span>`;
 }
 
-/**
- * Pick the creature CMC in the swept range that yields the most free mana value.
- */
-function bestCMC(results) {
-    let best = null;
-    Object.keys(results).map(Number).forEach(cmc => {
-        const v = results[cmc]?.avgFreeMana ?? -1;
-        if (best == null || v > best.value) best = { x: cmc, value: v };
+/** What one discover passed over: names for spells, a count for lands. */
+function passedHTML(passed) {
+    if (!passed.length) return '';
+    const lands = passed.filter(c => c?.types?.includes('land')).length;
+    const spells = passed.filter(c => !c?.types?.includes('land'));
+    const shown = spells.slice(0, 4).map(c => chip(c, 'is-passed')).join('');
+    const more = spells.length > 4 ? `<span class="vx-more">+${spells.length - 4}</span>` : '';
+    const landNote = lands ? `<span class="vx-more">${lands} land${lands === 1 ? '' : 's'}</span>` : '';
+    return `<span class="vx-passed" title="Exiled and put on the bottom">${landNote}${shown}${more}</span>`;
+}
+
+function renderSamples(library, analysis, point, config) {
+    const el = document.getElementById('vortex-reveals-display');
+    if (!el) return;
+    if (!point || !analysis.hasLibrary) { el.innerHTML = ''; return; }
+
+    const key = `${point.mv}|${point.castName}|${config.treatStarAs5Plus}|${cache.version}`;
+    if (key !== lastSampleKey) { samplesShown = SAMPLE_BATCH; lastSampleKey = key; }
+
+    const samples = drawSamples(library, point.mv, {
+        castName: point.castName, count: samplesShown, round: sampleRound, treatStarAs5Plus: config.treatStarAs5Plus
     });
-    return best;
-}
 
-/**
- * Render the discover-by-CMC sweep table.
- */
-function updateTable(config, results) {
-    const cmcValues = Object.keys(results).map(Number).sort((a, b) => a - b);
-    const recommended = bestCMC(results)?.x ?? null;
-
-    const rows = cmcValues.map(cmc => ({ x: cmc, ...results[cmc] })).filter(r => r.creatureCMC !== undefined);
-
-    renderSweepTable('vortex-comparisonTable', {
-        current: config.creatureCMC,
-        recommended,
-        rows,
-        emptyText: 'Configure your deck with power 5+ creatures to see results.',
-        columns: [
-            { label: 'CMC', align: 'left', render: r => `${r.x}` },
-            { label: 'POOL', render: r => `${r.castableCards}` },
-            { label: 'AVG MV', render: r => `<span style="color:var(--tx-green);">${formatNumber(r.avgSpellCMC, 2)}</span>` },
-            { label: 'FREE MV', render: r => `<span style="color:var(--tx-amber);">${formatNumber(r.avgFreeMana, 2)}</span>` },
-            { label: 'CHAIN', align: 'left', render: r => pBarCell(r.multiDiscoverRate || 0, 'oklch(0.72 0.16 290)') },
-            { label: 'VERDICT', render: r => { const v = discoverVerdict(r.avgSpellsPerTrigger, r.castableCards); return `<span style="color:${v.color}; font-weight:600; letter-spacing:0.06em;">${v.label}</span>`; } }
-        ]
-    });
-}
-
-/**
- * Update stats panel
- */
-function updateStats(config, results) {
-    const statsPanel = document.getElementById('vortex-stats');
-    const currentResult = results[config.creatureCMC];
-
-    if (statsPanel && currentResult) {
-        const totalNonLands = config.cardDetails.length;
-        const castablePercent = totalNonLands > 0 ? (currentResult.castableCards / totalNonLands) * 100 : 0;
-        const hitRate = currentResult.successfulDiscoveries / 20000;
-
-        // Build detailed breakdown with actual card names
-        const discoverableCards = currentResult.discoverableCards || [];
-
-        // Group by CMC
-        const cmcGroups = {};
-        discoverableCards.forEach(card => {
-            if (!cmcGroups[card.cmc]) {
-                cmcGroups[card.cmc] = [];
-            }
-            cmcGroups[card.cmc].push(card);
-        });
-
-        // Build breakdown HTML
-        let castableCMCBreakdown = '';
-        if (Object.keys(cmcGroups).length > 0) {
-            const cmcSections = [];
-            Object.keys(cmcGroups).sort((a, b) => Number(a) - Number(b)).forEach(cmc => {
-                const cards = cmcGroups[cmc];
-                const power5Plus = cards.filter(c => c.isPower5Plus);
-                const regularCards = cards.filter(c => !c.isPower5Plus);
-
-                let section = `<strong>${cmc} CMC (${cards.length} cards)</strong>:`;
-
-                if (power5Plus.length > 0) {
-                    const names = power5Plus.map(c => c.name).join(', ');
-                    section += `<br>&nbsp;&nbsp;⚡ <span style="color: #9878b8;">Chain: ${names}</span>`;
-                }
-
-                if (regularCards.length > 0) {
-                    const names = regularCards.map(c => c.name).join(', ');
-                    section += `<br>&nbsp;&nbsp;• ${names}`;
-                }
-
-                cmcSections.push(section);
-            });
-
-            castableCMCBreakdown = `<br><div style="margin-top: 8px; padding-left: 8px; line-height: 1.6;">${cmcSections.join('<br>')}</div>`;
-        }
-
-        const verdict = discoverVerdict(currentResult.avgSpellsPerTrigger, currentResult.castableCards);
-
-        // Use the power5PlusInRange from the result
-        const power5PlusInRange = currentResult.power5PlusInRange || 0;
-        const chainablePercent = currentResult.castableCards > 0
-            ? (power5PlusInRange / currentResult.castableCards) * 100
-            : 0;
-
-        // Check if we're excluding a creature from the pool
-        const excludedCreatureNote = config.power5PlusAtCMC && config.power5PlusAtCMC.length > 0
-            ? `<div style="margin:0; padding:8px 14px; background:var(--tx-panel-alt); border-bottom:1px solid var(--tx-rule); border-left:2px solid oklch(0.72 0.16 290); font-size:11px;">
-                ⚡ Casting <strong style="color:var(--tx-bright);">${config.power5PlusAtCMC[0].name}</strong> — excluded from the discover pool
-               </div>`
-            : '';
-
-        const hero = renderHeroStats([
-            { label: 'AVG SPELLS', value: formatNumber(currentResult.avgSpellsPerTrigger, 2), sub: 'cast per trigger', color: 'var(--tx-bright)', size: 'big' },
-            { label: 'FREE MANA', value: formatNumber(currentResult.avgFreeMana, 1), sub: 'value per trigger', color: 'var(--tx-amber)' },
-            { label: 'CHAIN PROB', value: formatNumber(currentResult.multiDiscoverRate * 100, 1) + '%', sub: 'chance of 2+ spells', color: 'var(--tx-green)' },
-            { label: 'DISCOVER POOL', value: currentResult.castableCards, sub: `${formatNumber(castablePercent, 0)}% of non-lands`, color: 'var(--tx-mid)' }
-        ]);
-
-        const best = bestCMC(results);
-        const rec = best
-            ? renderRecommendation(`Best value casting a <strong>CMC-${best.x}</strong> creature (~${formatNumber(best.value, 1)} free mana). Chain density in this pool: <strong>${formatNumber(chainablePercent, 1)}%</strong> (${power5PlusInRange} power-5+ targets).`)
-            : '';
-
-        const insight = renderInsightBox('', `Casting a power-5+ creature at CMC ${config.creatureCMC} discovers ${config.creatureCMC}. Average discovered spell costs ${formatNumber(currentResult.avgSpellCMC, 1)} mana. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
-
-        const details = `<details style="padding:10px 14px; border-bottom:1px solid var(--tx-rule); color:var(--tx-dim); font-size:11px;">
-                <summary style="cursor:pointer; user-select:none; letter-spacing:0.06em;">DISCOVER POOL BREAKDOWN · ${currentResult.castableCards} CARDS</summary>
-                <div style="margin-top:8px; padding-left:8px;">
-                    ${castableCMCBreakdown || 'No castable spells'}<br>
-                    <strong style="color:var(--tx-text);">${power5PlusInRange} of these can chain</strong> (power 5+ creatures)
+    const items = samples.map((sample, i) => {
+        const steps = sample.steps.map(step => `
+            <li class="vx-step${step.chains ? ' is-chain' : ''}${step.hit ? '' : ' is-whiff'}">
+                <span class="vx-step-x">Discover ${step.discoverCMC}</span>
+                <span class="vx-step-body">
+                    ${passedHTML(step.passed)}
+                    ${step.hit
+                        ? `${chip(step.hit, 'is-hit')}<span class="vx-step-mv">${step.hit.cmc}</span>${step.chains ? '<span class="vx-tag">triggers again</span>' : ''}`
+                        : '<span class="vx-tag is-bad">nothing left to find</span>'}
+                </span>
+            </li>`).join('');
+        const tone = sample.chainCount === 0 ? 'is-whiff' : sample.chainCount >= 2 ? 'is-chain' : '';
+        return `
+            <li class="vx-sample ${tone}">
+                <div class="vx-sample-head">
+                    <span class="vx-sample-n">#${i + 1}</span>
+                    <span class="vx-sample-sum"><strong>${sample.chainMana} mana</strong> · ${sample.chainCount} free spell${sample.chainCount === 1 ? '' : 's'}</span>
                 </div>
-            </details>`;
+                <ol class="vx-steps">${steps}</ol>
+            </li>`;
+    }).join('');
 
-        statsPanel.innerHTML = excludedCreatureNote + hero + rec + insight + details;
-    }
+    el.innerHTML = `
+        <ol class="vx-samples">${items}</ol>
+        <div class="vx-sample-actions">
+            <button type="button" class="btn btn-ghost btn-sm" data-vx-action="reshuffle">Shuffle again</button>
+            ${samplesShown < SAMPLE_MAX ? '<button type="button" class="btn btn-ghost btn-sm" data-vx-action="more">Show more</button>' : ''}
+            <span class="vx-sample-note">${point.castName ? `${escapeHtml(point.castName)} is on the stack, so it is not in the library.` : 'Each is one real shuffle of your library.'}</span>
+        </div>`;
 }
 
-/**
- * Update all UI elements
- */
-export function updateUI() {
-    const { config, results } = calculate();
+/** Secondary detail: the pool, every mana value, and the full spread. */
+function renderDetails(library, analysis, point, config) {
+    const poolEl = document.getElementById('vortex-pool');
+    const poolSummary = document.getElementById('vortex-pool-summary');
+    const distEl = document.getElementById('vortex-dist');
+    const distSummary = document.getElementById('vortex-dist-summary');
 
-    // Show/hide import warning based on whether we have card details
-    const importWarning = document.getElementById('vortex-import-warning');
-    if (importWarning) {
-        if (config.cardDetails.length > 0) {
-            importWarning.style.display = 'none';
-        } else {
-            importWarning.style.display = 'block';
-        }
-    }
-
-    if (config.cardDetails.length === 0 || config.creaturesPower5Plus === 0 || Object.keys(results).length === 0) {
-        if (chart) chart.destroy();
-        document.getElementById('vortex-comparisonTable').innerHTML = '<div class="tx-empty">Configure your deck with power 5+ creatures to see results.</div>';
-        const statsPanel = document.getElementById('vortex-stats');
-        if (statsPanel) {
-            statsPanel.innerHTML = '<div class="tx-empty">Import a decklist to analyze Monstrous Vortex triggers.</div>';
-        }
+    if (!point || !analysis.hasLibrary) {
+        [poolEl, distEl].forEach(e => { if (e) e.innerHTML = ''; });
+        renderSweepTable('vortex-comparisonTable', { rows: [], columns: [], emptyText: 'Import a decklist to fill this in.' });
         return;
     }
 
-    updateChart(config, results);
-    updateTable(config, results);
-    updateStats(config, results);
+    const pool = discoverPool(library, point.mv, point.castName, config.treatStarAs5Plus);
+    if (poolSummary) poolSummary.textContent = `What discover ${point.mv} can find · ${pool.total} cards, ${pool.chainers} of them chain`;
+    if (poolEl) {
+        poolEl.innerHTML = pool.groups.length ? `
+            <dl class="vx-pool">
+                ${pool.groups.map(g => `
+                    <div class="vx-pool-row">
+                        <dt>MV ${g.mv}</dt>
+                        <dd>${g.cards.map(c => `${cardRef(c.name)}${c.count > 1 ? ` ×${c.count}` : ''}${c.chains ? ' <span class="vx-tag">chains</span>' : ''}`).join('<span class="vx-sep">·</span>')}</dd>
+                    </div>`).join('')}
+            </dl>` : '<div class="tx-empty">Nothing in the library costs this little.</div>';
+    }
 
-    // Call sample reveals if container exists and we have data
-    if (document.getElementById('vortex-reveals-display') && config.cardDetails.length > 0) {
-         runSampleReveals();
+    renderSweepTable('vortex-comparisonTable', {
+        current: point.mv,
+        rows: analysis.byMV,
+        columns: [
+            { label: 'MV', align: 'left', render: r => r.mv },
+            { label: 'Can hit', render: r => r.pool },
+            { label: 'Average', render: r => formatNumber(r.stats.avgMana, 1) },
+            { label: 'Typical', render: r => r.stats.medianMana },
+            { label: 'Good turn', render: r => r.stats.p95Mana },
+            { label: 'Great turn', render: r => r.stats.p99Mana },
+            { label: 'Chains', render: r => pct(r.stats.chainRate) },
+            { label: 'Finds nothing', render: r => (r.stats.whiffRate > 0 ? pct(r.stats.whiffRate) : '—') },
+            { label: 'Your creatures', align: 'left', render: r => (r.names.length ? r.names.map(n => cardRef(n)).join(', ') : '<span class="vx-dim">—</span>') }
+        ]
+    });
+
+    const s = point.stats;
+    if (distSummary) distSummary.textContent = `How one discover ${point.mv} trigger spreads out`;
+    if (distEl) {
+        distEl.innerHTML = `
+            <div class="vx-dist-grid">
+                <div>
+                    <div class="tx-sim-block-title">Free spells per trigger</div>
+                    ${foldedChart(s.chainDist, s.runs, (i, plus) => `${i}${plus} spell${i === 1 && !plus ? '' : 's'}`, i => (i >= 2 ? 'chain' : null))}
+                </div>
+                <div>
+                    <div class="tx-sim-block-title">Free mana per trigger</div>
+                    ${foldedChart(s.manaDist, s.runs, (i, plus) => `${i}${plus} mana`, i => (i === s.p95Mana ? 'good turn' : i === s.medianMana ? 'typical' : null))}
+                </div>
+            </div>`;
     }
 }
 
 /**
- * Initialize Vortex calculator
+ * A spread chart whose far tail is folded into one "N+" row, so its last row
+ * is never the largest run seen — that is a sampled maximum by another name.
  */
-export function init() {
-    registerCalculator({
-        name: 'vortex',
-        calculate,
-        updateUI,
-        inputs: ['cmc'], // Binds vortex-cmcSlider and vortex-cmcValue
-        init: (debouncedUpdate) => {
-            const container = document.getElementById('vortex-sample-reveals');
-            if (container) {
-                container.innerHTML = generateSampleRevealsHTML('vortex', 'Sample Discover Reveals');
-            }
-            const starPowerCheckbox = document.getElementById('vortex-star-power');
-            if (starPowerCheckbox) {
-                starPowerCheckbox.addEventListener('change', () => debouncedUpdate());
-            }
+function foldedChart(dist, runs, label, marker) {
+    const { counts, cut, folded } = foldTail(dist);
+    return renderDistributionChart(counts, runs, i => label(i, folded && i === cut ? '+' : ''), marker, i => (i === 0 ? 'bad' : null));
+}
 
-            const revealBtn = document.getElementById('vortex-draw-reveals-btn');
-            if (revealBtn) {
-                // Use refreshSamples
-                revealBtn.addEventListener('click', refreshSamples);
-            }
-        }
+
+/** Show or hide the evidence panels; without a deck only the answer remains. */
+function showPanels(ids, visible) {
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) el.hidden = !visible;
+    }
+}
+
+export function updateUI() {
+    const { config, library, analysis, point } = calculate();
+    showPanels(['vortex-selected-panel', 'vortex-samples-panel', 'vortex-more-panel'], analysis.hasLibrary);
+    syncSlider(analysis, point);
+    renderAnswer(analysis, point);
+    renderSelected(analysis, point);
+    renderSamples(library, analysis, point, config);
+    renderDetails(library, analysis, point, config);
+}
+
+/** Point the slider (and everything it drives) at a mana value. */
+function selectMV(mv) {
+    if (!Number.isFinite(mv)) return;
+    selectedMV = mv;
+    updateUI();
+}
+
+// ==================== SHARE LINKS ====================
+
+/** The mana value travels via the legacy `vortexCMC` slider param; this adds the star reading. */
+export function getShareParams() {
+    const star = document.getElementById('vortex-star-power');
+    return star ? { vortexStar: star.checked ? 1 : 0 } : {};
+}
+
+export function applyShareParams(params) {
+    const raw = params?.get?.('vortexStar');
+    if (raw !== '0' && raw !== '1') return;
+    const star = document.getElementById('vortex-star-power');
+    if (star) {
+        star.checked = raw === '1';
+        updateUI();
+    }
+}
+
+// ==================== INIT ====================
+
+export function init() {
+    registerCalculator({ name: 'vortex', calculate, updateUI, inputs: [] });
+
+    // The slider re-reads a cached analysis, so it can update on every input
+    // event without debouncing — nothing is re-simulated while dragging.
+    const slider = document.getElementById('vortex-cmcSlider');
+    slider?.addEventListener('input', () => selectMV(parseInt(slider.value, 10)));
+
+    document.getElementById('vortex-star-power')?.addEventListener('change', () => updateUI());
+
+    // One delegated listener for everything rendered inside the page.
+    document.getElementById('vortex-tab')?.addEventListener('click', (e) => {
+        const action = e.target.closest?.('[data-vx-action]')?.dataset.vxAction;
+        if (action === 'reshuffle') { sampleRound += 1; updateUI(); return; }
+        if (action === 'more') { samplesShown = Math.min(SAMPLE_MAX, samplesShown + SAMPLE_BATCH); updateUI(); return; }
+        const row = e.target.closest?.('tr[data-mv]');
+        if (row) selectMV(parseInt(row.dataset.mv, 10));
+    });
+    document.getElementById('vortex-tab')?.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const row = e.target.closest?.('tr[data-mv]');
+        if (row && e.target === row) { e.preventDefault(); selectMV(parseInt(row.dataset.mv, 10)); }
     });
 }

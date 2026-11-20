@@ -11,7 +11,8 @@ import {
     analyzeDeck,
     groupAt,
     snapToTotal,
-    fitVerdict
+    fitVerdict,
+    summarize
 } from '../../js/calculators/wildpair.js';
 
 /**
@@ -422,14 +423,25 @@ describe('analyzeDeck — selector data', () => {
 // ==================== fitVerdict ====================
 
 describe('fitVerdict', () => {
-    it('reports NO DATA before a decklist is imported', () => {
-        assert.strictEqual(fitVerdict(analyzeDeck([])).label, 'NO DATA');
+    it('reports no data before a decklist is imported', () => {
+        const v = fitVerdict(analyzeDeck([]));
+        assert.strictEqual(v.label, 'No data');
+        assert.strictEqual(v.tone, 'flat');
     });
 
-    it('reports NO MATCHES when nothing shares a total', () => {
+    it('reports no matches when nothing shares a total', () => {
         const v = fitVerdict(analyzeDeck([creature('A', 1, 1, 1), creature('B', 2, 2, 2)]));
-        assert.strictEqual(v.label, 'NO MATCHES');
+        assert.strictEqual(v.label, 'No matches');
         assert.strictEqual(v.color, 'var(--tx-bad)');
+        assert.strictEqual(v.tone, 'bad');
+    });
+
+    it('colours a fair fit as a warning, never with the accent', () => {
+        const deck = [creature('Fatty A', 9, 6, 6), creature('Fatty B', 8, 5, 7)];
+        for (let i = 0; i < 12; i++) deck.push(creature(`Lonely ${i}`, 2, i + 1, 1));
+        const v = fitVerdict(analyzeDeck(deck));
+        assert.strictEqual(v.color, 'var(--tx-warn)');
+        assert.strictEqual(v.tone, 'warn');
     });
 
     it('rates a deck of matched one-drops poorly — live everywhere, cheats nothing', () => {
@@ -461,5 +473,66 @@ describe('fitVerdict', () => {
     it('never throws on a missing analysis', () => {
         assert.doesNotThrow(() => fitVerdict(null));
         assert.doesNotThrow(() => fitVerdict({}));
+    });
+});
+
+// ==================== summarize ====================
+
+describe('summarize', () => {
+    it('asks for a decklist when there is no data', () => {
+        const s = summarize(analyzeDeck([]));
+        assert.strictEqual(s.tone, 'flat');
+        assert.ok(/Import a decklist/.test(s.html));
+    });
+
+    it('says plainly when nothing can ever be found', () => {
+        const s = summarize(analyzeDeck([creature('A', 1, 1, 1), creature('B', 2, 2, 2)]));
+        assert.strictEqual(s.tone, 'bad');
+        assert.ok(/None of your <strong>2 creatures<\/strong>/.test(s.html), s.html);
+    });
+
+    it('counts the creatures with a partner and quotes the average find', () => {
+        const deck = [
+            creature('Bear', 2, 3, 3), creature('Wurm', 7, 3, 3),   // total 6: live
+            creature('Mouse', 1, 1, 1)                               // total 2: alone
+        ];
+        const s = summarize(analyzeDeck(deck));
+        assert.ok(/2 of your 3 creatures/.test(s.html), s.html);
+        // Bear finds Wurm (7), Wurm finds Bear (2): average 4.5.
+        assert.ok(/4\.5 mana/.test(s.html), s.html);
+        assert.ok(/The other 1 find nothing/.test(s.html), s.html);
+    });
+
+    it('names the best line with hoverable card references', () => {
+        const s = summarize(analyzeDeck([creature('Bear', 2, 3, 3), creature('Wurm', 7, 3, 3)]));
+        assert.ok(s.html.includes('data-card="Bear"'), s.html);
+        assert.ok(s.html.includes('data-card="Wurm"'), s.html);
+        assert.ok(/cast .*Bear.*\(2\).*Wurm.*\(7\)/.test(s.html), s.html);
+    });
+
+    it('leaves out the best line when every match is an even trade', () => {
+        const s = summarize(analyzeDeck([creature('A', 3, 2, 2), creature('B', 3, 1, 3)]));
+        assert.ok(!/Best line/.test(s.html), s.html);
+    });
+
+    it('carries the fit rating in its label and tone', () => {
+        const deck = [];
+        for (let i = 0; i < 5; i++) {
+            deck.push(creature(`cheap${i}`, 4, 3, 3));
+            deck.push(creature(`big${i}`, 8, 4, 2));
+        }
+        const s = summarize(analyzeDeck(deck));
+        assert.strictEqual(s.tone, 'good');
+        assert.strictEqual(s.label, 'Bottom line · Excellent fit');
+    });
+
+    it('escapes card names', () => {
+        const s = summarize(analyzeDeck([creature('<b>A</b>', 1, 2, 2), creature('B', 6, 3, 1)]));
+        assert.ok(!s.html.includes('<b>A</b>'), s.html);
+    });
+
+    it('never throws on a missing analysis', () => {
+        assert.doesNotThrow(() => summarize(null));
+        assert.doesNotThrow(() => summarize({}));
     });
 });

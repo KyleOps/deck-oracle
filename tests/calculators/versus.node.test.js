@@ -8,8 +8,12 @@ import {
     outcomeDist,
     outcomeOdds,
     contestedOdds,
-    verdict
+    verdict,
+    summarize,
+    curveSplit
 } from '../../js/calculators/versus.js';
+import { buildDeckFromCardData } from '../../js/utils/sampleSimulator.js';
+import { discoverForCreature } from '../../js/utils/discover.js';
 
 /** A per-copy creature entry in the cardDetails shape. */
 function creature(name, cmc, power, toughness) {
@@ -133,6 +137,38 @@ describe('ENGINES.wildpair', () => {
         assert.strictEqual(r.detail, 'no fixed total');
     });
 
+    it('finds the other member however the deck orders them', () => {
+        // Group entries are sorted by mana value; the deck lists the big one
+        // first. Each cast must still find the OTHER creature, never itself.
+        const { deck, cardData } = makeDeck([
+            creature('Big', 8, 1, 1), creature('Small', 2, 1, 1)
+        ]);
+        const ctx = buildContext(deck, cardData);
+        const prepared = ENGINES.wildpair.prepare(ctx);
+        const big = ENGINES.wildpair.evaluate(ctx.creatures[0], prepared);
+        const small = ENGINES.wildpair.evaluate(ctx.creatures[1], prepared);
+        assert.strictEqual(big.mean, 2);
+        assert.strictEqual(big.detail, 'Small');
+        assert.strictEqual(small.mean, 8);
+        assert.strictEqual(small.detail, 'Big');
+    });
+
+    it('lets one copy of a card find another copy of itself', () => {
+        const twin = creature('Twin', 5, 2, 2);
+        const { deck, cardData } = makeDeck([twin, { ...twin }, creature('Cheap', 1, 3, 1)]);
+        const ctx = buildContext(deck, cardData);
+        const prepared = ENGINES.wildpair.prepare(ctx);
+        // Casting Cheap finds a Twin (5); casting a Twin finds the other Twin.
+        assert.strictEqual(ENGINES.wildpair.evaluate(ctx.creatures[2], prepared).mean, 5);
+        assert.strictEqual(ENGINES.wildpair.evaluate(ctx.creatures[0], prepared).mean, 5);
+    });
+
+    it('does not write onto the shared deck state', () => {
+        const { deck, cardData } = makeDeck([creature('A', 2, 2, 2), creature('B', 4, 3, 1)]);
+        buildContext(deck, cardData);
+        assert.ok(deck.cardDetails.every(c => Object.keys(c).every(k => !k.startsWith('__'))));
+    });
+
     it('is certain — its best and worst outcome are the same card', () => {
         const { deck, cardData } = makeDeck([
             creature('A', 1, 2, 2), creature('B', 4, 3, 1), creature('C', 9, 1, 3)
@@ -169,6 +205,35 @@ describe('ENGINES.vortex', () => {
         assert.strictEqual(r.certain, false);
         assert.ok(r.mean > 0);
         assert.strictEqual(r.detail, 'discover 6');
+    });
+
+    it('never discovers the creature being cast — it is on the stack', () => {
+        // The only other card costs too much, so the cast creature is the only
+        // thing discover 6 could hit if it were (wrongly) left in the library.
+        const { deck, cardData } = makeDeck([creature('Fatty', 6, 6, 6), creature('Huge', 9, 1, 1)]);
+        const ctx = buildContext(deck, cardData);
+        const r = ENGINES.vortex.evaluate(ctx.creatures[0], ENGINES.vortex.prepare(ctx));
+        assert.strictEqual(r.triggers, true);
+        assert.strictEqual(r.mean, 0);
+        assert.strictEqual(r.stats.whiffRate, 1);
+    });
+
+    it('matches the Monstrous Vortex page exactly for the same creature', () => {
+        const { deck, cardData } = makeDeck([
+            creature('Fatty', 6, 6, 6), creature('Other', 5, 5, 5), creature('Small', 2, 1, 1), spell('Ramp', 3)
+        ]);
+        const ctx = buildContext(deck, cardData);
+        const r = ENGINES.vortex.evaluate(ctx.creatures[0], ENGINES.vortex.prepare(ctx));
+        const page = discoverForCreature(buildDeckFromCardData(cardData), { name: 'Fatty', cmc: 6 });
+        assert.strictEqual(r.mean, page.avgMana);
+        assert.strictEqual(r.p95, page.p95Mana);
+    });
+
+    it('quotes a great turn as its best, never a sampled maximum', () => {
+        const { deck, cardData } = makeDeck([creature('Fatty', 6, 6, 6), creature('Small', 2, 1, 1)]);
+        const ctx = buildContext(deck, cardData);
+        const r = ENGINES.vortex.evaluate(ctx.creatures[0], ENGINES.vortex.prepare(ctx));
+        assert.strictEqual(r.best, r.stats.p99Mana);
     });
 
     it('respects the star-power reading when deciding what triggers', () => {
@@ -261,8 +326,8 @@ describe('compareEngines', () => {
 
 describe('verdict', () => {
     it('reports NO DATA without a comparison', () => {
-        assert.strictEqual(verdict(null).label, 'NO DATA');
-        assert.strictEqual(verdict({ creatures: 0 }).label, 'NO DATA');
+        assert.strictEqual(verdict(null).label, 'No data');
+        assert.strictEqual(verdict({ creatures: 0 }).label, 'No data');
     });
 
     it('calls a dead heat rather than inventing a winner', () => {
@@ -275,7 +340,7 @@ describe('verdict', () => {
         };
         const v = verdict(cmp);
         assert.strictEqual(v.leader, 'tie');
-        assert.strictEqual(v.label, 'TOO CLOSE TO CALL');
+        assert.strictEqual(v.label, 'Too close to call');
     });
 
     it('names the leader and quotes the gap per cast', () => {
@@ -288,7 +353,7 @@ describe('verdict', () => {
         };
         const v = verdict(cmp);
         assert.strictEqual(v.leader, 'a');
-        assert.ok(v.label.includes('WILD PAIR'));
+        assert.strictEqual(v.label, 'Wild Pair leads');
         assert.ok(/3\.00 more mana/.test(v.advice), v.advice);
     });
 
@@ -496,5 +561,116 @@ describe('compareEngines — contested casts', () => {
         ]);
         const cmp = compareEngines(buildContext(deck, cardData), 'wildpair', 'vortex');
         assert.strictEqual(cmp.contested.casts, 0);
+    });
+});
+
+// ==================== summarize ====================
+
+describe('summarize', () => {
+    function mixed() {
+        return makeDeck([
+            creature('Dork A', 1, 1, 1),
+            creature('Dork B', 3, 1, 1),
+            creature('Fatty A', 6, 6, 6),
+            creature('Fatty B', 8, 6, 6),
+            spell('Ramp', 3), spell('Rampant', 2)
+        ]);
+    }
+
+    it('asks for a decklist without a comparison', () => {
+        assert.strictEqual(summarize(null).tone, 'flat');
+        assert.ok(/Import a decklist/.test(summarize(null).html));
+    });
+
+    it('keeps the two shapes apart: how often each fires, and what it gives', () => {
+        const { deck, cardData } = mixed();
+        const s = summarize(compareEngines(buildContext(deck, cardData), 'wildpair', 'vortex'));
+        // Wild Pair fires on all four (two pairs); Vortex on the two fatties.
+        assert.ok(/Wild Pair fires on <strong>4 of 4<\/strong>/.test(s.html), s.html);
+        assert.ok(/Monstrous Vortex fires on <strong>2 of 4<\/strong>/.test(s.html), s.html);
+        assert.ok(/you pick the result/.test(s.html), s.html);
+        assert.ok(/rolls for it/.test(s.html), s.html);
+        assert.ok(/data-term="p95"/.test(s.html), s.html);
+    });
+
+    it('names the engine that does more and by how much', () => {
+        const { deck, cardData } = mixed();
+        const cmp = compareEngines(buildContext(deck, cardData), 'wildpair', 'vortex');
+        const s = summarize(cmp);
+        const v = verdict(cmp);
+        assert.notStrictEqual(v.leader, 'tie');
+        const leader = v.leader === 'a' ? 'Wild Pair' : 'Monstrous Vortex';
+        assert.ok(s.html.includes(`<strong>${leader}</strong> does more`), s.html);
+        assert.strictEqual(s.tone, 'good');
+    });
+
+    it('reports how often the certain pick beats the roll where both fire', () => {
+        const { deck, cardData } = mixed();
+        const s = summarize(compareEngines(buildContext(deck, cardData), 'wildpair', 'vortex'));
+        assert.ok(/Where both fire \(2 creatures\), Wild Pair’s pick beats the roll \d+% of the time/.test(s.html), s.html);
+    });
+
+    it('calls it plainly when neither engine ever fires', () => {
+        const { deck, cardData } = makeDeck([creature('A', 1, 1, 1), creature('B', 2, 2, 1)]);
+        const s = summarize(compareEngines(buildContext(deck, cardData), 'wildpair', 'vortex'));
+        assert.strictEqual(s.tone, 'bad');
+        assert.ok(/Neither engine/.test(s.html), s.html);
+    });
+
+    it('reads as a dead heat when the averages are level', () => {
+        const cmp = {
+            creatures: 4,
+            contested: { casts: 0 },
+            summary: {
+                a: { engine: ENGINES.wildpair, perCast: 3.0, coverage: 1, fires: 4, perTrigger: 3, certain: true, p95: 3 },
+                b: { engine: ENGINES.vortex, perCast: 3.1, coverage: 0.5, fires: 2, perTrigger: 6.2, certain: false, firedMedian: 5, firedP95: 12, p95: 9 }
+            }
+        };
+        const s = summarize(cmp);
+        assert.strictEqual(s.tone, 'flat');
+        assert.ok(/Too close to call/.test(s.html), s.html);
+    });
+});
+
+// ==================== curveSplit ====================
+
+describe('curveSplit', () => {
+    it('weights each mana value by how many creatures sit there', () => {
+        const split = curveSplit([
+            { cmc: 2, count: 3, a: 2, b: 0 },
+            { cmc: 4, count: 1, a: 6, b: 4 },
+            { cmc: 5, count: 9, a: 99, b: 99 },     // the middle is in neither band
+            { cmc: 7, count: 2, a: 1, b: 8 }
+        ]);
+        assert.strictEqual(split.early.count, 4);
+        assert.strictEqual(split.early.a, 3);       // (2*3 + 6) / 4
+        assert.strictEqual(split.early.b, 1);       // (0*3 + 4) / 4
+        assert.deepStrictEqual(split.late, { a: 1, b: 8, count: 2 });
+    });
+
+    it('reports empty bands rather than dividing by zero', () => {
+        assert.deepStrictEqual(curveSplit([]).early, { a: 0, b: 0, count: 0 });
+        assert.deepStrictEqual(curveSplit(undefined).late, { a: 0, b: 0, count: 0 });
+    });
+});
+
+describe('compareEngines — per-side shape', () => {
+    it('reports fires as a count and the percentiles of fired casts only', () => {
+        const { deck, cardData } = makeDeck([
+            creature('Dork', 1, 1, 1), creature('Fatty A', 6, 6, 6), creature('Fatty B', 8, 6, 6), spell('Ramp', 2)
+        ]);
+        const cmp = compareEngines(buildContext(deck, cardData), 'wildpair', 'vortex');
+        assert.strictEqual(cmp.summary.a.fires, 2);
+        assert.strictEqual(cmp.summary.b.fires, 2);
+        // Over every cast the Dork's zero drags the typical result down; over
+        // fired casts only it does not.
+        assert.ok(cmp.summary.a.firedMedian >= cmp.summary.a.median);
+    });
+
+    it('exposes both prepared sides, whichever side the discover engine is on', () => {
+        const { deck, cardData } = makeDeck([creature('Fatty', 6, 6, 6), creature('Small', 2, 1, 1)]);
+        const cmp = compareEngines(buildContext(deck, cardData), 'vortex', 'wildpair');
+        assert.ok(cmp.prepared.a.byCreature instanceof Map);
+        assert.ok(cmp.prepared.b.byTotal instanceof Map);
     });
 });

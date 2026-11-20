@@ -33,22 +33,11 @@ import { formatNumber, formatPercentage } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import {
-    renderHeroStats, renderRecommendation, renderSweepTable
-} from '../utils/components.js';
+import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
+import { cardRef, escapeHtml } from '../data/glossary.js';
 
 /** Wild Pair's own mana cost — the bar a single activation is measured against. */
 export const WILD_PAIR_COST = 6;
-
-let ptChart = null;
-
-/**
- * Total the user is inspecting. Null means "follow the deck", which snaps to the
- * deepest group; once the user picks one their choice sticks until a different
- * deck is loaded.
- */
-let selectedTotal = null;
-let lastDeckKey = '';
 
 // ==================== PURE MATH ====================
 
@@ -313,25 +302,25 @@ export function fitVerdict(analysis) {
 
     if (!analysis?.hasData) {
         return {
-            tier: 'unknown', label: 'NO DATA', color: 'var(--tx-dim)',
+            tier: 'unknown', label: 'No data', tone: 'flat', color: 'var(--tx-dim)',
             advice: 'Import a decklist so power and toughness are known for every creature.'
         };
     }
     if (liveBuckets === 0) {
         return {
-            tier: 'unplayable', label: 'NO MATCHES', color: 'var(--tx-bad)',
+            tier: 'unplayable', label: 'No matches', tone: 'bad', color: 'var(--tx-bad)',
             advice: 'Every creature has a unique total power + toughness, so Wild Pair can never find anything. It is a blank six-drop in this deck.'
         };
     }
     if (liveRate >= 0.7 && avgCheat >= 5) {
         return {
-            tier: 'excellent', label: 'EXCELLENT FIT', color: 'var(--tx-good)',
+            tier: 'excellent', label: 'Excellent fit', tone: 'good', color: 'var(--tx-good)',
             advice: 'Most of the creature base is matched, and the bodies it finds are big. Wild Pair pays for itself on the first trigger.'
         };
     }
     if (liveRate >= 0.5 && avgCheat >= 3.5) {
         return {
-            tier: 'good', label: 'GOOD FIT', color: 'var(--tx-good)',
+            tier: 'good', label: 'Good fit', tone: 'good', color: 'var(--tx-good)',
             advice: 'Enough matched totals that most creature casts find something worth having.'
         };
     }
@@ -341,17 +330,66 @@ export function fitVerdict(analysis) {
     // big enough to build around on its own.
     if ((liveRate >= 0.3 && avgCheat >= 2.5) || biggestFetch >= WILD_PAIR_COST + 1) {
         return {
-            tier: 'fair', label: 'FAIR FIT', color: 'var(--tx-accent)',
-            advice: 'It connects often enough to matter, but plenty of creatures still find nothing worth the six mana. Move more of them onto shared totals.'
+            tier: 'fair', label: 'Fair fit', tone: 'warn', color: 'var(--tx-warn)',
+            advice: 'It connects often enough to matter, but plenty of creatures still find nothing. Moving more of them onto shared totals is what makes it good.'
         };
     }
     return {
-        tier: 'poor', label: 'POOR FIT', color: 'var(--tx-bad)',
+        tier: 'poor', label: 'Poor fit', tone: 'bad', color: 'var(--tx-bad)',
         advice: 'The matches that exist are too small to be worth six mana. Add a big creature that matches a cheap one you already play.'
     };
 }
 
+/**
+ * The bottom line: how much of the creature base Wild Pair can use, what one
+ * trigger is worth, and the best line in the deck — per activation, never a
+ * game total, because a six-mana enchantment is rarely out for long.
+ *
+ * @param {Object} analysis - Result of analyzeDeck
+ * @returns {{html:string, tone:'good'|'warn'|'bad'|'flat', label:string}}
+ */
+export function summarize(analysis) {
+    const fit = fitVerdict(analysis);
+    const label = fit.tier === 'unknown' ? 'Bottom line' : `Bottom line · ${fit.label}`;
+
+    if (!analysis?.hasData) {
+        return {
+            label, tone: 'flat',
+            html: 'Import a decklist so every creature’s power and toughness is known — that total is the only thing Wild Pair matches on.'
+        };
+    }
+    if (analysis.liveBuckets === 0) {
+        return {
+            label, tone: 'bad',
+            html: `None of your <strong>${analysis.creatures} creatures</strong> share a total power + toughness, so Wild Pair never finds anything here. One creature that matches a total you already play would change that.`
+        };
+    }
+
+    const n = analysis.creatures;
+    const live = analysis.liveCreatures;
+    const dead = analysis.deadCreatures;
+    let html = `<strong>${live} of your ${n} creatures</strong> share a total with another, so casting one finds a creature worth <strong>${formatNumber(analysis.avgCheat, 1)} mana</strong> on average.`;
+
+    const top = analysis.bestLines[0];
+    if (top && top.leverage > 0) {
+        html += ` Best line: cast ${cardRef(top.cast.name)} (${top.cast.cmc}) and put ${cardRef(top.fetched.name)} (${top.fetched.cmc}) onto the battlefield.`;
+    }
+    if (dead > 0) html += ` The other ${dead} find nothing.`;
+
+    return { label, tone: fit.tone, html };
+}
+
 // ==================== CONFIG ====================
+
+/**
+ * Total the user is inspecting. Null means "follow the deck", which snaps to the
+ * deepest group; once the user picks one their choice sticks until a different
+ * deck is loaded.
+ */
+let selectedTotal = null;
+let lastDeckKey = '';
+let lastTotals = [];
+let ptChart = null;
 
 /**
  * A signature of the deck's creature base, used to decide when the selection
@@ -378,7 +416,9 @@ export function getConfig() {
 }
 
 /**
- * Run the analysis and resolve which total is being inspected.
+ * Run the analysis and resolve which total is being inspected. Pure reads of
+ * the decklist — there is nothing random to simulate, so this is cheap enough
+ * to run on every render.
  * @returns {{config:Object, analysis:Object, fit:Object, total:number|null, group:Object|null}}
  */
 export function calculate() {
@@ -387,13 +427,17 @@ export function calculate() {
 
     const key = deckKeyOf(analysis);
     if (key !== lastDeckKey) {
+        // A total chosen before the first analysis (a share link) is kept and
+        // snapped; any later deck change starts again from the deepest group.
+        const keepShared = lastDeckKey === '' && Number.isFinite(selectedTotal);
         lastDeckKey = key;
-        selectedTotal = analysis.bestBucket?.total ?? analysis.minTotal;
+        if (!keepShared) selectedTotal = analysis.bestBucket?.total ?? analysis.minTotal;
     }
 
     // Always resolve to a total the deck has, so no view can be empty.
     const total = snapToTotal(analysis, selectedTotal);
     selectedTotal = total;
+    lastTotals = analysis.totals;
 
     return { config, analysis, fit: fitVerdict(analysis), total, group: groupAt(analysis, total) };
 }
@@ -410,7 +454,7 @@ export function setSelectedTotal(total) {
 
 // ==================== UI ====================
 
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** "6–8 mana", or "6 mana" when every card in the group costs the same. */
 function cheatRangeText(row) {
@@ -420,22 +464,84 @@ function cheatRangeText(row) {
         : `${row.cheatMin}–${row.cheatMax} mana`;
 }
 
+/** Swing as signed text with a class for its colour. */
+function swingHTML(swing) {
+    return `<span class="wp-up${swing > 0 ? ' is-up' : ''}">${swing > 0 ? '+' : ''}${swing}</span>`;
+}
+
+/** The answer: bottom line, four supporting numbers, the fit note. */
+function renderAnswer(analysis, fit) {
+    const el = document.getElementById('wildpair-answer');
+    if (!el) return;
+    const line = summarize(analysis);
+
+    if (!analysis.hasData || analysis.liveBuckets === 0) {
+        el.innerHTML = renderBottomLine(line) + dataNoteHTML(analysis);
+        return;
+    }
+
+    const biggest = analysis.liveRows.find(r => r.cheatMax === analysis.biggestFetch)?.dearest;
+    el.innerHTML = `
+        ${renderBottomLine(line)}
+        ${renderHeroStats([
+            {
+                label: 'Matched creatures',
+                value: formatPercentage(analysis.liveRate, 0),
+                sub: `${analysis.liveCreatures} of ${analysis.creatures} find something`,
+                color: analysis.liveRate >= 0.5 ? 'var(--tx-good)' : 'var(--tx-warn)',
+                tip: 'Creatures that share their total power + toughness with at least one other creature in the deck. Casting any of them gives Wild Pair something to search for.'
+            },
+            {
+                label: 'Average find',
+                value: formatNumber(analysis.avgCheat, 1),
+                sub: 'mana value per trigger',
+                tip: 'For each creature with a match, the mana value of the best creature it can search up — averaged. One trigger, not a whole game.'
+            },
+            {
+                label: 'Biggest find',
+                value: analysis.biggestFetch,
+                sub: biggest ? `mana value · ${escapeHtml(biggest.name)}` : 'mana value',
+                tip: 'The most expensive creature Wild Pair can put onto the battlefield in this deck. A tutor’s best case is certain, not luck.'
+            },
+            {
+                label: 'Matched totals',
+                value: analysis.liveBuckets,
+                sub: `of ${plural(analysis.buckets, 'total')} in the deck`,
+                tip: 'Distinct power + toughness totals that two or more of your creatures share.'
+            }
+        ])}
+        <p class="wp-fit-note"><strong>${escapeHtml(fit.label)}.</strong> ${escapeHtml(fit.advice)}</p>
+        ${dataNoteHTML(analysis)}`;
+}
+
 /**
- * The primary panel: the full pool at the selected total.
- *
- * Membership is undifferentiated, so the roster is just the cards — printed
- * stats, nothing invented. The single derived number worth stating is the
- * widest mana swing the pool allows, named with both of its endpoints, and the
- * bar on each row makes the pool's spread legible without a column of repeated
- * card names.
+ * Creatures with variable boxes or missing data change the numbers, so they
+ * are named rather than silently dropped.
  */
-function renderSelectedGroup(analysis, total, group) {
+function dataNoteHTML(analysis) {
+    const bits = [];
+    if (analysis.variable.length > 0) {
+        const names = analysis.variable.slice(0, 3).map(c => cardRef(c.name)).join(', ');
+        bits.push(`${plural(analysis.variable.length, 'creature')} with a variable power or toughness (${names}${analysis.variable.length > 3 ? ', …' : ''}) ${analysis.variable.length === 1 ? 'has' : 'have'} no fixed total, so Wild Pair can never match ${analysis.variable.length === 1 ? 'it' : 'them'}.`);
+    }
+    if (analysis.missing > 0) {
+        bits.push(`${plural(analysis.missing, 'creature')} ${analysis.missing === 1 ? 'is' : 'are'} missing power and toughness. Re-import the decklist to fill ${analysis.missing === 1 ? 'it' : 'them'} in.`);
+    }
+    return bits.length ? `<div class="wp-datanote">${bits.map(b => `<p>${b}</p>`).join('')}</div>` : '';
+}
+
+/**
+ * The full pool at the selected total. Membership is undifferentiated, so the
+ * roster is just the cards; the one derived number is the widest swing, named
+ * with both of its endpoints, and the bars make the spread legible.
+ */
+function renderSelectedGroup(analysis, group) {
     const el = document.getElementById('wildpair-group');
     if (!el) return;
 
     if (!analysis.hasData || !group) {
         el.innerHTML = `
-            <div class="tx-h"><span>Search pool</span><span class="tx-h-r">no deck</span></div>
+            <div class="tx-h"><span>Search pool</span></div>
             <div class="tx-empty">Import a decklist to group your creatures by total power and toughness.</div>`;
         return;
     }
@@ -444,62 +550,50 @@ function renderSelectedGroup(analysis, total, group) {
     // is comparable when stepping between groups, not just within one.
     const scaleMax = Math.max(1, ...analysis.rows.flatMap(r => r.cards.map(c => c.cmc)));
 
-    const poolRows = group.cards.map(card => {
-        const isLow = group.live && card === group.cheapest;
-        const isHigh = group.live && card === group.dearest;
+    const roster = group.cards.map(card => {
+        const isLow = group.live && group.swing > 0 && card === group.cheapest;
+        const isHigh = group.live && group.swing > 0 && card === group.dearest;
         const cls = isHigh ? ' is-high' : isLow ? ' is-low' : '';
-        const edge = isHigh ? 'DEAREST' : isLow ? 'CHEAPEST' : '';
         return `
-            <div class="wp-opt${cls}">
-                <span class="wp-opt-pt">${esc(card.power)}/${esc(card.toughness)}</span>
-                <span class="wp-opt-name">${esc(card.name)}</span>
-                <span class="wp-opt-edge">${edge}</span>
-                <span class="wp-opt-bar"><span class="wp-opt-bar-fill" style="width:${(card.cmc / scaleMax * 100).toFixed(1)}%;"></span></span>
+            <li class="wp-opt${cls}">
+                <span class="wp-opt-pt">${escapeHtml(card.power)}/${escapeHtml(card.toughness)}</span>
+                <span class="wp-opt-name">${cardRef(card.name)}</span>
+                <span class="wp-opt-edge">${isHigh ? 'priciest' : isLow ? 'cheapest' : ''}</span>
+                <span class="wp-opt-bar" aria-hidden="true"><span class="wp-opt-bar-fill" style="width:${(card.cmc / scaleMax * 100).toFixed(1)}%"></span></span>
                 <span class="wp-opt-mv">${card.cmc}</span>
-            </div>`;
+            </li>`;
     }).join('');
 
-    const swingHTML = group.live ? `
-        <div class="wp-swing">
-            <span class="wp-swing-label">Biggest swing</span>
-            <span class="wp-swing-value" style="color:${group.swing > 0 ? 'var(--tx-good)' : 'var(--tx-dim)'};">${group.swing > 0 ? '+' : ''}${group.swing}</span>
-            <span class="wp-swing-line">
-                cast <strong>${esc(group.cheapest.name)}</strong> (${group.cheapest.cmc})
-                → search up <strong>${esc(group.dearest.name)}</strong> (${group.dearest.cmc})
-            </span>
-        </div>` : '';
+    const lead = group.live
+        ? (group.swing > 0
+            ? `Cast any one of these and you may search up any other. Widest swing: cast ${cardRef(group.cheapest.name)} for ${group.cheapest.cmc} and put ${cardRef(group.dearest.name)} (${group.dearest.cmc}) onto the battlefield — <strong>${group.swing} mana ahead</strong>.`
+            : `Cast any one of these and you may search up any other. They all cost ${group.cheapest.cmc}, so every trigger here is an even trade.`)
+        : `Only one creature has this total, so casting it finds nothing. A second creature at ${group.total} total power + toughness would make it live.`;
 
     el.innerHTML = `
         <div class="tx-h">
-            <span>Search pool at total ${group.total}</span>
-            <span class="tx-h-r">${group.count} creature${group.count === 1 ? '' : 's'}${group.live ? ` · ${cheatRangeText(group)} · avg ${formatNumber(group.cheatAvg, 1)}` : ' · no match'}</span>
+            <span>Creatures at total ${group.total}</span>
+            <span class="tx-h-r">${plural(group.count, 'creature')}${group.live ? ` · finds ${cheatRangeText(group)}` : ' · no match'}</span>
         </div>
-        <div class="wp-group-detail${group.live ? '' : ' is-empty'}">
-            <div class="wp-detail-key">${group.total}</div>
-            <div class="wp-detail-body">
-                <div class="wp-detail-headline">${group.live
-                    ? 'Cast any one of these and you may search up any other.'
-                    : 'Only one creature has this total, so a cast here finds nothing.'}</div>
-                ${group.live
-                    ? swingHTML
-                    : `<div class="wp-detail-sub">Add a second creature at ${group.total} total power + toughness to make it live.</div>`}
-            </div>
+        <div class="wp-sel${group.live ? '' : ' is-empty'}">
+            <div class="wp-sel-key" aria-hidden="true">${group.total}</div>
+            <p class="wp-sel-lead">${lead}</p>
         </div>
-        <div class="wp-opt-list">
-            <div class="wp-opt wp-opt-head">
+        <ul class="wp-opt-list" aria-label="Creatures at total ${group.total}">
+            <li class="wp-opt wp-opt-head" aria-hidden="true">
                 <span class="wp-opt-pt">P/T</span>
-                <span class="wp-opt-name">CREATURE</span>
+                <span class="wp-opt-name">Creature</span>
                 <span class="wp-opt-edge"></span>
                 <span class="wp-opt-bar"></span>
                 <span class="wp-opt-mv">MV</span>
-            </div>
-            ${poolRows}
-        </div>`;
+            </li>
+            ${roster}
+        </ul>`;
 }
 
 /**
- * The at-a-glance view: every matched total as its own block, so the deck's
- * groupings can be read in one pass. Clicking a block selects it.
+ * Every matched total as its own block, so the deck's groupings read in one
+ * pass. Clicking a block (or its total) selects it.
  */
 function renderAllGroups(analysis, total) {
     const el = document.getElementById('wildpair-groups');
@@ -510,79 +604,98 @@ function renderAllGroups(analysis, total) {
         return;
     }
 
-    if (analysis.liveRows.length === 0) {
-        el.innerHTML = `
-            <div class="tx-h"><span>Matched totals</span><span class="tx-h-r">none</span></div>
-            <div class="tx-empty">No two creatures share a total power + toughness, so Wild Pair never finds anything.</div>
-            ${renderSingletons(analysis)}`;
-        bindTotalButtons(el);
+    const blocks = analysis.liveRows.map(row => {
+        const selected = row.total === total;
+        const members = row.cards.map(c => `
+            <li class="wp-gc-card">
+                <span class="wp-gc-pt">${escapeHtml(c.power)}/${escapeHtml(c.toughness)}</span>
+                <span class="wp-gc-name">${cardRef(c.name)}</span>
+                <span class="wp-gc-mv">${c.cmc}</span>
+            </li>`).join('');
+        return `
+            <div class="wp-gc${selected ? ' is-selected' : ''}" data-total="${row.total}">
+                <button type="button" class="wp-gc-head" data-total="${row.total}" aria-pressed="${selected}"
+                        aria-label="Total ${row.total}: ${plural(row.count, 'creature')}, finds ${cheatRangeText(row)}">
+                    <span class="wp-gc-total">${row.total}</span>
+                    <span class="wp-gc-n">${plural(row.count, 'creature')} · ${cheatRangeText(row)}</span>
+                    <span class="wp-gc-swing" title="Widest swing: cheapest cast, priciest find">${swingHTML(row.swing)}</span>
+                </button>
+                <ul class="wp-gc-cards">${members}</ul>
+            </div>`;
+    }).join('');
+
+    const singles = analysis.deadRows.map(r => `
+        <button type="button" class="wp-single${r.total === total ? ' is-selected' : ''}" data-total="${r.total}" aria-pressed="${r.total === total}">
+            <span class="wp-single-total">${r.total}</span>
+            <span class="wp-single-name" data-card="${escapeHtml(r.cards[0]?.name)}">${escapeHtml(r.cards[0]?.name)}</span>
+            <span class="wp-single-pt">${escapeHtml(r.cards[0]?.power)}/${escapeHtml(r.cards[0]?.toughness)}</span>
+        </button>`).join('');
+
+    el.innerHTML = `
+        ${analysis.liveRows.length ? `
+            <div class="tx-h">
+                <span>Creatures that can find each other</span>
+                <span class="tx-h-r">${plural(analysis.liveBuckets, 'matched total')} · +N is the widest mana swing</span>
+            </div>
+            <div class="wp-gc-grid">${blocks}</div>` : `
+            <div class="tx-h"><span>Creatures that can find each other</span><span class="tx-h-r">none</span></div>
+            <div class="tx-empty">No two creatures share a total power + toughness.</div>`}
+        ${singles ? `
+            <div class="tx-h wp-single-head">
+                <span>Nothing to find</span>
+                <span class="tx-h-r">${plural(analysis.deadRows.length, 'creature')} alone at ${analysis.deadRows.length === 1 ? 'its' : 'their'} total</span>
+            </div>
+            <div class="wp-single-list">${singles}</div>` : ''}`;
+}
+
+/**
+ * The best line at each matched total — the mana story, once the groupings
+ * themselves are understood. Directions, not roles: either creature can be the
+ * one you cast; this names the one worth casting.
+ */
+function renderBestLines(analysis) {
+    const el = document.getElementById('wildpair-pairings');
+    if (!el) return;
+
+    if (analysis.bestLines.length === 0) {
+        el.innerHTML = '<div class="tx-empty">No two creatures share a total, so there is no line to take.</div>';
         return;
     }
 
-    const cards = analysis.liveRows.map(row => {
-        const members = row.cards.map(c => `
-            <li class="wp-gc-card">
-                <span class="wp-gc-pt">${esc(c.power)}/${esc(c.toughness)}</span>
-                <span class="wp-gc-name">${esc(c.name)}</span>
-                <span class="wp-gc-mv">${c.cmc}</span>
-            </li>`).join('');
-
-        return `
-            <button type="button" class="wp-gc${row.total === total ? ' is-selected' : ''}" data-total="${row.total}"
-                    aria-pressed="${row.total === total ? 'true' : 'false'}"
-                    aria-label="Total ${row.total}, ${row.count} creatures, swing plus ${row.swing}">
-                <span class="wp-gc-head">
-                    <span class="wp-gc-total">${row.total}</span>
-                    <span class="wp-gc-n">${row.count} creatures</span>
-                    <span class="wp-gc-swing" style="color:${row.swing > 0 ? 'var(--tx-good)' : 'var(--tx-dim)'};">${row.swing > 0 ? '+' : ''}${row.swing}</span>
-                </span>
-                <span class="wp-gc-range">${cheatRangeText(row)}</span>
-                <ul class="wp-gc-cards">${members}</ul>
-            </button>`;
-    }).join('');
+    const rows = analysis.bestLines.map(p => `
+        <tr data-total="${p.total}">
+            <td>${p.total}</td>
+            <td class="ta-l">${cardRef(p.cast.name)} <span class="wp-dim">${escapeHtml(p.cast.power)}/${escapeHtml(p.cast.toughness)} · ${p.cast.cmc}</span></td>
+            <td class="ta-l">${cardRef(p.fetched.name)} <span class="wp-dim">${escapeHtml(p.fetched.power)}/${escapeHtml(p.fetched.toughness)} · ${p.fetched.cmc}</span></td>
+            <td>${swingHTML(p.leverage)}</td>
+        </tr>`).join('');
 
     el.innerHTML = `
-        <div class="tx-h">
-            <span>Totals that can find each other</span>
-            <span class="tx-h-r">${analysis.liveBuckets} matched total${analysis.liveBuckets === 1 ? '' : 's'} · Δ is the widest swing · click to inspect</span>
-        </div>
-        <div class="wp-gc-grid">${cards}</div>
-        ${renderSingletons(analysis)}`;
-
-    bindTotalButtons(el);
+        <table class="tx-sweep-table">
+            <thead><tr><th>Total</th><th class="ta-l">Cast from hand</th><th class="ta-l">Put onto the battlefield</th><th>Mana ahead</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
 }
 
-/**
- * The creatures that share a total with nothing. Compact, because the point is
- * only that they exist and how many there are.
- */
-function renderSingletons(analysis) {
-    const singles = analysis.deadRows;
-    if (singles.length === 0) return '';
-
-    const chips = singles.map(r => `
-        <button type="button" class="wp-single" data-total="${r.total}" title="Total ${r.total} — nothing shares it">
-            <span class="wp-single-total">${r.total}</span>
-            <span class="wp-single-name">${esc(r.cards[0]?.name)}</span>
-            <span class="wp-single-pt">${esc(r.cards[0]?.power)}/${esc(r.cards[0]?.toughness)}</span>
-        </button>`).join('');
-
-    return `
-        <div class="tx-h wp-single-head">
-            <span>No match in the deck</span>
-            <span class="tx-h-r">${singles.length} creature${singles.length === 1 ? '' : 's'} alone at their total</span>
-        </div>
-        <div class="wp-single-list">${chips}</div>`;
-}
-
-/**
- * Wire every element carrying a data-total to select that total — the group
- * cards and the singleton chips both look clickable, so both must behave like it.
- * @param {HTMLElement} root
- */
-function bindTotalButtons(root) {
-    root.querySelectorAll('[data-total]').forEach(btn => {
-        btn.addEventListener('click', () => setSelectedTotal(parseInt(btn.dataset.total, 10)));
+function updateSweep(analysis, total) {
+    renderSweepTable('wildpair-sweepTable', {
+        columns: [
+            { label: 'Total', align: 'left', render: r => `<strong>${r.total}</strong>` },
+            { label: 'Creatures', render: r => r.count },
+            { label: 'Match', render: r => (r.live ? '<span class="wp-yes">yes</span>' : '<span class="wp-no">no</span>') },
+            { label: 'Finds', render: r => (r.live ? cheatRangeText(r) : '<span class="wp-dim">—</span>') },
+            { label: 'Average', render: r => (r.live ? formatNumber(r.cheatAvg, 1) : '<span class="wp-dim">—</span>') },
+            { label: 'Widest swing', render: r => (r.live && r.swing > 0 ? swingHTML(r.swing) : '<span class="wp-dim">—</span>') },
+            {
+                label: 'Bodies',
+                align: 'left',
+                render: r => `<span class="wp-dim">${r.cards.slice(0, 6).map(c => `${escapeHtml(c.power)}/${escapeHtml(c.toughness)}`).join(' ')}${r.cards.length > 6 ? ' …' : ''}</span>`
+            }
+        ],
+        rows: analysis.rows,
+        current: total,
+        recommended: analysis.bestBucket?.total ?? null,
+        emptyText: 'Import a decklist with creatures to list every total.'
     });
 }
 
@@ -592,10 +705,13 @@ function bindTotalButtons(root) {
  * colour — it is an outline instead.
  */
 function updatePTChart(analysis, total) {
-    if (!document.getElementById('wildpair-pt-chart')) return;
-    const rows = analysis.rows;
-    if (rows.length === 0) return;
+    const canvas = document.getElementById('wildpair-pt-chart');
+    if (!canvas || analysis.rows.length === 0) return;
+    // Lives inside a collapsed section; a hidden canvas has no size to draw at.
+    const section = canvas.closest?.('details');
+    if (section && !section.open) return;
 
+    const rows = analysis.rows;
     const min = rows[0].total;
     const max = rows[rows.length - 1].total;
     const byTotal = new Map(rows.map(r => [r.total, r]));
@@ -619,302 +735,115 @@ function updatePTChart(analysis, total) {
         data: {
             labels,
             datasets: [
-                {
-                    label: 'Matched creatures',
-                    data: matched,
-                    backgroundColor: TX.green,
-                    borderColor: borderColors,
-                    borderWidth: borderWidths,
-                    stack: 'pt'
-                },
-                {
-                    label: 'Alone at their total',
-                    data: alone,
-                    backgroundColor: TX.red,
-                    borderColor: borderColors,
-                    borderWidth: borderWidths,
-                    stack: 'pt'
-                }
+                { label: 'Share a total', data: matched, backgroundColor: TX.green, borderColor: borderColors, borderWidth: borderWidths, stack: 'pt' },
+                { label: 'Alone at their total', data: alone, backgroundColor: TX.red, borderColor: borderColors, borderWidth: borderWidths, stack: 'pt' }
             ]
         },
         options: {
             onClick: (_evt, elements) => {
                 const idx = elements?.[0]?.index;
-                if (Number.isInteger(idx)) setSelectedTotal(min + idx);
+                if (Number.isInteger(idx) && byTotal.has(min + idx)) setSelectedTotal(min + idx);
             },
             plugins: {
                 legend: {
                     display: true,
                     position: 'top',
-                    labels: { color: TX.mid, font: { size: 10 }, boxWidth: 10, boxHeight: 8 }
+                    align: 'end',
+                    labels: { color: TX.mid, font: { size: 11 }, boxWidth: 10, boxHeight: 8 }
                 }
             },
             scales: {
                 x: {
                     stacked: true,
-                    title: { display: true, text: 'Total power + toughness', color: TX.dim, font: { size: 9 } },
+                    title: { display: true, text: 'Total power + toughness', color: TX.dim, font: { size: 11 } },
                     grid: { display: false },
-                    ticks: { color: TX.dim, font: { size: 9 } }
+                    ticks: { color: TX.dim }
                 },
                 y: {
                     stacked: true,
                     beginAtZero: true,
-                    title: { display: true, text: 'Creatures', color: TX.dim, font: { size: 9 } },
+                    title: { display: true, text: 'Creatures', color: TX.dim, font: { size: 11 } },
                     grid: { color: TX.rule },
-                    ticks: { color: TX.dim, font: { size: 9 }, precision: 0 }
+                    ticks: { color: TX.dim, precision: 0 }
                 }
             }
         }
     });
 }
 
-function updateSweep(analysis, total) {
-    renderSweepTable('wildpair-sweepTable', {
-        columns: [
-            { label: 'P+T', align: 'left', render: r => `<strong style="color:var(--tx-bright);">${r.total}</strong>` },
-            { label: 'CREATURES', render: r => r.count },
-            {
-                label: 'MATCHED',
-                render: r => r.live
-                    ? '<span style="color:var(--tx-good);">yes</span>'
-                    : '<span style="color:var(--tx-bad);">no</span>'
-            },
-            {
-                label: 'CHEAT RANGE',
-                render: r => r.live
-                    ? `<span style="color:var(--tx-text);">${cheatRangeText(r)}</span>`
-                    : '<span style="color:var(--tx-dim);">—</span>'
-            },
-            {
-                label: 'AVG',
-                render: r => r.live ? formatNumber(r.cheatAvg, 1) : '<span style="color:var(--tx-dim);">—</span>'
-            },
-            {
-                label: 'BEST SWING',
-                render: r => r.bestLine && r.bestLine.leverage > 0
-                    ? `<span style="color:var(--tx-good);">+${r.bestLine.leverage}</span>`
-                    : '<span style="color:var(--tx-dim);">—</span>'
-            },
-            {
-                label: 'BODIES',
-                align: 'left',
-                render: r => `<span class="wp-mini">${r.cards.map(c => `${c.power}/${c.toughness}`).slice(0, 6).join(' ')}${r.cards.length > 6 ? ' …' : ''}</span>`
-            }
-        ],
-        rows: analysis.rows,
-        current: total,
-        recommended: analysis.bestBucket?.total ?? null,
-        emptyText: 'Import a decklist with creatures to build the total ladder.'
-    });
-}
-
 /**
- * The best line available at each matched total. Secondary to the groups: this
- * is the mana story, once the groupings themselves are understood.
- *
- * Note these are directions, not roles. Creatures sharing a total are
- * interchangeable — either one can be the card you cast — so this simply picks
- * the direction worth taking: spend the cheapest, search up the dearest.
+ * Keep the selector in step with the deck. The slider runs over the INDEX of
+ * the deck's totals, so every stop lands on a total the deck actually has.
  */
-function renderBestLines(analysis) {
-    const el = document.getElementById('wildpair-pairings');
-    if (!el) return;
-
-    if (analysis.bestLines.length === 0) {
-        el.innerHTML = `
-            <div class="tx-h"><span>Best lines</span><span class="tx-h-r">none</span></div>
-            <div class="tx-empty">No two creatures in this deck share a total power + toughness, so Wild Pair has nothing to find.</div>`;
-        return;
-    }
-
-    const rowsHTML = analysis.bestLines.map(p => `
-        <div class="wp-pair" data-total="${p.total}">
-            <span class="wp-pair-total" title="Total power + toughness">${p.total}</span>
-            <span class="wp-pair-cast">
-                <span class="wp-pair-name">${esc(p.cast.name)}</span>
-                <span class="wp-pair-meta">${esc(p.cast.power)}/${esc(p.cast.toughness)} · MV ${p.cast.cmc}</span>
-            </span>
-            <span class="wp-pair-arrow">→</span>
-            <span class="wp-pair-fetch">
-                <span class="wp-pair-name">${esc(p.fetched.name)}</span>
-                <span class="wp-pair-meta">${esc(p.fetched.power)}/${esc(p.fetched.toughness)} · MV ${p.fetched.cmc}</span>
-            </span>
-            <span class="wp-pair-gain" style="color:${p.leverage > 0 ? 'var(--tx-good)' : 'var(--tx-dim)'};">
-                ${p.leverage > 0 ? '+' : ''}${p.leverage}
-            </span>
-        </div>`).join('');
-
-    el.innerHTML = `
-        <div class="tx-h">
-            <span>Best lines</span>
-            <span class="tx-h-r">the direction worth taking at each total</span>
-        </div>
-        <div class="wp-pair-list">
-            <div class="wp-pair wp-pair-head">
-                <span class="wp-pair-total">P+T</span>
-                <span class="wp-pair-cast">CAST FROM HAND</span>
-                <span class="wp-pair-arrow"></span>
-                <span class="wp-pair-fetch">PUT ONTO BATTLEFIELD</span>
-                <span class="wp-pair-gain">Δ MANA</span>
-            </div>
-            ${rowsHTML}
-        </div>`;
-
-    bindTotalButtons(el);
-}
-
-/**
- * Keep the selector in step with the deck.
- *
- * The slider runs over the INDEX of the deck's totals rather than the totals
- * themselves, so every stop lands on a total the deck actually has — dragging
- * never passes through empty positions.
- */
-function syncSlider(analysis, total) {
+function syncSlider(analysis, group, total) {
     const slider = document.getElementById('wildpair-totalSlider');
-    const number = document.getElementById('wildpair-totalValue');
     const totals = analysis.totals;
 
     if (slider) {
-        const last = Math.max(0, totals.length - 1);
         slider.min = '0';
-        slider.max = String(last);
+        slider.max = String(Math.max(0, totals.length - 1));
         slider.disabled = totals.length === 0;
         const idx = totals.indexOf(total);
         slider.value = String(idx >= 0 ? idx : 0);
-        slider.setAttribute('aria-valuetext', Number.isFinite(total) ? `${total} total power and toughness` : 'no deck');
-    }
-    if (number && Number.isFinite(total)) number.value = String(total);
-
-    // End labels only. A caption in the middle of this row sits directly under
-    // the slider thumb, which covers it at most positions — the count goes on
-    // its own line below instead.
-    const scale = document.getElementById('wildpair-total-scale');
-    if (scale) {
-        scale.innerHTML = totals.length
-            ? `<span>${totals[0]}</span><span>${totals[totals.length - 1]}</span>`
-            : '<span>—</span><span>—</span>';
+        slider.setAttribute('aria-valuetext', Number.isFinite(total) ? `total ${total}` : 'no deck');
     }
 
-    const stops = document.getElementById('wildpair-total-stops');
-    if (stops) {
-        stops.textContent = totals.length
-            ? `${totals.length} total${totals.length === 1 ? '' : 's'} in this deck`
-            : 'no creatures to step through';
+    const setHTML = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+    setHTML('wildpair-total-display', Number.isFinite(total) ? String(total) : '—');
+    setHTML('wildpair-total-scale', totals.length
+        ? `<span>${totals[0]}</span><span>${totals[totals.length - 1]}</span>`
+        : '<span>—</span><span>—</span>');
+    setHTML('wildpair-total-stops', totals.length
+        ? `${plural(totals.length, 'total')} in this deck — the slider only stops on these.`
+        : 'No creatures to step through yet.');
+    setHTML('wildpair-total-summary', !analysis.hasData
+        ? 'Import a decklist to browse your totals.'
+        : group
+            ? (group.live
+                ? `${plural(group.count, 'creature')} — each finds ${cheatRangeText(group)}`
+                : 'Alone at this total — finds nothing')
+            : '—');
+}
+
+
+/** Show or hide the evidence panels; without a deck only the answer remains. */
+function showPanels(ids, visible) {
+    for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el) el.hidden = !visible;
     }
 }
 
 export function updateUI() {
     const { analysis, fit, total, group } = calculate();
+    showPanels(['wildpair-group', 'wildpair-groups', 'wildpair-more'], analysis.hasData);
 
-    syncSlider(analysis, total);
-
-    const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
-    setText('wildpair-total-display', Number.isFinite(total) ? total : '—');
-    setText('wildpair-live-display', `${analysis.liveCreatures} / ${analysis.creatures}`);
-    setText('wildpair-matched-display', analysis.liveBuckets);
-
-    const summaryEl = document.getElementById('wildpair-total-summary');
-    if (summaryEl) {
-        summaryEl.innerHTML = !analysis.hasData
-            ? 'Import a decklist to browse your totals.'
-            : group
-                ? `${group.count} creature${group.count === 1 ? '' : 's'} here${group.live ? ` — cheats ${cheatRangeText(group)}` : ' — nothing shares this total'}`
-                : '—';
-    }
-
-    // Primary: the groupings.
-    renderSelectedGroup(analysis, total, group);
+    syncSlider(analysis, group, total);
+    renderAnswer(analysis, fit);
+    renderSelectedGroup(analysis, group);
     renderAllGroups(analysis, total);
-    updatePTChart(analysis, total);
-
-    // Secondary: the mana story.
-    const heroEl = document.getElementById('wildpair-hero');
-    if (heroEl) {
-        heroEl.innerHTML = renderHeroStats([
-            {
-                label: 'LIVE CASTS',
-                value: formatPercentage(analysis.liveRate, 0),
-                sub: `${analysis.liveCreatures} of ${analysis.creatures} creatures find something`,
-                size: 'big',
-                color: analysis.liveRate >= 0.5 ? 'var(--tx-good)' : 'var(--tx-bad)'
-            },
-            {
-                label: 'AVG BODY FOUND',
-                value: formatNumber(analysis.avgCheat, 1),
-                sub: 'mana value put onto the battlefield',
-                color: analysis.avgCheat >= 4 ? 'var(--tx-good)' : 'var(--tx-mid)'
-            },
-            {
-                label: 'BIGGEST FIND',
-                value: analysis.biggestFetch,
-                sub: 'mana value, best case',
-                color: 'var(--tx-mid)'
-            },
-            {
-                label: 'MATCHED TOTALS',
-                value: analysis.liveBuckets,
-                sub: `of ${analysis.buckets} totals in the deck`,
-                color: 'var(--tx-mid)'
-            },
-            {
-                label: 'NO MATCH',
-                value: analysis.deadCreatures,
-                sub: 'creatures nothing can find',
-                color: analysis.deadCreatures > analysis.liveCreatures ? 'var(--tx-bad)' : 'var(--tx-mid)'
-            }
-        ]);
-    }
-
-    const fitEl = document.getElementById('wildpair-fit');
-    if (fitEl) {
-        fitEl.innerHTML = `
-            <div class="wp-fit">
-                <div class="wp-fit-badge" style="color:${fit.color}; border-color:${fit.color};">${fit.label}</div>
-                <div class="wp-fit-body">
-                    <div class="wp-fit-advice">${fit.advice}</div>
-                    <div class="wp-fit-detail">${analysis.liveBuckets > 0
-                        ? `${formatPercentage(analysis.liveRate, 0)} of your creatures share a total with something else. When one of those is cast, Wild Pair puts an average of <strong>${formatNumber(analysis.avgCheat, 1)} mana</strong> onto the battlefield — up to ${analysis.biggestFetch} at best.`
-                        : 'There is no matched total in this list.'}</div>
-                    <div class="wp-fit-caveat">These are per-activation numbers, not a game total. Wild Pair costs {${WILD_PAIR_COST}} and is not on the battlefield for most of a game, so what matters is the value of a single trigger, not how many you can chain.</div>
-                </div>
-            </div>`;
-    }
-
-    const recEl = document.getElementById('wildpair-recommendation');
-    if (recEl) {
-        let text;
-        if (!analysis.hasData) {
-            text = 'Import a decklist to group your creatures by total power and toughness. Manual type counts are not enough — Wild Pair needs each creature\'s printed power and toughness.';
-        } else if (analysis.liveBuckets === 0) {
-            text = `All ${analysis.creatures} creatures have a unique total power + toughness, spread over ${analysis.buckets} different totals. Wild Pair finds nothing. Adding a single creature that matches an existing total turns a dead six-drop into a free body.`;
-        } else {
-            const best = analysis.bestBucket;
-            const topLine = analysis.bestLines[0];
-            text = `Your deepest total is <strong>${best.total}</strong> with ${best.count} creatures, cheating ${cheatRangeText(best)} an activation. The best swing in the deck is casting <strong>${esc(topLine.cast.name)}</strong> for ${topLine.cast.cmc} to put <strong>${esc(topLine.fetched.name)}</strong> (MV ${topLine.fetched.cmc}) onto the battlefield — ${topLine.leverage > 0 ? `${topLine.leverage} mana ahead` : 'an even trade'}. ${analysis.deadCreatures} creature${analysis.deadCreatures === 1 ? '' : 's'} nothing can find.`;
-        }
-        recEl.innerHTML = renderRecommendation(text);
-    }
-
-    // Data-quality note: */* creatures and missing toughness change the numbers
-    // above, so they are named rather than silently dropped.
-    const noteEl = document.getElementById('wildpair-datanote');
-    if (noteEl) {
-        const bits = [];
-        if (analysis.variable.length > 0) {
-            bits.push(`${analysis.variable.length} creature${analysis.variable.length === 1 ? ' has' : 's have'} a variable power or toughness (${analysis.variable.slice(0, 3).map(c => esc(c.name)).join(', ')}${analysis.variable.length > 3 ? ', …' : ''}) — no fixed total, so they are excluded.`);
-        }
-        if (analysis.missing > 0) {
-            bits.push(`${analysis.missing} creature${analysis.missing === 1 ? ' is' : 's are'} missing power/toughness data. Re-import the decklist to fill it in.`);
-        }
-        noteEl.innerHTML = bits.length
-            ? `<div class="wp-note">${bits.map(b => `<div>⚠ ${b}</div>`).join('')}</div>`
-            : '';
-    }
-
     renderBestLines(analysis);
     updateSweep(analysis, total);
+    updatePTChart(analysis, total);
 }
+
+// ==================== SHARE LINKS ====================
+
+/**
+ * The legacy `wpTotal` param carries the slider's INDEX, which only means
+ * something against the same deck. `wpPT` carries the total itself, so a link
+ * opened against a different deck snaps to the nearest total that deck has.
+ */
+export function getShareParams() {
+    return Number.isFinite(selectedTotal) ? { wpPT: selectedTotal } : {};
+}
+
+export function applyShareParams(params) {
+    const raw = parseInt(params?.get?.('wpPT'), 10);
+    if (Number.isFinite(raw) && raw >= -10 && raw <= 60) setSelectedTotal(raw);
+}
+
+// ==================== INIT ====================
 
 export function init() {
     registerCalculator({ name: 'wildpair', calculate, updateUI, inputs: [] });
@@ -923,13 +852,21 @@ export function init() {
     // the slider's positions are indices into the deck's own totals, so its
     // value has to be translated before it means anything.
     const slider = document.getElementById('wildpair-totalSlider');
-    if (slider) {
-        slider.addEventListener('input', (e) => {
-            const { analysis } = calculate();
-            const idx = parseInt(e.target.value, 10);
-            const total = analysis.totals[idx];
-            if (Number.isFinite(total)) setSelectedTotal(total);
-        });
-    }
+    slider?.addEventListener('input', (e) => {
+        const total = lastTotals[parseInt(e.target.value, 10)];
+        if (Number.isFinite(total)) setSelectedTotal(total);
+    });
 
+    // One delegated listener for every group block, singleton and table row.
+    const tab = document.getElementById('wildpair-tab');
+    tab?.addEventListener('click', (e) => {
+        const target = e.target.closest?.('[data-total]');
+        if (target && tab.contains(target)) setSelectedTotal(parseInt(target.dataset.total, 10));
+    });
+
+    // The chart sits in a collapsed section; draw it when it is opened.
+    document.getElementById('wildpair-more-chart')?.addEventListener('toggle', (e) => {
+        if (e.target.open) updateUI();
+    });
 }
+

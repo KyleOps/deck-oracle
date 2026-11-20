@@ -2,8 +2,9 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 
 import {
-    isPower5Plus, simulateDiscoverChain, sampleDiscover,
-    percentileFromDist, mergeDists
+    isPower5Plus, isBigCreature, simulateDiscoverChain, sampleDiscover,
+    percentileFromDist, mergeDists, mulberry32, hashSeed, seededShuffle,
+    withoutOne, sampleDiscoverFrom, discoverForCreature, DISCOVER_RUNS, foldTail
 } from '../../js/utils/discover.js';
 
 /** A card in the shape the simulation deck uses. */
@@ -408,5 +409,173 @@ describe('percentileFromDist — fractional weights', () => {
         ]);
         assert.strictEqual(percentileFromDist(dist, 0.5), 2);
         assert.strictEqual(percentileFromDist(dist, 0.95), 10);
+    });
+});
+
+// ==================== step bookkeeping ====================
+
+describe('simulateDiscoverChain — what each step passed over', () => {
+    it('records where each discover started, so the exiled cards can be listed', () => {
+        const lib = [land(1), spell(1, 9), fatty(1, 5), land(2), spell(2, 7), spell(3, 2)];
+        const r = simulateDiscoverChain(lib, 6);
+        assert.deepStrictEqual(r.steps.map(s => s.start), [0, 3]);
+        const passed = r.steps.map(s => lib.slice(s.start, s.start + s.dug).map(c => c.name));
+        assert.deepStrictEqual(passed, [['Forest 1', 'Spell 1'], ['Forest 2', 'Spell 2']]);
+    });
+});
+
+describe('isBigCreature', () => {
+    it('needs both a creature type and power 5+', () => {
+        assert.ok(isBigCreature(fatty(1, 6)));
+        assert.ok(!isBigCreature(dork(1, 2)));
+        assert.ok(!isBigCreature(card('Vehicle', 4, ['artifact'], '6')));
+        assert.ok(!isBigCreature(null));
+    });
+});
+
+// ==================== seeded, lazily shuffled sampling ====================
+
+/** Same deterministic deck builder as above, for the sampling checks. */
+function seededDeck(seed, size = 60) {
+    let x = seed;
+    const rnd = () => (x = (x * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const deck = [];
+    for (let i = 0; i < size; i++) {
+        const r = rnd();
+        if (r < 0.38) deck.push(land(i));
+        else if (r < 0.62) deck.push(spell(i, 1 + Math.floor(rnd() * 8)));
+        else if (r < 0.82) deck.push(fatty(i, 4 + Math.floor(rnd() * 6), 5 + Math.floor(rnd() * 4)));
+        else deck.push(dork(i, 1 + Math.floor(rnd() * 4), 1 + Math.floor(rnd() * 3)));
+    }
+    return deck;
+}
+
+describe('mulberry32 / hashSeed', () => {
+    it('is deterministic for a seed and stays in [0, 1)', () => {
+        const a = mulberry32(42), b = mulberry32(42);
+        for (let i = 0; i < 1000; i++) {
+            const v = a();
+            assert.strictEqual(v, b());
+            assert.ok(v >= 0 && v < 1);
+        }
+    });
+
+    it('hashes strings to stable, distinct 32-bit seeds', () => {
+        assert.strictEqual(hashSeed('Koma|7'), hashSeed('Koma|7'));
+        assert.notStrictEqual(hashSeed('Koma|7'), hashSeed('Koma|8'));
+        assert.ok(Number.isInteger(hashSeed('')) && hashSeed('x') >= 0);
+    });
+});
+
+describe('seededShuffle / withoutOne', () => {
+    it('shuffles a copy and keeps every card', () => {
+        const lib = seededDeck(3);
+        const out = seededShuffle(lib, mulberry32(1));
+        assert.strictEqual(out.length, lib.length);
+        assert.notStrictEqual(out, lib);
+        assert.deepStrictEqual(out.map(c => c.name).sort(), lib.map(c => c.name).sort());
+    });
+
+    it('removes exactly one copy of a card by name', () => {
+        const lib = [spell(1, 2), fatty(1, 6), fatty(1, 6)];
+        assert.strictEqual(withoutOne(lib, 'Fatty 1').length, 2);
+        assert.strictEqual(withoutOne(lib, 'Nope'), lib);
+        assert.strictEqual(withoutOne(lib, null), lib);
+        assert.strictEqual(lib.length, 3, 'the input is not mutated');
+    });
+});
+
+describe('sampleDiscoverFrom', () => {
+    it('agrees with full shuffles on the same deck (it is the same distribution)', () => {
+        for (const seed of [5, 11, 23]) {
+            const deck = seededDeck(seed);
+            for (const start of [4, 6, 8]) {
+                const lazy = sampleDiscoverFrom(deck, start, { runs: 4000, seed: 99 });
+                const rng = mulberry32(7);
+                const full = sampleDiscover(() => seededShuffle(deck, rng), start, { runs: 4000 });
+                assert.ok(Math.abs(lazy.avgMana - full.avgMana) < 0.45,
+                    `seed ${seed} discover ${start}: lazy ${lazy.avgMana} vs full ${full.avgMana}`);
+                assert.ok(Math.abs(lazy.chainRate - full.chainRate) < 0.04);
+            }
+        }
+    });
+
+    it('gives identical results for identical seeds', () => {
+        const deck = seededDeck(8);
+        const a = sampleDiscoverFrom(deck, 6, { runs: 300, seed: 12 });
+        const b = sampleDiscoverFrom(deck, 6, { runs: 300, seed: 12 });
+        assert.deepStrictEqual(a, b);
+    });
+
+    it('does not mutate the library it is given', () => {
+        const deck = seededDeck(4);
+        const before = deck.map(c => c.name).join(',');
+        sampleDiscoverFrom(deck, 6, { runs: 50 });
+        assert.strictEqual(deck.map(c => c.name).join(','), before);
+    });
+
+    it('is exact on a deck with only one possible outcome', () => {
+        const s = sampleDiscoverFrom([land(1), spell(1, 3), land(2)], 5, { runs: 100 });
+        assert.strictEqual(s.avgMana, 3);
+        assert.strictEqual(s.whiffRate, 0);
+        assert.strictEqual(s.medianMana, 3);
+        assert.strictEqual(s.p99Mana, 3);
+    });
+
+    it('reports percentiles but no sampled maximum', () => {
+        const s = sampleDiscoverFrom(seededDeck(2), 6, { runs: 200 });
+        assert.ok('p95Mana' in s && 'p99Mana' in s && 'medianMana' in s);
+        assert.ok(!('bestMana' in s));
+        assert.ok(s.medianMana <= s.p95Mana && s.p95Mana <= s.p99Mana);
+    });
+
+    it('handles an empty library', () => {
+        const s = sampleDiscoverFrom([], 6, { runs: 10 });
+        assert.strictEqual(s.whiffRate, 1, 'nothing to find is a whiff');
+        assert.strictEqual(s.avgMana, 0);
+        assert.doesNotThrow(() => sampleDiscoverFrom(undefined, 6, { runs: 3 }));
+    });
+});
+
+describe('discoverForCreature', () => {
+    it('removes the creature being cast before discovering', () => {
+        // Nothing else costs 6 or less, so finding anything would mean it found itself.
+        const s = discoverForCreature([fatty(1, 6), spell(1, 9), land(1)], { name: 'Fatty 1', cmc: 6 }, { runs: 50 });
+        assert.strictEqual(s.whiffRate, 1);
+        assert.strictEqual(s.avgMana, 0);
+    });
+
+    it('is reproducible and defaults to the shared run count', () => {
+        const deck = seededDeck(6);
+        const creature = deck.find(c => c.types.includes('creature') && isPower5Plus(c.power));
+        const a = discoverForCreature(deck, creature);
+        const b = discoverForCreature(deck, creature);
+        assert.strictEqual(a.runs, DISCOVER_RUNS);
+        assert.deepStrictEqual(a, b);
+    });
+});
+
+describe('foldTail', () => {
+    it('folds everything from the percentile up into one bucket', () => {
+        // 100 observations; the single 30 is a sampled maximum.
+        const dist = [];
+        dist[1] = 60; dist[2] = 30; dist[5] = 9; dist[30] = 1;
+        const { counts, cut, folded } = foldTail(mergeDists([{ dist }]), 0.99);
+        assert.strictEqual(cut, 5);
+        assert.strictEqual(counts.length, 6);
+        assert.strictEqual(counts[5], 10);
+        assert.strictEqual(folded, true);
+        assert.strictEqual(counts.reduce((a, b) => a + b, 0), 100, 'no observation is lost');
+    });
+
+    it('leaves a distribution with nothing past the cut alone', () => {
+        const { counts, folded } = foldTail([0, 5, 5], 0.99);
+        assert.deepStrictEqual(counts, [0, 5, 5]);
+        assert.strictEqual(folded, false);
+    });
+
+    it('handles empty input', () => {
+        assert.deepStrictEqual(foldTail([]), { counts: [], cut: 0, folded: false });
+        assert.deepStrictEqual(foldTail(undefined).counts, []);
     });
 });

@@ -11,10 +11,13 @@
  * That chain is the whole reason Vortex has a long tail.
  *
  * This lives outside any one calculator because more than one place needs it:
- * the Monstrous Vortex tab and the head-to-head comparison would otherwise each
- * carry their own copy, and two implementations that drift produce two different
- * answers for the same deck on the same site.
+ * the Monstrous Vortex page and the Head to Head comparison both sample through
+ * `discoverForCreature()`, with the same library, run count and seed, so the
+ * same creature in the same deck gets the same numbers on both pages.
  */
+
+/** Runs per sampled discover. Sized for a steady p99, not just the mean. */
+export const DISCOVER_RUNS = 2000;
 
 /**
  * Whether a printed power counts as 5 or greater.
@@ -35,6 +38,64 @@ export function isPower5Plus(power, treatStarAs5Plus = false) {
     return !Number.isNaN(p) && p >= 5;
 }
 
+/** True when a simulation-deck card is a power-5+ creature (what Vortex sees). */
+export function isBigCreature(card, treatStarAs5Plus = false) {
+    const types = Array.isArray(card?.types) ? card.types : [];
+    return types.includes('creature') && isPower5Plus(card.power, treatStarAs5Plus);
+}
+
+/**
+ * The one walk of a discover chain. Every caller goes through here so there is
+ * exactly one definition of the mechanic.
+ *
+ * Positions are requested strictly in order (0, 1, 2, …), which is what lets a
+ * caller hand in a lazily shuffled library (see `sampleDiscoverFrom`).
+ *
+ * @param {(i:number)=>Object} draw - card at library position i
+ * @param {number} length - library size
+ * @param {number} startCMC
+ * @param {boolean} treatStarAs5Plus
+ * @param {number} maxChain
+ * @param {Array|null} steps - pushed to when given; null skips the bookkeeping
+ * @returns {{chainCount:number, chainMana:number}}
+ */
+function walkChain(draw, length, startCMC, treatStarAs5Plus, maxChain, steps) {
+    let discoverCMC = Number.isFinite(startCMC) ? startCMC : 0;
+    let index = 0;
+    let chainCount = 0;
+    let chainMana = 0;
+
+    while (chainCount < maxChain && index < length) {
+        const start = index;
+        let hit = null;
+        let dug = 0;
+
+        for (; index < length; index++) {
+            const card = draw(index);
+            const types = Array.isArray(card?.types) ? card.types : [];
+            if (types.includes('land')) { dug += 1; continue; }
+            const cmc = Number.isFinite(card?.cmc) ? card.cmc : 0;
+            if (cmc <= discoverCMC) { hit = card; index += 1; break; }
+            dug += 1;
+        }
+
+        if (!hit) {
+            if (steps) steps.push({ discoverCMC, start, dug, hit: null, chains: false });
+            break;
+        }
+
+        const chains = isBigCreature(hit, treatStarAs5Plus);
+        chainCount += 1;
+        chainMana += Number.isFinite(hit.cmc) ? hit.cmc : 0;
+        if (steps) steps.push({ discoverCMC, start, dug, hit, chains });
+
+        if (!chains) break;
+        discoverCMC = Number.isFinite(hit.cmc) ? hit.cmc : 0;
+    }
+
+    return { chainCount, chainMana };
+}
+
 /**
  * Walk one discover chain down a pre-shuffled library.
  *
@@ -44,55 +105,23 @@ export function isPower5Plus(power, treatStarAs5Plus = false) {
  * triggers Vortex again.
  *
  * Takes a pre-shuffled array so it is deterministic and testable — the caller
- * owns the randomness.
+ * owns the randomness. Each step records where it started (`start`) and how
+ * many cards it passed over (`dug`), so `library.slice(start, start + dug)` is
+ * exactly what that discover exiled before its hit.
  *
  * @param {Array<{name:string, cmc:number, types:string[], power?:*}>} library - Pre-shuffled
  * @param {number} startCMC - Mana value of the first discover
  * @param {Object} [opts]
  * @param {boolean} [opts.treatStarAs5Plus=false]
  * @param {number} [opts.maxChain=10] - Safety cap on chain length
- * @returns {{steps:Array<{discoverCMC:number, dug:number, hit:Object|null, chains:boolean}>,
+ * @returns {{steps:Array<{discoverCMC:number, start:number, dug:number, hit:Object|null, chains:boolean}>,
  *            chainCount:number, chainMana:number}}
  */
 export function simulateDiscoverChain(library, startCMC, opts = {}) {
     const { treatStarAs5Plus = false, maxChain = 10 } = opts;
     const lib = Array.isArray(library) ? library : [];
-
     const steps = [];
-    let discoverCMC = Number.isFinite(startCMC) ? startCMC : 0;
-    let index = 0;
-    let chainCount = 0;
-    let chainMana = 0;
-
-    while (chainCount < maxChain && index < lib.length) {
-        let hit = null;
-        let dug = 0;
-
-        for (; index < lib.length; index++) {
-            const card = lib[index];
-            const types = Array.isArray(card?.types) ? card.types : [];
-            if (types.includes('land')) { dug += 1; continue; }
-            const cmc = Number.isFinite(card?.cmc) ? card.cmc : 0;
-            if (cmc <= discoverCMC) { hit = card; index += 1; break; }
-            dug += 1;
-        }
-
-        if (!hit) {
-            steps.push({ discoverCMC, dug, hit: null, chains: false });
-            break;
-        }
-
-        const types = Array.isArray(hit.types) ? hit.types : [];
-        const chains = types.includes('creature') && isPower5Plus(hit.power, treatStarAs5Plus);
-
-        chainCount += 1;
-        chainMana += Number.isFinite(hit.cmc) ? hit.cmc : 0;
-        steps.push({ discoverCMC, dug, hit, chains });
-
-        if (!chains) break;
-        discoverCMC = Number.isFinite(hit.cmc) ? hit.cmc : 0;
-    }
-
+    const { chainCount, chainMana } = walkChain(i => lib[i], lib.length, startCMC, treatStarAs5Plus, maxChain, steps);
     return { steps, chainCount, chainMana };
 }
 
@@ -143,6 +172,74 @@ export function mergeDists(parts) {
 }
 
 /**
+ * Fold a distribution's far tail into one "N or more" bucket for display.
+ *
+ * A histogram of sampled outcomes always ends at the largest run seen, which is
+ * the sampled maximum by another name — it moves with the number of shuffles.
+ * Folding everything from the q-th percentile up into that bucket keeps the
+ * picture honest: the last row reads "14+ mana", not "26 mana".
+ *
+ * @param {number[]} dist - counts[value]
+ * @param {number} [q=0.99]
+ * @returns {{counts:number[], cut:number, folded:boolean}} folded is true when
+ *          the last bucket holds values above `cut`
+ */
+export function foldTail(dist, q = 0.99) {
+    const counts = Array.isArray(dist) ? dist.map(v => v || 0) : [];
+    if (counts.length === 0) return { counts, cut: 0, folded: false };
+    const cut = percentileFromDist(counts, q);
+    const tail = counts.slice(cut + 1).reduce((a, b) => a + b, 0);
+    const out = counts.slice(0, cut + 1);
+    out[cut] = (out[cut] || 0) + tail;
+    return { counts: out, cut, folded: tail > 0 };
+}
+
+/** Fill holes in a sparse counts array with zeros, in place. */
+function densify(arr) {
+    for (let i = 0; i < arr.length; i++) if (!arr[i]) arr[i] = 0;
+    return arr;
+}
+
+/**
+ * Accumulates chain results into the summary every caller reports.
+ * @returns {{add:(r:{chainCount:number, chainMana:number})=>void, done:()=>Object}}
+ */
+function summariser() {
+    let n = 0, totalMana = 0, totalSpells = 0, whiffs = 0, chained = 0;
+    const chainDist = [];
+    const manaDist = [];
+    return {
+        add({ chainCount, chainMana }) {
+            n += 1;
+            totalMana += chainMana;
+            totalSpells += chainCount;
+            if (chainCount === 0) whiffs += 1;
+            if (chainCount >= 2) chained += 1;
+            chainDist[chainCount] = (chainDist[chainCount] || 0) + 1;
+            const bucket = Math.max(0, Math.round(chainMana));
+            manaDist[bucket] = (manaDist[bucket] || 0) + 1;
+        },
+        done() {
+            densify(chainDist);
+            densify(manaDist);
+            const runs = Math.max(1, n);
+            return {
+                runs: n,
+                avgMana: totalMana / runs,
+                avgSpells: totalSpells / runs,
+                medianMana: percentileFromDist(manaDist, 0.5),
+                p95Mana: percentileFromDist(manaDist, 0.95),
+                p99Mana: percentileFromDist(manaDist, 0.99),
+                whiffRate: whiffs / runs,
+                chainRate: chained / runs,
+                chainDist,
+                manaDist
+            };
+        }
+    };
+}
+
+/**
  * Run many chains from the same starting mana value and summarise them.
  *
  * Discover is genuinely random — unlike a tutor, you take what the top of the
@@ -161,43 +258,148 @@ export function mergeDists(parts) {
 export function sampleDiscover(shuffledLibrary, startCMC, opts = {}) {
     const { runs = 400, treatStarAs5Plus = false } = opts;
     const n = Math.max(1, Math.floor(runs));
-
-    let totalMana = 0;
-    let totalSpells = 0;
+    const acc = summariser();
     let best = 0;
-    let whiffs = 0;
-    let chained = 0;
-    const chainDist = [];
-    const manaDist = [];
 
     for (let i = 0; i < n; i++) {
-        const { chainCount, chainMana } = simulateDiscoverChain(shuffledLibrary(), startCMC, { treatStarAs5Plus });
-        totalMana += chainMana;
-        totalSpells += chainCount;
-        if (chainMana > best) best = chainMana;
-        if (chainCount === 0) whiffs += 1;
-        if (chainCount >= 2) chained += 1;
-        chainDist[chainCount] = (chainDist[chainCount] || 0) + 1;
-        const bucket = Math.max(0, Math.round(chainMana));
-        manaDist[bucket] = (manaDist[bucket] || 0) + 1;
+        const r = simulateDiscoverChain(shuffledLibrary(), startCMC, { treatStarAs5Plus });
+        if (r.chainMana > best) best = r.chainMana;
+        acc.add(r);
     }
 
-    for (let i = 0; i < chainDist.length; i++) if (!chainDist[i]) chainDist[i] = 0;
-    for (let i = 0; i < manaDist.length; i++) if (!manaDist[i]) manaDist[i] = 0;
+    // bestMana is the largest run SEEN, not a ceiling — it grows with the
+    // sample size. Never display it; quote p95/p99 instead.
+    return { ...acc.done(), bestMana: best };
+}
 
-    return {
-        runs: n,
-        avgMana: totalMana / n,
-        avgSpells: totalSpells / n,
-        // The largest run SEEN, not a ceiling — it grows with the sample size.
-        // Callers that want a stable "good turn" figure should use p95.
-        bestMana: best,
-        medianMana: percentileFromDist(manaDist, 0.5),
-        p95Mana: percentileFromDist(manaDist, 0.95),
-        p99Mana: percentileFromDist(manaDist, 0.99),
-        whiffRate: whiffs / n,
-        chainRate: chained / n,
-        chainDist,
-        manaDist
+// ==================== Seeded sampling ====================
+
+/**
+ * Small, fast seeded PRNG (mulberry32). Seeding makes a page's numbers a
+ * property of the deck rather than of the moment: revisit the page and nothing
+ * shuffles under you.
+ * @param {number} seed
+ * @returns {() => number} uniform in [0, 1)
+ */
+export function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function rng() {
+        a = (a + 0x6D2B79F5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+}
+
+/** 32-bit FNV-1a hash of a string, for deriving seeds from stable keys. */
+export function hashSeed(str) {
+    let h = 0x811c9dc5;
+    const s = String(str ?? '');
+    for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 0x01000193);
+    }
+    return h >>> 0;
+}
+
+/**
+ * Seeded Fisher–Yates shuffle into a new array (the input is not touched).
+ * @param {Array} library
+ * @param {() => number} rng
+ */
+export function seededShuffle(library, rng) {
+    const out = Array.isArray(library) ? library.slice() : [];
+    for (let i = out.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        const t = out[i]; out[i] = out[j]; out[j] = t;
+    }
+    return out;
+}
+
+/**
+ * The library minus one copy of a card — the creature being cast is on the
+ * stack, not in the library, so discover can never find it.
+ *
+ * @param {Array<{name:string}>} library
+ * @param {string|null|undefined} name
+ * @returns {Array} a new array (or the original when there is nothing to remove)
+ */
+export function withoutOne(library, name) {
+    const lib = Array.isArray(library) ? library : [];
+    if (!name) return lib;
+    const i = lib.findIndex(c => c?.name === name);
+    if (i === -1) return lib;
+    return [...lib.slice(0, i), ...lib.slice(i + 1)];
+}
+
+/**
+ * Sample many discover chains from one library, shuffling lazily.
+ *
+ * A discover usually reveals only a handful of cards, so shuffling all ninety-
+ * nine for every run is wasted work. This fixes library positions one at a time
+ * as the walk asks for them (a partial Fisher–Yates), which gives exactly the
+ * distribution of a full shuffle at a fraction of the cost — and because the
+ * walk is the same `walkChain` every other caller uses, the mechanic cannot
+ * drift.
+ *
+ * @param {Array} library - the library as it stands (not pre-shuffled)
+ * @param {number} startCMC
+ * @param {Object} [opts]
+ * @param {number} [opts.runs=DISCOVER_RUNS]
+ * @param {number} [opts.seed=1]
+ * @param {boolean} [opts.treatStarAs5Plus=false]
+ * @param {number} [opts.maxChain=10]
+ * @returns {{runs:number, avgMana:number, avgSpells:number, medianMana:number,
+ *            p95Mana:number, p99Mana:number, whiffRate:number, chainRate:number,
+ *            chainDist:number[], manaDist:number[]}}
+ */
+export function sampleDiscoverFrom(library, startCMC, opts = {}) {
+    const { runs = DISCOVER_RUNS, seed = 1, treatStarAs5Plus = false, maxChain = 10 } = opts;
+    const pool = Array.isArray(library) ? library.slice() : [];
+    const size = pool.length;
+    const rng = mulberry32(seed);
+    const n = Math.max(1, Math.floor(runs));
+    const acc = summariser();
+
+    let fixed = 0;
+    const draw = (i) => {
+        // Positions arrive in order, so i === fixed whenever a new one is needed.
+        if (i >= fixed) {
+            const j = i + Math.floor(rng() * (size - i));
+            const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+            fixed = i + 1;
+        }
+        return pool[i];
+    };
+
+    for (let r = 0; r < n; r++) {
+        fixed = 0;
+        acc.add(walkChain(draw, size, startCMC, treatStarAs5Plus, maxChain, null));
+    }
+    return acc.done();
+}
+
+/**
+ * What one cast of a specific creature discovers.
+ *
+ * The single entry point both Vortex pages use: the creature is removed from
+ * the library (it is on the stack), the discover size is its mana value, and
+ * the seed is derived from the creature, so the result is reproducible and
+ * identical wherever it is asked for.
+ *
+ * @param {Array} library - simulation-deck cards (buildDeckFromCardData shape)
+ * @param {{name:string, cmc:number}} creature
+ * @param {Object} [opts]
+ * @param {boolean} [opts.treatStarAs5Plus=false]
+ * @param {number} [opts.runs=DISCOVER_RUNS]
+ */
+export function discoverForCreature(library, creature, opts = {}) {
+    const { treatStarAs5Plus = false, runs = DISCOVER_RUNS } = opts;
+    const cmc = Math.max(0, Math.round(Number(creature?.cmc) || 0));
+    return sampleDiscoverFrom(withoutOne(library, creature?.name), cmc, {
+        runs,
+        treatStarAs5Plus,
+        seed: hashSeed(`${creature?.name ?? ''}|${cmc}`)
+    });
 }
