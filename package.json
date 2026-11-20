@@ -12,6 +12,7 @@
         "test:perf": "node --test tests/performance/benchmarks.node.test.js",
         "test:e2e": "playwright test",
         "test:watch": "nodemon --watch js --watch tests --exec npm run test:legacy",
+        "sw:manifest": "node scripts/update-sw-manifest.mjs",
         "lint": "eslint js serverless sw.js tests/**/*.node.test.js tests/e2e playwright.config.js eslint.config.js",
         "check": "npm run lint && npm test && npm run test:e2e",
         "dev": "http-server . -p 3000 -c-1",

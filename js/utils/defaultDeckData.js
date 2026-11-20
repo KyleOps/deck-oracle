@@ -5,6 +5,7 @@
  * Deck: 🌌Doctor Whostoric📜
  * Generated: 2026-01-26T03:55:47.955Z
  * Power/toughness backfilled 2026-09-02 for the Wild Pair calculator.
+ * Oracle text, colours and produced mana enriched from Scryfall 2026-11-21.
  */
 
 export const DEFAULT_DECK_DATA = {
@@ -649,7 +650,17 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "3"
+      "toughness": "3",
+      "oracle_text": "Time Lord's Prerogative — Whenever you cast a historic spell, copy it, except the copy isn't legendary. This ability triggers only once each turn. (Artifacts, legendaries, and Sagas are historic. A copy of a permanent spell becomes a token.)",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "c045ccb2-28d1-4bbe-9feb-3e86988fd24d"
     },
     "Expropriate": {
       "name": "Expropriate",
@@ -660,7 +671,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Council's dilemma — Starting with you, each player votes for time or money. For each time vote, take an extra turn after this one. For each money vote, choose a permanent owned by the voter and gain control of it. Exile Expropriate.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "9c8a2a5a-cb9b-4582-a453-085da78584f9"
     },
     "Command Tower": {
       "name": "Command Tower",
@@ -671,7 +690,18 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+      "colors": [],
+      "color_identity": [],
+      "produced_mana": [
+        "B",
+        "G",
+        "R",
+        "U",
+        "W"
+      ],
+      "scryfall_id": "a73297d2-580c-4174-a427-265f6916d09f"
     },
     "Skyshroud Claim": {
       "name": "Skyshroud Claim",
@@ -682,7 +712,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Search your library for up to two Forest cards, put them onto the battlefield, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "860c0808-3ec1-4182-bf83-783720a02780"
     },
     "Circuitous Route": {
       "name": "Circuitous Route",
@@ -693,7 +731,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Search your library for up to two basic land cards and/or Gate cards, put them onto the battlefield tapped, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "a806dec2-d4f9-4f8d-a1dd-170777941131"
     },
     "God-Pharaoh's Statue": {
       "name": "God-Pharaoh's Statue",
@@ -704,7 +750,11 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "artifacts"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Spells your opponents cast cost {2} more to cast.\nAt the beginning of your end step, each opponent loses 1 life.",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "7dce06ba-c1e1-45ec-82a7-fc10b0fa8870"
     },
     "Kiora Bests the Sea God": {
       "name": "Kiora Bests the Sea God",
@@ -715,7 +765,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "enchantments"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Create an 8/8 blue Kraken creature token with hexproof.\nII — Tap all nonland permanents target opponent controls. They don't untap during their controller's next untap step.\nIII — Gain control of target permanent an opponent controls. Untap it.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "2b604451-4f6c-4cfa-8d3a-01f18d01d88f"
     },
     "Thryx, the Sudden Storm": {
       "name": "Thryx, the Sudden Storm",
@@ -728,7 +786,15 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "5"
+      "toughness": "5",
+      "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nSpells you cast with mana value 5 or greater cost {1} less to cast and can't be countered.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "f5f1809c-fadb-4974-ae94-292e5d97afb8"
     },
     "Nissa, Vital Force": {
       "name": "Nissa, Vital Force",
@@ -739,7 +805,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "planeswalkers"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "+1: Untap target land you control. Until your next turn, it becomes a 5/5 Elemental creature with haste. It's still a land.\n−3: Return target permanent card from your graveyard to your hand.\n−6: You get an emblem with \"Whenever a land you control enters, you may draw a card.\"",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "bbaaa98a-ec40-4ff1-8762-a719cf1c475d"
     },
     "Explosive Vegetation": {
       "name": "Explosive Vegetation",
@@ -750,7 +824,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "8de3fdf8-d55e-4ffc-8f8b-6314d4d467ce"
     },
     "Arixmethes, Slumbering Isle": {
       "name": "Arixmethes, Slumbering Isle",
@@ -763,7 +845,21 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "12"
+      "toughness": "12",
+      "oracle_text": "Arixmethes enters tapped with five slumber counters on it.\nAs long as Arixmethes has a slumber counter on it, it's a land. (It's not a creature.)\nWhenever you cast a spell, you may remove a slumber counter from Arixmethes.\n{T}: Add {G}{U}.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "produced_mana": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "bf561379-4e5f-486a-bcdf-6e08e105316e"
     },
     "Genesis Storm": {
       "name": "Genesis Storm",
@@ -774,7 +870,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "When you cast this spell, copy it for each time you've cast your commander from the command zone this game.\nReveal cards from the top of your library until you reveal a nonland permanent card. You may put that card onto the battlefield. Then put all cards revealed this way that weren't put onto the battlefield on the bottom of your library in a random order.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "066578ed-ffaf-473d-87b8-e614035748b6"
     },
     "In Bolas's Clutches": {
       "name": "In Bolas's Clutches",
@@ -785,7 +889,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "enchantments"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Enchant permanent\nYou control enchanted permanent.\nEnchanted permanent is legendary.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "d72bf6b4-ac70-4be0-86de-cb3c47244dbc"
     },
     "Karn's Temporal Sundering": {
       "name": "Karn's Temporal Sundering",
@@ -796,7 +908,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "(You may cast a legendary sorcery only if you control a legendary creature or planeswalker.)\nTarget player takes an extra turn after this one. Return up to one target nonland permanent to its owner's hand. Exile Karn's Temporal Sundering.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "7a64c1a4-02ce-49d2-97f2-970b8c33672d"
     },
     "Kamahl's Druidic Vow": {
       "name": "Kamahl's Druidic Vow",
@@ -807,7 +927,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "(You may cast a legendary sorcery only if you control a legendary creature or planeswalker.)\nLook at the top X cards of your library. You may put any number of land and/or legendary permanent cards with mana value X or less from among them onto the battlefield. Put the rest into your graveyard.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "bf95ef60-e67b-466d-a6cb-d487ffa88b72"
     },
     "Ranger's Path": {
       "name": "Ranger's Path",
@@ -818,7 +946,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Search your library for up to two Forest cards, put them onto the battlefield tapped, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "26858a53-1054-407a-b2a2-34a7c4ae0f10"
     },
     "Hunting Wilds": {
       "name": "Hunting Wilds",
@@ -829,7 +965,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Kicker {3}{G} (You may pay an additional {3}{G} as you cast this spell.)\nSearch your library for up to two Forest cards, put them onto the battlefield tapped, then shuffle.\nIf this spell was kicked, untap all Forests put onto the battlefield this way. They become 3/3 green creatures with haste that are still lands.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "0097101d-e63d-4785-8c68-5d2fca3ded78"
     },
     "Vastwood Surge": {
       "name": "Vastwood Surge",
@@ -840,7 +984,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nSearch your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle. If this spell was kicked, put two +1/+1 counters on each creature you control.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "1dcd904c-fac6-490d-a9dd-ccdf39cbe597"
     },
     "Kodama of the East Tree": {
       "name": "Kodama of the East Tree",
@@ -853,7 +1005,15 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "6"
+      "toughness": "6",
+      "oracle_text": "Reach\nWhenever another permanent you control enters, if it wasn't put onto the battlefield with this ability, you may put a permanent card with equal or lesser mana value from your hand onto the battlefield.\nPartner (You can have two commanders if both have partner.)",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "af5105ee-09e2-4344-ab39-00f0e9034c47"
     },
     "Academy Ruins": {
       "name": "Academy Ruins",
@@ -864,7 +1024,16 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "{T}: Add {C}.\n{1}{U}, {T}: Put target artifact card from your graveyard on top of your library.",
+      "colors": [],
+      "color_identity": [
+        "U"
+      ],
+      "produced_mana": [
+        "C"
+      ],
+      "scryfall_id": "d0e3ff04-aa5b-4d6d-b06e-b4679f7938b8"
     },
     "Kogla, the Titan Ape": {
       "name": "Kogla, the Titan Ape",
@@ -877,7 +1046,15 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "6"
+      "toughness": "6",
+      "oracle_text": "When Kogla enters, it fights up to one target creature you don't control.\nWhenever Kogla attacks, destroy target artifact or enchantment defending player controls.\n{1}{G}: Return target Human you control to its owner's hand. Kogla gains indestructible until end of turn.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "3c35ca79-eb72-427a-a8ed-404b2214389a"
     },
     "Rejuvenating Springs": {
       "name": "Rejuvenating Springs",
@@ -888,7 +1065,18 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "This land enters tapped unless you have two or more opponents.\n{T}: Add {G} or {U}.",
+      "colors": [],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "produced_mana": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "c4565a7b-a0ed-4a7f-ad48-7745c56d141b"
     },
     "Sea Gate Restoration // Sea Gate, Reborn": {
       "name": "Sea Gate Restoration // Sea Gate, Reborn",
@@ -899,7 +1087,18 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Draw cards equal to the number of cards in your hand plus one. You have no maximum hand size for the rest of the game.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "produced_mana": [
+        "U"
+      ],
+      "scryfall_id": "193071fe-180b-4d35-ba78-9c16675c29fc"
     },
     "Ugin, the Spirit Dragon": {
       "name": "Ugin, the Spirit Dragon",
@@ -910,7 +1109,11 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "planeswalkers"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "+2: Ugin deals 3 damage to any target.\n−X: Exile each permanent with mana value X or less that's one or more colors.\n−10: You gain 7 life, draw seven cards, then put up to seven permanent cards from your hand onto the battlefield.",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "9c017fa9-7021-417a-9c2e-3df409644fcf"
     },
     "Nezahal, Primal Tide": {
       "name": "Nezahal, Primal Tide",
@@ -923,7 +1126,15 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "7"
+      "toughness": "7",
+      "oracle_text": "This spell can't be countered.\nYou have no maximum hand size.\nWhenever an opponent casts a noncreature spell, draw a card.\nDiscard three cards: Exile Nezahal. Return it to the battlefield tapped under its owner's control at the beginning of the next end step.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "a959b40d-dd8c-49d8-8003-744d0c877b04"
     },
     "Karn Liberated": {
       "name": "Karn Liberated",
@@ -934,7 +1145,11 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "planeswalkers"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "+4: Target player exiles a card from their hand.\n−3: Exile target permanent.\n−14: Restart the game, leaving in exile all non-Aura permanent cards exiled with Karn. Then put those cards onto the battlefield under your control.",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "4b0c6662-4dde-40a2-97e0-0318478c0367"
     },
     "Boseiju, Who Endures": {
       "name": "Boseiju, Who Endures",
@@ -945,19 +1160,31 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "{T}: Add {G}.\nChannel — {1}{G}, Discard this card: Destroy target artifact, enchantment, or nonbasic land an opponent controls. That player may search their library for a land card with a basic land type, put it onto the battlefield, then shuffle. This ability costs {1} less to activate for each legendary creature you control.",
+      "colors": [],
+      "color_identity": [
+        "G"
+      ],
+      "produced_mana": [
+        "G"
+      ],
+      "scryfall_id": "2135ac5a-187b-4dc9-8f82-34e8d1603416"
     },
     "Misty Rainforest": {
       "name": "Misty Rainforest",
       "type_line": "Land",
       "cmc": 0,
       "mana_cost": "",
-      "oracle_text": "{T}, Pay 1 life, Sacrifice Misty Rainforest: Search your library for a Forest or Island card, put it onto the battlefield, then shuffle.",
+      "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Forest or Island card, put it onto the battlefield, then shuffle.",
       "category": "lands",
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "88231c0d-0cc8-44ec-bf95-81d1710ac141"
     },
     "Otawara, Soaring City": {
       "name": "Otawara, Soaring City",
@@ -968,7 +1195,16 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "{T}: Add {U}.\nChannel — {3}{U}, Discard this card: Return target artifact, creature, enchantment, or planeswalker to its owner's hand. This ability costs {1} less to activate for each legendary creature you control.",
+      "colors": [],
+      "color_identity": [
+        "U"
+      ],
+      "produced_mana": [
+        "U"
+      ],
+      "scryfall_id": "486d7edc-d983-41f0-8b78-c99aecd72996"
     },
     "Yavimaya, Cradle of Growth": {
       "name": "Yavimaya, Cradle of Growth",
@@ -979,7 +1215,14 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Each land is a Forest in addition to its other land types.",
+      "colors": [],
+      "color_identity": [],
+      "produced_mana": [
+        "G"
+      ],
+      "scryfall_id": "4e4b6e22-93b2-4896-bba5-0ceaa5d8ea3c"
     },
     "Wondrous Crucible": {
       "name": "Wondrous Crucible",
@@ -990,7 +1233,11 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "artifacts"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Permanents you control have ward {2}.\nAt the beginning of your end step, mill two cards, then exile a nonland card at random from your graveyard. Copy it. You may cast the copy without paying its mana cost. (A copy of a permanent spell becomes a token.)",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "f4cb4a2b-c48f-4d30-8e0d-f76579be1747"
     },
     "The Temporal Anchor": {
       "name": "The Temporal Anchor",
@@ -1001,7 +1248,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "artifacts"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "At the beginning of your upkeep, scry 2.\nWhenever you choose to put one or more cards on the bottom of your library while scrying, exile that many cards from the bottom of your library.\nDuring your turn, you may play cards exiled with The Temporal Anchor.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "1a212d59-b72e-4939-a757-c131ca4323ce"
     },
     "Cityscape Leveler": {
       "name": "Cityscape Leveler",
@@ -1015,7 +1270,11 @@ export const DEFAULT_DECK_DATA = {
         "artifacts"
       ],
       "count": 1,
-      "toughness": "8"
+      "toughness": "8",
+      "oracle_text": "Trample\nWhen you cast this spell and whenever this creature attacks, destroy up to one target nonland permanent. Its controller creates a tapped Powerstone token.\nUnearth {8}",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "67a87278-4c82-4056-8354-253d86b0ef3d"
     },
     "Portal to Phyrexia": {
       "name": "Portal to Phyrexia",
@@ -1026,7 +1285,11 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "artifacts"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "When this artifact enters, each opponent sacrifices three creatures of their choice.\nAt the beginning of your upkeep, put target creature card from a graveyard onto the battlefield under your control. It's a Phyrexian in addition to its other types.",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "5f608efc-0dbc-4cc3-aadd-ed473bfc29ab"
     },
     "Nissa, Ascended Animist": {
       "name": "Nissa, Ascended Animist",
@@ -1037,7 +1300,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "planeswalkers"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Compleated ({G/P} can be paid with {G} or 2 life. For each {G/P} paid with life, this planeswalker enters with two fewer loyalty counters.)\n+1: Create an X/X green Phyrexian Horror creature token, where X is Nissa's loyalty.\n−1: Destroy target artifact or enchantment.\n−7: Until end of turn, creatures you control get +1/+1 for each Forest you control and gain trample.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "1dd64b1d-bcef-476c-bf0b-3ac7df7cbed3"
     },
     "Invasion of Zendikar // Awakened Skyclave": {
       "name": "Invasion of Zendikar // Awakened Skyclave",
@@ -1048,7 +1319,22 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "battles"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "(As a Siege enters, choose an opponent to protect it. You and others can attack it. When it's defeated, exile it, then cast it transformed.)\nWhen this Siege enters, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "produced_mana": [
+        "B",
+        "G",
+        "R",
+        "U",
+        "W"
+      ],
+      "scryfall_id": "8fed056f-a8f5-41ec-a7d2-a80a238872d1"
     },
     "Imoti, Celebrant of Bounty": {
       "name": "Imoti, Celebrant of Bounty",
@@ -1061,7 +1347,17 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "1"
+      "toughness": "1",
+      "oracle_text": "Cascade (When you cast this spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order.)\nSpells you cast with mana value 6 or greater have cascade.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "8afceb13-877a-4256-9ba6-851b6924ffd9"
     },
     "Path of the Animist": {
       "name": "Path of the Animist",
@@ -1072,7 +1368,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.\nWill of the Planeswalkers — Starting with you, each player votes for planeswalk or chaos. If planeswalk gets more votes, planeswalk. If chaos gets more votes or the vote is tied, chaos ensues.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "daf5fe01-6f27-4a78-bff0-0bfbb1bbd49f"
     },
     "Open the Way": {
       "name": "Open the Way",
@@ -1083,7 +1387,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "X can't be greater than the number of players in the game.\nReveal cards from the top of your library until you reveal X land cards. Put those land cards onto the battlefield tapped and the rest on the bottom of your library in a random order.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "5d928e0d-a586-4de1-a469-0591122659fa"
     },
     "City of Death": {
       "name": "City of Death",
@@ -1094,7 +1406,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "enchantments"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after VI.)\nI — Create a Treasure token.\nII, III, IV, V, VI — Create a token that's a copy of target non-Saga token you control.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "bd4d9b25-02ea-4ce3-a35f-7f427a74f591"
     },
     "Trenzalore Clocktower": {
       "name": "Trenzalore Clocktower",
@@ -1105,7 +1425,16 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "{T}: Add {U}. Put a time counter on Trenzalore Clocktower.\n{1}{U}, {T}, Remove twelve time counters from Trenzalore Clocktower and exile it: Shuffle your graveyard and hand into your library, then draw seven cards. Activate only if you control a Time Lord.",
+      "colors": [],
+      "color_identity": [
+        "U"
+      ],
+      "produced_mana": [
+        "U"
+      ],
+      "scryfall_id": "64444549-1198-4465-91d5-02a7903691dc"
     },
     "Mosswort Bridge": {
       "name": "Mosswort Bridge",
@@ -1116,7 +1445,16 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Hideaway 4 (When this land enters, look at the top four cards of your library, exile one face down, then put the rest on the bottom in a random order.)\nThis land enters tapped.\n{T}: Add {G}.\n{G}, {T}: You may play the exiled card without paying its mana cost if creatures you control have total power 10 or greater.",
+      "colors": [],
+      "color_identity": [
+        "G"
+      ],
+      "produced_mana": [
+        "G"
+      ],
+      "scryfall_id": "fbf2148a-e8d8-453f-9901-2941bf0d15d4"
     },
     "Prime Speaker Zegana": {
       "name": "Prime Speaker Zegana",
@@ -1129,7 +1467,17 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "1"
+      "toughness": "1",
+      "oracle_text": "Prime Speaker Zegana enters with X +1/+1 counters on it, where X is the greatest power among other creatures you control.\nWhen Prime Speaker Zegana enters, draw cards equal to its power.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "d2f007b0-b578-44f8-be65-cd9e2ac56e09"
     },
     "Tishana, Voice of Thunder": {
       "name": "Tishana, Voice of Thunder",
@@ -1142,7 +1490,17 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "*"
+      "toughness": "*",
+      "oracle_text": "Tishana's power and toughness are each equal to the number of cards in your hand.\nYou have no maximum hand size.\nWhen Tishana enters, draw a card for each creature you control.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "e522b695-859e-4fba-bf8c-c415fbce13e3"
     },
     "Migration Path": {
       "name": "Migration Path",
@@ -1153,7 +1511,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.\nCycling {2} ({2}, Discard this card: Draw a card.)",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "21e3dfad-69b6-416c-966b-0d9c876d22fe"
     },
     "Doppelgang": {
       "name": "Doppelgang",
@@ -1164,7 +1530,17 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "For each of X target permanents, create X tokens that are copies of that permanent.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "a2daec58-78ed-4da5-b3b0-b04f12b0acbd"
     },
     "Koma, Cosmos Serpent": {
       "name": "Koma, Cosmos Serpent",
@@ -1177,7 +1553,17 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "6"
+      "toughness": "6",
+      "oracle_text": "This spell can't be countered.\nAt the beginning of each upkeep, create a 3/3 blue Serpent creature token named Koma's Coil.\nSacrifice another Serpent: Choose one —\n• Tap target permanent. Its activated abilities can't be activated this turn.\n• Koma gains indestructible until end of turn.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "b2f23d6f-f2c8-4022-9f46-ba7fda00ef99"
     },
     "Nexus of Becoming": {
       "name": "Nexus of Becoming",
@@ -1188,7 +1574,11 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "artifacts"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "At the beginning of combat on your turn, draw a card. Then you may exile an artifact or creature card from your hand. If you do, create a token that's a copy of the exiled card, except it's a 3/3 Golem artifact creature in addition to its other types.",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "b0f61742-522c-4b36-97db-41d0c412a072"
     },
     "Bonny Pall, Clearcutter": {
       "name": "Bonny Pall, Clearcutter",
@@ -1201,7 +1591,17 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "5"
+      "toughness": "5",
+      "oracle_text": "Reach\nWhen Bonny Pall enters, create Beau, a legendary blue Ox creature token with \"Beau's power and toughness are each equal to the number of lands you control.\"\nWhenever you attack, draw a card, then you may put a land card from your hand or graveyard onto the battlefield.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "4383ae7c-58ea-4354-93e4-677ad185c3bb"
     },
     "Map the Frontier": {
       "name": "Map the Frontier",
@@ -1212,7 +1612,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Search your library for up to two basic land cards and/or Desert cards, put them onto the battlefield tapped, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "165f4428-e1a1-477d-bd90-138189e88163"
     },
     "Mindslaver": {
       "name": "Mindslaver",
@@ -1223,7 +1631,11 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "artifacts"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "{4}, {T}, Sacrifice Mindslaver: You control target player during that player's next turn. (You see all cards that player could see and make all decisions for them.)",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "00d03b17-75ae-40d2-8570-b219ef0dfd4a"
     },
     "Omenpath Journey": {
       "name": "Omenpath Journey",
@@ -1234,7 +1646,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "enchantments"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "When this enchantment enters, search your library for up to five land cards that have different names, exile them, then shuffle.\nAt the beginning of your end step, choose a card at random exiled with this enchantment and put it onto the battlefield tapped.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "c49c9b72-61c0-4e3a-a3a6-994b149398a9"
     },
     "Disciple of Freyalise // Garden of Freyalise": {
       "name": "Disciple of Freyalise // Garden of Freyalise",
@@ -1247,7 +1667,18 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "3"
+      "toughness": "3",
+      "oracle_text": "When this creature enters, you may sacrifice another creature. If you do, you gain X life and draw X cards, where X is that creature's power.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "produced_mana": [
+        "G"
+      ],
+      "scryfall_id": "a8e9ea5a-5e10-4b77-baef-0352ff035483"
     },
     "Apex Devastator": {
       "name": "Apex Devastator",
@@ -1260,7 +1691,15 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "10"
+      "toughness": "10",
+      "oracle_text": "Cascade, cascade, cascade, cascade (When you cast this spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order. Multiple instances of cascade each trigger separately.)",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "8fa281e1-5c48-4bba-b8e9-88c6f5f53abb"
     },
     "Sink into Stupor // Soporific Springs": {
       "name": "Sink into Stupor // Soporific Springs",
@@ -1271,7 +1710,18 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "instants"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Return target spell or nonland permanent an opponent controls to its owner's hand.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "produced_mana": [
+        "U"
+      ],
+      "scryfall_id": "5358b87a-1a29-426d-b165-40c97da2c14d"
     },
     "Shifting Woodland": {
       "name": "Shifting Woodland",
@@ -1282,7 +1732,16 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "This land enters tapped unless you control a Forest.\n{T}: Add {G}.\nDelirium — {2}{G}{G}: This land becomes a copy of target permanent card in your graveyard until end of turn. Activate only if there are four or more card types among cards in your graveyard.",
+      "colors": [],
+      "color_identity": [
+        "G"
+      ],
+      "produced_mana": [
+        "G"
+      ],
+      "scryfall_id": "059164e1-894d-4586-9800-e60d6fbd6eb6"
     },
     "Sunken Palace": {
       "name": "Sunken Palace",
@@ -1293,7 +1752,16 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "This land enters tapped.\n{T}: Add {U}.\n{1}{U}, {T}, Exile seven cards from your graveyard: Add {U}. When you spend this mana to cast a spell or activate an ability, copy that spell or ability. You may choose new targets for the copy. (Mana abilities can't be copied.)",
+      "colors": [],
+      "color_identity": [
+        "U"
+      ],
+      "produced_mana": [
+        "U"
+      ],
+      "scryfall_id": "e44ee47c-95de-4090-97b6-188585d86b0c"
     },
     "Ugin, the Ineffable": {
       "name": "Ugin, the Ineffable",
@@ -1304,7 +1772,11 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "planeswalkers"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Colorless spells you cast cost {2} less to cast.\n+1: Exile the top card of your library face down and look at it. Create a 2/2 colorless Spirit creature token. When that token leaves the battlefield, put the exiled card into your hand.\n−3: Destroy target permanent that's one or more colors.",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "2eb7e322-aba0-42f5-80a1-267f3444ac4d"
     },
     "Talon Gates of Madara": {
       "name": "Talon Gates of Madara",
@@ -1315,7 +1787,19 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "When this land enters, up to one target creature phases out.\n{T}: Add {C}.\n{1}, {T}: Add one mana of any color.\n{4}: Put this card from your hand onto the battlefield.",
+      "colors": [],
+      "color_identity": [],
+      "produced_mana": [
+        "B",
+        "C",
+        "G",
+        "R",
+        "U",
+        "W"
+      ],
+      "scryfall_id": "3e2c6447-e599-4b89-8a34-e46aa306a3f7"
     },
     "Portent of Calamity": {
       "name": "Portent of Calamity",
@@ -1326,7 +1810,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Reveal the top X cards of your library. For each card type, you may exile a card of that type from among them. Put the rest into your graveyard. You may cast a spell from among the exiled cards without paying its mana cost if you exiled four or more cards this way. Then put the rest of the exiled cards into your hand.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "8599e2dd-9164-4da3-814f-adccef3b9497"
     },
     "Aminatou's Augury": {
       "name": "Aminatou's Augury",
@@ -1337,7 +1829,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Exile the top eight cards of your library. You may put a land card from among them onto the battlefield. Until end of turn, for each nonland card type, you may cast a spell of that type from among the exiled cards without paying its mana cost.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "503448da-d14f-4759-85b6-0db2e90e0241"
     },
     "Aesi, Tyrant of Gyre Strait": {
       "name": "Aesi, Tyrant of Gyre Strait",
@@ -1350,7 +1850,17 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "5"
+      "toughness": "5",
+      "oracle_text": "You may play an additional land on each of your turns.\nLandfall — Whenever a land you control enters, you may draw a card.",
+      "colors": [
+        "G",
+        "U"
+      ],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "673c21f8-02b6-4ac4-b2fc-df065b4ac662"
     },
     "One with the Multiverse": {
       "name": "One with the Multiverse",
@@ -1361,7 +1871,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "enchantments"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "You may look at the top card of your library any time.\nYou may play lands and cast spells from the top of your library.\nOnce during each of your turns, you may cast a spell from your hand or the top of your library without paying its mana cost.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "1c85ae22-ccd0-4649-a736-1915043daae7"
     },
     "Omniscience": {
       "name": "Omniscience",
@@ -1372,7 +1890,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "enchantments"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "You may cast spells from your hand without paying their mana costs.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "d33d91d0-1506-45e4-9def-975bf901815e"
     },
     "Willowrush Verge": {
       "name": "Willowrush Verge",
@@ -1383,7 +1909,18 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "{T}: Add {U}.\n{T}: Add {G}. Activate only if you control a Forest or an Island.",
+      "colors": [],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "produced_mana": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "758d93d5-3f66-4395-a928-000485396c87"
     },
     "Ugin, Eye of the Storms": {
       "name": "Ugin, Eye of the Storms",
@@ -1394,7 +1931,14 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "planeswalkers"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "When you cast this spell, exile up to one target permanent that's one or more colors.\nWhenever you cast a colorless spell, exile up to one target permanent that's one or more colors.\n+2: You gain 3 life and draw a card.\n0: Add {C}{C}{C}.\n−11: Search your library for any number of colorless nonland cards, exile them, then shuffle. Until end of turn, you may cast those cards without paying their mana costs.",
+      "colors": [],
+      "color_identity": [],
+      "produced_mana": [
+        "C"
+      ],
+      "scryfall_id": "64a5d494-efa1-446b-bebe-2ad36e154376"
     },
     "Mistrise Village": {
       "name": "Mistrise Village",
@@ -1405,7 +1949,16 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "This land enters tapped unless you control a Mountain or a Forest.\n{T}: Add {U}.\n{U}, {T}: The next spell you cast this turn can't be countered.",
+      "colors": [],
+      "color_identity": [
+        "U"
+      ],
+      "produced_mana": [
+        "U"
+      ],
+      "scryfall_id": "d44bccbf-6fab-46e4-8ddb-6577e27ec6e8"
     },
     "Encroaching Dragonstorm": {
       "name": "Encroaching Dragonstorm",
@@ -1416,7 +1969,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "enchantments"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "When this enchantment enters, search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.\nWhen a Dragon you control enters, return this enchantment to its owner's hand.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "4ddd4477-f8c9-4d05-9177-f8344ba8f40b"
     },
     "Summon: Bahamut": {
       "name": "Summon: Bahamut",
@@ -1430,7 +1991,11 @@ export const DEFAULT_DECK_DATA = {
         "enchantments"
       ],
       "count": 1,
-      "toughness": "9"
+      "toughness": "9",
+      "oracle_text": "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after IV.)\nI, II — Destroy up to one target nonland permanent.\nIII — Draw two cards.\nIV — Mega Flare — This creature deals damage equal to the total mana value of other permanents you control to each opponent.\nFlying",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "95318d85-4a08-47ac-a43d-ea83c0bea81c"
     },
     "Reach the Horizon": {
       "name": "Reach the Horizon",
@@ -1441,7 +2006,15 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "sorceries"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Search your library for up to two basic land cards and/or Town cards with different names, put them onto the battlefield tapped, then shuffle.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "scryfall_id": "c25960e0-5779-4e20-89f3-03950ad9d91c"
     },
     "Clive's Hideaway": {
       "name": "Clive's Hideaway",
@@ -1452,7 +2025,14 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Hideaway 4 (When this land enters, look at the top four cards of your library, exile one face down, then put the rest on the bottom in a random order.)\n{T}: Add {C}.\n{2}, {T}: You may play the exiled card without paying its mana cost if you control four or more legendary creatures.",
+      "colors": [],
+      "color_identity": [],
+      "produced_mana": [
+        "C"
+      ],
+      "scryfall_id": "5e43c36f-b8a2-4b2b-b2ea-57e6fa97521c"
     },
     "Extinguisher Battleship": {
       "name": "Extinguisher Battleship",
@@ -1465,7 +2045,11 @@ export const DEFAULT_DECK_DATA = {
         "artifacts"
       ],
       "count": 1,
-      "toughness": "10"
+      "toughness": "10",
+      "oracle_text": "When this Spacecraft enters, destroy target noncreature permanent. Then this Spacecraft deals 4 damage to each creature.\nStation (Tap another creature you control: Put charge counters equal to its power on this Spacecraft. Station only as a sorcery. It's an artifact creature at 5+.)\n5+ | Flying, trample",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "5541cdd2-84a6-4667-83eb-fffbe5b3cd3d"
     },
     "Wan Shi Tong, Librarian": {
       "name": "Wan Shi Tong, Librarian",
@@ -1478,7 +2062,15 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "1"
+      "toughness": "1",
+      "oracle_text": "Flash\nFlying, vigilance\nWhen Wan Shi Tong enters, put X +1/+1 counters on him. Then draw half X cards, rounded down.\nWhenever an opponent searches their library, put a +1/+1 counter on Wan Shi Tong and draw a card.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "e20da6b5-1057-4a28-9e85-07de714e262f"
     },
     "Wan Shi Tong, All-Knowing": {
       "name": "Wan Shi Tong, All-Knowing",
@@ -1491,7 +2083,15 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "4"
+      "toughness": "4",
+      "oracle_text": "Flying\nWhen Wan Shi Tong enters, target nonland permanent's owner puts it into their library second from the top or on the bottom.\nWhenever one or more cards are put into a library from anywhere, create two 1/1 colorless Spirit creature tokens with \"This token can't block or be blocked by non-Spirit creatures.\"",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "777fcc21-2856-4181-8ecd-c272f9769e36"
     },
     "Planetarium of Wan Shi Tong": {
       "name": "Planetarium of Wan Shi Tong",
@@ -1502,7 +2102,11 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "artifacts"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "{1}, {T}: Scry 2.\nWhenever you scry or surveil, look at the top card of your library. You may cast that card without paying its mana cost. Do this only once each turn. (Look at the card after you scry or surveil.)",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "0ebaf0bf-7aa2-469d-bdbb-0fbf6741eede"
     },
     "Chimil, the Inner Sun": {
       "name": "Chimil, the Inner Sun",
@@ -1513,7 +2117,11 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "artifacts"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "Spells you control can't be countered.\nAt the beginning of your end step, discover 5. (Exile cards from the top of your library until you exile a nonland card with mana value 5 or less. Cast it without paying its mana cost or put it into your hand. Put the rest on the bottom in a random order.)",
+      "colors": [],
+      "color_identity": [],
+      "scryfall_id": "7b696878-bf6c-4323-baa5-93c44dde075e"
     },
     "Tropical Island": {
       "name": "Tropical Island",
@@ -1524,7 +2132,18 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "({T}: Add {G} or {U}.)",
+      "colors": [],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "produced_mana": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "47033ba4-8f26-4a6b-97bd-5b366327325e"
     },
     "Jin-Gitaxias // The Great Synthesis": {
       "name": "Jin-Gitaxias // The Great Synthesis",
@@ -1537,7 +2156,15 @@ export const DEFAULT_DECK_DATA = {
         "creatures"
       ],
       "count": 1,
-      "toughness": "5"
+      "toughness": "5",
+      "oracle_text": "Ward {2}\nWhenever you cast a noncreature spell with mana value 3 or greater, draw a card.\n{3}{U}: Exile Jin-Gitaxias, then return it to the battlefield transformed under its owner's control. Activate only as a sorcery and only if you have seven or more cards in hand.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "scryfall_id": "41c83142-b948-4ee5-a486-41306d2bb411"
     },
     "Breeding Pool": {
       "name": "Breeding Pool",
@@ -1548,7 +2175,18 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 1
+      "count": 1,
+      "oracle_text": "({T}: Add {G} or {U}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+      "colors": [],
+      "color_identity": [
+        "G",
+        "U"
+      ],
+      "produced_mana": [
+        "G",
+        "U"
+      ],
+      "scryfall_id": "63e4dc07-c742-41bd-8301-861637908fd1"
     },
     "Forest": {
       "name": "Forest",
@@ -1559,7 +2197,16 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 13
+      "count": 13,
+      "oracle_text": "({T}: Add {G}.)",
+      "colors": [],
+      "color_identity": [
+        "G"
+      ],
+      "produced_mana": [
+        "G"
+      ],
+      "scryfall_id": "2e781bfd-f8cb-4d20-b977-4359f3a21311"
     },
     "Island": {
       "name": "Island",
@@ -1570,7 +2217,16 @@ export const DEFAULT_DECK_DATA = {
       "allCategories": [
         "lands"
       ],
-      "count": 7
+      "count": 7,
+      "oracle_text": "({T}: Add {U}.)",
+      "colors": [],
+      "color_identity": [
+        "U"
+      ],
+      "produced_mana": [
+        "U"
+      ],
+      "scryfall_id": "1335d293-3dd2-4f13-bd2c-22181f4528ee"
     }
   },
   "creaturesPower5Plus": 11,

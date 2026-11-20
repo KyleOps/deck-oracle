@@ -273,9 +273,22 @@ Lands:
 
             const result = parseDecklistText(decklist);
 
-            // Commander header should be skipped, card should be parsed
-            assert.ok(result.cards.length >= 4, 'Should parse multiple cards');
-            assert.ok(result.cards.some(c => c.name === "Atraxa, Praetors' Voice"));
+            // The commander lives in the command zone: reported separately and
+            // kept out of the library, matching the Moxfield/Archidekt importers.
+            assert.equal(result.cards.length, 4);
+            assert.deepEqual(result.commanders, [{ count: 1, name: "Atraxa, Praetors' Voice" }]);
+            assert.ok(!result.cards.some(c => c.name === "Atraxa, Praetors' Voice"));
+        });
+
+        it('recognises *CMDR* markers and skips maybeboards', () => {
+            const decklist = `1 Kenrith, the Returned King *CMDR*
+1 Sol Ring
+Maybeboard (2)
+1 Mana Crypt
+1 Mox Diamond`;
+            const result = parseDecklistText(decklist);
+            assert.deepEqual(result.cards, [{ count: 1, name: 'Sol Ring' }]);
+            assert.deepEqual(result.commanders, [{ count: 1, name: 'Kenrith, the Returned King' }]);
         });
 
         it('parses Arena-style export', () => {
@@ -285,12 +298,19 @@ Lands:
 
             const result = parseDecklistText(decklist);
 
-            // Note: "Deck" is parsed as a card (count 1) since it's not in the section header regex
-            // This is acceptable since Arena exports typically include more context
-            assert.strictEqual(result.cards.length, 3);
-            // Check the actual card entries (not the "Deck" line)
-            assert.strictEqual(result.cards[1].count, 4);
-            assert.strictEqual(result.cards[2].count, 3);
+            // "Deck" is a section header and set/collector suffixes are stripped
+            assert.deepEqual(result.cards, [
+                { count: 4, name: 'Lightning Bolt' },
+                { count: 3, name: 'Counterspell' }
+            ]);
+        });
+
+        it('strips printing and foil markers from names', () => {
+            const result = parseDecklistText(['1 Sol Ring [C21] *F*', '2 Arcane Signet (CMM) 371 #ramp'].join('\n'));
+            assert.deepEqual(result.cards, [
+                { count: 1, name: 'Sol Ring' },
+                { count: 2, name: 'Arcane Signet' }
+            ]);
         });
     });
 

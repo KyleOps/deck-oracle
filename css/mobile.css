@@ -1,789 +1,39 @@
-/* ==================== MOBILE & RESPONSIVE STYLES ==================== */
+/* ==================== RESPONSIVE ====================
+   The shell adapts with viewport media queries (sidebar → drawer); calculator
+   content adapts with container queries in components.css, because a
+   calculator should respond to the space it actually has, not the window.
+   This file only holds the viewport-level and input-modality rules. */
 
-/* ==================== TABLET AND BELOW (900px) ==================== */
-
-@media (max-width: 900px) {
-    .container {
-        /* No overflow-x clamp and no side padding: the clamp breaks
-           position:sticky (it makes .container a scroll container), and the
-           shell is edge-to-edge on small screens by design — the gutter token
-           handles spacing from 900px up. */
-        max-width: 100%;
-        padding: 0;
-    }
-
-    .main-grid {
-        grid-template-columns: 1fr;
-        gap: var(--spacing-lg);
-        width: 100%;
-    }
-
-    .panel {
-        padding: var(--spacing-lg);
-        width: 100%;
-        box-sizing: border-box;
-        /* Reduce blur on tablet for performance */
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-    }
-
-    h1 {
-        font-size: 1.5rem;
-    }
-
-    /* Prevent overflow on charts and tables */
-    .chart-container,
-    .table-wrapper {
-        max-width: 100%;
-        overflow-x: auto;
-    }
-
-    /* Sub-navigation horizontal scroll */
-    .sub-nav-group {
-        flex-wrap: nowrap;
-        justify-content: flex-start;
-    }
-}
-
-/* ==================== MOBILE (640px) ==================== */
-
+/* ---- Phones: inputs at 16px so iOS doesn't zoom on focus ---- */
 @media (max-width: 640px) {
-    body {
-        padding: var(--spacing-md);
-        font-size: 16px;
-        /* Lighter animation for mobile battery */
-        animation-duration: 40s;
-    }
-
-    h1 {
-        font-size: 1.25rem;
-        letter-spacing: 1px;
-        margin-bottom: var(--spacing-md);
-        /* Reduce glow on mobile */
-        text-shadow: 0 0 20px var(--accent-glow);
-    }
-
-    h2 {
-        font-size: 1rem;
-        margin-bottom: var(--spacing-md);
-    }
-
-    /* Navigation - Mobile Optimizations */
-    .tab-group-header {
-        padding: var(--spacing-xs);
-        gap: var(--spacing-xs);
-    }
-
-    .tab-group-btn {
-        padding: var(--spacing-sm) var(--spacing-md);
-        font-size: 0.8rem;
-        min-width: 80px;
-        flex: 1;
-    }
-
-    .tab-icon {
-        font-size: 1rem;
-    }
-
-    /* Sub-navigation - smooth horizontal scroll */
-    .tab-sub-nav {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-    }
-
-    .tab-sub-nav::-webkit-scrollbar {
-        display: none;
-    }
-
-    .sub-nav-group {
-        padding: var(--spacing-xs);
-        gap: var(--spacing-xs);
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        justify-content: flex-start;
-        touch-action: pan-x;
-        /* Reduce blur on mobile */
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-    }
-
-    .sub-nav-group::-webkit-scrollbar {
-        display: none;
-    }
-
-    .sub-nav-pill {
-        padding: var(--spacing-xs) var(--spacing-md);
-        font-size: 0.8rem;
-        flex-shrink: 0;
-        white-space: nowrap;
-    }
-
-    .sub-nav-pill span {
-        font-size: 0.9rem;
-    }
-
-    .card-text {
-        font-size: 0.85rem;
-        margin-bottom: var(--spacing-lg);
-    }
-
-    /* Panel - reduce effects for mobile */
-    .panel {
-        padding: var(--spacing-md);
-        margin-bottom: var(--spacing-lg);
-        border-radius: var(--radius-lg);
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
-    }
-
-    .panel:hover {
-        transform: none; /* Disable hover lift on mobile */
-        box-shadow: var(--glass-shadow);
-    }
-
-    /* Selector */
-    .selector-button {
-        font-size: 0.95rem;
-        padding: var(--spacing-md) var(--spacing-lg);
-    }
-
-    .selector-icon {
-        font-size: 1.2rem;
-    }
-
-    .selector-option {
-        padding: var(--spacing-md) var(--spacing-lg);
-        font-size: 0.9rem;
-    }
-
-    .selector-option-icon {
-        font-size: 1.2rem;
-    }
-
-    /* Touch-friendly inputs */
-    .input-group input,
-    .input-group textarea,
-    .type-input input,
-    .import-btn {
-        min-height: 44px;
-        font-size: 16px;
-    }
-
-    .input-group textarea {
-        min-height: 100px;
-    }
-
-    /* Hide number spinners */
-    .input-group input[type="number"],
-    .type-input input[type="number"] {
-        -moz-appearance: textfield;
-    }
-
-    .input-group input[type="number"]::-webkit-outer-spin-button,
-    .input-group input[type="number"]::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
-
-    /* Left to the intrinsic auto-fit rule in components.css: three inputs
-       fit across a 390px phone, and forcing one column here made each card
-       type nearly a full screen tall. */
-    .type-grid {
-        gap: 1px;
-    }
-
-    /* Larger slider thumb for mobile */
-    .x-slider-row input[type="range"]::-webkit-slider-thumb {
-        width: 28px;
-        height: 28px;
-    }
-
-    .x-slider-row input[type="range"]::-moz-range-thumb {
-        width: 28px;
-        height: 28px;
-    }
-
-    .x-number {
-        width: 60px !important;
-        min-width: 60px;
-        max-width: 60px;
-        padding: var(--spacing-sm) var(--spacing-xs) !important;
-    }
-
-    /* Stack import row */
-    .import-row,
-    .import-url-row {
-        flex-direction: column;
-    }
-
-    .import-row input,
-    .import-btn,
-    .import-url-row input,
-    .import-url-row .import-btn {
-        width: 100%;
-        margin-right: 0;
-    }
-
-    .import-url-row .import-btn {
-        margin-top: var(--spacing-sm);
-    }
-
-    /* Charts */
-    .chart-container {
-        height: 260px;
-        margin-bottom: var(--spacing-md);
-        position: relative;
-    }
-
-    .chart-container canvas {
-        max-width: 100%;
-        height: auto !important;
-    }
-
-    .chart-legend {
-        gap: var(--spacing-md);
-        font-size: 0.8rem;
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-
-    .legend-item {
-        gap: var(--spacing-xs);
-        font-size: 0.75rem;
-    }
-
-    .legend-color {
-        width: 12px;
-        height: 12px;
-        flex-shrink: 0;
-    }
-
-    /* Tables */
-    .table-wrapper {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        margin: 0 calc(var(--spacing-md) * -1);
-        padding: 0 var(--spacing-md);
-    }
-
-    .comparison-table {
-        font-size: 0.8rem;
-        min-width: 100%;
-    }
-
-    .comparison-table th,
-    .comparison-table td {
-        padding: var(--spacing-sm);
-        white-space: nowrap;
-        min-width: 60px;
-    }
-
-    .comparison-table th:first-child,
-    .comparison-table td:first-child {
-        position: sticky;
-        left: 0;
-        background: var(--bg-gradient-1);
-        z-index: 1;
-    }
-
-    .mobile-hide {
-        display: none;
-    }
-
-    /* Distribution chart */
-    .dist-label {
-        min-width: 60px;
-        font-size: 0.85em;
-    }
-
-    .dist-row {
-        gap: var(--spacing-sm);
-    }
-
-    .dist-value {
-        width: 40px;
-        font-size: 0.85em;
-    }
-
-    .dist-marker {
-        font-size: 0.8em;
-    }
-
-    /* Big Spell Comparison Grid */
-    .big-spell-grid {
-        grid-template-columns: repeat(2, 1fr) !important;
-        gap: var(--spacing-sm);
-    }
-
-    .big-spell-card {
-        padding: var(--spacing-sm);
-    }
-
-    .big-spell-title {
-        font-size: 0.8em;
-    }
-
-    .big-spell-value {
-        font-size: 1.5em;
-    }
-
-    .big-spell-x-value {
-        font-size: 1em;
-    }
-
-    .big-spell-details,
-    .big-spell-metric {
-        font-size: 0.75em;
-    }
-
-    /* Stats grid */
-    .stats-grid {
-        gap: var(--spacing-sm);
-    }
-
-    .stat-card {
-        padding: var(--spacing-sm);
-    }
-
-    .stat-card:hover {
-        transform: none;
-        box-shadow: none;
-    }
-
-    /* Pre blocks */
-    pre {
-        white-space: pre;
-        overflow-x: auto;
-        max-width: 100%;
-        font-size: 0.7em;
-        scrollbar-width: thin;
-    }
-}
-
-/* ==================== SMALL MOBILE (375px) ==================== */
-
-@media (max-width: 375px) {
-    body {
-        padding: var(--spacing-sm);
-    }
-
-    .panel {
-        padding: var(--spacing-sm);
-    }
-
-    .type-input {
-        padding: var(--spacing-xs) var(--spacing-sm);
-    }
-
-    .type-input label {
-        font-size: 0.8rem;
-    }
-
-    .type-input input {
-        width: 44px;
-        font-size: 0.85rem;
-    }
-
-    .comparison-table {
-        font-size: 0.75rem;
-        min-width: 450px;
-    }
-
-    .comparison-table th,
-    .comparison-table td {
-        padding: var(--spacing-xs);
-        min-width: 50px;
-    }
-
-    .chart-container {
-        height: 220px;
-    }
-
-    h1 {
-        font-size: 1.1rem;
-    }
-
-    .card-text {
-        font-size: 0.8rem;
-    }
-
-    .big-spell-grid {
-        gap: var(--spacing-xs);
-    }
-
-    .big-spell-card {
-        padding: var(--spacing-xs);
-    }
-
-    .tab-group-btn {
-        padding: var(--spacing-xs) var(--spacing-sm);
-        font-size: 0.75rem;
-        min-width: 72px;
-    }
-
-    .sub-nav-pill {
-        padding: var(--spacing-xs) var(--spacing-sm);
-        font-size: 0.75rem;
-    }
-}
-
-/* ==================== LANDSCAPE MOBILE ==================== */
-
-@media (max-width: 900px) and (orientation: landscape) {
-    body {
-        padding: var(--spacing-sm) var(--spacing-md);
-    }
-
-    h1 {
-        font-size: 1.25rem;
-        margin-bottom: var(--spacing-xs);
-    }
-
-    .card-text {
-        margin-bottom: var(--spacing-md);
-    }
-
-    .panel {
-        padding: var(--spacing-md);
-        margin-bottom: var(--spacing-md);
-    }
-
-    .chart-container {
-        height: 200px;
-    }
-
-    .main-grid {
-        gap: var(--spacing-md);
-    }
-}
-
-/* ==================== HIGH DPI DISPLAYS ==================== */
-
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-    body {
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-    }
-}
-
-/* ==================== REDUCED MOTION ==================== */
-
-@media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
-
-    html {
-        scroll-behavior: auto;
-    }
-
-    body {
-        animation: none !important;
-    }
-
-    .panel:hover {
-        transform: none;
-    }
-
-    .stat-card:hover {
-        transform: none;
-    }
-}
-
-/* ==================== PRINT STYLES ==================== */
-
-@media print {
-    body {
-        background: white;
-        color: black;
-        animation: none;
-    }
-
-    .tab-nav,
-    .import-section,
-    .tab-group-header,
-    .tab-sub-nav,
-    .icon-btn {
-        display: none;
-    }
-
-    .panel {
-        break-inside: avoid;
-        border: 1px solid #ccc;
-        box-shadow: none;
-        backdrop-filter: none;
-        background: white;
-    }
-
-    .chart-container {
-        page-break-inside: avoid;
-    }
-}
-
-/* ==================== TOUCH DEVICE OPTIMIZATIONS ==================== */
-
-@media (hover: none) and (pointer: coarse) {
-    /* Increase touch targets */
-    .import-btn,
+    input[type="text"],
+    input[type="url"],
     input[type="number"],
-    input[type="text"] {
-        min-height: 44px;
-        min-width: 44px;
+    input[type="search"],
+    select,
+    textarea {
+        font-size: 16px;
     }
 
-    /* Better slider thumb for touch */
-    .x-slider-row input[type="range"]::-webkit-slider-thumb {
-        width: 28px;
-        height: 28px;
-    }
-
-    .x-slider-row input[type="range"]::-moz-range-thumb {
-        width: 28px;
-        height: 28px;
-    }
-
-    /* Remove hover effects on touch devices */
-    .import-btn:hover {
-        transform: none;
-        box-shadow: 0 4px 12px var(--accent-glow);
-    }
-
-    .panel:hover {
-        transform: none;
-    }
-
-    .stat-card:hover {
-        transform: none;
-    }
-
-    /* Better touch feedback */
-    .import-btn:active {
-        opacity: 0.8;
-        transform: scale(0.98);
-    }
-
-    /* Prevent text selection on UI elements */
-    .import-btn,
-    .panel h2,
-    .legend-item,
-    .collapse-btn,
-    .tab-group-btn,
-    .sub-nav-pill {
-        -webkit-user-select: none;
-        user-select: none;
-        -webkit-tap-highlight-color: transparent;
-    }
-
-    /* Smooth scrolling for touch */
-    .table-wrapper,
     .chart-container,
-    .sub-nav-group {
-        -webkit-overflow-scrolling: touch;
-        scroll-behavior: smooth;
-    }
-}
-
-/* ==================== TABLET (768px - 1024px) ==================== */
-
-@media (min-width: 768px) and (max-width: 1024px) {
-    .container {
+    .table-wrapper {
         max-width: 100%;
-        padding: 0 var(--spacing-md);
-    }
-
-    .main-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* ==================== SAFE AREA INSETS (Notch Support) ==================== */
-
-@supports (padding: max(0px)) {
-    body {
-        padding-left: max(var(--spacing-lg), env(safe-area-inset-left));
-        padding-right: max(var(--spacing-lg), env(safe-area-inset-right));
-        padding-top: max(var(--spacing-lg), env(safe-area-inset-top));
-        padding-bottom: max(var(--spacing-lg), env(safe-area-inset-bottom));
-    }
-}
-
-/* ==================== FOLDABLE DEVICES ==================== */
-
-@media (min-width: 600px) and (max-width: 900px) and (min-height: 600px) {
-    .main-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* ==================== TERMINAL SHELL — RESPONSIVE ====================
-   The terminal chrome (header, tab row, sub-bar, deck radar) was built
-   desktop-first. These rules make it usable on phones: the header stacks, the
-   nav rails scroll horizontally with momentum, and the radar drops to one
-   column. */
-
-@media (max-width: 900px) {
-    /* Header stacks: identity row on top, group rail beneath. */
-    .tx-header-top {
-        grid-template-columns: 1fr auto;
-        grid-template-areas:
-            "wordmark pill"
-            "groups   groups";
-        height: auto;
-    }
-
-    .tx-wordmark  { grid-area: wordmark; border-right: 0; height: 44px; }
-    .tx-deck-pill { grid-area: pill;     height: 44px; }
-
-    .tx-group-row {
-        grid-area: groups;
-        border-right: 0;
-        border-top: 1px solid var(--tx-rule);
-        height: 38px;
         overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
     }
-
-    .tx-group-row::-webkit-scrollbar { display: none; }
-
-    .tx-group {
-        padding: 0 14px;
-        font-size: 9px;
-        letter-spacing: 0.12em;
-        flex: 0 0 auto;
-    }
-
-    /* Tab row scrolls rather than compressing tab labels to nothing. */
-    .tx-tab {
-        padding: 0 14px;
-        min-width: 0;
-    }
-
-    .tx-tab .tx-name { display: none; }
-    .tx-tab .tx-sep  { display: none; }
-    .tx-tab .tx-code { font-size: 12px; }
-
-    /* The active tab keeps its full name so you always know where you are. */
-    .tx-tab.active .tx-name { display: inline; }
-    .tx-tab.active .tx-sep  { display: inline; }
-
-    /* Sticky offsets must follow the taller stacked header. */
-    .tx-header   { position: static; }
-    .tx-sub-bar  { position: static; }
-
-    /* Sub-bar wraps into a two-row import strip. */
-    .tx-sub-bar {
-        height: auto;
-        flex-wrap: wrap;
-        padding: 10px 12px;
-        gap: 8px;
-        overflow: visible;
-    }
-
-    .tx-sub-bar .tx-url-input   { flex: 1 1 100%; }
-    .tx-sub-bar .tx-paste-input { flex: 1 1 140px; }
-    .tx-sub-bar .tx-or          { display: none; }
-    .tx-sub-bar .tx-fetch-btn   { flex: 0 0 auto; }
-    .tx-sub-bar .tx-import-meta { margin-left: auto; }
-
-    /* Deck radar: one column, composition above matches. */
-    .rdr-body {
-        grid-template-columns: 1fr;
-    }
-
-    .rdr-col-comp {
-        border-right: 0;
-        border-bottom: 1px solid var(--tx-rule);
-    }
-
-    .rdr-row {
-        grid-template-columns: 70px 1fr;
-        row-gap: 4px;
-    }
-
-    /* "OPEN →" is redundant on touch — the whole row is the target. */
-    .rdr-go { display: none; }
-
-    /* Calculator dashboards are multi-column grids on desktop; collapse them
-       all rather than listing every calculator's bespoke grid class. */
-    .portent-grid,
-    .tab-content [class$="-grid"]:not(.type-grid) {
-        grid-template-columns: 1fr !important;
-    }
-
-    /* Keep every table swipeable instead of blowing out the page width. */
-    .tab-content table {
-        display: block;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        white-space: nowrap;
-        max-width: 100%;
-    }
-}
-
-@media (max-width: 640px) {
-    .tx-wordmark .tx-tag { display: none; }
-    .tx-wordmark .tx-deck,
-    .tx-wordmark .tx-oracle { font-size: 15px; }
-    .tx-wordmark { padding: 0 12px; }
-    .tx-deck-pill { padding: 0 12px; font-size: 9px; }
-
-    .tx-status-bar {
-        gap: 12px;
-        font-size: 9px;
-        padding: 0 12px;
-    }
-
-    /* Radar composition metrics: 2x2 rather than a squeezed single row. */
-    .rdr-metrics { grid-template-columns: repeat(2, 1fr); gap: 12px 8px; }
-    .rdr-curve { height: 64px; }
-
-    /* Terminal headings inside calculators stay label-sized on mobile too —
-       the legacy h1 rules above would otherwise scale them up to 1.25rem. */
-    .tab-content h1 {
-        font-size: 11px;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: var(--tx-mid);
-        text-shadow: none;
-        margin-bottom: var(--spacing-md);
-    }
-
-    /* Full-width touch targets for the sub-bar controls. */
-    .tx-sub-bar .tx-paste-input { flex: 1 1 100%; }
-    .tx-sub-bar .tx-fetch-btn { flex: 1 1 100%; padding: 9px 14px; }
 
     /* Hero stat rows wrap instead of shrinking numbers to illegibility. */
     .tx-hero,
     .portent-hero {
         display: grid !important;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .tx-stat { border-right: 0 !important; }
-}
 
-/* Comfortable touch targets on coarse pointers. */
-@media (hover: none) and (pointer: coarse) {
-    .tx-tab { min-height: 44px; }
-    .tx-group { min-height: 38px; }
-    .rdr-row { padding: 12px 10px; }
-    .calculator-content input[type="range"] { height: 6px; }
-    .calculator-content input[type="range"]::-webkit-slider-thumb {
-        width: 18px;
-        height: 26px;
-    }
-}
+    .type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
-/* Outcome matrix stacks into single-column cells on narrow screens — a 2x2
-   grid of 22px numbers plus notes does not survive a 390px viewport. */
-@media (max-width: 640px) {
+    /* Outcome matrix stacks into single-column cells — a 2x2 grid of large
+       numbers plus notes does not survive a 390px viewport. */
     .tx-mx-table,
     .tx-mx-table thead,
     .tx-mx-table tbody,
@@ -793,17 +43,66 @@
         display: block;
         width: auto;
     }
-
     .tx-mx-table thead { display: none; }
-
-    .tx-mx-rowlabel {
-        width: auto;
-        border-right: 0;
-        background: var(--tx-panel-alt);
-    }
-
+    .tx-mx-rowlabel { width: auto; border-right: 0; background: var(--tx-panel-alt); }
     .tx-mx-cell { border-right: 0; }
-
     .tx-mx-foot { flex-wrap: wrap; }
     .tx-mx-foot-note { margin-left: 0; flex: 1 1 100%; }
+
+    .big-spell-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---- Touch: comfortable targets ---- */
+@media (hover: none) and (pointer: coarse) {
+    .nav-item { min-height: 44px; }
+    .icon-btn { width: 40px; height: 40px; }
+    .calculator-content input[type="range"]::-webkit-slider-thumb {
+        width: 22px;
+        height: 22px;
+    }
+    .calculator-content input[type="range"]::-moz-range-thumb {
+        width: 22px;
+        height: 22px;
+    }
+    .tx-chip,
+    .tx-preset,
+    .seg-btn { min-height: 38px; }
+}
+
+/* ---- Notch / home-indicator safe areas ---- */
+@supports (padding: max(0px)) {
+    .topbar {
+        padding-left: max(var(--page-pad), env(safe-area-inset-left));
+        padding-right: max(var(--page-pad), env(safe-area-inset-right));
+    }
+    .toasts {
+        bottom: max(16px, env(safe-area-inset-bottom));
+    }
+}
+
+/* ---- Print: the results, not the chrome ---- */
+@media print {
+    :root { color-scheme: light; }
+    .sidebar,
+    .topbar,
+    .scrim,
+    .app-footer,
+    .page-actions,
+    .toasts,
+    .tooltip,
+    .card-preview,
+    .drawer,
+    .opponents-bar {
+        display: none !important;
+    }
+    .app { display: block; }
+    .main-col { margin: 0; }
+    .tab-content { display: none !important; }
+    .tab-content.active { display: block !important; animation: none; }
+    .panel,
+    .ov-card,
+    .finding {
+        break-inside: avoid;
+        box-shadow: none;
+    }
 }

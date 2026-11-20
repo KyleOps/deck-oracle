@@ -59,6 +59,94 @@ export const TX_CHART = {
     }
 };
 
+// ── Theme sync ──────────────────────────────────────────────────────────────
+// The palette above is the dark-theme default (and what Node tests see). In the
+// browser, applyChartTheme() re-reads every value from the live CSS tokens, so
+// one source of truth — css/tokens.css — drives both the DOM and the canvas,
+// and switching to the light theme recolours charts too.
+
+const TOKEN_MAP = {
+    bg: '--tx-panel', rule: '--tx-rule', ruleHi: '--tx-rule-hi', dim: '--tx-dim', mid: '--tx-mid',
+    text: '--tx-text', bright: '--tx-bright', green: '--tx-good', amber: '--tx-accent',
+    red: '--tx-bad', blue: '--tx-flat'
+};
+const TYPE_KEYS = ['creature', 'instant', 'sorcery', 'artifact', 'enchantment', 'planeswalker', 'battle', 'land'];
+
+/** Bumped on every theme application; charts built under an older theme are rebuilt. */
+let themeVersion = 0;
+
+function withAlpha(color, alpha) {
+    const hex = String(color).trim().match(/^#([0-9a-f]{6})$/i);
+    if (hex) {
+        const n = parseInt(hex[1], 16);
+        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+    }
+    const rgb = String(color).match(/rgba?\(([^)]+)\)/);
+    if (rgb) {
+        const [r, g, b] = rgb[1].split(',').map(v => v.trim());
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+    return color;
+}
+
+/**
+ * Refresh TX_CHART from the CSS tokens and push it into Chart.js defaults.
+ * Call after Chart.js loads and whenever the theme changes.
+ */
+export function applyChartTheme() {
+    if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return;
+    const css = getComputedStyle(document.documentElement);
+    const read = name => css.getPropertyValue(name).trim();
+    for (const [key, token] of Object.entries(TOKEN_MAP)) {
+        const value = read(token);
+        if (value) TX_CHART[key] = value;
+    }
+    TX_CHART.greenFill = withAlpha(TX_CHART.green, 0.12);
+    TX_CHART.amberFill = withAlpha(TX_CHART.amber, 0.12);
+    TX_CHART.redFill = withAlpha(TX_CHART.red, 0.12);
+    TX_CHART.blueFill = withAlpha(TX_CHART.blue, 0.12);
+    const series = [1, 2, 3, 4, 5, 6].map(i => read(`--series-${i}`)).filter(Boolean);
+    if (series.length === 6) TX_CHART.series = series;
+    for (const type of TYPE_KEYS) {
+        const value = read(`--type-${type}`);
+        if (value) TX_CHART.types[type] = value;
+    }
+    themeVersion += 1;
+
+    const Chart = typeof window !== 'undefined' ? window.Chart : undefined;
+    if (!Chart) return;
+    const mono = read('--font-mono') || 'ui-monospace, monospace';
+    Chart.defaults.color = TX_CHART.dim;
+    Chart.defaults.borderColor = TX_CHART.rule;
+    Chart.defaults.backgroundColor = TX_CHART.bg;
+    Chart.defaults.font.family = mono;
+    Chart.defaults.font.size = 11;
+    Chart.defaults.plugins.legend.display = false;
+    Object.assign(Chart.defaults.plugins.tooltip, {
+        backgroundColor: read('--surface-raised') || TX_CHART.bg,
+        borderColor: TX_CHART.ruleHi,
+        borderWidth: 1,
+        titleColor: TX_CHART.mid,
+        bodyColor: TX_CHART.text,
+        padding: 10,
+        cornerRadius: 6,
+        boxPadding: 4
+    });
+    if (Chart.defaults.scales) {
+        // Merge one level deeper than a plain spread. Replacing the whole `ticks`
+        // object drops Chart.js's own tick callback — on a category axis that is
+        // what maps an index back to its label.
+        const applyScaleDefaults = (scale = {}) => ({
+            ...scale,
+            grid: { ...scale.grid, color: TX_CHART.rule, drawTicks: false },
+            ticks: { ...scale.ticks, color: TX_CHART.dim, font: { size: 10 } },
+            border: { ...scale.border, color: TX_CHART.rule, dash: [] }
+        });
+        Chart.defaults.scales.linear = applyScaleDefaults(Chart.defaults.scales.linear);
+        Chart.defaults.scales.category = applyScaleDefaults(Chart.defaults.scales.category);
+    }
+}
+
 /**
  * Create or update a Chart.js instance.
  * @param {Object} chartInstance - The existing Chart instance (or null/undefined).
@@ -69,6 +157,18 @@ export const TX_CHART = {
 export function createOrUpdateChart(chartInstance, canvasId, config) {
     const ctx = document.getElementById(canvasId);
     if (!ctx) return null;
+    // Chart.js loads lazily; offline (or before it arrives) charts are skipped
+    // rather than throwing and taking the rest of the calculator down.
+    if (typeof Chart === 'undefined') return null;
+
+    // A chart built under the other theme, or whose canvas has been replaced,
+    // is rebuilt from scratch — the surgical update path below deliberately
+    // leaves options (and therefore colours) alone.
+    if (chartInstance && (chartInstance.$themeVersion !== themeVersion
+        || (chartInstance.canvas !== undefined && chartInstance.canvas !== ctx))) {
+        try { chartInstance.destroy(); } catch { /* already gone */ }
+        chartInstance = null;
+    }
 
     // Defer construction until the canvas actually has a layout box. Calculators
     // render on init while their tab is still display:none, so the canvas is
@@ -126,6 +226,7 @@ export function createOrUpdateChart(chartInstance, canvasId, config) {
             data: config.data,
             options: { ...options, animation: false }
         });
+        chart.$themeVersion = themeVersion;
 
         // Restore animation after the first static paint, so subsequent data
         // changes still animate but the initial appearance does not.

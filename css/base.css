@@ -1,231 +1,5 @@
-/* ==================== TERMINAL UI — BASE STYLES ==================== */
-
-:root {
-    /* ==================== TERMINAL COLOR PALETTE ==================== */
-    /* ---- SUBSTRATE ----
-       Near-black with a faint cool-green cast (deactivated phosphor), never pure
-       #000. Each step is a real surface level, not decoration. */
-    --tx-void:      #060706;  /* outside the shell — letterboxing on wide screens */
-    --tx-bg:        #0a0b0a;
-    --tx-panel:     #101211;
-    --tx-panel-alt: #151816;
-    --tx-rule:      #1e221f;
-    --tx-rule-hi:   #2c322e;
-    --tx-row-hi:    #171b18;
-
-    /* ---- INK ---- */
-    /* Lightened from #626b66, which sat at 3.25:1 on the panel tone — below the
-       4.5:1 WCAG AA floor for body text, and this is the most-used dim tone in
-       the UI (inactive tabs, hints, small labels). */
-    --tx-dim:       #808b85;
-    --tx-mid:       #939c97;
-    --tx-text:      #d2d8d4;
-    --tx-bright:    #eef1ef;
-
-    /* ---- ACCENT ----
-       ONE brand accent. It marks the active tab, the focus ring, the primary
-       action, and the recommended row. Nothing else may use it, or it stops
-       meaning "look here". */
-    --tx-accent:     #f0a92c;
-    --tx-accent-dim: #7a5716;
-
-    /* ---- SEMANTIC DATA PAIR ----
-       Reserved for what the numbers MEAN (likely/unlikely, correct/incorrect).
-       Never used for chrome, so colour always carries information. Amber stays
-       the brand accent rather than the brutalist default red, because red is
-       already spoken for here: in a probability tool it reads as "bad outcome",
-       not "brand". */
-    --tx-good:      #55c97f;
-    --tx-bad:       #e8635c;
-    --tx-flat:      #7d8a92;
-
-    /* Legacy aliases — existing rules keep working, now on the new palette */
-    --tx-green:     var(--tx-good);
-    --tx-green-dim: #2c5f40;
-    --tx-amber:     var(--tx-accent);
-    --tx-amber-dim: var(--tx-accent-dim);
-    --tx-red:       var(--tx-bad);
-    --tx-blue:      var(--tx-flat);
-
-    /* ---- TYPE SCALE ----
-       The old design put 99 of its 122 font sizes in the 8-11px band: one
-       register for everything, so nothing had hierarchy. This scale is
-       deliberately bimodal — a dense telemetry band (9-13px) for data and
-       metadata, and a display band an order of magnitude larger for the few
-       numbers that actually carry the answer. */
-    --t-display: clamp(42px, 5vw, 68px);
-    --t-xxl:     34px;
-    --t-xl:      24px;
-    --t-lg:      17px;
-    --t-body:    13px;
-    --t-sm:      12px;
-    --t-xs:      11px;
-    --t-label:   10px;
-    --t-micro:    9px;
-
-    /* Tracking: negative for display (glyphs form solid blocks),
-       generous for small caps labels (mechanical spacing). */
-    --track-display: -0.035em;
-    --track-tight:   -0.015em;
-    --track-label:    0.16em;
-    --track-wide:     0.22em;
-
-    /* Shell width — see .container.
-       The gutter token is 0 below 900px (legacy body padding already supplies a
-       small phone margin) and grows with the viewport above it, so margins
-       scale continuously rather than snapping in at the cap.
-
-       The cap is deliberately generous: a tight cap meant that past ~1690px the
-       shell froze and only the margins grew, so dragging the window wider did
-       nothing to the content. Readability at this width is protected by tiling
-       results into more columns as space allows (see ADAPTIVE LAYOUT) rather
-       than by starving the shell. */
-    --shell-max: 2200px;
-    --shell-gutter: 0px;
-
-    /* ==================== LEGACY VARIABLE ALIASES (keep old names working) ==================== */
-    --primary:           var(--tx-amber);
-    --primary-light:     var(--tx-bright);
-    --primary-dark:      var(--tx-amber-dim);
-    --primary-glow:      transparent;
-
-    --secondary:         var(--tx-green);
-    --secondary-light:   var(--tx-green);
-    --secondary-dark:    var(--tx-green-dim);
-    --secondary-glow:    transparent;
-
-    --bg-dark:       var(--tx-bg);
-    --bg-gradient-1: var(--tx-panel);
-    --bg-gradient-2: var(--tx-panel);
-    --bg-gradient-3: var(--tx-panel);
-
-    --glass-bg:           var(--tx-panel);
-    --glass-bg-hover:     var(--tx-panel-alt);
-    --glass-border:       var(--tx-rule);
-    --glass-border-hover: var(--tx-rule-hi);
-    --glass-highlight:    transparent;
-    --glass-shadow:       none;
-    --glass-blur:         0px;
-
-    --text-primary:   var(--tx-text);
-    --text-secondary: var(--tx-mid);
-    --text-muted:     var(--tx-dim);
-    --text-dim:       var(--tx-dim);
-    --text-light:     var(--tx-bright);
-
-    --success:       var(--tx-green);
-    --success-light: var(--tx-green);
-    --success-dark:  var(--tx-green-dim);
-    --warning:       var(--tx-amber);
-    --warning-light: var(--tx-bright);
-    --danger:        var(--tx-red);
-    --danger-light:  var(--tx-red);
-    --danger-dark:   var(--tx-red);
-    --info:          var(--tx-blue);
-    --info-dark:     var(--tx-blue);
-
-    /* ==================== TYPE COLORS (MTG Card Types — terminal palette) ====================
-       Mirrored as literals in TX_CHART.types (js/utils/chartHelpers.js) because
-       canvas cannot resolve CSS custom properties. Edit the two together. */
-    --type-creature:     #7ab77f;
-    --type-instant:      #6f9dc4;
-    --type-sorcery:      #a68ac4;
-    --type-artifact:     #9aa19d;
-    --type-enchantment:  #d2ac6b;
-    --type-planeswalker: #c4869e;
-    --type-battle:       #c67d72;
-    --type-land:         #8b9c78;
-
-    /* ==================== UI COLORS ==================== */
-    --input-bg:      var(--tx-bg);
-    --overlay-bg:    rgba(0, 0, 0, 0.6);
-    --panel-bg-alt:  var(--tx-panel-alt);
-
-    /* ==================== SPACING ==================== */
-    --spacing-xs: 4px;
-    --spacing-sm: 8px;
-    --spacing-md: 12px;
-    --spacing-lg: 16px;
-    --spacing-xl: 20px;
-    --spacing-2xl: 24px;
-    --spacing-3xl: 32px;
-
-    /* ==================== BORDER RADIUS — zero everywhere ==================== */
-    --radius-sm:   0px;
-    --radius-md:   0px;
-    --radius-lg:   0px;
-    --radius-xl:   0px;
-    --radius-2xl:  0px;
-    --radius-full: 2px;
-
-    /* ==================== TRANSITIONS — keep snappy ==================== */
-    --transition-fast:   0.12s ease;
-    --transition-normal: 0.15s ease;
-    --transition-slow:   0.20s ease;
-    --transition-bounce: 0.15s ease;
-
-    /* ==================== FONTS — monospace only ==================== */
-    --font-display: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
-    --font-body:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
-    --font-mono:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
-
-    /* ==================== Z-INDEX LAYERS ==================== */
-    --z-base:     1;
-    --z-dropdown: 100;
-    --z-sticky:   200;
-    --z-modal:    1000;
-    --z-toast:    2000;
-
-    /* ==================== THEME VARIABLES — terminal defaults ==================== */
-    --accent:      var(--tx-amber);
-    --accent-light: var(--tx-bright);
-    --accent-glow: transparent;
-    --theme-tint:  rgba(28, 37, 32, 0.5);
-}
-
-/* ==================== CALCULATOR ACCENT THEMES — all inherit terminal palette ==================== */
-
-body.theme-portent,
-body.theme-surge,
-body.theme-wave,
-body.theme-vow,
-body.theme-vortex,
-body.theme-lands,
-body.theme-mulligan,
-body.theme-rashmi,
-body.theme-lumra,
-body.theme-abstract {
-    --accent:      var(--tx-amber);
-    --accent-light: var(--tx-bright);
-    --accent-glow: transparent;
-    --theme-tint:  rgba(28, 37, 32, 0.5);
-}
-
-body.theme-mara {
-    --accent:      var(--tx-red);
-    --accent-light: var(--tx-bright);
-    --accent-glow: transparent;
-    --theme-tint:  rgba(28, 37, 32, 0.5);
-    --mara-primary: var(--tx-red);
-    --mara-secondary: var(--tx-red);
-}
-
-body.theme-dreamharvest {
-    --accent:      var(--tx-blue);
-    --accent-light: var(--tx-bright);
-    --accent-glow: transparent;
-    --theme-tint:  rgba(28, 37, 32, 0.5);
-    --dreamharvest-primary: var(--tx-blue);
-    --dreamharvest-secondary: var(--tx-blue);
-}
-
-body.theme-mindsdilation {
-    --accent:      var(--tx-blue);
-    --accent-light: var(--tx-bright);
-    --accent-glow: transparent;
-    --theme-tint:  rgba(28, 37, 32, 0.5);
-    --mindsdilation-primary: var(--tx-blue);
-}
+/* ==================== BASE ====================
+   Reset, typography and shared utilities. Tokens live in tokens.css. */
 
 /* ==================== MULTIPLAYER CALCULATORS - OPPONENT UI ==================== */
 
@@ -474,7 +248,9 @@ body.theme-mindsdilation {
 
 /* ==================== RESET & BASE ==================== */
 
-* {
+*,
+*::before,
+*::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
@@ -484,62 +260,77 @@ html {
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow-y: auto;
+    text-size-adjust: 100%;
     scrollbar-gutter: stable;
-    scroll-behavior: smooth;
+    background: var(--tx-bg);
 }
 
 body {
     font-family: var(--font-body);
-    font-feature-settings: 'tnum' 1, 'cv01' 1;
-    letter-spacing: 0.01em;
-    min-height: 100vh;
-    color: var(--tx-text);
-    background: var(--tx-void);
-    padding: 0;
     font-size: var(--t-sm);
+    line-height: 1.5;
+    color: var(--tx-text);
+    background: var(--tx-bg);
+    min-height: 100vh;
+    min-height: 100dvh;
+    font-feature-settings: 'cv11' 1, 'ss01' 1;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+img,
+svg,
+canvas {
+    display: block;
+    max-width: 100%;
+}
+
+a {
+    color: var(--tx-accent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+/* Numbers line up in columns everywhere they appear. */
+.num,
+table td,
+table th,
+.tx-stat-value,
+.vbar-value,
+input[type="number"] {
+    font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    * { animation: none !important; transition: none !important; }
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 /* ==================== TYPOGRAPHY ==================== */
 
-h1 {
+h1, h2, h3, h4 {
     font-family: var(--font-display);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: var(--spacing-sm);
-    text-align: left;
-    text-shadow: none;
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-h2 {
-    font-family: var(--font-display);
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 0;
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--tx-rule);
+    color: var(--tx-bright);
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: var(--track-tight);
 }
 
 h3 {
-    font-family: var(--font-display);
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: var(--spacing-md);
+    font-size: var(--t-sm);
+    margin-bottom: var(--spacing-sm);
 }
 
 p {
@@ -547,63 +338,49 @@ p {
     color: var(--tx-mid);
 }
 
+strong { color: var(--tx-bright); font-weight: 600; }
+
+kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.7em;
+    height: 1.7em;
+    padding: 0 0.4em;
+    font-family: var(--font-mono);
+    font-size: 0.78em;
+    font-weight: 500;
+    color: var(--tx-mid);
+    background: var(--tx-panel-alt);
+    border: 1px solid var(--tx-rule-hi);
+    border-bottom-width: 2px;
+    border-radius: var(--radius-xs);
+    line-height: 1;
+}
+
+/* Legacy calculator mastheads are replaced by the shared page header. */
+.calc-body > h1,
+.calc-body > .card-text,
 .card-text {
     display: none;
 }
 
 /* ==================== LAYOUT ==================== */
 
-.container {
-    /* Capped and centred. Previously full-bleed, which stranded content on the
-       left of an ultrawide monitor with dead space to the right. The side rules
-       make the letterboxing read as a deliberate frame rather than an accident. */
-    width: min(100% - (2 * var(--shell-gutter)), var(--shell-max));
-    max-width: var(--shell-max);
-    margin-inline: auto;
-    padding: 0;
-    box-sizing: border-box;
-    background: var(--tx-bg);
-    border-inline: 1px solid var(--tx-rule);
-    min-height: 100vh;
-}
-
-.footer-actions {
-    display: flex;
-    gap: var(--spacing-md);
-    align-items: center;
-    justify-content: center;
-    padding: var(--spacing-md) var(--spacing-lg);
-}
-
-.header-row {
-    display: none;
-}
-
-.calculator-content {
-    max-width: 100%;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-.calculator-content .tab-content {
-    max-width: 100%;
-}
-
+.calculator-content .tab-content,
 .calculator-content .main-grid {
     max-width: 100%;
 }
 
 .main-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0;
     width: 100%;
-    border-top: 1px solid var(--tx-rule);
 }
 
 .main-grid.single-column {
-    grid-template-columns: 1fr;
-    max-width: 100%;
+    grid-template-columns: minmax(0, 1fr);
 }
 
 /* ==================== TAB CONTENT ==================== */
@@ -614,6 +391,12 @@ p {
 
 .tab-content.active {
     display: block;
+    animation: page-in 0.32s var(--ease-out);
+}
+
+@keyframes page-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
 }
 
 /* ==================== UTILITY CLASSES ==================== */
@@ -631,8 +414,8 @@ p {
 }
 
 *:focus-visible {
-    outline: 1px solid var(--tx-amber);
-    outline-offset: 1px;
+    outline: 2px solid var(--tx-accent);
+    outline-offset: 2px;
 }
 
 .loading {
@@ -643,10 +426,10 @@ p {
 
 /* ==================== SCROLLBAR STYLING ==================== */
 
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--tx-bg); }
-::-webkit-scrollbar-thumb { background: var(--tx-rule-hi); }
-::-webkit-scrollbar-thumb:hover { background: var(--tx-amber); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--tx-rule-hi); border-radius: 10px; border: 3px solid var(--tx-bg); }
+::-webkit-scrollbar-thumb:hover { background: var(--tx-dim); }
 
 * {
     scrollbar-width: thin;
@@ -655,27 +438,9 @@ p {
 
 /* ==================== SELECTION ==================== */
 
-::selection { background: var(--tx-amber); color: var(--tx-bg); }
-::-moz-selection { background: var(--tx-amber); color: var(--tx-bg); }
+::selection { background: var(--accent-soft); color: var(--tx-bright); }
 
 
-/* ==================== TEXTURE ====================
-   A fixed, very low opacity noise field over the whole viewport. Pure flat
-   dark surfaces read as sterile digital vector; a little grain gives the
-   substrate a physical quality. Non-interactive and behind all content. */
-body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: 9;
-    pointer-events: none;
-    opacity: 0.035;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-@media (prefers-reduced-motion: reduce) {
-    body::after { display: none; }
-}
 
 /* ==================== DISPLAY TYPOGRAPHY ====================
    The macro half of the bimodal scale. Reserved for the single number that
@@ -698,83 +463,3 @@ body::after {
     text-transform: uppercase;
     color: var(--tx-dim);
 }
-
-/* ==================== CALCULATOR MASTHEAD ====================
-   Each calculator opens with its name at display scale over the card's rules
-   text. Previously every h1 was 12px, so a calculator had no title presence at
-   all and every tab looked identical on arrival. */
-
-.calculator-content .tab-content > h1 {
-    font-size: var(--t-xl);
-    font-weight: 700;
-    line-height: 1.05;
-    letter-spacing: var(--track-tight);
-    text-transform: none;
-    color: var(--tx-bright);
-    text-shadow: none;
-    margin: 0;
-    padding: 22px 20px 0;
-}
-
-/* The flavour/rules line under a masthead title. */
-.calculator-content .tab-content > .card-text {
-    display: block;
-    font-size: var(--t-body);
-    line-height: 1.5;
-    color: var(--tx-mid);
-    margin: 8px 0 0;
-    padding: 0 20px 20px;
-    max-width: 68ch;
-    border-bottom: 1px solid var(--tx-rule);
-    text-wrap: pretty;
-}
-
-/* Gutter scales with the viewport once there is room for one. */
-@media (min-width: 900px) {
-    :root { --shell-gutter: clamp(16px, 2.2vw, 44px); }
-}
-
-/* Chimil, the Inner Sun — the terminal palette is uniform, so a calculator
-   theme is just the accent selection and focus colour. */
-body.theme-chimil {
-    --accent:       var(--tx-accent);
-    --accent-light: var(--tx-bright);
-    --accent-glow:  transparent;
-    --theme-tint:   rgba(30, 34, 31, 0.5);
-    --chimil-primary:   var(--tx-good);
-    --chimil-secondary: var(--tx-accent);
-}
-
-.theme-chimil h1 { color: var(--tx-bright); text-shadow: none; }
-.theme-chimil h2 { color: var(--tx-mid); border-bottom-color: var(--tx-rule); }
-.theme-chimil *:focus-visible { outline-color: var(--tx-accent); }
-
-/* Wild Pair — same uniform terminal palette; green carries "paired", red
-   carries "stranded", which is the one distinction this calculator draws. */
-body.theme-wildpair {
-    --accent:       var(--tx-accent);
-    --accent-light: var(--tx-bright);
-    --accent-glow:  transparent;
-    --theme-tint:   rgba(30, 34, 31, 0.5);
-    --wildpair-primary:   var(--tx-good);
-    --wildpair-secondary: var(--tx-accent);
-}
-
-.theme-wildpair h1 { color: var(--tx-bright); text-shadow: none; }
-.theme-wildpair h2 { color: var(--tx-mid); border-bottom-color: var(--tx-rule); }
-.theme-wildpair *:focus-visible { outline-color: var(--tx-accent); }
-
-/* Head to Head — a comparison tab, so green marks side A and amber side B and
-   neither is chrome; the palette is otherwise the shared terminal one. */
-body.theme-versus {
-    --accent:       var(--tx-accent);
-    --accent-light: var(--tx-bright);
-    --accent-glow:  transparent;
-    --theme-tint:   rgba(30, 34, 31, 0.5);
-    --versus-primary:   var(--tx-good);
-    --versus-secondary: var(--tx-accent);
-}
-
-.theme-versus h1 { color: var(--tx-bright); text-shadow: none; }
-.theme-versus h2 { color: var(--tx-mid); border-bottom-color: var(--tx-rule); }
-.theme-versus *:focus-visible { outline-color: var(--tx-accent); }

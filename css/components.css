@@ -1,389 +1,9 @@
 /* ==================== TERMINAL COMPONENTS ==================== */
 
-/* ==================== FOOTER ==================== */
-
-.tx-footer {
-    min-height: 34px;
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    padding: 8px 16px;
-    border-top: 1px solid var(--tx-rule);
-    font-size: var(--t-micro);
-    letter-spacing: 0.04em;
-    color: var(--tx-dim);
-    gap: 6px 20px;
-    background: var(--tx-bg);
-    position: sticky;
-    bottom: 0;
-    z-index: var(--z-sticky);
-    flex-shrink: 0;
-}
-
-.tx-footer kbd {
-    display: inline-block;
-    min-width: 16px;
-    padding: 1px 4px;
-    margin-right: 3px;
-    border: 1px solid var(--tx-rule-hi);
-    background: var(--tx-panel-alt);
-    color: var(--tx-mid);
-    font-family: inherit;
-    font-size: var(--t-micro);
-    text-align: center;
-    line-height: 1.4;
-}
-
-.tx-footer-btn {
-    background: none;
-    border: 0;
-    padding: 0;
-    font-family: inherit;
-    font-size: var(--t-micro);
-    color: var(--tx-mid);
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    text-decoration-color: var(--tx-rule-hi);
-    transition: color var(--transition-fast);
-}
-
-.tx-footer-btn:hover { color: var(--tx-accent); }
-
-.tx-footer-ver {
-    /* --tx-rule-hi is a border tone, far too dim to read as text (1.5:1). */
-    color: var(--tx-dim);
-    font-variant-numeric: tabular-nums;
-}
-
-.tx-footer .tx-footer-right {
-    margin-left: auto;
-}
-
-/* ==================== TERMINAL HEADER ==================== */
-
-.tx-header {
-    display: flex;
-    flex-direction: column;
-    border-bottom: 1px solid var(--tx-rule-hi);
-    background: var(--tx-bg);
-    position: sticky;
-    top: 0;
-    z-index: calc(var(--z-sticky) - 1);
-}
-
-/* Top row: wordmark | group buttons | deck pill */
-.tx-header-top {
-    display: grid;
-    /* Auto rails so the wordmark and deck pill size to their content rather than
-       overflowing a fixed column (the "◇ TERMINAL" tag used to collide). */
-    grid-template-columns: auto 1fr minmax(160px, auto);
-    height: 44px;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.tx-wordmark {
-    padding: 0 18px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border-right: 1px solid var(--tx-rule);
-    height: 100%;
-    white-space: nowrap;
-}
-
-.tx-wordmark .tx-deck {
-    font-size: var(--t-lg);
-    font-weight: 700;
-    letter-spacing: var(--track-tight);
-    color: var(--tx-bright);
-}
-
-.tx-wordmark .tx-oracle {
-    font-size: var(--t-lg);
-    font-weight: 300;
-    letter-spacing: var(--track-tight);
-    color: var(--tx-mid);
-}
-
-.tx-wordmark .tx-tag {
-    font-size: 9px;
-    color: var(--tx-dim);
-    margin-left: 4px;
-    letter-spacing: 0.08em;
-}
-
-/* Group selector buttons */
-.tx-group-row {
-    display: flex;
-    align-items: stretch;
-    height: 100%;
-    padding: 0 8px;
-    gap: 4px;
-    border-right: 1px solid var(--tx-rule);
-}
-
-.tx-group {
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    font-size: var(--t-label);
-    font-weight: 500;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    border: none;
-    border-bottom: 2px solid transparent;
-    background: none;
-    cursor: pointer;
-    transition: color 0.12s, background 0.12s, border-color 0.12s;
-    font-family: inherit;
-    white-space: nowrap;
-}
-
-.tx-group:hover {
-    color: var(--tx-text);
-    background: var(--tx-panel-alt);
-}
-
-.tx-group.active {
-    color: var(--tx-bright);
-    border-bottom-color: var(--tx-accent);
-}
-
-/* Bottom row: calculator tabs for current group */
-.tx-tab-row {
-    display: flex;
-    height: 40px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    width: 100%;
-}
-
-.tx-tab-row::-webkit-scrollbar { display: none; }
-
-.tx-tab {
-    padding: 0 18px;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: var(--t-xs);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    border-right: 1px solid var(--tx-rule);
-    cursor: pointer;
-    transition: color 0.12s, background 0.12s;
-    white-space: nowrap;
-    /* Sized to content, not stretched: with only two tabs in a group, `flex: 1`
-       turned the active tab into a half-width slab of solid amber. */
-    flex: 0 0 auto;
-    background: none;
-    border-top: 2px solid transparent;
-    border-bottom: none;
-    border-left: none;
-    font-family: inherit;
-    justify-content: center;
-}
-
-.tx-tab:last-child { border-right: 0; }
-
-.tx-tab:hover {
-    color: var(--tx-text);
-    background: var(--tx-panel-alt);
-}
-
-.tx-tab.active {
-    color: var(--tx-bright);
-    background: var(--tx-panel-alt);
-    border-top-color: var(--tx-accent);
-}
-
-.tx-tab.active .tx-code { color: var(--tx-accent); }
-
-.tx-tab.group-hidden {
-    display: none;
-}
-
-.tx-tab .tx-code {
-    font-weight: 700;
-    font-size: 11px;
-}
-
-.tx-tab .tx-sep {
-    color: var(--tx-dim);
-    font-weight: 400;
-}
-
-.tx-tab.active .tx-sep {
-    color: var(--tx-dim);
-}
-
-.tx-tab .tx-name {
-    font-size: 10px;
-    font-weight: 400;
-    opacity: 0.8;
-}
-
-.tx-tab.active .tx-name {
-    opacity: 1;
-}
-
-.tx-deck-pill {
-    padding: 0 18px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    height: 100%;
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.tx-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px;
-    border: 1px solid var(--tx-rule);
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--tx-mid);
-    background: var(--tx-panel);
-}
-
-.tx-deck-hash {
-    font-size: 10px;
-    color: var(--tx-dim);
-}
-
-/* ==================== SUB-BAR (deck import strip) ==================== */
-
-.tx-sub-bar {
-    height: 38px;
-    display: flex;
-    align-items: center;
-    padding: 0 14px;
-    gap: 12px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-    position: sticky;
-    top: 84px;
-    z-index: calc(var(--z-sticky) - 2);
-    overflow: hidden;
-}
-
-.tx-sub-bar .tx-src-label {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-wide);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.tx-sub-bar .tx-url-input {
-    flex: 0 0 320px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    padding: 5px 10px;
-    font-family: inherit;
-    font-size: 11px;
-    outline: none;
-    border-radius: 0;
-    transition: border-color 0.12s;
-}
-
-.tx-sub-bar .tx-url-input:focus { border-color: var(--tx-amber); }
-.tx-sub-bar .tx-url-input::placeholder { color: var(--tx-dim); }
-
-.tx-sub-bar .tx-or {
-    font-size: var(--t-xs);
-    color: var(--tx-rule-hi);
-    flex-shrink: 0;
-}
-
-.tx-sub-bar .tx-import-meta {
-    margin-left: auto;
-    font-size: var(--t-xs);
-    flex-shrink: 0;
-}
-
-.tx-sub-bar .tx-import-meta a {
-    color: var(--tx-mid);
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    text-decoration-color: var(--tx-rule-hi);
-    transition: color var(--transition-fast);
-}
-
-.tx-sub-bar .tx-import-meta a:hover { color: var(--tx-accent); }
-
-.tx-sub-bar .tx-paste-input {
-    flex: 0 0 200px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    padding: 5px 10px;
-    font-family: inherit;
-    font-size: 11px;
-    outline: none;
-    border-radius: 0;
-    transition: border-color 0.12s;
-}
-
-.tx-sub-bar .tx-paste-input:focus { border-color: var(--tx-amber); }
-.tx-sub-bar .tx-paste-input::placeholder { color: var(--tx-dim); }
-
-.tx-fetch-btn {
-    background: transparent;
-    border: 1px solid var(--tx-amber);
-    color: var(--tx-amber);
-    padding: 5px 14px;
-    font-family: inherit;
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-    flex-shrink: 0;
-}
-
-.tx-fetch-btn:hover {
-    background: var(--tx-amber);
-    color: var(--tx-bg);
-}
-
-.tx-import-meta {
-    margin-left: auto;
-    font-size: 10px;
-    letter-spacing: 0.10em;
-    color: var(--tx-dim);
-    white-space: nowrap;
-}
-
-.tx-import-meta .tx-hash {
-    color: var(--tx-amber);
-}
-
-/* ==================== TERMINAL DOT (status indicator) ==================== */
-
-.tx-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
-}
-
 /* ==================== PANEL HEADER BAND ==================== */
 
 .tx-h {
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--tx-dim);
@@ -398,7 +18,7 @@
 
 .tx-h .tx-h-r {
     color: var(--tx-mid);
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.08em;
     text-transform: none;
     cursor: pointer;
@@ -414,7 +34,7 @@
     color: var(--tx-bright);
     padding: 8px 10px;
     font-family: inherit;
-    font-size: 12px;
+    font-size: var(--t-sm);
     outline: none;
     border-radius: 0;
     width: 100%;
@@ -423,7 +43,7 @@
 }
 
 .tx-input:focus {
-    border-color: var(--tx-amber);
+    border-color: var(--tx-dim);
 }
 
 /* ==================== TERMINAL RANGE SLIDER ==================== */
@@ -465,7 +85,7 @@
     padding: 4px 10px;
     border: 1px solid var(--tx-rule);
     font-family: inherit;
-    font-size: 11px;
+    font-size: var(--t-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--tx-mid);
@@ -604,11 +224,11 @@
 .portent-sweep-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 11px;
+    font-size: var(--t-xs);
 }
 
 .portent-sweep-table thead th {
-    font-size: 9px;
+    font-size: var(--t-micro);
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -671,7 +291,7 @@
     align-items: center;
     padding: 5px 16px;
     border-bottom: 1px solid var(--tx-rule);
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.04em;
 }
 
@@ -695,7 +315,7 @@
 .portent-trial {
     padding: 12px 16px;
     border-bottom: 1px solid var(--tx-rule);
-    font-size: 11px;
+    font-size: var(--t-xs);
 }
 
 .portent-trial-header {
@@ -709,7 +329,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 10px;
+    font-size: var(--t-label);
     padding: 1px 0;
 }
 
@@ -761,7 +381,7 @@
     display: inline-block;
     padding: 1px 7px;
     border: 1px solid currentColor;
-    font-size: 9px;
+    font-size: var(--t-micro);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -777,7 +397,7 @@
     padding: 10px 14px;
     border-bottom: 1px solid var(--tx-rule);
     background: var(--tx-panel-alt);
-    font-size: 11px;
+    font-size: var(--t-xs);
     color: var(--tx-text);
     line-height: 1.55;
 }
@@ -789,7 +409,7 @@
 .tx-empty {
     padding: 18px 14px;
     color: var(--tx-dim);
-    font-size: 11px;
+    font-size: var(--t-xs);
     letter-spacing: 0.04em;
 }
 
@@ -797,12 +417,12 @@
 .tx-sweep-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 11px;
+    font-size: var(--t-xs);
     font-feature-settings: 'tnum' 1;
 }
 
 .tx-sweep-table thead th {
-    font-size: 9px;
+    font-size: var(--t-micro);
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -838,80 +458,6 @@
 .tx-hero + .insight-box,
 .tx-rec + .insight-box { border-top: 0; }
 
-/* ==================== GLASS PANEL (legacy — now flat) ==================== */
-
-.panel {
-    background: var(--tx-panel);
-    border: 0;
-    border-bottom: 1px solid var(--tx-rule);
-    border-radius: 0;
-    padding: 0;
-    box-shadow: none;
-    margin-bottom: 0;
-    width: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
-    position: relative;
-}
-
-.panel::before { display: none; }
-
-.panel:hover {
-    transform: none;
-    border-color: inherit;
-    box-shadow: none;
-}
-
-#deck-config {
-    margin-bottom: 0;
-}
-
-#deck-config:not(.expanded) {
-    margin-bottom: 0;
-}
-
-/* ==================== NAVIGATION ==================== */
-
-.tab-groups { display: none; }
-#tab-group-nav { display: none !important; }
-.tab-sub-nav { display: none; }
-
-/* ==================== ICON BUTTONS ==================== */
-
-.icon-btn {
-    width: 32px;
-    height: 28px;
-    padding: 0;
-    background: transparent;
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-mid);
-    font-size: 0.9rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.12s;
-    flex-shrink: 0;
-}
-
-.icon-btn:hover {
-    background: var(--tx-panel-alt);
-    border-color: var(--tx-amber);
-    color: var(--tx-amber);
-    transform: none;
-    box-shadow: none;
-}
-
-.icon-btn.active {
-    background: var(--tx-amber);
-    border-color: var(--tx-amber);
-    color: var(--tx-bg);
-}
-
-/* ==================== LEGACY DROPDOWN SELECTOR (hidden) ==================== */
-
-.calculator-selector { display: none !important; }
-
 /* ==================== INPUT GROUPS ==================== */
 
 .input-group {
@@ -924,7 +470,7 @@
 .input-group label {
     display: block;
     margin-bottom: var(--spacing-xs);
-    font-size: 9px;
+    font-size: var(--t-micro);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--tx-dim);
@@ -939,7 +485,7 @@
     background: var(--tx-bg);
     border: 1px solid var(--tx-rule);
     color: var(--tx-bright);
-    font-size: 11px;
+    font-size: var(--t-xs);
     font-family: inherit;
     transition: border-color 0.12s;
     resize: vertical;
@@ -983,12 +529,12 @@
     gap: var(--spacing-sm);
     cursor: pointer;
     user-select: none;
-    font-size: 11px;
+    font-size: var(--t-xs);
     color: var(--tx-text);
 }
 
 .helper-text {
-    font-size: 10px;
+    font-size: var(--t-label);
     color: var(--tx-dim);
     margin-top: var(--spacing-xs);
 }
@@ -1032,7 +578,7 @@
     background: var(--tx-bg);
     border: 1px solid var(--tx-rule);
     color: var(--tx-bright);
-    font-size: 11px;
+    font-size: var(--t-xs);
     text-align: center;
     font-family: inherit;
     font-feature-settings: 'tnum' 1;
@@ -1051,7 +597,7 @@
 .deck-total {
     margin: 0;
     padding: 8px 14px;
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.10em;
     text-transform: uppercase;
     color: var(--tx-dim);
@@ -1136,7 +682,7 @@
     color: var(--tx-bg);
     font-weight: 600;
     font-family: inherit;
-    font-size: 11px;
+    font-size: var(--t-xs);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     cursor: pointer;
@@ -1168,7 +714,7 @@
 
 .import-status {
     margin-top: var(--spacing-sm);
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.08em;
     min-height: 16px;
 }
@@ -1204,7 +750,7 @@
 
 .deck-name {
     padding: 6px 14px;
-    font-size: 10px;
+    font-size: var(--t-label);
     color: var(--tx-amber);
     background: var(--tx-panel);
     border-bottom: 1px solid var(--tx-rule);
@@ -1213,7 +759,7 @@
 
 .deck-name .label {
     color: var(--tx-dim);
-    font-size: 9px;
+    font-size: var(--t-micro);
     letter-spacing: 0.10em;
     text-transform: uppercase;
     display: block;
@@ -1232,7 +778,7 @@
     display: flex;
     gap: 18px;
     padding: 6px 14px;
-    font-size: 10px;
+    font-size: var(--t-label);
     border-top: 1px solid var(--tx-rule);
     background: var(--tx-panel);
 }
@@ -1244,7 +790,7 @@
     color: var(--tx-mid);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    font-size: 9px;
+    font-size: var(--t-micro);
 }
 
 .legend-color {
@@ -1265,7 +811,7 @@
 .comparison-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 11px;
+    font-size: var(--t-xs);
     min-width: 400px;
     font-feature-settings: 'tnum' 1;
 }
@@ -1280,7 +826,7 @@
 }
 
 .comparison-table th {
-    font-size: 9px;
+    font-size: var(--t-micro);
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1306,7 +852,7 @@
 .section-header { background: var(--tx-panel-alt) !important; }
 .section-header td {
     padding: 5px 14px !important;
-    font-size: 9px;
+    font-size: var(--t-micro);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--tx-dim);
@@ -1315,7 +861,7 @@
 /* ==================== INSIGHT BOX ==================== */
 
 .insight-box {
-    padding: var(--spacing-md) 14px;
+    padding: var(--spacing-md) 16px;
     margin: 0;
     border-top: 1px solid var(--tx-rule);
     background: var(--tx-panel-alt);
@@ -1326,17 +872,32 @@
 }
 
 .insight-box h3 {
-    font-size: 9px;
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
     margin-bottom: var(--spacing-sm);
-    color: var(--tx-amber);
+    color: var(--tx-dim);
     border: none;
     padding: 0;
 }
 
-.insight-box p {
-    font-size: 10px;
+.insight-box p,
+.insight-body {
+    font-size: var(--t-xs);
     color: var(--tx-mid);
     line-height: 1.6;
+}
+
+.insight-body { margin-bottom: 8px; }
+.insight-body:last-child { margin-bottom: 0; }
+
+.insight-foot {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--tx-rule);
+    font-size: var(--t-label);
+    color: var(--tx-dim);
 }
 
 /* ==================== STAT CARDS ==================== */
@@ -1399,7 +960,7 @@
     background: var(--tx-bg);
     border: 1px solid var(--tx-rule);
     color: var(--tx-bright);
-    font-size: 11px;
+    font-size: var(--t-xs);
     font-weight: 600;
     font-family: inherit;
     transition: border-color 0.12s;
@@ -1419,7 +980,7 @@
     padding: 4px 10px;
     border-radius: 0;
     cursor: pointer;
-    font-size: 10px;
+    font-size: var(--t-label);
     font-family: inherit;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -1443,7 +1004,7 @@
     color: var(--tx-dim);
     cursor: pointer;
     font-family: inherit;
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.10em;
     text-transform: uppercase;
     transition: all 0.12s;
@@ -1487,7 +1048,7 @@
     margin: 0;
     padding: 0;
     border: none;
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.16em;
     color: var(--tx-dim);
     text-transform: uppercase;
@@ -1549,7 +1110,7 @@
     padding: 2px 6px;
     margin: 2px;
     border: 1px solid var(--tx-rule);
-    font-size: 10px;
+    font-size: var(--t-label);
     font-weight: 400;
     cursor: default;
     border-radius: 0;
@@ -1570,12 +1131,12 @@
 
 .reveal-summary {
     margin-top: 6px;
-    font-size: 10px;
+    font-size: var(--t-label);
     color: var(--tx-mid);
     letter-spacing: 0.06em;
 }
 
-.reveal-summary strong { font-size: 10px; font-weight: 600; }
+.reveal-summary strong { font-size: var(--t-label); font-weight: 600; }
 .reveal-summary.free-spell strong { color: var(--tx-green); }
 .reveal-summary.whiff strong      { color: var(--tx-red); }
 
@@ -1601,7 +1162,7 @@
     text-align: right;
     color: var(--tx-mid);
     white-space: nowrap;
-    font-size: 10px;
+    font-size: var(--t-label);
 }
 
 .dist-bar-container {
@@ -1630,7 +1191,7 @@
 }
 
 .dist-marker {
-    font-size: 9px;
+    font-size: var(--t-micro);
     color: var(--tx-amber);
     white-space: nowrap;
     letter-spacing: 0.08em;
@@ -1667,7 +1228,7 @@
 
 .big-spell-title {
     margin-top: 0;
-    font-size: 9px;
+    font-size: var(--t-micro);
     letter-spacing: 0.10em;
     text-transform: uppercase;
     color: var(--tx-dim);
@@ -1680,7 +1241,7 @@
 .big-spell-x-value {
     margin-bottom: 2px;
     font-weight: 700;
-    font-size: 10px;
+    font-size: var(--t-label);
     color: var(--tx-amber);
     letter-spacing: 0.08em;
 }
@@ -1694,7 +1255,7 @@
 
 .big-spell-metric {
     color: var(--tx-mid);
-    font-size: 9px;
+    font-size: var(--t-micro);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     margin-bottom: var(--spacing-sm);
@@ -1702,14 +1263,14 @@
 
 .big-spell-details {
     color: var(--tx-dim);
-    font-size: 9px;
+    font-size: var(--t-micro);
     border-top: 1px solid var(--tx-rule);
     padding-top: var(--spacing-xs);
 }
 
 .big-spell-restriction {
     margin-top: 2px;
-    font-size: 9px;
+    font-size: var(--t-micro);
     line-height: 1.4;
 }
 
@@ -1720,240 +1281,6 @@
     border-bottom: 1px solid var(--tx-rule);
     background: var(--tx-panel);
 }
-
-/* ==================== DECK RADAR ==================== */
-
-#tx-radar {
-    display: none;
-    border-bottom: 1px solid var(--tx-rule-hi);
-    background: var(--tx-panel);
-}
-
-.rdr-close {
-    background: none;
-    border: none;
-    color: var(--tx-dim);
-    font-family: inherit;
-    font-size: 9px;
-    letter-spacing: 0.1em;
-    cursor: pointer;
-    padding: 0 0 0 12px;
-}
-
-.rdr-close:hover { color: var(--tx-amber); }
-
-.rdr-body {
-    display: grid;
-    grid-template-columns: minmax(280px, 400px) 1fr;
-}
-
-.rdr-col { padding: 14px 16px; }
-
-.rdr-col-comp { border-right: 1px solid var(--tx-rule); }
-
-.rdr-col-title {
-    font-size: 9px;
-    letter-spacing: 0.18em;
-    color: var(--tx-dim);
-    text-transform: uppercase;
-    margin-bottom: 12px;
-}
-
-/* Headline composition numbers */
-.rdr-metrics {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-bottom: 14px;
-}
-
-.rdr-metric { display: flex; flex-direction: column; gap: 2px; }
-
-.rdr-metric-n {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--tx-bright);
-    line-height: 1;
-    font-feature-settings: 'tnum' 1;
-}
-
-.rdr-metric-l {
-    font-size: 8px;
-    letter-spacing: 0.1em;
-    color: var(--tx-dim);
-    text-transform: uppercase;
-}
-
-/* Stacked type-composition bar */
-.rdr-bar {
-    display: flex;
-    height: 10px;
-    width: 100%;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    overflow: hidden;
-}
-
-.rdr-seg { display: block; height: 100%; }
-
-.rdr-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 14px;
-    margin-top: 8px;
-}
-
-.rdr-legend-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 9px;
-    letter-spacing: 0.08em;
-    color: var(--tx-mid);
-}
-
-.rdr-swatch { width: 8px; height: 8px; display: inline-block; }
-
-.rdr-legend-n {
-    color: var(--tx-bright);
-    font-feature-settings: 'tnum' 1;
-}
-
-/* Mana curve histogram */
-.rdr-curve-title {
-    font-size: 9px;
-    letter-spacing: 0.14em;
-    color: var(--tx-dim);
-    text-transform: uppercase;
-    margin: 16px 0 6px;
-}
-
-.rdr-dim { color: var(--tx-rule-hi); }
-
-.rdr-curve {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
-    gap: 4px;
-    height: 76px;
-    align-items: end;
-}
-
-.rdr-curve-col {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    height: 100%;
-    gap: 3px;
-}
-
-.rdr-curve-n {
-    font-size: 8px;
-    color: var(--tx-mid);
-    font-feature-settings: 'tnum' 1;
-    min-height: 10px;
-}
-
-.rdr-curve-bar {
-    width: 100%;
-    background: var(--tx-green-dim);
-    border-top: 2px solid var(--tx-green);
-    min-height: 0;
-    transition: height 0.25s ease;
-}
-
-.rdr-curve-col:hover .rdr-curve-bar { background: var(--tx-green); }
-
-.rdr-curve-x {
-    font-size: 9px;
-    color: var(--tx-dim);
-    font-feature-settings: 'tnum' 1;
-}
-
-/* Ranked calculator matches */
-.rdr-rows { display: flex; flex-direction: column; }
-
-.rdr-row {
-    display: grid;
-    grid-template-columns: 78px 1fr auto;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    padding: 8px 10px;
-    background: transparent;
-    border: 0;
-    border-bottom: 1px solid var(--tx-rule);
-    border-left: 2px solid transparent;
-    font-family: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition: background 0.12s, border-color 0.12s;
-}
-
-.rdr-row:hover { background: var(--tx-row-hi); }
-.rdr-row.rdr-tier-core { border-left-color: var(--tx-green); }
-.rdr-row.rdr-tier-likely { border-left-color: var(--tx-amber); }
-.rdr-row.rdr-tier-possible { border-left-color: var(--tx-blue); }
-
-.rdr-badge {
-    display: inline-block;
-    padding: 2px 0;
-    border: 1px solid;
-    font-size: 8px;
-    letter-spacing: 0.12em;
-    text-align: center;
-    text-transform: uppercase;
-}
-
-.rdr-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-
-.rdr-row-title {
-    font-size: 11px;
-    color: var(--tx-bright);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-
-.rdr-code {
-    color: var(--tx-amber);
-    font-weight: 700;
-    margin-right: 4px;
-}
-
-.rdr-reason {
-    font-size: 10px;
-    color: var(--tx-mid);
-    line-height: 1.4;
-}
-
-.rdr-reason-2 { color: var(--tx-dim); }
-
-.rdr-go {
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    color: var(--tx-dim);
-    white-space: nowrap;
-}
-
-.rdr-row:hover .rdr-go { color: var(--tx-amber); }
-
-.rdr-empty {
-    font-size: 11px;
-    color: var(--tx-dim);
-    padding: 10px 0;
-}
-
-/* Relevance markers on the nav tabs */
-.tx-tab-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--tx-green);
-    flex: 0 0 auto;
-}
-
-.tx-tab-maybe .tx-tab-dot { background: var(--tx-amber); }
 
 /* ==================== GLOBAL CONTROL THEMING ====================
    Native form controls inside calculator panels used to render with the OS
@@ -1970,7 +1297,7 @@
     border: 1px solid var(--tx-rule);
     color: var(--tx-bright);
     font-family: inherit;
-    font-size: 11px;
+    font-size: var(--t-xs);
     padding: 5px 8px;
     border-radius: 0;
     outline: none;
@@ -2050,27 +1377,26 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 /* Generic action buttons: outlined, not filled. Solid amber is reserved for the
    single primary action in the sub-bar. */
-.calculator-content button:not([class*="tx-"]):not([class*="rdr-"]):not(.preset-btn) {
+.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn) {
     background: transparent;
     border: 1px solid var(--tx-rule-hi);
-    color: var(--tx-mid);
+    color: var(--tx-text);
     font-family: inherit;
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-size: var(--t-xs);
+    font-weight: 600;
     padding: 7px 14px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.calculator-content button:not([class*="tx-"]):not([class*="rdr-"]):not(.preset-btn):hover {
+.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):hover {
     background: var(--tx-panel-alt);
     color: var(--tx-bright);
     border-color: var(--tx-amber);
 }
 
-.calculator-content button:not([class*="tx-"]):not([class*="rdr-"]):not(.preset-btn):disabled {
+.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):disabled {
     opacity: 0.4;
     cursor: not-allowed;
     border-color: var(--tx-rule);
@@ -2078,12 +1404,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 /* Section headings inside calculators — keep the terminal label voice rather
    than falling back to browser-default h1/h2 sizing. */
-.calculator-content h2,
-.calculator-content h3 {
+/* Only bare headings: anything with its own class styles itself. */
+.calc-body h2:not([class]),
+.calc-body h3:not([class]) {
     font-family: inherit;
-    font-size: 10px;
+    font-size: var(--t-label);
     font-weight: 600;
-    letter-spacing: 0.18em;
+    letter-spacing: var(--track-label);
     text-transform: uppercase;
     color: var(--tx-mid);
     margin: 0 0 10px;
@@ -2106,7 +1433,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 .tx-field-row > label {
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--tx-mid);
@@ -2114,7 +1441,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 .tx-field-row > small {
-    font-size: 10px;
+    font-size: var(--t-label);
     color: var(--tx-dim);
 }
 
@@ -2133,7 +1460,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
     border-right-width: 0;
     color: var(--tx-dim);
     font-family: inherit;
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.14em;
     text-transform: uppercase;
     border-radius: 0;
@@ -2159,7 +1486,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 /* Labelled slider block */
 .calculator-content .input-group > label {
     display: block;
-    font-size: 9px;
+    font-size: var(--t-micro);
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--tx-dim);
@@ -2169,7 +1496,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .calculator-content .input-group small {
     display: block;
     margin-top: 5px;
-    font-size: 10px;
+    font-size: var(--t-label);
     color: var(--tx-dim);
 }
 
@@ -2276,7 +1603,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 /* Body copy inside calculators: terminal-sized, not browser-default. */
 .calculator-content .panel > p,
 .calculator-content .panel > section > p {
-    font-size: 11px;
+    font-size: var(--t-xs);
     color: var(--tx-mid);
     line-height: 1.6;
 }
@@ -2298,7 +1625,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 .tx-mx-table th {
-    font-size: 9px;
+    font-size: var(--t-micro);
     font-weight: 500;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -2330,13 +1657,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .tx-mx-cell.is-bad  { background: color-mix(in oklab, var(--tx-red) 5%, transparent); }
 
 .tx-mx-mark {
-    font-size: 11px;
+    font-size: var(--t-xs);
     float: right;
     line-height: 1;
 }
 
 .tx-mx-label {
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--tx-mid);
@@ -2352,7 +1679,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 .tx-mx-note {
-    font-size: 10px;
+    font-size: var(--t-label);
     color: var(--tx-dim);
     line-height: 1.45;
     margin-top: 6px;
@@ -2363,7 +1690,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
     align-items: baseline;
     gap: 12px;
     padding: 10px 14px;
-    font-size: 9px;
+    font-size: var(--t-micro);
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--tx-dim);
@@ -2381,24 +1708,8 @@ input[type="range"].tx-slider::-moz-range-thumb {
     margin-left: auto;
     text-transform: none;
     letter-spacing: 0;
-    font-size: 10px;
+    font-size: var(--t-label);
 }
-
-/* ==================== SQUARE-CORNER ENFORCEMENT ====================
-   The terminal language is hard-edged throughout. A lot of calculator output is
-   built as HTML strings with inline `border-radius` left over from the previous
-   rounded-glass design (sample-hand card chips, reveal cards, distribution
-   bars). Inline styles beat normal declarations, so this override needs
-   !important. Scoped to generated calculator output only — it deliberately does
-   not touch native controls like checkboxes. */
-.calculator-content .sample-reveal,
-.calculator-content .sample-reveal *,
-.calculator-content .card-chip,
-.calculator-content [class*="reveal"] [style*="border-radius"],
-.calculator-content [style*="border-radius"]:not(input):not(.tx-p-bar):not(.tx-p-fill) {
-    border-radius: 0 !important;
-}
-
 
 /* ==================== FOCUS ====================
    One visible, consistent focus ring in the brand accent. Keyboard users get
