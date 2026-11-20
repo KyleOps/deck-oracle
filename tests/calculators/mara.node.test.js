@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { simulateChoice1, simulateChoice2, calculateMaraStats } from '../../js/calculators/mara.js';
+import {
+    simulateChoice1, simulateChoice2, calculateMaraStats, topCardsTotalDistribution, summarizeMara, MARA_COST
+} from '../../js/calculators/mara.js';
 
 describe('Mara Calculator', () => {
     describe('simulateChoice1', () => {
@@ -180,6 +182,112 @@ describe('Mara Calculator', () => {
             // Expected avg per card: 1, expected for 4 cards: 4
             assert.ok(result.choice2.avgDamage >= 2 && result.choice2.avgDamage <= 6,
                 `avgDamage should be around 4, got ${result.choice2.avgDamage}`);
+        });
+    });
+    describe('topCardsTotalDistribution (exact damage odds)', () => {
+        const brute = (mvs, k) => {
+            // Enumerate every k-subset of positions.
+            const counts = [];
+            let total = 0;
+            const rec = (start, picked, sum) => {
+                if (picked === k) { counts[sum] = (counts[sum] ?? 0) + 1; total++; return; }
+                for (let i = start; i < mvs.length; i++) rec(i + 1, picked + 1, sum + mvs[i]);
+            };
+            rec(0, 0, 0);
+            return Array.from(counts, c => (c ?? 0) / total);
+        };
+
+        it('matches brute-force enumeration on a small library', () => {
+            const mvs = [0, 0, 0, 1, 2, 2, 3, 5, 0, 4];
+            const exact = topCardsTotalDistribution(mvs.map(cmc => ({ cmc })), 4);
+            const expected = brute(mvs, 4);
+            assert.strictEqual(exact.length, expected.length);
+            exact.forEach((p, i) => assert.ok(Math.abs(p - expected[i]) < 1e-12, `total ${i}: ${p} vs ${expected[i]}`));
+        });
+
+        it('sums to 1 and handles libraries smaller than four cards', () => {
+            const dist = topCardsTotalDistribution([{ cmc: 3 }, { cmc: 2 }], 4);
+            assert.strictEqual(dist[5], 1, 'both cards are always exiled');
+            const big = topCardsTotalDistribution(Array.from({ length: 99 }, (_, i) => ({ cmc: i % 7 })), 4);
+            assert.ok(Math.abs(big.reduce((a, b) => a + b, 0) - 1) < 1e-9);
+        });
+    });
+
+    describe('calculateMaraStats (exact)', () => {
+        const deck = {
+            cardsByName: {
+                Forest: { name: 'Forest', type_line: 'Basic Land — Forest', cmc: 0, count: 30 },
+                Bear: { name: 'Bear', type_line: 'Creature — Bear', cmc: 2, count: 20 },
+                Angel: { name: 'Angel', type_line: 'Creature — Angel', cmc: 6, count: 10 }
+            }
+        };
+
+        it('free spell is the average nonland mana value', () => {
+            const s = calculateMaraStats(deck);
+            assert.ok(Math.abs(s.choice1.avgCMC - (20 * 2 + 10 * 6) / 30) < 1e-12);
+            assert.ok(Math.abs(s.choice1.pct5Plus - 100 / 3) < 1e-9);
+        });
+
+        it('cards exiled follows the first-success position (N + 1) / (S + 1)', () => {
+            const s = calculateMaraStats(deck);
+            assert.ok(Math.abs(s.choice1.avgExiled - 61 / 31) < 1e-12);
+        });
+
+        it('average damage is four times the average card mana value', () => {
+            const s = calculateMaraStats(deck);
+            assert.ok(Math.abs(s.choice2.avgDamage - (4 * 100) / 60) < 1e-12);
+            const mean = s.choice2.damageProbs.reduce((a, p, d) => a + p * d, 0);
+            assert.ok(Math.abs(mean - s.choice2.avgDamage) < 1e-9, 'distribution mean matches');
+            assert.strictEqual(s.choice2.minDamage, 0);
+            assert.strictEqual(s.choice2.maxDamage, 24);
+        });
+
+        it('is deterministic — same deck, same answer', () => {
+            assert.deepStrictEqual(calculateMaraStats(deck), calculateMaraStats(deck));
+        });
+
+        it('counts a modal double-faced spell // land as a nonland card', () => {
+            const s = calculateMaraStats({
+                cardsByName: {
+                    Island: { name: 'Island', type_line: 'Basic Land — Island', cmc: 0, count: 1 },
+                    'Emeria’s Call // Emeria, Shattered Skyclave': {
+                        name: 'Emeria’s Call // Emeria, Shattered Skyclave', type_line: 'Sorcery // Land', cmc: 7, count: 1
+                    }
+                }
+            });
+            assert.strictEqual(s.nonlandCount, 1);
+            assert.strictEqual(s.choice1.avgCMC, 7);
+        });
+    });
+
+    describe('summarizeMara', () => {
+        const stats = (spell, damage) => ({ choice1: { avgCMC: spell }, choice2: { avgDamage: damage } });
+
+        it('is empty without opponents', () => {
+            assert.deepStrictEqual(summarizeMara([]), { html: '', tone: 'flat' });
+        });
+
+        it('one opponent: names them and warns when the spell is worth less than Mara', () => {
+            const line = summarizeMara([{ name: 'Oloro <EDH>', stats: stats(3.1, 8.6) }]);
+            assert.strictEqual(line.tone, 'warn');
+            assert.match(line.html, /Oloro &lt;EDH&gt;/, 'deck names are escaped');
+            assert.match(line.html, /about 3\.1 mana/);
+            assert.match(line.html, /about 8\.6 damage/);
+            assert.match(line.html, new RegExp(`less than Mara’s ${MARA_COST}-mana cost`));
+        });
+
+        it('three opponents: totals across the table and a range when decks differ', () => {
+            const line = summarizeMara([
+                { name: 'A', stats: stats(2.9, 8.0) },
+                { name: 'B', stats: stats(2.9, 7.8) },
+                { name: 'C', stats: stats(3.6, 10.1) }
+            ]);
+            assert.strictEqual(line.tone, 'good');
+            assert.match(line.html, /three opponents/);
+            assert.match(line.html, /2\.9–3\.6 mana/);
+            assert.match(line.html, /9\.4 mana/);
+            assert.match(line.html, /25\.9 damage/);
+            assert.match(line.html, /more than twice/);
         });
     });
 });

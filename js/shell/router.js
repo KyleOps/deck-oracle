@@ -17,12 +17,18 @@ let navToken = 0;
 const mounted = new Map();
 const mounting = new Map();
 const listeners = [];
+const afterListeners = [];
 
 export function currentTab() {
     return current;
 }
 
 /** Called synchronously at the start of every navigation with the new key. */
+/** Called after a page has mounted and rendered: (name, panelElement). */
+export function onNavigated(cb) {
+    afterListeners.push(cb);
+}
+
 export function onNavigate(cb) {
     listeners.push(cb);
 }
@@ -172,6 +178,9 @@ export async function navigate(name, { history: historyMode = 'push', focus = fa
     } catch (err) {
         console.error(`${name} failed to render:`, err);
     }
+    afterListeners.forEach(cb => {
+        try { cb(name, panel); } catch (err) { console.error('Navigation listener failed:', err); }
+    });
     if (focus) mainEl()?.focus({ preventScroll: true });
 }
 

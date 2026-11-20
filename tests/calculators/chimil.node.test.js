@@ -17,7 +17,13 @@ import {
     simulateGame,
     summariseGames,
     cheatedDistribution,
-    AUTO_SIM_GAMES
+    AUTO_SIM_GAMES,
+    MAX_TURNS,
+    simulateGames,
+    truncateGames,
+    quantile,
+    turnBands,
+    summarize
 } from '../../js/calculators/chimil.js';
 
 /** Build a per-copy cardDetails array from [cmc, count] pairs. */
@@ -284,10 +290,11 @@ describe('fitVerdict', () => {
         assert.strictEqual(verdictFor(nonlands([[1, 3], [8, 40]]), 36).tier, 'poor');
     });
 
-    it('always returns a label, colour and advice', () => {
+    it('always returns a label, a result tone and advice', () => {
         for (const cards of [nonlands([[7, 30]]), nonlands([[3, 40]]), nonlands([[1, 4], [9, 40]])]) {
             const v = verdictFor(cards, 36);
-            assert.ok(v.label && v.color && v.advice, JSON.stringify(v));
+            assert.ok(v.label && v.advice, JSON.stringify(v));
+            assert.ok(['good', 'warn', 'bad'].includes(v.tone), JSON.stringify(v));
         }
     });
 
@@ -380,10 +387,25 @@ describe('summariseGames', () => {
         assert.strictEqual(s.avgFinal, (10 + 25) / 2);
     });
 
-    it('reports the best and worst game, which is what a range means', () => {
+    it('reports percentiles of the totals, never the sampled extremes', () => {
         const s = summariseGames(games);
-        assert.strictEqual(s.worstFinal, 10);
-        assert.strictEqual(s.bestFinal, 25);
+        assert.strictEqual(s.p50, 10);
+        assert.strictEqual(s.p90, 25);
+        assert.strictEqual('bestFinal' in s, false);
+        assert.strictEqual('worstFinal' in s, false);
+    });
+
+    it('finds the end step by which the typical game has repaid the cost', () => {
+        // MV 2 every step: 2, 4, 6 -> repaid at step 3. MV 5: 5, 10 -> step 2.
+        const twos = Array.from({ length: 3 }, () => simulateGame(lib([['Two', 2, 10, false]]), 5));
+        assert.strictEqual(summariseGames(twos).medianPayback, 3);
+        const fives = Array.from({ length: 3 }, () => simulateGame(lib([['Five', 5, 10, false]]), 5));
+        assert.strictEqual(summariseGames(fives).medianPayback, 2);
+    });
+
+    it('reports no payback when the typical game never reaches the cost', () => {
+        const short = [simulateGame(lib([['One', 1, 10, false]]), 3)];
+        assert.strictEqual(summariseGames(short).medianPayback, null);
     });
 
     it('measures the "just a mana dork" rate at mana value 2 or less', () => {
@@ -457,7 +479,118 @@ describe('turn horizon affects the simulated answer', () => {
         assert.strictEqual(g[g.length - 1].hit, null);  // ran dry
     });
 
-    it('defaults to a sensible auto-simulation size', () => {
-        assert.strictEqual(AUTO_SIM_GAMES, 500);
+    it('simulates enough games for stable percentiles', () => {
+        assert.ok(AUTO_SIM_GAMES >= 1000);
+    });
+});
+
+describe('simulateGames / truncateGames', () => {
+    const deck = lib([['Three', 3, 30, false], ['Forest', 0, 36, true]]);
+
+    it('simulates the requested number of games at the requested length', () => {
+        const games = simulateGames(deck, 25, MAX_TURNS);
+        assert.strictEqual(games.length, 25);
+        for (const g of games) assert.strictEqual(g.length, MAX_TURNS);
+    });
+
+    it('does not modify the deck it is given', () => {
+        const before = deck.map(c => c.name).join();
+        simulateGames(deck, 5, 10);
+        assert.strictEqual(deck.map(c => c.name).join(), before);
+    });
+
+    it('reads a shorter horizon as a prefix of the same games', () => {
+        const games = simulateGames(deck, 10, MAX_TURNS);
+        const short = truncateGames(games, 4);
+        short.forEach((g, i) => {
+            assert.strictEqual(g.length, 4);
+            assert.strictEqual(g[3].cumulative, games[i][3].cumulative);
+        });
+    });
+
+    it('leaves games that ran dry early untouched', () => {
+        const dry = [simulateGame(lib([['Only', 2, 1, false], ['Forest', 0, 5, true]]), 10)];
+        assert.strictEqual(truncateGames(dry, 8)[0].length, 2);
+    });
+});
+
+describe('quantile', () => {
+    it('uses the nearest rank', () => {
+        const xs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        assert.strictEqual(quantile(xs, 0.5), 5);
+        assert.strictEqual(quantile(xs, 0.9), 9);
+        assert.strictEqual(quantile(xs, 0.1), 1);
+        assert.strictEqual(quantile(xs, 1), 10);
+    });
+
+    it('returns 0 for no data', () => {
+        assert.strictEqual(quantile([], 0.5), 0);
+        assert.strictEqual(quantile(undefined, 0.5), 0);
+    });
+});
+
+describe('turnBands', () => {
+    it('reports the spread of running totals at every end step', () => {
+        const games = [
+            simulateGame(lib([['Two', 2, 10, false]]), 4),   // 2 4 6 8
+            simulateGame(lib([['Five', 5, 10, false]]), 4)   // 5 10 15 20
+        ];
+        const bands = turnBands(games, 4);
+        assert.strictEqual(bands.length, 4);
+        assert.deepStrictEqual([bands[0].p10, bands[0].p90], [2, 5]);
+        assert.strictEqual(bands[1].mean, 7);
+        assert.strictEqual(bands[1].repaid, 0.5);   // only the MV 5 game has 6+ by step 2
+        assert.strictEqual(bands[2].repaid, 1);
+    });
+
+    it('holds a game that ran dry at its final total', () => {
+        const dry = [simulateGame(lib([['Only', 4, 1, false], ['Forest', 0, 5, true]]), 6)];
+        const bands = turnBands(dry, 6);
+        assert.strictEqual(bands[5].p50, 4);
+    });
+});
+
+describe('summarize (bottom line)', () => {
+    const triggerFor = (cards, lands) => analyzeTrigger({ cardDetails: nonlands(cards), lands });
+
+    it('says plainly when Chimil can find nothing', () => {
+        const trigger = triggerFor([[7, 30]], 36);
+        const s = summarize({ turns: 10, trigger, payback: null, fit: fitVerdict(trigger, null), sim: null });
+        assert.strictEqual(s.tone, 'bad');
+        assert.match(s.html, /finds nothing/);
+    });
+
+    it('leads with the typical simulated total and its range', () => {
+        const trigger = triggerFor([[3, 20], [5, 20]], 36);
+        const games = Array.from({ length: 20 }, () => simulateGame(lib([['Four', 4, 40, false]]), 10));
+        const sim = summariseGames(games);
+        const s = summarize({ turns: 10, trigger, payback: 2, fit: fitVerdict(trigger, 2), sim });
+        assert.match(s.html, /Over 10 end steps/);
+        assert.match(s.html, /<strong>40 mana<\/strong>/);
+        assert.match(s.html, /end step 2/);
+        assert.strictEqual(s.tone, 'good');
+    });
+
+    it('flags how many hits are cheap', () => {
+        const trigger = triggerFor([[2, 30]], 36);
+        const games = [simulateGame(lib([['Two', 2, 30, false]]), 5)];
+        const s = summarize({ turns: 5, trigger, payback: 3, fit: fitVerdict(trigger, 3), sim: summariseGames(games) });
+        assert.match(s.html, /<strong>100%<\/strong> of hits are cheap/);
+    });
+
+    it('falls back to the exact average without a decklist to simulate', () => {
+        const trigger = triggerFor([[4, 30]], 36);
+        const s = summarize({ turns: 10, trigger, payback: 2, fit: fitVerdict(trigger, 2), sim: null });
+        assert.match(s.html, /<strong>4\.0 mana<\/strong> of free spells per end step/);
+        assert.match(s.html, /<strong>40<\/strong> over 10 end steps/);
+    });
+
+    it('says when the cost is never repaid in the window', () => {
+        const trigger = triggerFor([[1, 30]], 36);
+        const s = summarize({ turns: 3, trigger, payback: 6, fit: fitVerdict(trigger, 6), sim: null });
+        assert.doesNotThrow(() => summarize(undefined));
+        assert.match(s.html, /end step 6/);
+        const never = summarize({ turns: 3, trigger, payback: null, fit: fitVerdict(trigger, null), sim: null });
+        assert.match(never.html, /never earns back/);
     });
 });

@@ -1932,26 +1932,11 @@ input[type="range"].tx-slider::-moz-range-thumb {
     cursor: not-allowed;
 }
 
-.opponent-tab {
-    background: transparent;
-    border: 1px solid var(--tx-rule);
-    border-top: 2px solid transparent;
-    color: var(--tx-dim);
-    font-family: inherit;
-    font-size: var(--t-xs);
-    padding: 7px 14px;
-    border-radius: 0;
-    cursor: pointer;
-    transition: color var(--transition-fast), background var(--transition-fast);
-}
 
-.opponent-tab:hover { color: var(--tx-text); background: var(--tx-panel-alt); }
 
-.opponent-tab.active {
-    background: var(--tx-panel-alt);
-    border-top-color: var(--tx-accent);
-    color: var(--tx-bright);
-}
+
+
+
 
 /* ==================== SIMULATION SUMMARY ====================
    One standard shape for every calculator's sample section: headline metrics,
@@ -2219,14 +2204,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
     padding: 12px 14px;
 }
 
-/* Per-opponent block, shared by the multiplayer calculators (Mara, Dream
-   Harvest) which previously emitted identical inline-styled wrappers. */
-.tx-opp-card {
-    margin-bottom: var(--spacing-lg);
-    padding: var(--spacing-md);
-    background: var(--tx-panel-alt);
-    border: 1px solid var(--tx-rule);
-}
+
 
 /* ==================== EXPLICIT PANEL PAIRING ====================
    Results are a single full-width column by design (see ADAPTIVE LAYOUT). This

@@ -85,16 +85,23 @@ export function colorProfile(cardsByName = {}) {
     const out = Object.fromEntries(COLORS.map(c => [c, { color: c, pips: 0, cards: 0, sources: 0, heaviest: null }]));
     let colorlessLands = 0;
 
+    // Basic-fetchers (Evolving Wilds) can only find the basics the deck runs.
+    const basicColors = [...new Set(cards
+        .filter(c => isLand(c) && /\bbasic\b/i.test(String(c.type_line ?? '').split('//')[0]))
+        .flatMap(c => landColors(c, identity)))];
+
     for (const card of cards) {
         const copies = Number(card.count);
         if (isLand(card)) {
-            const colors = landColors(card, identity);
+            const colors = landColors(card, identity, basicColors);
             if (colors.length === 0) colorlessLands += copies;
             colors.forEach(c => { out[c].sources += copies; });
             continue;
         }
-        const { pips } = parseManaCost(card.mana_cost);
-        const mv = Math.floor(Number(card.cmc) || 0);
+        const { pips, x } = parseManaCost(card.mana_cost);
+        // X spells are judged at X = 1: at X = 0 every X spell would look like
+        // the hardest card of its colour, which nobody casts it as.
+        const mv = Math.floor(Number(card.cmc) || 0) + x;
         for (const c of COLORS) {
             if (pips[c] <= 0) continue;
             out[c].pips += pips[c] * copies;

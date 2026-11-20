@@ -103,9 +103,12 @@ export function isLand(card) {
  *
  * @param {Object} card - card record
  * @param {string[]} [deckIdentity] - the deck's colour identity (WUBRG subset)
+ * @param {string[]} [basicColors] - colours of the basic lands the deck runs.
+ *   When given, basic-fetchers (Evolving Wilds) only count for those colours —
+ *   they can't find a basic the deck doesn't have.
  * @returns {string[]} colours in WUBRG order (may be empty for colourless lands)
  */
-export function landColors(card, deckIdentity = COLORS) {
+export function landColors(card, deckIdentity = COLORS, basicColors = null) {
     if (!card) return [];
     const identity = deckIdentity && deckIdentity.length ? deckIdentity : COLORS;
     const found = new Set();
@@ -135,7 +138,8 @@ export function landColors(card, deckIdentity = COLORS) {
     // Fetch lands: "search your library for a Forest or Island card"
     if (/search your library for/.test(text)) {
         if (/basic land card/.test(text)) {
-            identity.forEach(c => found.add(c));
+            const reachable = Array.isArray(basicColors) && basicColors.length ? basicColors : identity;
+            reachable.forEach(c => found.add(c));
         }
         for (const [type, color] of Object.entries(BASIC_TYPE_COLOR)) {
             if (new RegExp(`search your library for[^.]*\\b${type}\\b`).test(text)) found.add(color);

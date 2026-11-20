@@ -1,74 +1,49 @@
 /**
- * Ensnared by the Mara Calculator
- * Simulates villainous choice outcomes for opponent decks
+ * Ensnared by the Mara — {2}{R}{R} sorcery.
  *
- * Card Effect:
  * Each opponent faces a villainous choice:
- * - Choice 1: Exile cards from top until nonland, you cast it free
- * - Choice 2: Exile top 4 cards, deal damage = total mana value
+ *   • they exile cards from the top of their library until they exile a
+ *     nonland card, and you may cast it without paying its mana cost; or
+ *   • they exile their top four cards and Mara deals damage equal to the total
+ *     mana value of those cards.
+ *
+ * Both options are worked out EXACTLY from each opponent's list: the free spell
+ * is a uniformly random nonland card of their library, and the damage is a sum
+ * over every possible set of four top cards. Sample casts are real shuffles,
+ * for illustration only.
  */
 
-import { createCache } from '../utils/simulation.js';
 import { registerCalculator, updateCalculatorIfActive } from '../utils/calculatorBase.js';
-import { renderHeroStats, generateSampleRevealsHTML } from '../utils/components.js';
-import { shuffleDeck, renderCardBadge, createCollapsibleSection, TYPE_COLORS, buildDeckFromCardData } from '../utils/sampleSimulator.js';
+import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { cardRef, escapeHtml } from '../data/glossary.js';
 import * as OpponentState from '../utils/opponentState.js';
+import {
+    libraryOf, isLandCard, createRevealer, typicalRange, formatRange, formatPct, fmt1, tailAtLeast,
+    capDistribution, countWord, objectId, readOpponents, frameScheduler, opponentLabel, cardChip, miniBars,
+    renderOpponentPlaceholder, renderLoadingNote, bindOpponentActions, renderDisclosure, hasRoom
+} from '../utils/opponentPages.js';
 
-const CONFIG = {
-    DEFAULT_SAMPLE_SIZE: 500,
-    DEFAULT_SIM_COUNT: 5000
-};
+/** Mara's own mana value — what the free spells are measured against. */
+export const MARA_COST = 4;
+/** Cards exiled by the damage option. */
+const DAMAGE_CARDS = 4;
+/** "Big" outcomes called out in the table. */
+const BIG_SPELL_MV = 5;
+const BIG_DAMAGE = 10;
 
-let simulationCache = createCache(50);
+const SAMPLE_BATCH = 3;
+const SAMPLE_MAX = 24;
 
-// Stable samples for each opponent
-const stableSamples = {
-    opponent1: [],
-    opponent2: [],
-    opponent3: []
-};
-
-// Track rendered count for batch rendering per opponent
-const renderedCounts = {
-    opponent1: 0,
-    opponent2: 0,
-    opponent3: 0
-};
+// ── Mechanics ───────────────────────────────────────────────────────────────
 
 /**
- * Render a compact horizontal bar chart (no gaps, shows all values)
- */
-function renderCompactChart(data, totalSims, labelFn, barColor = '#e8635c', labelWidth = 28) {
-    let html = '<div class="compact-dist-chart" style="display: flex; flex-direction: column; gap: 2px;">';
-
-    for (let i = 0; i < data.length; i++) {
-        const count = data[i] || 0;
-        const pct = (count / totalSims * 100);
-        const pctStr = pct.toFixed(1) + '%';
-
-        html += `
-            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.8em;">
-                <div style="width: ${labelWidth}px; text-align: right; color: var(--text-dim); white-space: nowrap;">${labelFn(i)}</div>
-                <div style="flex: 1; height: 14px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-                    <div style="width: ${pct}%; height: 100%; background: ${barColor}; border-radius: 2px;"></div>
-                </div>
-                <div style="width: 42px; text-align: right; color: var(--text-secondary);">${pctStr}</div>
-            </div>
-        `;
-    }
-
-    html += '</div>';
-    return html;
-}
-
-/**
- * Simulate Choice 1: Exile until nonland
- * @param {Array} deck - Shuffled deck array
- * @returns {Object} - { cardsExiled, spellCMC, spellName, spellTypes }
+ * Choice 1 on a shuffled library: exile until a nonland card.
+ * @param {Array} deck - shuffled library (top first)
+ * @returns {{cardsExiled:number, spellCMC:number, spellName:string|null, spellTypes:string[]}}
  */
 export function simulateChoice1(deck) {
     for (let i = 0; i < deck.length; i++) {
-        if (!deck[i].types.includes('land')) {
+        if (!isLandCard(deck[i])) {
             return {
                 cardsExiled: i + 1,
                 spellCMC: deck[i].cmc || 0,
@@ -77,473 +52,429 @@ export function simulateChoice1(deck) {
             };
         }
     }
-    // Edge case: all lands (extremely rare but possible)
+    // A library of nothing but lands: everything is exiled and nothing is cast.
     return { cardsExiled: deck.length, spellCMC: 0, spellName: null, spellTypes: [] };
 }
 
 /**
- * Simulate Choice 2: Top 4 CMC sum as damage
- * @param {Array} deck - Shuffled deck
- * @returns {Object} - { damage, cards }
+ * Choice 2 on a shuffled library: the top four cards' total mana value.
+ * @param {Array} deck - shuffled library (top first)
+ * @returns {{damage:number, cards:Array<{name:string, cmc:number, types:string[]}>}}
  */
 export function simulateChoice2(deck) {
-    const top4 = deck.slice(0, 4);
-    const damage = top4.reduce((sum, card) => sum + (card.cmc || 0), 0);
+    const top = deck.slice(0, DAMAGE_CARDS);
     return {
-        damage,
-        cards: top4.map(c => ({ name: c.name, cmc: c.cmc || 0, types: c.types }))
+        damage: top.reduce((sum, card) => sum + (card.cmc || 0), 0),
+        cards: top.map(c => ({ name: c.name, cmc: c.cmc || 0, types: c.types }))
     };
 }
 
+function choose(n, k) {
+    if (k < 0 || k > n) return 0;
+    const m = Math.min(k, n - k);
+    let r = 1;
+    for (let i = 1; i <= m; i++) r = (r * (n - m + i)) / i;
+    return r;
+}
+
 /**
- * Calculate Mara statistics for an opponent deck
- * @param {Object} opponentData - Opponent deck data with cardsByName
- * @param {number} numSims - Number of simulations
- * @returns {Object} - Statistics for both choices
+ * Exact distribution of the total mana value of `draw` cards taken from the top
+ * of a shuffled library (drawing without replacement): counts every possible
+ * set of cards by mana-value group.
+ * @param {Array<{cmc:number}>} library
+ * @param {number} [draw=4]
+ * @returns {number[]} probability by total (index = total mana value)
  */
-export function calculateMaraStats(opponentData, numSims = CONFIG.DEFAULT_SIM_COUNT) {
-    if (!opponentData?.cardsByName || Object.keys(opponentData.cardsByName).length === 0) {
-        return null;
+export function topCardsTotalDistribution(library, draw = DAMAGE_CARDS) {
+    const n = library.length;
+    const k = Math.min(draw, n);
+    if (n === 0) return [1];
+
+    const groups = new Map();
+    for (const card of library) {
+        const mv = Math.max(0, Math.round(card.cmc || 0));
+        groups.set(mv, (groups.get(mv) ?? 0) + 1);
     }
+    const sorted = library.map(c => Math.max(0, Math.round(c.cmc || 0))).sort((a, b) => b - a);
+    const maxTotal = sorted.slice(0, k).reduce((a, b) => a + b, 0);
 
-    // Build deck directly from passed data (works for both tests and app)
-    const deck = buildDeckFromCardData(opponentData);
-
-    if (!deck || deck.length === 0) return null;
-
-    // Choice 1 accumulators
-    let totalChoice1CMC = 0;
-    let totalChoice1Exiled = 0;
-    const choice1CMCDistribution = {};
-    let choice1Hits5Plus = 0;
-
-    // Choice 2 accumulators
-    let totalChoice2Damage = 0;
-    let minDamage = Infinity;
-    let maxDamage = 0;
-    const choice2DamageDistribution = {};
-
-    for (let i = 0; i < numSims; i++) {
-        const shuffled = shuffleDeck([...deck]);
-
-        // Choice 1
-        const c1 = simulateChoice1(shuffled);
-        totalChoice1CMC += c1.spellCMC;
-        totalChoice1Exiled += c1.cardsExiled;
-        choice1CMCDistribution[c1.spellCMC] = (choice1CMCDistribution[c1.spellCMC] || 0) + 1;
-        if (c1.spellCMC >= 5) choice1Hits5Plus++;
-
-        // Choice 2
-        const c2 = simulateChoice2(shuffled);
-        totalChoice2Damage += c2.damage;
-        minDamage = Math.min(minDamage, c2.damage);
-        maxDamage = Math.max(maxDamage, c2.damage);
-        choice2DamageDistribution[c2.damage] = (choice2DamageDistribution[c2.damage] || 0) + 1;
+    // ways[picked][total] = number of ways to pick `picked` cards totalling `total`
+    let ways = Array.from({ length: k + 1 }, () => new Float64Array(maxTotal + 1));
+    ways[0][0] = 1;
+    for (const [mv, count] of groups) {
+        const next = Array.from({ length: k + 1 }, () => new Float64Array(maxTotal + 1));
+        for (let picked = 0; picked <= k; picked++) {
+            const row = ways[picked];
+            for (let total = 0; total <= maxTotal; total++) {
+                const w = row[total];
+                if (!w) continue;
+                for (let j = 0; j <= Math.min(count, k - picked); j++) {
+                    const t = total + j * mv;
+                    if (t > maxTotal) break;
+                    next[picked + j][t] += w * choose(count, j);
+                }
+            }
+        }
+        ways = next;
     }
+    const all = choose(n, k);
+    return Array.from(ways[k], w => w / all);
+}
+
+/**
+ * Exact statistics for both options against one opponent list.
+ * @param {Object} opponentData - deck data with cardsByName
+ * @returns {Object|null}
+ */
+export function calculateMaraStats(opponentData) {
+    if (!opponentData?.cardsByName || Object.keys(opponentData.cardsByName).length === 0) return null;
+    const library = libraryOf(opponentData);
+    const n = library.length;
+    if (n === 0) return null;
+
+    const spells = library.filter(c => !c.land);
+    const s = spells.length;
+    const spellMvSum = spells.reduce((a, c) => a + c.cmc, 0);
+    const mvProbs = [];
+    for (const card of spells) {
+        const mv = Math.round(card.cmc);
+        mvProbs[mv] = (mvProbs[mv] ?? 0) + 1 / s;
+    }
+    for (let i = 0; i < mvProbs.length; i++) mvProbs[i] = mvProbs[i] ?? 0;
+
+    const damageProbs = topCardsTotalDistribution(library, DAMAGE_CARDS);
+    const k = Math.min(DAMAGE_CARDS, n);
+    const allMv = library.map(c => c.cmc).sort((a, b) => a - b);
+    const totalMv = allMv.reduce((a, b) => a + b, 0);
 
     return {
         choice1: {
-            avgCMC: totalChoice1CMC / numSims,
-            avgExiled: totalChoice1Exiled / numSims,
-            pct5Plus: (choice1Hits5Plus / numSims) * 100,
-            cmcDistribution: choice1CMCDistribution
+            avgCMC: s ? spellMvSum / s : 0,
+            // Position of the first nonland card in a shuffled library: (N + 1) / (S + 1).
+            avgExiled: s ? (n + 1) / (s + 1) : n,
+            pct5Plus: s ? (spells.filter(c => c.cmc >= BIG_SPELL_MV).length / s) * 100 : 0,
+            mvProbs,
+            typical: s ? typicalRange(mvProbs) : [0, 0]
         },
         choice2: {
-            avgDamage: totalChoice2Damage / numSims,
-            minDamage: minDamage === Infinity ? 0 : minDamage,
-            maxDamage,
-            damageDistribution: choice2DamageDistribution
+            avgDamage: (k * totalMv) / n,
+            minDamage: allMv.slice(0, k).reduce((a, b) => a + b, 0),
+            maxDamage: allMv.slice(-k).reduce((a, b) => a + b, 0),
+            damageProbs,
+            pct10Plus: tailAtLeast(damageProbs, BIG_DAMAGE) * 100,
+            typical: typicalRange(damageProbs)
         },
-        numSims,
-        deckSize: deck.length
+        deckSize: n,
+        landCount: n - s,
+        nonlandCount: s
     };
 }
 
-/**
- * Generate stable samples for an opponent
- */
-function generateStableSamples(opponentKey, count) {
-    const deck = OpponentState.buildOpponentDeck(opponentKey);
-    if (!deck) {
-        stableSamples[opponentKey] = [];
-        return;
-    }
+const statsCache = new WeakMap();
+function statsFor(data) {
+    if (!statsCache.has(data)) statsCache.set(data, calculateMaraStats(data));
+    return statsCache.get(data);
+}
 
-    stableSamples[opponentKey] = [];
-    for (let i = 0; i < count; i++) {
-        stableSamples[opponentKey].push(shuffleDeck([...deck]));
-    }
+// ── Plain-language answer ───────────────────────────────────────────────────
+
+function spread(values, unit) {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+    return values.length > 1 && hi - lo >= 0.5
+        ? `${fmt1(lo)}–${fmt1(hi)} ${unit}`
+        : `about ${fmt1(mean)} ${unit}`;
+}
+
+function versusCost(total) {
+    if (total >= 2 * MARA_COST) return `more than twice Mara’s ${MARA_COST}-mana cost`;
+    if (total >= MARA_COST) return `more than Mara’s ${MARA_COST}-mana cost`;
+    return `less than Mara’s ${MARA_COST}-mana cost`;
 }
 
 /**
- * Force refresh samples for all opponents and re-render
+ * The bottom line for a table of opponents.
+ * @param {Array<{name:string, stats:Object}>} rows
+ * @returns {{html:string, tone:'good'|'warn'|'flat'}}
  */
-function refreshSamples() {
-    const countInput = document.getElementById('mara-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
+export function summarizeMara(rows) {
+    const valid = (rows ?? []).filter(r => r?.stats);
+    if (valid.length === 0) return { html: '', tone: 'flat' };
+    const spells = valid.map(r => r.stats.choice1.avgCMC);
+    const damage = valid.map(r => r.stats.choice2.avgDamage);
+    const totalSpell = spells.reduce((a, b) => a + b, 0);
+    const totalDamage = damage.reduce((a, b) => a + b, 0);
+    const tone = totalSpell >= MARA_COST ? 'good' : 'warn';
 
-    for (const opp of OpponentState.getActiveOpponents()) {
-        if (OpponentState.getOpponentData(opp)?.cardsByName &&
-            Object.keys(OpponentState.getOpponentData(opp).cardsByName).length > 0) {
-            generateStableSamples(opp, numSims);
-        }
-    }
-
-    runSampleReveals();
-}
-
-/**
- * Render results for all active opponents
- */
-function renderResults() {
-    const resultsContainer = document.getElementById('mara-results');
-    if (!resultsContainer) return;
-
-    const opponentsWithData = OpponentState.getOpponentsWithData();
-
-    if (opponentsWithData.length === 0) {
-        resultsContainer.innerHTML = `
-            <h2>Results</h2>
-            <p style="color: var(--text-dim); text-align: center; padding: 20px;">
-                Import at least one opponent's decklist to see analysis.
-            </p>
-        `;
-        return;
-    }
-
-    // Calculate totals for summary
-    let totalFreeCastCMC = 0;
-    let totalDamage = 0;
-    const allStats = [];
-
-    for (const opp of opponentsWithData) {
-        const data = OpponentState.getOpponentData(opp);
-        const stats = calculateMaraStats(data);
-        if (stats) {
-            allStats.push({ opp, data, stats });
-            totalFreeCastCMC += stats.choice1.avgCMC;
-            totalDamage += stats.choice2.avgDamage;
-        }
-    }
-
-    let html = '<h2>Choice Analysis</h2>';
-
-    // Summary section
-    if (allStats.length > 0) {
-        html += `<div class="tx-h"><span>SUMMARY · EXPECTED GAINS</span><span class="tx-h-r">across ${allStats.length} opponent${allStats.length > 1 ? 's' : ''}</span></div>`;
-        html += renderHeroStats([
-            { label: 'IF ALL FREE CAST', value: totalFreeCastCMC.toFixed(1), sub: 'total CMC value', color: 'var(--tx-mid)', size: 'big' },
-            { label: 'IF ALL DEAL DAMAGE', value: totalDamage.toFixed(1), sub: 'damage total', color: 'var(--tx-red)', size: 'big' }
-        ]);
-    }
-
-    // Individual opponent results
-    for (const { opp, data, stats } of allStats) {
-        html += `
-            <div class="opponent-results">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-sm);">
-                    <h3 style="color: var(--mara-primary, #e8635c);">${data.name}</h3>
-                    <span style="color: var(--text-dim); font-size: 0.85em;">${stats.deckSize} cards</span>
-                </div>
-
-                <div class="choice-grid">
-                    <div class="choice-card choice-purple">
-                        <div class="choice-label">Choice 1: Free Cast</div>
-                        <div style="display: flex; gap: var(--spacing-md); flex-wrap: wrap;">
-                            <div><span style="font-size: 1.3em; font-weight: bold; color: #9878b8;">${stats.choice1.avgCMC.toFixed(1)}</span> <span style="font-size: 0.75em; color: var(--text-dim);">avg CMC</span></div>
-                            <div><span style="font-size: 1.3em; font-weight: bold;">${stats.choice1.avgExiled.toFixed(1)}</span> <span style="font-size: 0.75em; color: var(--text-dim);">cards exiled</span></div>
-                            <div><span style="font-size: 1.3em; font-weight: bold;">${stats.choice1.pct5Plus.toFixed(0)}%</span> <span style="font-size: 0.75em; color: var(--text-dim);">CMC 5+</span></div>
-                        </div>
-                    </div>
-
-                    <div class="choice-card choice-red">
-                        <div class="choice-label">Choice 2: Damage</div>
-                        <div style="display: flex; gap: var(--spacing-md); flex-wrap: wrap;">
-                            <div><span style="font-size: 1.3em; font-weight: bold; color: #e8635c;">${stats.choice2.avgDamage.toFixed(1)}</span> <span style="font-size: 0.75em; color: var(--text-dim);">avg dmg</span></div>
-                            <div><span style="font-size: 1.3em; font-weight: bold;">${stats.choice2.minDamage}-${stats.choice2.maxDamage}</span> <span style="font-size: 0.75em; color: var(--text-dim);">range</span></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    resultsContainer.innerHTML = html;
-}
-
-/**
- * Run sample reveals
- */
-export function runSampleReveals() {
-    const displayContainer = document.getElementById('mara-reveals-display');
-    if (!displayContainer) return;
-
-    const opponentsWithData = OpponentState.getOpponentsWithData();
-
-    if (opponentsWithData.length === 0) {
-        displayContainer.innerHTML = '<p style="color: var(--text-dim);">Please import opponent decklists to run simulations.</p>';
-        return;
-    }
-
-    const countInput = document.getElementById('mara-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
-
-    // Ensure we have stable samples for all opponents
-    for (const opp of opponentsWithData) {
-        if (!stableSamples[opp] || stableSamples[opp].length < numSims) {
-            generateStableSamples(opp, numSims);
-        }
-    }
-
-    let fullHTML = '';
-
-    // Process each opponent
-    for (const opp of opponentsWithData) {
-        const data = OpponentState.getOpponentData(opp);
-        const samples = stableSamples[opp];
-
-        // Stats loop
-        let totalChoice1CMC = 0;
-        let totalChoice2Damage = 0;
-        const choice1CMCDist = {};
-        const choice2DamageDist = {};
-        let maxCMC = 0;
-        let maxDamage = 0;
-
-        for (let i = 0; i < numSims; i++) {
-            const shuffled = samples[i];
-            const c1 = simulateChoice1(shuffled);
-            const c2 = simulateChoice2(shuffled);
-
-            totalChoice1CMC += c1.spellCMC;
-            totalChoice2Damage += c2.damage;
-
-            choice1CMCDist[c1.spellCMC] = (choice1CMCDist[c1.spellCMC] || 0) + 1;
-            choice2DamageDist[c2.damage] = (choice2DamageDist[c2.damage] || 0) + 1;
-
-            if (c1.spellCMC > maxCMC) maxCMC = c1.spellCMC;
-            if (c2.damage > maxDamage) maxDamage = c2.damage;
-        }
-
-        // Convert to arrays
-        const cmcDistArray = new Array(Math.min(maxCMC + 1, 12)).fill(0);
-        for (const [cmc, freq] of Object.entries(choice1CMCDist)) {
-            const idx = Math.min(parseInt(cmc), 11);
-            cmcDistArray[idx] = (cmcDistArray[idx] || 0) + freq;
-        }
-
-        // Bin damage
-        const damageBins = [0, 0, 0, 0, 0, 0, 0];
-        const damageBinLabels = ['0-3', '4-6', '7-9', '10-12', '13-15', '16-18', '19+'];
-        for (const [dmg, freq] of Object.entries(choice2DamageDist)) {
-            const d = parseInt(dmg);
-            let binIdx;
-            if (d <= 3) binIdx = 0;
-            else if (d <= 6) binIdx = 1;
-            else if (d <= 9) binIdx = 2;
-            else if (d <= 12) binIdx = 3;
-            else if (d <= 15) binIdx = 4;
-            else if (d <= 18) binIdx = 5;
-            else binIdx = 6;
-            damageBins[binIdx] += freq;
-        }
-
-        const avgCMC = (totalChoice1CMC / numSims).toFixed(1);
-        const avgDamage = (totalChoice2Damage / numSims).toFixed(1);
-
-        // Build UI
-        let oppHTML = `<div class="tx-opp-card">`;
-        oppHTML += `<h4 style="margin-top: 0; color: var(--mara-primary, #e8635c);">${data.name}</h4>`;
-
-        // Stats summary
-        oppHTML += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); margin-bottom: var(--spacing-md);">`;
-        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(152, 120, 184, 0.1); border-radius: var(--radius-sm);">`;
-        oppHTML += `<small style="color: var(--text-dim);">Avg Free Spell CMC</small><br>`;
-        oppHTML += `<strong style="color: #9878b8; font-size: 1.4em;">${avgCMC}</strong>`;
-        oppHTML += `</div>`;
-        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(232, 99, 92, 0.1); border-radius: var(--radius-sm);">`;
-        oppHTML += `<small style="color: var(--text-dim);">Avg Damage (Top 4)</small><br>`;
-        oppHTML += `<strong style="color: #e8635c; font-size: 1.4em;">${avgDamage}</strong>`;
-        oppHTML += `</div></div>`;
-
-        // Distribution charts
-        oppHTML += `<div style="margin-bottom: var(--spacing-md);">`;
-        oppHTML += `<h5 style="margin: 0 0 var(--spacing-sm) 0; color: #9878b8;">Choice 1: Free Spell CMC</h5>`;
-        oppHTML += renderCompactChart(cmcDistArray, numSims, (idx) => `${idx}`, '#9878b8');
-        oppHTML += `</div>`;
-
-        oppHTML += `<div style="margin-bottom: var(--spacing-md);">`;
-        oppHTML += `<h5 style="margin: 0 0 var(--spacing-sm) 0; color: #e8635c;">Choice 2: Damage</h5>`;
-        oppHTML += renderCompactChart(damageBins, numSims, (idx) => damageBinLabels[idx] || `${idx}`, '#e8635c', 36);
-        oppHTML += `</div>`;
-
-        // Sample list
-        const listId = `mara-${opp}-samples-list`;
-        const btnId = `mara-${opp}-load-more`;
-        const listHTML = `<div id="${listId}"></div><button id="${btnId}" class="import-btn" style="width: 100%; margin-top: var(--spacing-md); display: none;">Load More</button>`;
-
-        oppHTML += createCollapsibleSection('Show/Hide Sample Simulations', listHTML, false);
-        oppHTML += `</div>`;
-        fullHTML += oppHTML;
-    }
-
-    displayContainer.innerHTML = fullHTML;
-
-    // Batch render samples
-    for (const opp of opponentsWithData) {
-        const listContainer = document.getElementById(`mara-${opp}-samples-list`);
-        const loadMoreBtn = document.getElementById(`mara-${opp}-load-more`);
-        const samples = stableSamples[opp];
-
-        renderedCounts[opp] = 0;
-
-        const renderBatch = (batchSize) => {
-            const start = renderedCounts[opp];
-            const end = Math.min(start + batchSize, numSims);
-            let html = '';
-
-            for (let i = start; i < end; i++) {
-                const shuffled = samples[i];
-                const c1 = simulateChoice1(shuffled);
-                const c2 = simulateChoice2(shuffled);
-
-                const revealedCards = shuffled.slice(0, c1.cardsExiled);
-                const revealHtml = revealedCards.map(card => renderCardBadge(card)).join(' ');
-
-                const top4Html = c2.cards.map(card =>
-                    `<span class="cmc-badge" style="background: ${card.types.includes('land') ? TYPE_COLORS.land : 'var(--mara-primary, #e8635c)'};">${card.cmc}</span>`
-                ).join(' ');
-
-                const isGoodCast = c1.spellCMC >= 4;
-
-                html += `<div class="sample-reveal ${isGoodCast ? 'free-spell' : 'whiff'}" style="padding: var(--spacing-sm); margin-bottom: var(--spacing-xs); background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); font-size: 0.85em;">`;
-                html += `<div style="margin-bottom: var(--spacing-xs);"><strong>Sample ${i + 1}:</strong></div>`;
-                html += `<div style="margin-bottom: var(--spacing-xs);">`;
-                html += `<span style="color: #9878b8; font-weight: 600;">C1:</span> ${revealHtml}`;
-                html += c1.spellName
-                    ? ` → <span style="color: var(--success); font-weight: 600;">${c1.spellName}</span> <span style="color: var(--text-dim);">(${c1.spellCMC} CMC)</span>`
-                    : ` → <span style="color: var(--danger);">All lands!</span>`;
-                html += `</div>`;
-                html += `<div>`;
-                html += `<span style="color: var(--danger); font-weight: 600;">C2:</span> ${top4Html} = <span style="color: var(--danger); font-weight: bold;">${c2.damage} damage</span>`;
-                html += `</div>`;
-                html += `</div>`;
-            }
-
-            if (listContainer) {
-                listContainer.insertAdjacentHTML('beforeend', html);
-            }
-
-            renderedCounts[opp] = end;
-
-            if (loadMoreBtn) {
-                if (renderedCounts[opp] < numSims) {
-                    loadMoreBtn.style.display = 'block';
-                    loadMoreBtn.textContent = `Load More (Showing ${renderedCounts[opp]}/${numSims})`;
-                } else {
-                    loadMoreBtn.style.display = 'none';
-                }
-            }
+    if (valid.length === 1) {
+        return {
+            tone,
+            html: `Against ${escapeHtml(valid[0].name)}, Mara either hands you a free spell worth <strong>${spread(spells, 'mana')}</strong> or deals <strong>${spread(damage, 'damage')}</strong> — they choose before anything is revealed. On its own, the spell is worth ${versusCost(totalSpell)}.`
         };
-
-        renderBatch(20);
-
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener('click', () => renderBatch(50));
-        }
     }
+    return {
+        tone,
+        html: `Each of the ${countWord(valid.length)} opponents either hands you a free spell worth <strong>${spread(spells, 'mana')}</strong> or takes <strong>${spread(damage, 'damage')}</strong> — their choice. Across the table that’s <strong>${fmt1(totalSpell)} mana</strong> of free spells (${versusCost(totalSpell)}), <strong>${fmt1(totalDamage)} damage</strong>, or a mix.`
+    };
+}
+
+// ── Rendering ───────────────────────────────────────────────────────────────
+
+const PLACEHOLDER = {
+    title: 'What will each opponent hand over?',
+    lead: `${cardRef('Ensnared by the Mara')} gives every opponent a villainous choice. Load their decklists and this page works out exactly what each option is worth against them.`,
+    steps: [
+        {
+            kicker: 'Option one · a free spell',
+            text: 'They exile cards from the top until they hit a nonland card. You may cast it without paying its mana cost.',
+            demo: '<span class="opp-demo-card is-land">land</span><span class="opp-demo-card is-land">land</span><span class="opp-demo-arrow">→</span><span class="opp-demo-card is-hit">3-drop, free</span>'
+        },
+        {
+            kicker: 'Option two · damage',
+            text: 'They exile their top four cards. Mara deals damage equal to those cards’ total mana value — lands count as 0.',
+            demo: '<span class="opp-demo-card">2</span><span class="opp-demo-card is-land">0</span><span class="opp-demo-card">3</span><span class="opp-demo-card">4</span><span class="opp-demo-arrow">=</span><span class="opp-demo-card is-hit">9 damage</span>'
+        },
+        {
+            kicker: 'They choose',
+            text: 'Each opponent picks before anything is revealed, so neither option is known in advance. This page shows what both are worth.'
+        }
+    ]
+};
+
+function heroStats(rows) {
+    const n = rows.length;
+    const avg = f => rows.reduce((a, r) => a + f(r.stats), 0) / n;
+    const each = n > 1 ? ', average opponent' : '';
+    return renderHeroStats([
+        {
+            label: 'Free spell', size: 'big', value: fmt1(avg(s => s.choice1.avgCMC)), sub: `mana value${each}`,
+            tip: 'If an opponent picks the spell: the average mana value of the first nonland card in their library — the one you cast for free.'
+        },
+        {
+            label: 'Or damage', value: fmt1(avg(s => s.choice2.avgDamage)), sub: n > 1 ? 'average opponent' : 'average',
+            tip: 'If an opponent picks damage: the average total mana value of their top four cards. Lands count as 0.'
+        },
+        {
+            label: 'Big spell', value: formatPct(avg(s => s.choice1.pct5Plus) / 100), sub: `free spell costs ${BIG_SPELL_MV} or more`,
+            tip: `Chance the free spell has mana value ${BIG_SPELL_MV} or more.`
+        },
+        {
+            label: 'Big hit', value: formatPct(avg(s => s.choice2.pct10Plus) / 100), sub: `${BIG_DAMAGE} or more damage`,
+            tip: `Chance the top four cards add up to ${BIG_DAMAGE} or more damage — enough to threaten a low-life opponent.`
+        }
+    ]);
+}
+
+function tableHtml(rows) {
+    const body = rows.map(r => {
+        const c1 = r.stats.choice1;
+        const c2 = r.stats.choice2;
+        return `<tr>
+            <td>${opponentLabel(r.opp, `${r.stats.landCount} lands`)}</td>
+            <td data-label="Free spell">${fmt1(c1.avgCMC)}<span class="opp-cell-sub">usually ${formatRange(c1.typical)} mana</span></td>
+            <td data-label="Costs ${BIG_SPELL_MV}+">${formatPct(c1.pct5Plus / 100)}</td>
+            <td data-label="Damage">${fmt1(c2.avgDamage)}<span class="opp-cell-sub">usually ${formatRange(c2.typical)}</span></td>
+            <td data-label="${BIG_DAMAGE}+ damage">${formatPct(c2.pct10Plus / 100)}</td>
+        </tr>`;
+    }).join('');
+    const foot = rows.length > 1 ? `<tfoot><tr>
+            <td>All ${countWord(rows.length)} opponents</td>
+            <td data-label="Free spells">${fmt1(rows.reduce((a, r) => a + r.stats.choice1.avgCMC, 0))}<span class="opp-cell-sub">mana if all pick the spell</span></td>
+            <td data-label=""></td>
+            <td data-label="Damage">${fmt1(rows.reduce((a, r) => a + r.stats.choice2.avgDamage, 0))}<span class="opp-cell-sub">if all pick damage</span></td>
+            <td data-label=""></td>
+        </tr></tfoot>` : '';
+    return `<div class="opp-table-wrap"><table class="opp-table">
+        <thead><tr>
+            <th scope="col">Opponent</th>
+            <th scope="col">Free spell</th>
+            <th scope="col">Costs ${BIG_SPELL_MV}+</th>
+            <th scope="col">Damage</th>
+            <th scope="col">${BIG_DAMAGE}+ damage</th>
+        </tr></thead>
+        <tbody>${body}</tbody>${foot}
+    </table></div>`;
+}
+
+const SPELL_CAP = 7;
+const DAMAGE_BIN = 4;
+const DAMAGE_BINS = 6;
+
+function damageBins(probs) {
+    const bins = new Array(DAMAGE_BINS).fill(0);
+    probs.forEach((p, d) => { bins[Math.min(Math.floor(d / DAMAGE_BIN), DAMAGE_BINS - 1)] += p; });
+    return bins;
+}
+
+function damageBinLabel(i) {
+    const lo = i * DAMAGE_BIN;
+    return i === DAMAGE_BINS - 1 ? `${lo}+` : `${lo}–${lo + DAMAGE_BIN - 1}`;
+}
+
+function multiplesHtml(rows) {
+    const spellDists = rows.map(r => capDistribution(r.stats.choice1.mvProbs, SPELL_CAP));
+    const damageDists = rows.map(r => damageBins(r.stats.choice2.damageProbs));
+    const spellMax = Math.max(...spellDists.flat());
+    const damageMax = Math.max(...damageDists.flat());
+    const cells = rows.map((r, i) => `
+        <div class="opp-multiple">
+            <div class="opp-multiple-head">${opponentLabel(r.opp)}</div>
+            ${miniBars({ title: 'Free spell · mana value', probs: spellDists[i], label: v => (v === SPELL_CAP ? `${v}+` : `${v}`), scaleMax: spellMax, color: r.opp.color })}
+            ${miniBars({ title: 'Damage', probs: damageDists[i], label: damageBinLabel, scaleMax: damageMax, color: r.opp.color })}
+        </div>`).join('');
+    return `<div class="opp-multiples">${cells}</div>
+        <p class="opp-caption">How often each outcome happens. Every opponent is drawn on the same scale, so a longer bar means more likely — compare across columns.</p>`;
+}
+
+let lastSignature = null;
+let sampleRound = 0;
+let samplesShown = SAMPLE_BATCH;
+const sampleCache = new Map();
+
+/** One sample cast against one library: the reveal for each option, from the same shuffle. */
+function sampleCast(library) {
+    const revealer = createRevealer(library);
+    const seen = [];
+    let spellAt = -1;
+    while (spellAt < 0 || seen.length < DAMAGE_CARDS) {
+        const card = revealer.reveal();
+        if (!card) break;
+        seen.push(card);
+        if (spellAt < 0 && !card.land) spellAt = seen.length - 1;
+    }
+    return {
+        spellRun: spellAt >= 0 ? seen.slice(0, spellAt + 1) : seen,
+        spell: spellAt >= 0 ? seen[spellAt] : null,
+        top: seen.slice(0, DAMAGE_CARDS)
+    };
+}
+
+function samplesFor(opp) {
+    const key = `${objectId(opp.data)}:${sampleRound}`;
+    if (!sampleCache.has(key)) {
+        const library = libraryOf(opp.data);
+        sampleCache.set(key, Array.from({ length: SAMPLE_MAX }, () => sampleCast(library)));
+    }
+    return sampleCache.get(key);
+}
+
+function gameRow(opp, cast) {
+    const lands = cast.spell ? cast.spellRun.slice(0, -1) : cast.spellRun;
+    const run = lands.map(c => cardChip(c)).join('')
+        + (cast.spell ? `${lands.length ? '<span class="opp-arrow">→</span>' : ''}${cardChip(cast.spell)}` : '');
+    const damage = cast.top.reduce((a, c) => a + c.cmc, 0);
+    const top = cast.top.map(c => cardChip(c, { mvText: String(c.cmc) })).join('');
+    return `<div class="mara-game-row">
+        <div class="mara-game-who">${opponentLabel(opp)}</div>
+        <div class="mara-game-opt" data-label="If they give you a spell">
+            <div class="mara-game-result">${cast.spell ? `${cast.spell.cmc}-mana spell, free` : 'Nothing — only lands'}</div>
+            <div class="opp-flow">${run}</div>
+        </div>
+        <div class="mara-game-opt" data-label="If they take damage">
+            <div class="mara-game-result">${damage} damage</div>
+            <div class="opp-flow">${top}</div>
+        </div>
+    </div>`;
+}
+
+function renderSamples(state) {
+    const panel = document.getElementById('mara-sample-reveals');
+    if (!panel) return;
+    if (state.opponents.length === 0) {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        return;
+    }
+    panel.hidden = false;
+    const casts = state.opponents.map(opp => samplesFor(opp));
+    const games = Array.from({ length: samplesShown }, (_, g) => `
+        <div class="opp-game">
+            <div class="opp-game-head">Cast ${g + 1}</div>
+            ${state.opponents.map((opp, i) => gameRow(opp, casts[i][g])).join('')}
+        </div>`).join('');
+    panel.innerHTML = `
+        <div class="opp-section-head">
+            <div>
+                <h2 class="opp-section-title">Sample casts</h2>
+                <p class="opp-section-sub">Real shuffles of each list. Both options come from the same shuffle — the opponent only gets one.</p>
+            </div>
+            <div class="opp-section-actions"><button type="button" class="btn btn-ghost btn-sm" data-mara-action="reshuffle">Reshuffle</button></div>
+        </div>
+        <div class="mara-game-cols" aria-hidden="true"><span></span><span>If they give you a spell</span><span>If they take damage</span></div>
+        <div class="opp-games">${games}</div>
+        ${samplesShown < SAMPLE_MAX ? '<div class="opp-more"><button type="button" class="btn btn-ghost btn-sm" data-mara-action="more">Show more casts</button></div>' : ''}`;
+}
+
+function renderResults(state) {
+    const panel = document.getElementById('mara-results');
+    if (!panel) return;
+    if (state.opponents.length === 0) {
+        panel.innerHTML = renderOpponentPlaceholder(PLACEHOLDER, state);
+        return;
+    }
+    const rows = state.opponents.map(opp => ({ opp, name: opp.name, stats: statsFor(opp.data) })).filter(r => r.stats);
+    const line = summarizeMara(rows);
+    panel.innerHTML = `
+        ${renderLoadingNote(state)}
+        ${renderBottomLine(line)}
+        ${heroStats(rows)}
+        <div class="opp-section-head">
+            <h2 class="opp-section-title">Opponent by opponent</h2>
+            <span class="opp-section-sub">Exact odds from each list</span>
+        </div>
+        ${tableHtml(rows)}
+        ${renderDisclosure({ id: 'mara-spread', title: 'How often each outcome happens', body: multiplesHtml(rows), open: hasRoom(panel) })}`;
 }
 
 /**
- * Main calculation function
+ * Stats for every active opponent with a deck, keyed by seat.
+ * @returns {Object<string, Object>}
  */
 export function calculate() {
     const results = {};
-
-    for (const opp of OpponentState.getActiveOpponents()) {
-        const data = OpponentState.getOpponentData(opp);
-        if (data?.cardsByName && Object.keys(data.cardsByName).length > 0) {
-            const cacheKey = `mara-${opp}-${data.deckSize}-${Object.keys(data.cardsByName).length}`;
-            const cached = simulationCache.get(cacheKey);
-            if (cached) {
-                results[opp] = cached;
-            } else {
-                const stats = calculateMaraStats(data);
-                if (stats) {
-                    simulationCache.set(cacheKey, stats);
-                    results[opp] = stats;
-                }
-            }
-        }
+    for (const opp of readOpponents().opponents) {
+        const stats = statsFor(opp.data);
+        if (stats) results[opp.key] = stats;
     }
-
     return results;
 }
 
-/**
- * Update UI
- */
+/** Render — only when the opponents (or their import state) changed. */
 export function updateUI() {
-    renderResults();
-
-    const hasAnyDeckData = OpponentState.hasAnyDeckData();
-
-    const sampleBtn = document.getElementById('mara-draw-reveals-btn');
-    const importNote = document.querySelector('#mara-sample-reveals .sim-import-note');
-    if (sampleBtn) {
-        sampleBtn.disabled = !hasAnyDeckData;
-    }
-    if (importNote) {
-        importNote.style.display = hasAnyDeckData ? 'none' : 'inline';
-    }
-
-    if (hasAnyDeckData) {
-        runSampleReveals();
-    }
+    const state = readOpponents();
+    if (state.signature === lastSignature && document.getElementById('mara-results')?.firstElementChild) return;
+    lastSignature = state.signature;
+    samplesShown = SAMPLE_BATCH;
+    // Keep the sample casts of decks that are still loaded; drop the rest.
+    const live = new Set(state.opponents.map(o => String(objectId(o.data))));
+    for (const key of sampleCache.keys()) if (!live.has(key.split(':')[0])) sampleCache.delete(key);
+    renderResults(state);
+    renderSamples(state);
 }
 
-/**
- * Initialize the calculator
- */
 export function init() {
-    // Register for opponent data changes
-    OpponentState.onOpponentChange(() => {
-        simulationCache.clear();
-        // Clear stable samples when opponent data changes
-        for (const key of Object.keys(stableSamples)) {
-            stableSamples[key] = [];
-        }
-        updateCalculatorIfActive('mara', updateUI);
-    });
+    const scheduleRender = frameScheduler(() => updateCalculatorIfActive('mara', updateUI));
+    OpponentState.onOpponentChange(scheduleRender);
 
     registerCalculator({
         name: 'mara',
         calculate,
         updateUI,
         init: () => {
-            const sampleContainer = document.getElementById('mara-sample-reveals');
-            if (sampleContainer) {
-                sampleContainer.innerHTML = generateSampleRevealsHTML('mara', 'Sample Mara Reveals', { requiresImport: true });
-            }
-
-            const sampleBtn = document.getElementById('mara-draw-reveals-btn');
-            if (sampleBtn) {
-                sampleBtn.addEventListener('click', refreshSamples);
-            }
+            const root = document.getElementById('mara-tab');
+            bindOpponentActions(root);
+            root?.addEventListener('click', e => {
+                const action = e.target.closest('[data-mara-action]')?.dataset.maraAction;
+                if (action === 'reshuffle') {
+                    sampleRound += 1;
+                    sampleCache.clear();
+                    renderSamples(readOpponents());
+                } else if (action === 'more') {
+                    samplesShown = Math.min(SAMPLE_MAX, samplesShown + SAMPLE_BATCH);
+                    renderSamples(readOpponents());
+                }
+            });
         }
     });
-}
-
-/**
- * Get opponent deck URLs (for share.js) - delegates to shared state
- */
-export function getOpponentUrls() {
-    return OpponentState.getOpponentUrls();
-}
-
-/**
- * Set opponent deck URL (for share.js restore) - delegates to shared state
- */
-export async function setOpponentUrl(opponentKey, url) {
-    return OpponentState.setOpponentUrl(opponentKey, url);
 }

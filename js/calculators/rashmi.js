@@ -1,613 +1,504 @@
 /**
- * Rashmi, Eternities Crafter Calculator
- * Calculates probability of getting a free spell when casting with Rashmi
+ * Rashmi, Eternities Crafter
+ *
+ * "Whenever you cast your first spell each turn, reveal the top card of your
+ * library. You may cast it without paying its mana cost if it's a spell with
+ * lesser mana value. If you don't cast it, put it into your hand."
+ *
+ * The top card of a shuffled library is a uniformly random card, so every
+ * number here is exact: the free-spell chance for a cast of mana value M is the
+ * share of the library that is a nonland card with mana value below M. Sample
+ * reveals are real random cards from the list, kept stable while the mana
+ * value changes so you can watch the same reveals flip between "cast free" and
+ * "to hand".
  */
 
-import { createCache, formatNumber, formatPercentage, debounce } from '../utils/simulation.js';
-import { createOrUpdateChart } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { generateSampleRevealsHTML, renderHeroStats, renderRecommendation, renderInsightBox, renderVerdictBadge, renderSweepTable, pBarCell, renderSimulationSummary } from '../utils/components.js';
-import { probabilityVerdict, formatDelta, deltaColor, recommendThresholdX } from '../utils/analysis.js';
-import {
-    buildDeckFromCardData, shuffleDeck, renderCardBadge, 
-    createCollapsibleSection, extractCardTypes
-} from '../utils/sampleSimulator.js';
+import { renderHeroStats, renderBottomLine, renderSweepTable, pBarCell } from '../utils/components.js';
+import { recommendThresholdX } from '../utils/analysis.js';
+import { buildDeckFromCardData, extractCardTypes } from '../utils/sampleSimulator.js';
+import { cardRef } from '../data/glossary.js';
 
-const CONFIG = {
-    CMC_RANGE_BEFORE: 2,
-    CMC_RANGE_AFTER: 4,
-    MAX_TRACKED_CMC: 20,
-    DEFAULT_SAMPLE_SIZE: 500
-};
+/** Highest mana value tracked; anything above is folded into it. */
+export const MAX_TRACKED_MV = 20;
 
-// Simulation state
-let lastDeckHash = '';
+/** Highest cast mana value offered (big X spells reach this). */
+export const MAX_CAST_MV = 15;
+
+/** "Reliable" means at least this chance of a free spell. */
+export const RELIABLE_CHANCE = 0.7;
+
+/** Sample reveals shown. */
+export const SAMPLE_REVEALS = 12;
+
+/** Mana values either side of the cast value reported by calculate(). */
+const RANGE_BEFORE = 2;
+const RANGE_AFTER = 4;
+
 let chart = null;
-let simulationCache = createCache(50);
 
-// Stable samples state
-let stableSamples = [];
-let lastSampleDeckHash = '';
-let renderedCount = 0;
+// ==================== PURE MATH ====================
 
-/**
- * Check if a card is an X spell
- */
-function isXSpell(manaCost) {
-    return manaCost ? /\{X\}/i.test(manaCost) : false;
+/** True for a mana cost containing {X}. */
+export function isXSpell(manaCost) {
+    return typeof manaCost === 'string' && /\{X\}/i.test(manaCost);
 }
 
 /**
- * Generate stable samples from the deck
- * @param {Array} deck - The source deck
- * @param {number} count - Number of samples to generate
+ * Turn a decklist into the lookup tables the odds need.
+ *
+ * cdf[m] counts eligible nonland cards with mana value <= m and prefixMv[m]
+ * sums their mana value, so any cast value is answered in O(1).
+ *
+ * @param {Object<string, {name:string, count:number, cmc:number, type_line:string, mana_cost?:string}>} cardsByName
+ * @param {{excludeX?:boolean}} [opts] - excludeX: X spells (which resolve with X = 0) never count as free spells
+ * @returns {{deckSize:number, lands:number, spells:number, cmcDistribution:Object<number,number>, cdf:number[], prefixMv:number[], xSpells:Array, xCount:number, excludeX:boolean, hasImportedData:boolean}}
  */
-function generateStableSamples(deck, count) {
-    stableSamples = [];
-    // We generate enough independent samples
-    // For each sample, we shuffle a copy of the deck (simulation of independent draws)
-    // Optimization: For single card draws, we can just pick a random card, but 
-    // full shuffle preserves the "draw from deck" semantics if we ever expand to "draw 2".
-    // For single card reveal, simple random pick is O(1).
-    
-    // To match previous behavior (shuffleDeck), we'll do full shuffles or robust sampling.
-    // Given the deck size is small (100), full shuffle is fine.
-    
-    for (let i = 0; i < Math.max(count, CONFIG.DEFAULT_SAMPLE_SIZE); i++) {
-        // We use a light copy and shuffle
-        const shuffled = shuffleDeck([...deck]);
-        stableSamples.push(shuffled[0]);
-    }
-}
+export function buildRashmiState(cardsByName, { excludeX = false } = {}) {
+    const cards = Object.values(cardsByName ?? {});
+    const cmcDistribution = {};
+    const xSpells = [];
+    const cdf = new Array(MAX_TRACKED_MV + 1).fill(0);
+    const prefixMv = new Array(MAX_TRACKED_MV + 1).fill(0);
+    let deckSize = 0;
+    let lands = 0;
+    let spells = 0;
 
-/**
- * Prepare the simulation state based on current config
- */
-function prepareSimulationState() {
-    const config = DeckConfig.getDeckConfig();
-    const cardData = DeckConfig.getImportedCardData();
-    const hasImportedData = cardData?.cardsByName && Object.keys(cardData.cardsByName).length > 0;
+    for (const card of cards) {
+        const count = Math.max(0, Number(card?.count) || 0);
+        if (!count) continue;
+        deckSize += count;
+        const isLand = extractCardTypes({ type_line: card.type_line ?? '' }).includes('land');
+        if (isLand) { lands += count; continue; }
+        spells += count;
 
-    const excludeCheckbox = document.getElementById('rashmi-exclude-x');
-    const excludeXSpells = excludeCheckbox ? excludeCheckbox.checked : false;
-
-    // Check if we can reuse the cached calculation state
-    // We need to construct a hash that captures all inputs that affect the distribution
-    const rawDeckHash = JSON.stringify({ 
-        cards: hasImportedData ? Object.keys(cardData.cardsByName).length : 0, // Quick check
-        configLands: config.lands,
-        exclude: excludeXSpells
-    });
-
-    // We also need to check if the specific card counts/details changed if we want to be 100% robust,
-    // but usually checking the imported data reference or a simplified hash is enough.
-    // For now, we'll rebuild the distribution if the simple hash changes, 
-    // but strictly speaking, we should verify the content if the user edits counts.
-    // Since DeckConfig.getImportedCardData returns the same object unless changed,
-    // and we built a hash, we are relatively safe.
-    
-    // However, to optimize properly, we want to AVOID the loop below if possible.
-    // Let's check our module-level cache.
-    
-    let state = simulationCache.get(rawDeckHash);
-    
-    if (!state) {
-        let cmcDistribution = {};
-        let xSpells = [];
-        let deckSize = config.lands;
-        let preparedDeck = [];
-        
-        // CDF and Prefix Sum Arrays
-        // cdf[i] = count of cards with CMC <= i
-        // prefixSumCmc[i] = sum of (CMC * count) for cards with CMC <= i
-        const cdf = new Array(CONFIG.MAX_TRACKED_CMC + 1).fill(0);
-        const prefixSumCmc = new Array(CONFIG.MAX_TRACKED_CMC + 1).fill(0);
-
-        if (hasImportedData) {
-            preparedDeck = buildDeckFromCardData(cardData);
-            deckSize = preparedDeck.length;
-
-            // 1. Build Frequency Map
-            Object.values(cardData.cardsByName).forEach(card => {
-                const types = extractCardTypes(card);
-                const isLand = types.includes('land');
-                
-                if (!isLand) {
-                    const cmc = card.cmc !== undefined ? Math.floor(card.cmc) : 0;
-                    const isX = isXSpell(card.mana_cost);
-
-                    if (isX) {
-                        xSpells.push({
-                            name: card.name,
-                            count: card.count,
-                            cmc: cmc,
-                            manaCost: card.mana_cost
-                        });
-                    }
-
-                    if (!excludeXSpells || !isX) {
-                        const effectiveCmc = Math.min(cmc, CONFIG.MAX_TRACKED_CMC);
-                        cmcDistribution[effectiveCmc] = (cmcDistribution[effectiveCmc] || 0) + card.count;
-                    }
-                }
-            });
-
-            // 2. Build CDF and Prefix Sums
-            let runningCount = 0;
-            let runningSum = 0;
-            for (let i = 0; i <= CONFIG.MAX_TRACKED_CMC; i++) {
-                const count = cmcDistribution[i] || 0;
-                runningCount += count;
-                runningSum += count * i;
-                
-                cdf[i] = runningCount;
-                prefixSumCmc[i] = runningSum;
-            }
-        }
-
-        state = {
-            deckSize,
-            cmcDistribution,
-            cdf,
-            prefixSumCmc,
-            xSpells,
-            excludeXSpells,
-            hasImportedData,
-            preparedDeck,
-            lands: config.lands,
-            rawDeckHash 
-        };
-
-        simulationCache.set(rawDeckHash, state);
-    }
-    
-    // Check if we need to regenerate samples (only if deck content changed)
-    if (state.hasImportedData && state.rawDeckHash !== lastSampleDeckHash) {
-        generateStableSamples(state.preparedDeck, 20); // Default count
-        lastSampleDeckHash = state.rawDeckHash;
+        const mv = Math.min(MAX_TRACKED_MV, Math.max(0, Math.floor(Number(card.cmc) || 0)));
+        const isX = isXSpell(card.mana_cost);
+        if (isX) xSpells.push({ name: card.name, count, cmc: mv, manaCost: card.mana_cost });
+        if (excludeX && isX) continue;
+        cmcDistribution[mv] = (cmcDistribution[mv] || 0) + count;
     }
 
-    // Mix in the dynamic castCmc which doesn't affect the deck distribution
+    let runningCount = 0;
+    let runningSum = 0;
+    for (let i = 0; i <= MAX_TRACKED_MV; i++) {
+        const count = cmcDistribution[i] || 0;
+        runningCount += count;
+        runningSum += count * i;
+        cdf[i] = runningCount;
+        prefixMv[i] = runningSum;
+    }
+
     return {
-        ...state,
-        castCmc: parseInt(document.getElementById('rashmi-cmcValue').value) || 4
+        deckSize,
+        lands,
+        spells,
+        cmcDistribution,
+        cdf,
+        prefixMv,
+        xSpells,
+        xCount: xSpells.reduce((s, x) => s + x.count, 0),
+        excludeX,
+        hasImportedData: deckSize > 0
     };
 }
 
 /**
- * Calculate probabilities for a given cast CMC using O(1) lookups
+ * Odds for one cast: the chance the top card is a spell with lesser mana value,
+ * and the average mana value of that free spell when it is one.
+ *
+ * @param {Object} state - buildRashmiState output
+ * @param {number} castMv - mana value of the spell that triggered Rashmi
+ * @returns {{probFreeSpell:number, probWhiff:number, expectedCmc:number}}
  */
-function calculateRashmiProbability(state, castCmc) {
-    const { deckSize, cdf, prefixSumCmc } = state;
-    
-    if (deckSize === 0 || castCmc === 0) {
-        return { probFreeSpell: 0, probWhiff: 0, expectedCmc: 0 };
-    }
+export function freeSpellOdds(state, castMv) {
+    const deckSize = state?.deckSize ?? 0;
+    const mv = Math.floor(Number(castMv) || 0);
+    if (deckSize === 0 || mv <= 0) return { probFreeSpell: 0, probWhiff: 1, expectedCmc: 0 };
 
-    // Rashmi triggers for a spell with CMC < castCmc.
-    // So we want the cumulative count for (castCmc - 1).
-    const targetIndex = Math.min(Math.max(0, castCmc - 1), CONFIG.MAX_TRACKED_CMC);
-    
-    const countFree = cdf[targetIndex];
-    const sumCmc = prefixSumCmc[targetIndex];
-
-    const probFreeSpell = countFree / deckSize;
-    const expectedCmc = countFree > 0 ? sumCmc / countFree : 0;
-
+    // "Lesser mana value": eligible cards have mana value <= castMv - 1.
+    const index = Math.min(mv - 1, MAX_TRACKED_MV);
+    const free = state.cdf[index];
+    const probFreeSpell = free / deckSize;
     return {
         probFreeSpell,
         probWhiff: 1 - probFreeSpell,
-        expectedCmc
+        expectedCmc: free > 0 ? state.prefixMv[index] / free : 0
     };
 }
 
 /**
- * Calculate results for current deck configuration
+ * Free-spell odds for every cast mana value 1..max.
+ * @returns {Array<{x:number, prob:number, expectedCmc:number, freeMana:number}>}
+ */
+export function oddsByCastMv(state, max = MAX_CAST_MV) {
+    const rows = [];
+    for (let mv = 1; mv <= max; mv++) {
+        const r = freeSpellOdds(state, mv);
+        rows.push({ x: mv, prob: r.probFreeSpell, expectedCmc: r.expectedCmc, freeMana: r.probFreeSpell * r.expectedCmc });
+    }
+    return rows;
+}
+
+/**
+ * What the revealed card is, as shares of the library: a free spell, a spell
+ * too big to cast free, an X spell left out, or a land. Sums to 1.
+ *
+ * @returns {{free:number, tooBig:number, xLeftOut:number, land:number}}
+ */
+export function revealBreakdown(state, castMv) {
+    const deckSize = state?.deckSize ?? 0;
+    if (!deckSize) return { free: 0, tooBig: 0, xLeftOut: 0, land: 0 };
+    const free = freeSpellOdds(state, castMv).probFreeSpell;
+    const land = state.lands / deckSize;
+    const xLeftOut = state.excludeX ? state.xCount / deckSize : 0;
+    return { free, tooBig: Math.max(0, 1 - free - land - xLeftOut), xLeftOut, land };
+}
+
+/**
+ * The lowest cast mana value whose free-spell chance reaches `target`.
+ * @returns {{mv:number|null, best:{x:number, prob:number}}}
+ */
+export function reliableFrom(rows, target = RELIABLE_CHANCE) {
+    const rec = recommendThresholdX(rows.map(r => ({ x: r.x, value: r.prob })), { target });
+    const best = rows.reduce((b, r) => (r.prob > b.prob ? r : b), { x: 0, prob: 0 });
+    return { mv: rec?.reason === 'threshold' ? rec.x : null, best };
+}
+
+/**
+ * Your own spells grouped by mana value, with what Rashmi does when each is the
+ * first spell of a turn, plus the average across all of them.
+ *
+ * @returns {{rows:Array<{x:number, count:number, prob:number, expectedCmc:number}>, average:number}}
+ */
+export function curveRows(state) {
+    const dist = state?.cmcDistribution ?? {};
+    const rows = Object.keys(dist).map(Number).sort((a, b) => a - b)
+        .filter(mv => dist[mv] > 0)
+        .map(mv => {
+            const r = freeSpellOdds(state, mv);
+            return { x: mv, count: dist[mv], prob: r.probFreeSpell, expectedCmc: r.expectedCmc };
+        });
+    const total = rows.reduce((s, r) => s + r.count, 0);
+    const average = total ? rows.reduce((s, r) => s + r.count * r.prob, 0) / total : 0;
+    return { rows, average };
+}
+
+const pct = v => `${Math.round((Number.isFinite(v) ? v : 0) * 100)}%`;
+const one = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
+
+/** Tone for a free-spell chance: what the number means for the deck. */
+export function chanceTone(p) {
+    if (!(p > 0)) return 'bad';
+    if (p >= 0.5) return 'good';
+    if (p >= 0.3) return 'warn';
+    return 'bad';
+}
+
+/**
+ * The plain-English answer to "How often does Rashmi flip a free spell?".
+ *
+ * @param {{castMv:number, odds:Object, reliable:{mv:number|null, best:Object}, landShare:number, hasImportedData:boolean}} result
+ * @returns {{html:string, tone:string}}
+ */
+export function summarize(result) {
+    const { castMv, odds, reliable, landShare = 0, hasImportedData = true } = result ?? {};
+    if (!hasImportedData || !odds) {
+        return { tone: 'flat', html: 'Import a decklist to see what Rashmi reveals — the odds come from the mana values of your actual cards.' };
+    }
+
+    const p = odds.probFreeSpell;
+    let html = p > 0
+        ? `Casting a <strong>${castMv}-mana</strong> spell, Rashmi flips a free spell <strong>${pct(p)}</strong> of the time — on average a <strong>${one(odds.expectedCmc)}-mana</strong> card. Otherwise the card goes to your hand.`
+        : `Casting a <strong>${castMv}-mana</strong> spell, Rashmi can’t flip a free spell — nothing in your deck costs less. The revealed card always goes to your hand.`;
+
+    if (reliable?.mv != null) {
+        html += reliable.mv <= castMv
+            ? ' That is in the reliable range (7 in 10 or better).'
+            : ` It reaches 7 in 10 once your first spell costs <strong>${reliable.mv}</strong> or more.`;
+    } else if (reliable?.best?.prob > 0) {
+        html += ` No spell reaches 7 in 10: ${pct(landShare)} of your library is lands, so even a huge spell tops out at <strong>${pct(reliable.best.prob)}</strong>.`;
+    }
+    return { html, tone: chanceTone(p) };
+}
+
+// ==================== STATE ====================
+
+const cache = { ref: null, excludeX: null, state: null, deck: null };
+const samples = { deckRef: null, picks: [] };
+
+function readCastMv() {
+    const raw = parseInt(document.getElementById('rashmi-cmcValue')?.value, 10);
+    return Math.max(1, Math.min(MAX_CAST_MV, Number.isFinite(raw) ? raw : 5));
+}
+
+/**
+ * Deck tables for the current list, rebuilt only when the deck object or the
+ * X-spell setting changes (the deck object is replaced on every import).
+ */
+function currentState() {
+    const cardsByName = DeckConfig.getImportedCardData()?.cardsByName ?? {};
+    const excludeX = Boolean(document.getElementById('rashmi-exclude-x')?.checked);
+    if (cache.ref !== cardsByName || cache.excludeX !== excludeX || !cache.state) {
+        cache.state = buildRashmiState(cardsByName, { excludeX });
+        if (cache.ref !== cardsByName) cache.deck = null;
+        cache.ref = cardsByName;
+        cache.excludeX = excludeX;
+    }
+    return cache.state;
+}
+
+/**
+ * Odds for the chosen cast mana value and its neighbours.
+ * @returns {{config:Object, results:Object<number, {probFreeSpell:number, probWhiff:number, expectedCmc:number}>}}
  */
 export function calculate() {
-    const state = prepareSimulationState();
-
-    if (state.deckSize === 0 || !state.hasImportedData) {
-        return { config: state, results: {} };
-    }
+    const state = currentState();
+    const config = { ...state, castCmc: readCastMv() };
+    if (!state.hasImportedData) return { config, results: {} };
 
     const results = {};
-    const minCmc = Math.max(1, state.castCmc - CONFIG.CMC_RANGE_BEFORE);
-    const maxCmc = Math.min(state.castCmc + CONFIG.CMC_RANGE_AFTER, 15);
-
-    for (let testCmc = minCmc; testCmc <= maxCmc; testCmc++) {
-        results[testCmc] = calculateRashmiProbability(state, testCmc);
-    }
-
-    return { config: state, results };
+    const lo = Math.max(1, config.castCmc - RANGE_BEFORE);
+    const hi = Math.min(MAX_CAST_MV, config.castCmc + RANGE_AFTER);
+    for (let mv = lo; mv <= hi; mv++) results[mv] = freeSpellOdds(state, mv);
+    return { config, results };
 }
 
-/**
- * Update chart visualization
- */
-function updateChart(config, results) {
-    const cmcValues = Object.keys(results).map(Number).sort((a, b) => a - b);
-    const probFreeSpellData = cmcValues.map(cmc => results[cmc].probFreeSpell * 100);
-    const expectedCmcData = cmcValues.map(cmc => results[cmc].expectedCmc);
+// ==================== RENDERING ====================
 
+function updateChart(rows, castMv) {
+    if (!document.getElementById('rashmi-chart')) return;
     chart = createOrUpdateChart(chart, 'rashmi-chart', {
-        type: 'line',
+        type: 'bar',
         data: {
-            labels: cmcValues.map(cmc => 'CMC ' + cmc),
-            datasets: [
-                {
-                    label: 'P(Free Spell) %',
-                    data: probFreeSpellData,
-                    borderColor: '#55c97f',
-                    backgroundColor: 'rgba(85, 201, 127, 0.1)',
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: cmcValues.map(cmc => cmc === config.castCmc ? 8 : 4),
-                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.castCmc ? '#fff' : '#55c97f'),
-                    yAxisID: 'yProb'
-                },
-                {
-                    label: 'Expected Free CMC',
-                    data: expectedCmcData,
-                    borderColor: '#5b8db8',
-                    backgroundColor: 'rgba(91, 141, 184, 0.1)',
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: cmcValues.map(cmc => cmc === config.castCmc ? 8 : 4),
-                    pointBackgroundColor: cmcValues.map(cmc => cmc === config.castCmc ? '#fff' : '#5b8db8'),
-                    yAxisID: 'yCmc'
-                }
-            ]
+            labels: rows.map(r => String(r.x)),
+            datasets: [{
+                label: 'Free-spell chance',
+                data: rows.map(r => Math.round(r.prob * 1000) / 10),
+                backgroundColor: rows.map(r => (r.x === castMv ? TX.amber : TX.greenFill)),
+                borderColor: rows.map(r => (r.x === castMv ? TX.amber : TX.green)),
+                borderWidth: 1,
+                borderRadius: 3,
+                maxBarThickness: 44,
+                order: 2
+            }, {
+                type: 'line',
+                label: 'Reliable: 7 in 10',
+                data: rows.map(() => RELIABLE_CHANCE * 100),
+                borderColor: TX.mid,
+                borderWidth: 1,
+                borderDash: [5, 4],
+                pointRadius: 0,
+                pointHoverRadius: 0,
+                fill: false,
+                order: 1
+            }]
         },
         options: {
-            scales: {
-                yProb: {
-                    type: 'linear',
-                    position: 'left',
-                    beginAtZero: true,
-                    max: 100,
-                    title: { display: true, text: 'P(Free Spell) %', color: '#55c97f' },
-                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    ticks: { color: '#55c97f' }
-                },
-                yCmc: {
-                    type: 'linear',
-                    position: 'right',
-                    beginAtZero: true,
-                    title: { display: true, text: 'Expected Free CMC', color: '#5b8db8' },
-                    grid: { drawOnChartArea: false },
-                    ticks: { color: '#5b8db8' }
+            plugins: {
+                tooltip: {
+                    filter: item => item.datasetIndex === 0,
+                    callbacks: {
+                        title: items => `Casting a ${items[0]?.label}-mana spell`,
+                        label: ctx => {
+                            const r = rows[ctx.dataIndex];
+                            return r ? [` Free spell: ${pct(r.prob)}`, ` Average free spell: ${one(r.expectedCmc)} mana`] : '';
+                        }
+                    }
                 }
+            },
+            scales: {
+                x: { title: { display: true, text: 'Mana value of your first spell', color: TX.dim } },
+                y: { beginAtZero: true, max: 100, ticks: { callback: v => `${v}%` }, title: { display: true, text: 'Chance of a free spell', color: TX.dim } }
             }
         }
     });
 }
 
-/**
- * Compute P(free spell) across the full cast-CMC range for the sweep table and
- * the reliability recommendation.
- * @returns {Array<{x:number, prob:number, expectedCmc:number}>}
- */
-function computeSweep(config) {
-    const sweep = [];
-    for (let cmc = 1; cmc <= 15; cmc++) {
-        const r = calculateRashmiProbability(config, cmc);
-        sweep.push({ x: cmc, prob: r.probFreeSpell, expectedCmc: r.expectedCmc });
-    }
-    return sweep;
+function renderBreakdown(state, castMv) {
+    const el = document.getElementById('rashmi-split');
+    if (!el) return;
+    const b = revealBreakdown(state, castMv);
+    const parts = [
+        { key: 'free', label: 'Free spell', value: b.free },
+        { key: 'big', label: `Costs ${castMv} or more — to hand`, value: b.tooBig },
+        { key: 'x', label: 'X spell, left out — to hand', value: b.xLeftOut },
+        { key: 'land', label: 'Land — to hand', value: b.land }
+    ].filter(p => p.value > 0);
+
+    el.innerHTML = `
+        <div class="rs-band" role="img" aria-label="${parts.map(p => `${p.label}: ${pct(p.value)}`).join(', ')}">
+            ${parts.map(p => `<span class="rs-band-seg is-${p.key}" style="width:${(p.value * 100).toFixed(2)}%"></span>`).join('')}
+        </div>
+        <ul class="rs-legend">
+            ${parts.map(p => `<li><span class="rs-swatch is-${p.key}"></span>${p.label}<strong>${pct(p.value)}</strong></li>`).join('')}
+        </ul>`;
 }
 
-/**
- * Render the cast-CMC sweep table.
- */
-function updateTable(config) {
-    const sweep = computeSweep(config);
-    const rec = recommendThresholdX(sweep.map(p => ({ x: p.x, value: p.prob })), { target: 0.7 });
-    const recommended = rec && rec.reason === 'threshold' ? rec.x : null;
-
-    let prev = null;
-    const rows = sweep.map(p => {
-        const delta = prev != null ? p.prob - prev : null;
-        prev = p.prob;
-        return { ...p, delta };
-    });
-
-    renderSweepTable('rashmi-comparisonTable', {
-        current: config.castCmc,
-        recommended,
-        rows,
-        columns: [
-            { label: 'CAST CMC', align: 'left', render: r => `${r.x}` },
-            { label: 'P(FREE)', render: r => `<span style="color:var(--tx-green);">${formatPercentage(r.prob)}</span>` },
-            { label: 'CHANCE', align: 'left', render: r => pBarCell(r.prob, 'var(--tx-green)') },
-            { label: 'AVG FREE MV', render: r => `<span style="color:var(--tx-blue);">${formatNumber(r.expectedCmc, 2)}</span>` },
-            { label: 'Δp', render: r => r.delta == null ? '—' : `<span style="color:${deltaColor(r.delta, 0.005)};">${formatDelta(r.delta * 100, 1, '%')}</span>` },
-            { label: 'VERDICT', render: r => { const v = probabilityVerdict(r.prob); return `<span style="color:${v.color}; font-weight:600; letter-spacing:0.06em;">${v.label}</span>`; } }
-        ]
-    });
-}
-
-/**
- * Render hero numerics + verdict + recommendation for the current cast CMC.
- */
-function updateStats(config, results) {
-    const heroPanel = document.getElementById('rashmi-hero');
-    const currentResult = results[config.castCmc];
-    if (!heroPanel || !currentResult) return;
-
-    const prob = currentResult.probFreeSpell;
-    const next = results[config.castCmc + 1];
-    const marginal = next ? next.probFreeSpell - prob : null;
-    const verdict = probabilityVerdict(prob);
-
-    const hero = renderHeroStats([
-        { label: 'P(FREE SPELL)', value: formatPercentage(prob), sub: `casting CMC ${config.castCmc}`, color: 'var(--tx-green)', size: 'big' },
-        { label: 'AVG FREE MV', value: formatNumber(currentResult.expectedCmc, 1), sub: 'value when it hits', color: 'var(--tx-blue)' },
-        { label: 'WHIFF', value: formatPercentage(currentResult.probWhiff), sub: 'draw only', color: 'var(--tx-amber)' },
-        { label: 'MARGINAL +1 CMC', value: marginal != null ? formatDelta(marginal * 100, 1, '%') : '—', sub: 'Δ trigger chance', color: marginal != null ? deltaColor(marginal, 0.001) : 'var(--tx-dim)' }
+function renderHero(state, castMv, odds, reliable) {
+    const el = document.getElementById('rashmi-hero');
+    if (!el) return;
+    el.innerHTML = renderHeroStats([
+        {
+            label: 'Free-spell chance',
+            value: pct(odds.probFreeSpell),
+            sub: `casting a ${castMv}-mana spell`,
+            size: 'big',
+            color: `var(--tx-${chanceTone(odds.probFreeSpell)})`,
+            tip: 'The chance the top card of your library is a nonland card with lower mana value than the spell you cast. Exact, from your decklist.'
+        },
+        {
+            label: 'Average free spell',
+            value: odds.probFreeSpell > 0 ? one(odds.expectedCmc) : '—',
+            sub: 'mana value, when it hits',
+            tip: 'Every eligible card is equally likely to be on top, so this is the average mana value of the cards that qualify.'
+        },
+        {
+            label: 'Free mana per trigger',
+            value: one(odds.probFreeSpell * odds.expectedCmc),
+            sub: 'average, counting misses',
+            term: 'ev'
+        },
+        {
+            label: 'Reliable from',
+            value: reliable.mv != null ? `${reliable.mv}+` : 'Never',
+            sub: reliable.mv != null ? 'mana value for 7 in 10' : `best case ${pct(reliable.best.prob)}`,
+            color: reliable.mv != null ? 'var(--tx-bright)' : 'var(--tx-warn)',
+            tip: 'The cheapest first spell that flips a free spell at least 7 times in 10.'
+        }
     ]);
-
-    const sweep = computeSweep(config);
-    const rec = recommendThresholdX(sweep.map(p => ({ x: p.x, value: p.prob })), { target: 0.7 });
-    let recBanner = '';
-    if (rec && rec.reason === 'threshold') {
-        recBanner = renderRecommendation(`Rashmi reliably triggers (≥70%) once you cast <strong>CMC ${rec.x}+</strong> spells. Build your curve so your payoff spells sit above that line.`);
-    } else if (rec) {
-        recBanner = renderRecommendation(`Even your most expensive spells top out at <strong>${formatPercentage(rec.value)}</strong> — add more cheap spells to make Rashmi consistent.`);
-    }
-
-    const insight = renderInsightBox('', `Casting a CMC ${config.castCmc} spell flips the top card; a free cast needs a non-land with CMC &lt; ${config.castCmc}. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
-
-    heroPanel.innerHTML = hero + recBanner + insight;
 }
 
-/**
- * Update CMC distribution breakdown table
- */
-function updateCMCBreakdown(config) {
-    const cmcs = Object.keys(config.cmcDistribution).map(Number).sort((a, b) => a - b);
-    let breakdownHTML = '<h2>Deck CMC Distribution</h2>';
-
-    if (config.xSpells && config.xSpells.length > 0) {
-        const totalXSpells = config.xSpells.reduce((sum, spell) => sum + spell.count, 0);
-        const statusText = config.excludeXSpells ? 'excluded from calculation' : `counted at their base CMC`;
-
-        breakdownHTML += `
-            <div style="margin-bottom: var(--spacing-md); padding: var(--spacing-md); background: rgba(240, 169, 44, 0.08); border: 1px solid rgba(240, 169, 44, 0.28); border-radius: var(--radius-md);">
-                <strong style="color: #f0a92c;">▲ X spells detected (${totalXSpells} cards ${statusText}):</strong><br>
-                <small style="color: var(--text-dim); display: block; margin-top: 4px; font-style: italic;">
-                    Note: When revealed from library, X=0, so these can't be cast for free with Rashmi
-                </small>
-            </div>
-        `;
-    }
-
-    breakdownHTML += '<div class="table-wrapper"><table class="comparison-table">';
-    breakdownHTML += '<tr><th>CMC</th><th>Cards</th><th>% of Deck</th><th>Can Cast Free?</th></tr>';
-
-    cmcs.forEach(cmc => {
-        const count = config.cmcDistribution[cmc];
-        const canCast = cmc < config.castCmc;
-        const canCastClass = canCast ? 'marginal-positive' : 'marginal-negative';
-        const canCastText = canCast ? '✓ Yes' : '✗ No';
-
-        breakdownHTML += `
-            <tr>
-                <td>${cmc}</td>
-                <td>${count}</td>
-                <td>${formatPercentage(count / config.deckSize)}</td>
-                <td class="${canCastClass}">${canCastText}</td>
-            </tr>
-        `;
-    });
-
-    breakdownHTML += '</table></div>';
-    document.getElementById('rashmi-breakdown').innerHTML = breakdownHTML;
-}
-
-/**
- * Force refresh of stable samples (e.g., when user clicks Redraw)
- */
-function refreshSamples() {
-    const config = prepareSimulationState();
-    if (config.hasImportedData && config.preparedDeck.length > 0) {
-        const countInput = document.getElementById('rashmi-sample-count');
-        const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
-        generateStableSamples(config.preparedDeck, numSims);
-        runSampleReveals(); // Re-render
-    }
-}
-
-/**
- * Run sample Rashmi reveals using stable samples
- */
-export function runSampleReveals() {
-    const config = prepareSimulationState();
-
-    if (!config.hasImportedData) {
-        const display = document.getElementById('rashmi-reveals-display');
-        if (display) display.innerHTML = '<p style="color: var(--text-dim);">Please import a decklist to run simulations.</p>';
-        return;
-    }
-
-    const countInput = document.getElementById('rashmi-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
-    
-    // Ensure we have enough samples if the user increased the count
-    if (stableSamples.length < numSims) {
-        generateStableSamples(config.preparedDeck, numSims);
-    }
-
-    let revealsHTML = '';
-    let hitCount = 0;
-    let totalFreeCMC = 0;
-    const freeCmcDist = [];
-
-    // 1. STATS LOOP (Full Simulation)
-    // Use the stable samples!
-    for (let i = 0; i < numSims; i++) {
-        const revealedCard = stableSamples[i];
-        
-        // Safety check if something went wrong
-        if (!revealedCard) continue;
-
-        const cardCmc = revealedCard.cmc || 0;
-        const isX = isXSpell(revealedCard.mana_cost);
-        const isLand = revealedCard.types.includes('land');
-        
-        let isFree = !isLand && cardCmc < config.castCmc;
-        if (isFree && isX && config.excludeXSpells) isFree = false;
-
-        if (isFree) {
-            hitCount++;
-            totalFreeCMC += cardCmc;
-            freeCmcDist[cardCmc] = (freeCmcDist[cardCmc] || 0) + 1;
-        }
-    }
-
-    // 2. Build Summary UI
-    const hitPct = (hitCount / numSims * 100).toFixed(1);
-    const missPct = (100 - parseFloat(hitPct)).toFixed(1);
-    
-    for (let i = 0; i < freeCmcDist.length; i++) if (!freeCmcDist[i]) freeCmcDist[i] = 0;
-    const avgFreeCMC = hitCount > 0 ? (totalFreeCMC / hitCount).toFixed(2) : '—';
-
-    const distributionHTML = renderSimulationSummary({
-        title: `Free cast at MV ${config.castCmc}`,
-        runs: numSims,
-        metrics: [
-            { label: 'Free cast rate', value: `${hitPct}%`, sub: 'triggers that cast something', color: probabilityVerdict(hitCount / numSims).color },
-            { label: 'Avg free MV', value: avgFreeCMC, sub: 'mana value cheated', color: 'var(--tx-accent)' },
-            { label: 'Draw only', value: `${missPct}%`, sub: 'no free spell', color: 'var(--tx-mid)' }
+function renderCurveTable(state, castMv) {
+    const { rows, average } = curveRows(state);
+    renderSweepTable('rashmi-comparisonTable', {
+        rows,
+        current: castMv,
+        columns: [
+            { label: 'Mana value', align: 'left', render: r => String(r.x) },
+            { label: 'Your spells', render: r => String(r.count) },
+            { label: 'Free-spell chance if cast first', render: r => `${pct(r.prob)} ${pBarCell(r.prob, `var(--tx-${chanceTone(r.prob)})`)}` },
+            { label: 'Average free spell', render: r => (r.prob > 0 ? one(r.expectedCmc) : '—') }
         ],
-        distribution: hitCount > 0 ? {
-            title: 'Free cast mana value — distribution',
-            counts: freeCmcDist,
-            totalSims: numSims,
-            labelFn: (i) => `MV ${i}`,
-            markerFn: () => null
-        } : null,
-        outcomes: [
-            { label: 'Free spell cast', value: hitCount / numSims, good: true },
-            { label: 'Draw only', value: (numSims - hitCount) / numSims, good: false }
-        ]
+        emptyText: 'Import a decklist to see your spells by mana value.'
     });
+    const note = document.getElementById('rashmi-curve-note');
+    if (note) {
+        note.innerHTML = rows.length
+            ? `If every spell in your deck were equally likely to be your first of the turn, Rashmi would flip a free spell <strong>${pct(average)}</strong> of the time. In practice your first spell is often a cheap one — use the row for what you actually cast.`
+            : '';
+    }
+}
 
+function renderXNote(state) {
+    const group = document.getElementById('rashmi-x-group');
+    const hint = document.getElementById('rashmi-x-hint');
+    if (group) group.hidden = state.xCount === 0;
+    if (hint && state.xCount > 0) {
+        const names = state.xSpells.slice(0, 3).map(x => cardRef(x.name)).join(', ');
+        const more = state.xSpells.length > 3 ? ` and ${state.xSpells.length - 3} more` : '';
+        hint.innerHTML = `Cast free, an X spell resolves with X = 0. Your deck has ${state.xCount}: ${names}${more}.`;
+    }
+}
 
-    // 3. Prepare List Container
-    const listId = 'rashmi-samples-list';
-    const btnId = 'rashmi-load-more';
-    const listHTML = `<div id="${listId}"></div><button id="${btnId}" class="import-btn" style="width: 100%; margin-top: 12px; display: none;">Load More (50)</button>`;
+function ensureSamples(deck, cardsByName, force = false) {
+    if (!force && samples.deckRef === cardsByName && samples.picks.length) return samples.picks;
+    samples.picks = [];
+    for (let i = 0; i < SAMPLE_REVEALS && deck.length; i++) {
+        samples.picks.push(deck[Math.floor(Math.random() * deck.length)]);
+    }
+    samples.deckRef = cardsByName;
+    return samples.picks;
+}
 
-    const revealsSectionHTML = createCollapsibleSection(`Show/Hide Individual Reveals (${numSims} simulations)`, listHTML, true);
-    document.getElementById('rashmi-reveals-display').innerHTML = distributionHTML + revealsSectionHTML;
+/**
+ * Classify a revealed card for a given cast.
+ * @returns {'free'|'land'|'big'|'x'}
+ */
+export function classifyReveal(card, castMv, excludeX = false) {
+    const isLand = Array.isArray(card?.types) && card.types.includes('land');
+    if (isLand) return 'land';
+    const mv = Math.floor(Number(card?.cmc) || 0);
+    if (excludeX && isXSpell(card?.mana_cost)) return 'x';
+    return mv < castMv ? 'free' : 'big';
+}
 
-    // 4. Render Batch Function
-    const listContainer = document.getElementById(listId);
-    const loadMoreBtn = document.getElementById(btnId);
-    renderedCount = 0;
+/**
+ * Render sample reveals. Picks stay the same while the cast value changes;
+ * pass force to draw new ones.
+ */
+export function runSampleReveals(force = false) {
+    const display = document.getElementById('rashmi-reveals-display');
+    if (!display) return;
+    const cardsByName = DeckConfig.getImportedCardData()?.cardsByName ?? {};
+    const state = currentState();
+    if (!state.hasImportedData) {
+        display.innerHTML = '<div class="tx-empty">Import a decklist to see sample reveals.</div>';
+        return;
+    }
+    if (!cache.deck) cache.deck = buildDeckFromCardData({ cardsByName });
+    const picks = ensureSamples(cache.deck, cardsByName, force);
+    const castMv = readCastMv();
 
-    const renderBatch = (batchSize) => {
-        const start = renderedCount;
-        const end = Math.min(start + batchSize, numSims);
-        let html = '';
-
-        for (let i = start; i < end; i++) {
-            const revealedCard = stableSamples[i];
-            if (!revealedCard) continue;
-
-            const cardCmc = revealedCard.cmc || 0;
-            const isX = isXSpell(revealedCard.mana_cost);
-            const isLand = revealedCard.types.includes('land');
-            
-            let isFree = !isLand && cardCmc < config.castCmc;
-            if (isFree && isX && config.excludeXSpells) isFree = false;
-
-            html += `<div class="sample-reveal ${isFree ? 'free-spell' : 'whiff'}">`;
-            html += `<div><strong>Reveal ${i + 1}:</strong></div>`;
-            html += '<div style="margin: 8px 0;">';
-            html += renderCardBadge(revealedCard);
-            
-            if (isFree) {
-                html += `<span style="margin-left: 8px; color: #55c97f; font-weight: bold;">CAST FREE!${isX ? ' (X=0)' : ''}</span>`;
-            } else {
-                let reason = isLand ? '(Land)' : (cardCmc >= config.castCmc ? `(CMC ${cardCmc} too high)` : '(X Spell excluded)');
-                html += `<span style="margin-left: 8px; color: #e8635c;">Draw card ${reason}</span>`;
-            }
-            html += '</div></div>';
-        }
-
-        if (listContainer) {
-            listContainer.insertAdjacentHTML('beforeend', html);
-        }
-        
-        renderedCount = end;
-        
-        if (loadMoreBtn) {
-            if (renderedCount < numSims) {
-                loadMoreBtn.style.display = 'block';
-                loadMoreBtn.textContent = `Load More (Showing ${renderedCount}/${numSims})`;
-            } else {
-                loadMoreBtn.style.display = 'none';
-            }
-        }
+    const verdict = {
+        free: 'Cast free',
+        land: 'Land — to hand',
+        big: 'Too big — to hand',
+        x: 'X spell — to hand'
     };
-
-    // Initial Render
-    renderBatch(50);
-
-    if (loadMoreBtn) {
-        loadMoreBtn.addEventListener('click', () => renderBatch(50));
-    }
+    const hits = picks.filter(c => classifyReveal(c, castMv, state.excludeX) === 'free').length;
+    display.innerHTML = `
+        <ol class="rs-reveals">
+            ${picks.map((card, i) => {
+                const kind = classifyReveal(card, castMv, state.excludeX);
+                const mv = card.types?.includes('land') ? '' : `<span class="rs-reveal-mv">${Math.floor(Number(card.cmc) || 0)}</span>`;
+                return `<li class="rs-reveal is-${kind}">
+                    <span class="rs-reveal-n">${i + 1}</span>
+                    <span class="rs-reveal-card">${cardRef(card.name)}${mv}</span>
+                    <span class="rs-reveal-verdict">${verdict[kind]}</span>
+                </li>`;
+            }).join('')}
+        </ol>
+        <p class="rs-caption">${hits} of these ${picks.length} reveals would be free with a ${castMv}-mana spell. Change the mana value to see the same cards re-sorted.</p>`;
 }
 
-/**
- * Update all UI elements
- */
 export function updateUI() {
-    const { results, config } = calculate();
-    const importWarning = document.getElementById('rashmi-import-warning');
-    const statsSection = document.getElementById('rashmi-stats');
-    const breakdownSection = document.getElementById('rashmi-breakdown');
-    const heroSection = document.getElementById('rashmi-hero');
+    const { config } = calculate();
+    const state = currentState();
+    const castMv = config.castCmc;
+    renderXNote(state);
 
-    if (!config.hasImportedData) {
-        if (importWarning) importWarning.style.display = 'block';
-        if (statsSection) statsSection.style.display = 'none';
-        if (breakdownSection) breakdownSection.style.display = 'none';
-        if (heroSection) heroSection.style.display = 'none';
+    const bottom = document.getElementById('rashmi-bottom-line');
+    const evidence = document.querySelectorAll('#rashmi-tab [data-needs-deck]');
+    evidence.forEach(el => { el.hidden = !state.hasImportedData; });
+
+    if (!state.hasImportedData) {
+        if (bottom) bottom.innerHTML = renderBottomLine(summarize({ hasImportedData: false }));
+        const hero = document.getElementById('rashmi-hero');
+        if (hero) hero.innerHTML = '';
         if (chart) { chart.destroy(); chart = null; }
-        const table = document.getElementById('rashmi-comparisonTable');
-        if (table) table.innerHTML = '';
         return;
     }
 
-    if (importWarning) importWarning.style.display = 'none';
-    if (statsSection) statsSection.style.display = 'block';
-    if (breakdownSection) breakdownSection.style.display = 'block';
-    if (heroSection) heroSection.style.display = 'block';
+    const odds = freeSpellOdds(state, castMv);
+    const maxMv = Math.min(MAX_CAST_MV, Math.max(10, castMv + 2, ...curveRows(state).rows.map(r => r.x + 1)));
+    const rows = oddsByCastMv(state, maxMv);
+    const reliable = reliableFrom(oddsByCastMv(state, MAX_CAST_MV));
 
-    if (config.deckSize === 0 || Object.keys(results).length === 0) {
-        if (chart) chart.destroy();
-        const table = document.getElementById('rashmi-comparisonTable');
-        if (table) table.innerHTML = '';
-        return;
+    if (bottom) {
+        bottom.innerHTML = renderBottomLine(summarize({
+            castMv, odds, reliable, landShare: state.lands / state.deckSize, hasImportedData: true
+        }));
     }
-
-    updateStats(config, results);
-    updateChart(config, results);
-    updateTable(config);
-    updateCMCBreakdown(config);
-
-    if (document.getElementById('rashmi-reveals-display')) {
-        runSampleReveals();
-    }
+    renderHero(state, castMv, odds, reliable);
+    renderBreakdown(state, castMv);
+    updateChart(rows, castMv);
+    runSampleReveals();
+    renderCurveTable(state, castMv);
 }
 
-/**
- * Initialize Rashmi calculator
- */
 export function init() {
     registerCalculator({
         name: 'rashmi',
@@ -615,16 +506,8 @@ export function init() {
         updateUI,
         inputs: ['cmc'],
         init: (debouncedUpdate) => {
-            const container = document.getElementById('rashmi-sample-reveals');
-            if (container) {
-                container.innerHTML = generateSampleRevealsHTML('rashmi', 'Sample Cast Triggers');
-            }
-            const excludeCheckbox = document.getElementById('rashmi-exclude-x');
-            if (excludeCheckbox) excludeCheckbox.addEventListener('change', () => debouncedUpdate());
-
-            const revealBtn = document.getElementById('rashmi-draw-reveals-btn');
-            // Changed to call refreshSamples instead of runSampleReveals directly
-            if (revealBtn) revealBtn.addEventListener('click', () => refreshSamples());
+            document.getElementById('rashmi-exclude-x')?.addEventListener('change', () => debouncedUpdate());
+            document.getElementById('rashmi-draw-reveals-btn')?.addEventListener('click', () => runSampleReveals(true));
         }
     });
 }

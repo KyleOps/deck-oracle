@@ -4,7 +4,10 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { calculateMindsDilationStats } from '../../js/calculators/mindsdilation.js';
+import {
+    calculateMindsDilationStats, roundStats, formatRounds, summarizeMindsDilation, getShareParams, applyShareParams,
+    MINDS_DILATION_COST
+} from '../../js/calculators/mindsdilation.js';
 
 // Helper to build minimal opponentData from a card list
 function makeOpponentData(cards) {
@@ -134,5 +137,106 @@ describe('calculateMindsDilationStats', () => {
         const stats = calculateMindsDilationStats(data);
         const bucketTotal = Object.values(stats.mvBuckets).reduce((a, b) => a + b, 0);
         assert.strictEqual(bucketTotal, stats.nonlandCount);
+    });
+});
+
+describe('Mind’s Dilation — library details', () => {
+    it('bands split the whole library and sum to 1', () => {
+        const data = makeOpponentData([
+            { name: 'Island', cmc: 0, type_line: 'Basic Land — Island', count: 36 },
+            { name: 'Opt', cmc: 1, type_line: 'Instant', count: 30 },
+            { name: 'Wrath', cmc: 4, type_line: 'Sorcery', count: 20 },
+            { name: 'Ulamog', cmc: 10, type_line: 'Legendary Creature — Eldrazi', count: 13 }
+        ]);
+        const { bands } = calculateMindsDilationStats(data);
+        assert.ok(Math.abs(bands.land + bands.cheap + bands.mid + bands.big - 1) < 1e-12);
+        assert.ok(Math.abs(bands.big - 13 / 99) < 1e-12);
+    });
+
+    it('a modal double-faced spell // land is a castable spell, not a land', () => {
+        const data = makeOpponentData([
+            { name: 'Forest', cmc: 0, type_line: 'Basic Land — Forest', count: 3 },
+            { name: 'Bala Ged Recovery // Bala Ged Sanctuary', cmc: 3, type_line: 'Sorcery // Land', count: 1 }
+        ]);
+        const stats = calculateMindsDilationStats(data);
+        assert.strictEqual(stats.nonlandCount, 1);
+        assert.strictEqual(stats.pNonland, 0.25);
+    });
+
+    it('The Sixth Doctor moves historic spells into higher value bands', () => {
+        const data = makeOpponentData([
+            { name: 'Sol Ring', cmc: 1, type_line: 'Artifact', count: 1 },
+            { name: 'Bident', cmc: 3, type_line: 'Legendary Enchantment Artifact', count: 1 }
+        ]);
+        assert.strictEqual(calculateMindsDilationStats(data, false).bands.big, 0);
+        assert.strictEqual(calculateMindsDilationStats(data, true).bands.big, 0.5);
+    });
+});
+
+describe('roundStats', () => {
+    it('adds hit chances and value across opponents', () => {
+        const r = roundStats([{ pNonland: 0.6, evPerTrigger: 2 }, { pNonland: 0.7, evPerTrigger: 2.5 }]);
+        assert.ok(Math.abs(r.spellsPerRound - 1.3) < 1e-12);
+        assert.ok(Math.abs(r.manaPerRound - 4.5) < 1e-12);
+        assert.ok(Math.abs(r.chanceAny - (1 - 0.4 * 0.3)) < 1e-12);
+        assert.ok(Math.abs(r.paybackRounds - MINDS_DILATION_COST / 4.5) < 1e-12);
+    });
+
+    it('never pays back against an all-land library', () => {
+        assert.strictEqual(roundStats([{ pNonland: 0, evPerTrigger: 0 }]).paybackRounds, Infinity);
+        assert.strictEqual(formatRounds(Infinity), 'never');
+    });
+
+    it('formats rounds in plain words', () => {
+        assert.strictEqual(formatRounds(0.8), 'under a round');
+        assert.strictEqual(formatRounds(1.02), '1 round');
+        assert.strictEqual(formatRounds(1.08), '1.1 rounds');
+        assert.strictEqual(formatRounds(3.64), '3.6 rounds');
+    });
+});
+
+describe('summarizeMindsDilation', () => {
+    const stats = (p, mv) => ({ pNonland: p, avgEffectiveMV: mv, evPerTrigger: p * mv });
+
+    it('is empty without opponents', () => {
+        assert.deepStrictEqual(summarizeMindsDilation([]), { html: '', tone: 'flat' });
+    });
+
+    it('one opponent: hit rate per turn and a slow payback', () => {
+        const line = summarizeMindsDilation([{ name: 'Solo', stats: stats(0.62, 3) }]);
+        assert.strictEqual(line.tone, 'warn');
+        assert.match(line.html, /If Solo casts a spell every turn/);
+        assert.match(line.html, /62%/);
+        assert.match(line.html, /3\.8 rounds/);
+    });
+
+    it('three opponents: free spells a round, chance of at least one, quick payback', () => {
+        const line = summarizeMindsDilation([
+            { name: 'A', stats: stats(0.69, 2.9) },
+            { name: 'B', stats: stats(0.68, 2.9) },
+            { name: 'C', stats: stats(0.71, 3.6) }
+        ]);
+        assert.strictEqual(line.tone, 'good');
+        assert.match(line.html, /2\.1 free spells a round/);
+        assert.match(line.html, /97%/);
+        assert.match(line.html, /1\.1 rounds/);
+    });
+
+    it('mentions The Sixth Doctor when it is counted', () => {
+        const line = summarizeMindsDilation([{ name: 'A', stats: stats(0.5, 2) }], { sixthDoctor: true });
+        assert.match(line.html, /Sixth Doctor/);
+        assert.strictEqual(line.tone, 'bad');
+    });
+});
+
+describe('share params', () => {
+    it('round-trips The Sixth Doctor switch and ignores junk', () => {
+        assert.deepStrictEqual(getShareParams(), {});
+        applyShareParams(new URLSearchParams('sixth=1'));
+        assert.deepStrictEqual(getShareParams(), { sixth: '1' });
+        applyShareParams(new URLSearchParams('sixth=<script>'));
+        assert.deepStrictEqual(getShareParams(), { sixth: '1' });
+        applyShareParams(new URLSearchParams('sixth=0'));
+        assert.deepStrictEqual(getShareParams(), {});
     });
 });

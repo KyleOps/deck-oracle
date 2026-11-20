@@ -1,6 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { simulateDreamHarvest, calculateDreamHarvestStats } from '../../js/calculators/dreamharvest.js';
+import {
+    simulateDreamHarvest, calculateDreamHarvestStats, resolveDreamHarvest, summarizeDreamHarvest, poolDistributions,
+    DREAM_HARVEST_COST, MV_THRESHOLD
+} from '../../js/calculators/dreamharvest.js';
 
 describe('Dream Harvest Calculator', () => {
     describe('simulateDreamHarvest', () => {
@@ -134,6 +137,91 @@ describe('Dream Harvest Calculator', () => {
             // Should have some castable spells on average
             assert.ok(result.avgCastable >= 0.5,
                 `avgCastable should have some spells, got ${result.avgCastable}`);
+        });
+    });
+    describe('resolveDreamHarvest', () => {
+        it('reads cards from any source until the pile reaches mana value 5', () => {
+            const cards = [{ name: 'L', types: ['land'], cmc: 0 }, { name: 'A', types: ['instant'], cmc: 3 }, { name: 'B', types: ['creature'], cmc: 3 }, { name: 'C', types: ['creature'], cmc: 9 }];
+            let i = 0;
+            const r = resolveDreamHarvest(() => cards[i++] ?? null);
+            assert.strictEqual(r.cardsExiled, 3);
+            assert.strictEqual(r.totalMV, 6);
+            assert.strictEqual(r.numCastable, 2);
+            assert.strictEqual(r.totalCastableMV, 6);
+            assert.ok(r.totalMV >= MV_THRESHOLD);
+        });
+    });
+
+    describe('calculateDreamHarvestStats (seeded simulation)', () => {
+        const deck = {
+            cardsByName: {
+                Forest: { name: 'Forest', type_line: 'Basic Land — Forest', cmc: 0, count: 36 },
+                Elf: { name: 'Elf', type_line: 'Creature — Elf', cmc: 1, count: 20 },
+                Rampant: { name: 'Rampant Growth', type_line: 'Sorcery', cmc: 2, count: 23 },
+                Hulk: { name: 'Hulk', type_line: 'Creature', cmc: 6, count: 20 }
+            }
+        };
+
+        it('gives the same numbers for the same list (seeded by the list)', () => {
+            const a = calculateDreamHarvestStats(deck, 2000);
+            const b = calculateDreamHarvestStats({ cardsByName: { ...deck.cardsByName } }, 2000);
+            assert.strictEqual(a.avgCastableMV, b.avgCastableMV);
+            assert.deepStrictEqual(a.spellsProbs, b.spellsProbs);
+        });
+
+        it('distributions are probabilities and agree with the averages', () => {
+            const s = calculateDreamHarvestStats(deck, 4000);
+            const sum = arr => arr.reduce((x, y) => x + y, 0);
+            assert.ok(Math.abs(sum(s.spellsProbs) - 1) < 1e-9);
+            assert.ok(Math.abs(sum(s.manaProbs) - 1) < 1e-9);
+            const meanSpells = s.spellsProbs.reduce((x, p, i) => x + p * i, 0);
+            assert.ok(Math.abs(meanSpells - s.avgCastable) < 1e-9);
+            assert.ok(s.avgCastableMV >= MV_THRESHOLD, 'lands are worth 0, so the stolen value always reaches 5');
+            assert.ok(s.pBigSpell > 0 && s.pBigSpell < 1);
+            assert.strictEqual(s.landCount, 36);
+        });
+
+        it('a 6-drop on top is one big spell; the chance of a big spell matches a quick estimate', () => {
+            // P(no 5+ spell in pile) is at least P(first spell is not the Hulk)… just sanity-bound it.
+            const s = calculateDreamHarvestStats(deck, 4000);
+            assert.ok(s.pBigSpell > 0.3, `pBigSpell ${s.pBigSpell}`);
+        });
+    });
+
+    describe('poolDistributions', () => {
+        it('averages arrays of different lengths', () => {
+            assert.deepStrictEqual(poolDistributions([[0.5, 0.5], [0, 0, 1]]), [0.25, 0.25, 0.5]);
+        });
+    });
+
+    describe('summarizeDreamHarvest', () => {
+        const stats = (mana, spellsProbs) => ({ avgCastableMV: mana, spellsProbs });
+
+        it('is empty without opponents', () => {
+            assert.deepStrictEqual(summarizeDreamHarvest([]), { html: '', tone: 'flat' });
+        });
+
+        it('one opponent: less than its own cost is a warning', () => {
+            const line = summarizeDreamHarvest([{ name: 'Solo', stats: stats(6.4, [0, 0.1, 0.6, 0.3]) }]);
+            assert.strictEqual(line.tone, 'warn');
+            assert.match(line.html, /Against Solo/);
+            assert.match(line.html, /2–3 spells/);
+            assert.match(line.html, new RegExp(`less than its ${DREAM_HARVEST_COST}-mana cost`));
+        });
+
+        it('three opponents: totals and the typical spell count across the table', () => {
+            const dist = [0, 0.1, 0.65, 0.25];
+            const line = summarizeDreamHarvest([
+                { name: 'A', stats: stats(6.4, dist) },
+                { name: 'B', stats: stats(6.3, dist) },
+                { name: 'C', stats: stats(6.6, dist) }
+            ]);
+            assert.strictEqual(line.tone, 'good');
+            assert.match(line.html, /these three decks/);
+            assert.match(line.html, /<strong>2 spells<\/strong>/);
+            assert.match(line.html, /about 6\.4 mana/);
+            assert.match(line.html, /19\.3 mana/);
+            assert.match(line.html, /more than twice/);
         });
     });
 });

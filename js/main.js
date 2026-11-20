@@ -14,7 +14,7 @@ import { featuredCardName } from './utils/deckStats.js';
 import { FORMATS } from './utils/format.js';
 import { debounce } from './utils/simulation.js';
 import { CALCULATORS, DEFAULT_TAB } from './utils/calculatorRegistry.js';
-import { initRouter, navigate, ensureMounted, currentTab, refreshCurrent, onNavigate, step, tabFromUrl, mountedModule } from './shell/router.js';
+import { initRouter, navigate, ensureMounted, currentTab, refreshCurrent, onNavigate, onNavigated, step, tabFromUrl, mountedModule } from './shell/router.js';
 import { initSidebar, markRelevance, renderDeckSwitcher } from './shell/sidebar.js';
 import { initGuide, openGuide, isGuideOpen, refreshPageHeader } from './shell/pageHeader.js';
 import { initPalette, openPalette } from './shell/palette.js';
@@ -64,6 +64,13 @@ function initOpponentsBar() {
     const toggle = document.getElementById('opponents-toggle');
     onNavigate(name => {
         if (bar) bar.hidden = CALCULATORS[name]?.group !== 'multiplayer';
+    });
+    // Seat the bar under the page header, so a multiplayer page opens with
+    // what the card does before asking for decklists.
+    onNavigated((name, panel) => {
+        if (!bar || CALCULATORS[name]?.group !== 'multiplayer') return;
+        const body = panel.querySelector(':scope > .calc-body');
+        if (body && bar.nextElementSibling !== body) body.before(bar);
     });
     toggle?.addEventListener('click', () => {
         const open = toggle.getAttribute('aria-expanded') !== 'true';

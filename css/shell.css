@@ -1799,3 +1799,23 @@
 .finding-link:hover { text-decoration: underline; }
 
 .saved-deck-rename { flex: 1; min-width: 0; height: 40px; margin: 4px; font-size: var(--t-sm); }
+
+/* When seated inside a multiplayer page (under its header) the bar is just
+   another card in the column. */
+.tab-content > .opponents-bar {
+    margin: 0 0 16px;
+    max-width: none;
+}
+
+/* Phyrexian ({G/P}) and twobrid ({2/W}) mana symbols */
+.ms-wp { background: var(--mana-w); color: var(--mana-w-ink); }
+.ms-up { background: var(--mana-u); color: var(--mana-u-ink); }
+.ms-bp { background: var(--mana-b); color: var(--mana-b-ink); }
+.ms-rp { background: var(--mana-r); color: var(--mana-r-ink); }
+.ms-gp { background: var(--mana-g); color: var(--mana-g-ink); }
+:is(.ms-wp, .ms-up, .ms-bp, .ms-rp, .ms-gp)::after { content: 'Φ'; font-family: var(--font-body); }
+.ms-2w { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-w) 50%); }
+.ms-2u { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-u) 50%); }
+.ms-2b { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-b) 50%); }
+.ms-2r { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-r) 50%); }
+.ms-2g { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-g) 50%); }

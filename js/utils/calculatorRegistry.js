@@ -53,6 +53,7 @@ export const CALCULATORS = Object.freeze({
         question: 'Can my lands cast my spells on curve?',
         summary: 'Colour sources against colour demands for every card, with how many sources each colour needs.',
         method: 'exact', keywords: ['colors', 'colours', 'sources', 'karsten', 'pips', 'lands', 'castability'],
+        charts: false,
         load: () => import('../calculators/manabase.js'), view: () => import('../views/manabase.js')
     },
     hands: {
@@ -171,22 +172,22 @@ export const CALCULATORS = Object.freeze({
     mara: {
         name: 'Ensnared by the Mara', short: 'MAR', group: 'multiplayer', card: 'Ensnared by the Mara', cardInDeck: true,
         question: 'What does each opponent’s villainous choice give you?',
-        summary: 'Free spells versus damage for each opponent, simulated from their real decklists.',
-        method: 'simulation', keywords: ['villainous choice', 'opponents', 'damage'], needsOpponents: true,
+        summary: 'Free spell versus damage for each opponent, worked out exactly from their real decklists.',
+        method: 'exact', keywords: ['villainous choice', 'opponents', 'damage'], needsOpponents: true, charts: false,
         load: () => import('../calculators/mara.js'), view: () => import('../views/mara.js')
     },
     dreamharvest: {
         name: 'Dream Harvest', short: 'DRH', group: 'multiplayer', card: 'Dream Harvest', cardInDeck: true,
         question: 'How much will Dream Harvest steal from your opponents?',
         summary: 'Cards and mana value exiled from each opponent until each pile reaches five.',
-        method: 'simulation', keywords: ['steal', 'opponents', 'exile'], needsOpponents: true,
+        method: 'simulation', keywords: ['steal', 'opponents', 'exile'], needsOpponents: true, charts: false,
         load: () => import('../calculators/dreamharvest.js'), view: () => import('../views/dreamharvest.js')
     },
     mindsdilation: {
         name: 'Mind’s Dilation', short: 'MND', group: 'multiplayer', card: "Mind's Dilation", cardInDeck: true,
         question: 'How often will Mind’s Dilation give you a free spell?',
         summary: 'Free casts per turn cycle from your opponents’ libraries, by their land counts.',
-        method: 'exact + simulation', keywords: ['opponents', 'free spell', 'exile top'], needsOpponents: true,
+        method: 'exact', keywords: ['opponents', 'free spell', 'exile top'], needsOpponents: true, charts: false,
         load: () => import('../calculators/mindsdilation.js'), view: () => import('../views/mindsdilation.js')
     }
 });

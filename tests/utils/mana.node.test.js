@@ -100,3 +100,11 @@ describe('renderManaCost', () => {
         assert.equal(renderManaCost(''), '');
     });
 });
+
+describe('landColors with the deck\'s basics', () => {
+    it('limits basic-fetchers to the basics the deck runs', () => {
+        const wilds = { type_line: 'Land', oracle_text: 'Sacrifice Evolving Wilds: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.' };
+        assert.deepEqual(landColors(wilds, ['W', 'U', 'G'], ['G']), ['G']);
+        assert.deepEqual(landColors(wilds, ['W', 'U', 'G'], []), ['W', 'U', 'G']);
+    });
+});
