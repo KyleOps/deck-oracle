@@ -710,9 +710,19 @@
 /* ---------- Calculator body: panels as cards ---------- */
 .calc-body { min-width: 0; }
 
+/* Column gap only. The sticky rail spans 200 implicit rows (so results can
+   never back-fill column 1), so any row-gap here is multiplied 199 times —
+   a 16px row-gap once added ~3,200px of empty page. Panels space themselves
+   with margins instead. */
 .calc-body .main-grid {
-    gap: 16px;
+    column-gap: 16px;
+    row-gap: 0;
     align-items: start;
+}
+
+.calc-body .main-grid > .panel,
+.calc-body .main-grid > .panel-row {
+    margin-bottom: 16px;
 }
 
 .calc-body .panel,

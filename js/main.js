@@ -232,13 +232,19 @@ async function init() {
     document.documentElement.dataset.format = fmt.key in FORMATS ? fmt.key : 'commander';
 }
 
+/** Offer installation at most once a month — it is an offer, not a nag. */
 function initPWAInstall() {
+    const KEY = 'deckOracle.installOffered';
+    const MONTH = 30 * 24 * 60 * 60 * 1000;
     window.addEventListener('beforeinstallprompt', e => {
         e.preventDefault();
-        const prompt = e;
+        let last = 0;
+        try { last = Number(localStorage.getItem(KEY)) || 0; } catch { /* storage blocked */ }
+        if (Date.now() - last < MONTH) return;
+        try { localStorage.setItem(KEY, String(Date.now())); } catch { /* storage blocked */ }
         toast('Install Deck Oracle for offline use?', {
             timeout: 10000,
-            action: { label: 'Install', run: () => prompt.prompt() }
+            action: { label: 'Install', run: () => e.prompt() }
         });
     }, { once: true });
 }

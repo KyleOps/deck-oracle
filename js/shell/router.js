@@ -131,7 +131,8 @@ export async function navigate(name, { history: historyMode = 'push', focus = fa
     const previous = current;
     current = name;
 
-    document.body.classList.forEach(c => { if (c.startsWith('theme-')) document.body.classList.remove(c); });
+    // Copy first: removing from a live DOMTokenList while iterating skips entries.
+    [...document.body.classList].filter(c => c.startsWith('theme-')).forEach(c => document.body.classList.remove(c));
     document.body.classList.add(`theme-${name}`);
     document.body.dataset.page = name;
     document.body.dataset.group = CALCULATORS[name].group;
