@@ -1722,8 +1722,9 @@
     height: 64px;
     flex-shrink: 0;
     border-radius: var(--radius-md);
-    background-size: cover;
-    background-position: center 25%;
+    object-fit: cover;
+    object-position: center 25%;
+    background: var(--tx-panel-alt);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 

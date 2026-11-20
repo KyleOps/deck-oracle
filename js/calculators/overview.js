@@ -17,6 +17,7 @@ import { analyzeDeck } from '../utils/deckRadar.js';
 import { CALCULATORS, getGroup } from '../utils/calculatorRegistry.js';
 import { CARD_META } from '../data/cards.js';
 import { escapeHtml, cardRef, term } from '../data/glossary.js';
+import { cardImageUrl, findCard } from '../data/images.js';
 
 const NAME = 'overview';
 const TYPE_LABEL = {
@@ -39,10 +40,9 @@ function manaPip(color) {
     return `<span class="ms ms-${color.toLowerCase()}" aria-hidden="true">${color}</span>`;
 }
 
-function artUrl(name) {
+function artUrl(name, cardsByName) {
     if (!name) return '';
-    return CARD_META[name]?.art
-        ?? `https://api.scryfall.com/cards/named?format=image&version=art_crop&exact=${encodeURIComponent(name)}`;
+    return CARD_META[name]?.art ?? cardImageUrl(findCard(cardsByName, name) ?? name, 'art_crop');
 }
 
 function sourceLink(config) {
@@ -72,7 +72,7 @@ function renderHero(config, stats, format) {
             <span class="ov-welcome-text"><strong>You’re looking at an example deck.</strong> Load your own from Moxfield, Archidekt or a pasted list — every page updates to match.</span>
             <button class="btn btn-primary btn-sm" type="button" data-ov-deck>Load your deck</button>
         </div>` : ''}
-        ${featured ? `<div class="ov-hero-art" style="background-image:url('${artUrl(featured)}')" aria-hidden="true"></div>` : ''}
+        ${featured ? `<div class="ov-hero-art" style="background-image:url('${artUrl(featured, config.cardsByName)}')" aria-hidden="true"></div>` : ''}
         <div class="ov-hero-body">
             <div class="ov-eyebrow">${escapeHtml(format.label)} deck ${sourceLink(config)}</div>
             <h2 class="ov-hero-name">${escapeHtml(name)}</h2>
@@ -246,7 +246,7 @@ function toolCard(key, reason, tone) {
     const art = c.card ? CARD_META[c.card]?.art : null;
     return `
         <a class="tool-card${tone ? ` tool-${tone}` : ''}" href="?tab=${key}" data-tab-link="${key}">
-            ${art ? `<span class="tool-art" style="background-image:url('${art}')" aria-hidden="true"></span>` : ''}
+            ${art ? `<img class="tool-art" src="${art}" alt="" loading="lazy" decoding="async" width="64" height="64">` : ''}
             <span class="tool-body">
                 <span class="tool-group">${escapeHtml(getGroup(c.group)?.label ?? '')}</span>
                 <span class="tool-name">${escapeHtml(c.name)}</span>

@@ -11,6 +11,7 @@ import * as OpponentState from './utils/opponentState.js';
 import * as Share from './utils/share.js';
 import { analyzeDeck } from './utils/deckRadar.js';
 import { featuredCardName } from './utils/deckStats.js';
+import { findCard } from './data/images.js';
 import { FORMATS } from './utils/format.js';
 import { debounce } from './utils/simulation.js';
 import { CALCULATORS, DEFAULT_TAB } from './utils/calculatorRegistry.js';
@@ -38,7 +39,8 @@ function deckSummary(config) {
         || (config.importSource === 'manual' ? 'Custom counts' : 'Untitled deck');
     const parts = [`${size} cards`, format.label.replace(/ \(\d+\)/, '')];
     if (config.importSource === 'manual') parts.push('counts only');
-    return { name, meta: parts.join(' · '), artName: featuredCardName(config) };
+    const artName = featuredCardName(config);
+    return { name, meta: parts.join(' · '), artName, artCard: findCard(config.cardsByName, artName) };
 }
 
 function syncDeckChrome() {

@@ -6,6 +6,7 @@
 import { CALCULATORS, GROUPS, getGroup } from '../utils/calculatorRegistry.js';
 import { CARD_META } from '../data/cards.js';
 import { escapeHtml } from '../data/glossary.js';
+import { cardImageUrl } from '../data/images.js';
 import { onNavigate } from './router.js';
 
 export function renderNav() {
@@ -69,7 +70,7 @@ export function markRelevance(ranked = []) {
 }
 
 /** Deck switcher button in the sidebar: name, size, format, commander art. */
-export function renderDeckSwitcher({ name, meta, artName }) {
+export function renderDeckSwitcher({ name, meta, artName, artCard }) {
     const nameEl = document.getElementById('deck-switcher-name');
     const metaEl = document.getElementById('deck-switcher-meta');
     const artEl = document.getElementById('deck-switcher-art');
@@ -80,9 +81,7 @@ export function renderDeckSwitcher({ name, meta, artName }) {
     if (metaEl) metaEl.textContent = meta;
     if (artEl) {
         const known = artName && CARD_META[artName]?.art;
-        const url = known || (artName
-            ? `https://api.scryfall.com/cards/named?format=image&version=art_crop&exact=${encodeURIComponent(artName)}`
-            : '');
+        const url = known || (artName ? cardImageUrl(artCard ?? artName, 'art_crop') : '');
         artEl.style.backgroundImage = url ? `url("${url}")` : '';
         artEl.classList.toggle('empty', !url);
     }

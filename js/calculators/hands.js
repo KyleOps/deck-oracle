@@ -17,11 +17,13 @@ import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { renderManaCost } from '../utils/mana.js';
 import { escapeHtml, cardRef, term } from '../data/glossary.js';
 import * as Lab from '../utils/handLab.js';
+import { cardImageUrl, findCard } from '../data/images.js';
 
 const NAME = 'hands';
 const GAMES = 10000;
+/** Direct CDN URL when the deck record has a Scryfall id, else a named lookup. */
 const SCRYFALL_IMAGE = name =>
-    `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(name)}`;
+    cardImageUrl(findCard(DeckConfig.getImportedCardData().cardsByName, name) ?? name, 'normal');
 const TYPE_VAR = {
     lands: 'land', creatures: 'creature', planeswalkers: 'planeswalker', battles: 'battle',
     artifacts: 'artifact', enchantments: 'enchantment', instants: 'instant', sorceries: 'sorcery'

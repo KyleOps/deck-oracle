@@ -57,6 +57,7 @@ const STATIC_ASSETS = [
     'js/calculators/wildpair.js',
     'js/data/cards.js',
     'js/data/glossary.js',
+    'js/data/images.js',
     'js/main.js',
     'js/shell/deckDialog.js',
     'js/shell/overlays.js',

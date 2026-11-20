@@ -9,9 +9,11 @@
  */
 
 import { GLOSSARY, escapeHtml } from '../data/glossary.js';
+import { cardImageUrl, findCard } from '../data/images.js';
+import { getImportedCardData } from '../utils/deckConfig.js';
 
-const SCRYFALL_IMAGE = name =>
-    `https://api.scryfall.com/cards/named?format=image&version=normal&exact=${encodeURIComponent(name)}`;
+/** Prefer the deck's own record (direct CDN URL) over a by-name lookup. */
+const previewUrl = name => cardImageUrl(findCard(getImportedCardData().cardsByName, name) ?? name, 'normal');
 
 let tooltipEl;
 let previewEl;
@@ -67,7 +69,7 @@ function show(target) {
             previewEl.classList.remove('loaded');
             previewImg.dataset.name = name;
             previewImg.alt = name;
-            previewImg.src = SCRYFALL_IMAGE(name);
+            previewImg.src = previewUrl(name);
         }
         previewEl.hidden = false;
         positionPreview(target);
