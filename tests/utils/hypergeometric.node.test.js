@@ -1,4 +1,9 @@
-import { describe, it, assert, assertClose } from '../test-helper.js';
+import { describe, it } from 'node:test';
+import nodeAssert from 'node:assert/strict';
+
+const assert = (condition, message) => nodeAssert.ok(condition, message);
+const assertClose = (actual, expected, message, tolerance = 0.0001) =>
+    nodeAssert.ok(Math.abs(actual - expected) <= tolerance, `${message}: expected ${expected}, got ${actual}`);
 import { choose, drawType, drawTypeMin, drawTwoTypeMin, drawThreeTypeMin } from '../../js/utils/hypergeometric.js';
 
 describe('Hypergeometric Utils', () => {

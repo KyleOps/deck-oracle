@@ -539,7 +539,7 @@ ${s} .bs-card.is-miss .card-ref { color: var(--tx-dim); text-decoration-color: t
 ${s} .bs-card.is-miss .bs-dot { opacity: 0.45; }
 ${s} .bs-card.is-star { background: var(--good-soft); }
 ${s} .bs-card.is-star .card-ref { color: var(--tx-bright); font-weight: 600; }
-${s} .bs-card-mv { font-family: var(--font-mono); font-size: var(--t-label); color: var(--tx-dim); }
+${s} .bs-card-mv { font-family: var(--font-mono); font-size: var(--t-label); color: var(--tx-mid); }
 ${s} .bs-fate { font-size: var(--t-label); color: var(--tx-dim); white-space: nowrap; text-align: right; min-width: 64px; }
 ${s} .bs-card.is-hit .bs-fate { color: var(--tx-mid); }
 ${s} .bs-card.is-star .bs-fate { color: var(--tx-good); font-weight: 600; }

@@ -286,7 +286,7 @@ export const styles = `
 #manabase-tab .mb-karsten td.is-met { background: var(--good-soft); color: var(--tx-good); }
 #manabase-tab .mb-karsten td.is-short.has-cards { background: var(--bad-soft); color: var(--tx-bad); }
 #manabase-tab .mb-karsten td.has-cards { box-shadow: inset 0 0 0 1.5px currentColor; cursor: help; }
-#manabase-tab .mb-karsten td.is-na { background: transparent; color: var(--tx-rule-hi); font-weight: 400; }
+#manabase-tab .mb-karsten td.is-na { background: transparent; color: var(--tx-dim); font-weight: 400; }
 #manabase-tab .mb-cell-cards {
     display: block;
     margin-top: 2px;

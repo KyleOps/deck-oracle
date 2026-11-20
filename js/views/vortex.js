@@ -189,9 +189,9 @@ export const styles = `
 #vortex-tab .vx-passed::after { content: '→'; color: var(--tx-dim); margin: 0 2px; }
 #vortex-tab .reveal-card { margin: 0; border-radius: var(--radius-xs); cursor: zoom-in; }
 #vortex-tab .reveal-card.is-passed {
-    opacity: 0.55;
     color: var(--tx-mid);
     border-color: var(--tx-rule-hi);
+    border-style: dashed;
 }
 #vortex-tab .reveal-card.is-hit { font-weight: 600; }
 #vortex-tab .vx-step-mv {

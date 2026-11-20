@@ -169,7 +169,7 @@ export const styles = `
     font-family: var(--font-mono);
     font-size: var(--t-micro);
     text-align: center;
-    color: var(--tx-dim);
+    color: var(--tx-mid);
 }
 #chimil-tab .ch-hit-mv {
     font-family: var(--font-mono);

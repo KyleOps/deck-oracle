@@ -49,7 +49,6 @@
     .tx-mx-foot { flex-wrap: wrap; }
     .tx-mx-foot-note { margin-left: 0; flex: 1 1 100%; }
 
-    .big-spell-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ---- Touch: comfortable targets ---- */

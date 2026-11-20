@@ -100,7 +100,8 @@ export const styles = `
     background: var(--tx-panel);
 }
 #abstract-tab .ap-pile.is-kept { border-color: var(--tx-good); }
-#abstract-tab .ap-pile.is-binned { opacity: 0.62; }
+/* Muted, not faded: opacity took the binned pile below readable contrast. */
+#abstract-tab .ap-pile.is-binned { border-style: dashed; background: transparent; }
 #abstract-tab .ap-pile-head {
     display: flex;
     justify-content: space-between;

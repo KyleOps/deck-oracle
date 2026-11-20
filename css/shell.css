@@ -737,14 +737,6 @@
 
 .panel { position: relative; }
 
-.calc-body .portent-grid {
-    gap: 16px;
-    background: none;
-    border: 0;
-}
-
-.calc-body .portent-grid > div { border-right: 1px solid var(--tx-rule); }
-
 /* Panel header band */
 .calc-body .tx-h {
     text-transform: none;
@@ -1333,6 +1325,9 @@
 
 /* ==================== DECK OVERVIEW ==================== */
 .ov { display: grid; gap: 28px; }
+/* Grid items default to min-width: auto, which let the swipeable findings
+   row stretch the page sideways on phones. */
+.ov > * { min-width: 0; }
 
 .ov-hero {
     position: relative;

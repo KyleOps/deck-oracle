@@ -219,9 +219,9 @@
     --tx-text:      #2a2823;
     --tx-bright:    #12110e;
 
-    --tx-accent:     #9a5f00;
+    --tx-accent:     #8a5500;
     --tx-accent-dim: #e9cf9f;
-    --accent-soft:   rgba(154, 95, 0, 0.1);
+    --accent-soft:   rgba(138, 85, 0, 0.09);
     --accent-ink:    #ffffff;
 
     --tx-good:  #146b3a;
@@ -234,20 +234,21 @@
     --tx-green-dim: #bfe0cb;
 
     --series-1: #146b3a;
-    --series-2: #9a5f00;
+    --series-2: #8a5500;
     --series-3: #2f6f9f;
     --series-4: #b23a28;
     --series-5: #7457a3;
     --series-6: #2c7f76;
 
-    --type-creature:     #3f8a47;
-    --type-instant:      #3a72a3;
-    --type-sorcery:      #7a5aa6;
-    --type-artifact:     #78807b;
-    --type-enchantment:  #a87a26;
-    --type-planeswalker: #a8557a;
-    --type-battle:       #a8503f;
-    --type-land:         #66784f;
+    /* Dark enough to read as TEXT on paper (AA), still distinct as fills. */
+    --type-creature:     #2f6f37;
+    --type-instant:      #2c5f8a;
+    --type-sorcery:      #654a8f;
+    --type-artifact:     #5f6762;
+    --type-enchantment:  #8a6418;
+    --type-planeswalker: #8f4567;
+    --type-battle:       #8f4232;
+    --type-land:         #52623f;
 
     --mana-w: #f1e6c2;  --mana-u: #a9d2ec;  --mana-b: #bdb3b5;
     --mana-r: #f2ad94;  --mana-g: #a8d7ae;  --mana-c: #d9dbd8;
