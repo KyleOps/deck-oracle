@@ -1,169 +1,87 @@
 /**
- * Comprehensive Mulligan Calculator Tests for Node Test Runner
- * Tests confidence threshold, penalty mechanics, and strategy decisions
+ * Mulligan Planner — behaviour of the keep rule through the calculator's own
+ * inputs (sliders read from the DOM, rows set like a share link would).
  */
 
-import { describe, it, beforeEach } from 'node:test';
-import { assert, assertClose, assertInRange, createMockInput, createMockCheckbox, resetMocks } from '../node-test-helper.js';
-import { calculate, calcMultiTypeSuccess, getDeckConfig, setCardTypes } from '../../js/calculators/mulligan.js';
+import { describe, it } from 'node:test';
+import { assert, assertClose, assertInRange, createMockInput, resetMocks } from '../node-test-helper.js';
+import { calculate, setCardTypes, applyShareParams } from '../../js/calculators/mulligan.js';
+import { keepBar } from '../../js/utils/mulliganModel.js';
 
-describe('Mulligan Strategy Calculator - Comprehensive', () => {
+const LANDS = { id: 1, name: 'Lands', count: 37, required: 3, byTurn: 3, max: 5 };
+const RAMP = { id: 2, name: 'Ramp', count: 11, required: 1, byTurn: 3 };
 
-    function setupMulligan(config = {}) {
+function setup({ threshold = 75, penalty = 20, types = [LANDS, RAMP] } = {}) {
+    resetMocks();
+    createMockInput('mull-threshold', threshold);
+    createMockInput('mull-penalty', penalty);
+    setCardTypes(types);
+    return calculate().result;
+}
+
+describe('Mulligan Planner — keep rule', () => {
+    it('keeps exactly the sevens that clear the bar', () => {
+        const result = setup({ threshold: 68 });
+        result.strategy.forEach(h => {
+            const legal = result.steps[0].decisions[result.strategy.indexOf(h)].legal;
+            assert.strictEqual(h.keep, legal && h.successProb >= 0.68 - 1e-12, `hand ${h.counts}`);
+        });
+    });
+
+    it('a higher bar keeps fewer sevens', () => {
+        const rates = [50, 68, 75, 90].map(threshold => setup({ threshold }).keepSeven);
+        for (let i = 1; i < rates.length; i++) assert.ok(rates[i] <= rates[i - 1], `threshold step ${i}`);
+    });
+
+    it('the penalty lowers the bar after cards are lost', () => {
+        applyShareParams(new URLSearchParams('mullFree=0'));
+        const strict = setup({ penalty: 0 });
+        const loose = setup({ penalty: 50 });
+        assertClose(strict.steps[2].bar, 0.75, 'no penalty: same bar', 1e-12);
+        assertClose(loose.steps[2].bar, keepBar(0.75, 0.5, 2), 'penalty 50%: bar halves per card', 1e-12);
+        assert.ok(loose.steps[2].keepChance >= strict.steps[2].keepChance);
+        assert.ok(loose.avgHandSize >= strict.avgHandSize, 'a lower bar keeps bigger hands');
+        assert.ok(strict.success >= loose.success - 1e-9, 'a constant bar finds better hands');
+    });
+});
+
+describe('Mulligan Planner — plan statistics', () => {
+    it('produces valid probabilities', () => {
+        const result = setup();
+        assertInRange(result.expectedSuccess, 0, 1, 'success');
+        assertClose(result.strategy.reduce((s, h) => s + h.handProb, 0), 1, 'hands sum to 1', 1e-9);
+        assertInRange(result.avgMulligans, 0, 3, 'average mulligans');
+        assertInRange(result.expectedCards, 4, 7, 'average hand size');
+    });
+
+    it('mulligans beat keeping every seven', () => {
+        const result = setup();
+        assert.ok(result.expectedSuccess >= result.baselineSuccess);
+    });
+
+    it('handles one group and three groups', () => {
+        assert.ok(setup({ types: [LANDS] }).expectedSuccess > 0.8);
+        const three = setup({ types: [LANDS, RAMP, { id: 3, name: 'Payoffs', count: 10, required: 1, byTurn: 5 }] });
+        assert.ok(three.strategy.length > 0);
+        assert.strictEqual(three.types.length, 3);
+    });
+});
+
+describe('Mulligan Planner — edge cases', () => {
+    it('impossible requirements give no success', () => {
+        const result = setup({ types: [{ id: 1, name: 'Lands', count: 5, required: 8, byTurn: 3 }] });
+        assertClose(result.expectedSuccess, 0, 'impossible', 1e-9);
+    });
+
+    it('groups larger than the deck still produce a plan (and flag it)', () => {
+        const result = setup({ types: [{ id: 1, name: 'Lands', count: 120, required: 3, byTurn: 3 }] });
+        assert.strictEqual(result.oversize, true);
+        assert.ok(result.expectedSuccess > 0.99);
+    });
+
+    it('no rows means no plan', () => {
         resetMocks();
-        createMockInput('mull-deck-size', config.deckSize || 98);
-        createMockInput('mull-penalty', config.penalty || 20);
-        createMockInput('mull-threshold', config.threshold || 75);
-        createMockCheckbox('mull-free', config.freeMulligan || false);
-
-        const types = config.types || [
-            { id: 1, name: 'Lands', count: 40, required: 3, byTurn: 3, color: '#22c55e' },
-            { id: 2, name: 'Ramp', count: 16, required: 1, byTurn: 3, color: '#3b82f6' }
-        ];
-        setCardTypes(types);
-    }
-
-    describe('Core Math - calcMultiTypeSuccess', () => {
-        it('calculates sequential deadlines correctly (A by T1, B by T2)', () => {
-            const types = [
-                { id: 1, count: 1, required: 1, byTurn: 1 },
-                { id: 2, count: 1, required: 1, byTurn: 2 }
-            ];
-            const hand = [0, 0];
-            const deckSize = 17;
-            const result = calcMultiTypeSuccess(deckSize, types, hand);
-            assertClose(result, 1/90, 'Sequential A(T1), B(T2)');
-        });
-
-        it('returns 1.0 when all requirements are met', () => {
-            const types = [
-                { id: 1, count: 10, required: 2, byTurn: 3 }
-            ];
-            const hand = [2];
-            const result = calcMultiTypeSuccess(60, types, hand);
-            assert.strictEqual(result, 1.0);
-        });
-
-        it('returns 0 for impossible Turn 0 requirements', () => {
-            const types = [
-                { id: 1, count: 10, required: 2, byTurn: 0 }
-            ];
-            const hand = [0];
-            const result = calcMultiTypeSuccess(60, types, hand);
-            assert.strictEqual(result, 0);
-        });
-    });
-
-    describe('Confidence Threshold Behavior', () => {
-        it('confidence threshold affects keep decisions', () => {
-            setupMulligan({ threshold: 50 });
-            const { result: low } = calculate();
-
-            setupMulligan({ threshold: 90 });
-            const { result: high } = calculate();
-
-            const lowKeepCount = low.strategy.filter(h => h.keep).length;
-            const highKeepCount = high.strategy.filter(h => h.keep).length;
-
-            assert.ok(lowKeepCount >= highKeepCount, 'Lower threshold should keep more hands');
-        });
-
-        it('adjusts threshold correctly across different values', () => {
-            const thresholds = [50, 68, 75, 90];
-            const keepRates = [];
-
-            thresholds.forEach(threshold => {
-                setupMulligan({ threshold });
-                const { result } = calculate();
-                const keepRate = result.strategy
-                    .filter(h => h.keep)
-                    .reduce((sum, h) => sum + h.handProb, 0);
-                keepRates.push(keepRate);
-            });
-
-            // Higher thresholds should result in lower or equal keep rates
-            for (let i = 1; i < keepRates.length; i++) {
-                assert.ok(keepRates[i] <= keepRates[i-1],
-                    `Keep rate at threshold ${thresholds[i]} should be <= threshold ${thresholds[i-1]}`);
-            }
-        });
-    });
-
-    describe('Strategy Generation', () => {
-        it('generates valid strategy for standard deck', () => {
-            setupMulligan();
-            const { result } = calculate();
-
-            assert.ok(result.expectedSuccess >= 0 && result.expectedSuccess <= 1,
-                'Success rate should be valid probability');
-            assert.ok(result.strategy.length > 0, 'Strategy entries should be generated');
-
-            const totalProb = result.strategy.reduce((sum, h) => sum + h.handProb, 0);
-            assertClose(totalProb, 1.0, 'Hand probabilities should sum to 1', 0.0001);
-        });
-
-        it('handles single card type', () => {
-            setupMulligan({
-                types: [{ id: 1, name: 'Lands', count: 40, required: 3, byTurn: 3, color: '#22c55e' }]
-            });
-            const { result } = calculate();
-
-            assert.ok(result.strategy.length > 0, 'Strategy should be generated for single type');
-            assert.ok(result.expectedSuccess > 0, 'Should have non-zero success rate');
-        });
-
-        it('handles three card types', () => {
-            setupMulligan({
-                types: [
-                    { id: 1, name: 'Lands', count: 36, required: 3, byTurn: 3, color: '#22c55e' },
-                    { id: 2, name: 'Ramp', count: 14, required: 1, byTurn: 3, color: '#3b82f6' },
-                    { id: 3, name: 'Payoffs', count: 10, required: 1, byTurn: 5, color: '#ef4444' }
-                ]
-            });
-            const { result } = calculate();
-
-            assert.ok(result.strategy.length > 0, 'Strategy should be generated for three types');
-        });
-    });
-
-    describe('Edge Cases', () => {
-        it('handles impossible requirements gracefully', () => {
-            setupMulligan({
-                types: [{ id: 1, name: 'Lands', count: 5, required: 8, byTurn: 3, color: '#22c55e' }]
-            });
-            const { result } = calculate();
-            assertClose(result.expectedSuccess, 0, 'Success rate should be near 0 for impossible requirements', 0.01);
-        });
-
-        it('handles very large deck sizes', () => {
-            setupMulligan({
-                deckSize: 250,
-                types: [{ id: 1, name: 'Lands', count: 100, required: 3, byTurn: 3, color: '#22c55e' }]
-            });
-            const { result } = calculate();
-            assert.ok(result.strategy.length > 0, 'Strategy should be generated for large deck');
-        });
-    });
-
-    describe('Mulligan Breakdown Statistics', () => {
-        it('calculates average mulligans correctly', () => {
-            setupMulligan();
-            const { result } = calculate();
-            assertInRange(result.avgMulligans, 0, 3, 'Average mulligans should be between 0 and 3');
-        });
-
-        it('baseline success is lower than or equal to strategy success', () => {
-            setupMulligan();
-            const { result } = calculate();
-            assert.ok(result.expectedSuccess >= result.baselineSuccess,
-                'Strategy success should be >= baseline (no mulligan) success');
-        });
-
-        it('unpenalized success is higher than or equal to penalized', () => {
-            setupMulligan({ penalty: 20 });
-            const { result } = calculate();
-            assert.ok(result.unpenalizedSuccess >= result.expectedSuccess,
-                'Unpenalized success should be >= penalized success');
-        });
+        setCardTypes([]);
+        assert.strictEqual(calculate().result, null);
     });
 });

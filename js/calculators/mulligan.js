@@ -1,1549 +1,1141 @@
 /**
- * Mulligan Strategy Calculator
- * Determines optimal mulligan decisions for any number of card types
+ * Mulligan Planner — "Which hands should I keep, and how often will I find one?"
+ *
+ * The maths lives in utils/mulliganModel.js (exact, pure, tested). This module
+ * owns the requirement rows, the deck-built templates, rendering, and the
+ * sample-game simulation. Requirement rows can be *linked* to a group of the
+ * imported list (lands, ramp, cards costing 2 or less, …) so their counts
+ * follow the deck, or typed by hand.
+ *
+ * Share links: share.js reads getState() (requirement rows) and the inputs
+ * mull-penalty / mull-threshold / mulligan-sample-count; getShareParams()
+ * carries the rest (turn order, free mulligan, limits, linked groups).
  */
 
-import { choose, drawTwoTypeMin, drawThreeTypeMin } from '../utils/hypergeometric.js';
-import { formatNumber, formatPercentage, createCache } from '../utils/simulation.js';
-import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
-import { generateSampleRevealsHTML, renderHeroStats, renderOutcomeMatrix } from '../utils/components.js';
-import { shuffleDeck, createCollapsibleSection } from '../utils/sampleSimulator.js';
-import { probabilityVerdict } from '../utils/analysis.js';
-import { updateCalculatorIfActive } from '../utils/calculatorBase.js';
+import { registerCalculator } from '../utils/calculatorBase.js';
+import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { escapeHtml } from '../data/glossary.js';
+import { tagDeck } from '../utils/cardTags.js';
+import { isLand } from '../utils/mana.js';
+import { TX_CHART } from '../utils/chartHelpers.js';
+import { createCache, debounce } from '../utils/simulation.js';
+import { formatChance } from '../utils/percent.js';
+import {
+    HAND_SIZE, mulliganPlan, marginalGains, drawSchedule, handSuccess, keepRules,
+    chooseBottom, bottomCount, keepBar
+} from '../utils/mulliganModel.js';
 
-let simulationCache = createCache(100);
-let lastConfigHash = '';
-let turnChart = null;
+const NAME = 'mulligan';
+const SAMPLE_DEFAULT = 500;
+const GAMES_SHOWN = 4;
+const STEP_TABS = 4;
+const PRESETS = Object.freeze({
+    casual: { penalty: 50, threshold: 60 },
+    balanced: { penalty: 20, threshold: 75 },
+    competitive: { penalty: 5, threshold: 92 }
+});
 
-// Stable samples state
-let stableSamples = [];
-const SAMPLE_COUNT_DEFAULT = 10;
-let renderedCount = 0;
+/** Groups a requirement can be counted from, in the imported list. */
+export const SOURCES = Object.freeze({
+    land: { label: 'Lands', name: 'Lands', unit: 'lands', test: c => isLand(c) },
+    ramp: { label: 'Ramp', name: 'Ramp', unit: 'ramp', needsList: true, test: (c, tags) => !isLand(c) && tags.includes('ramp') },
+    cheap: { label: 'Cards costing 2 or less', name: 'Early plays', unit: 'early plays', needsList: true, test: c => !isLand(c) && (Number(c.cmc) || 0) <= 2 },
+    draw: { label: 'Card draw', name: 'Card draw', unit: 'card draw', needsList: true, test: (c, tags) => !isLand(c) && tags.includes('draw') },
+    interaction: { label: 'Removal and interaction', name: 'Interaction', unit: 'interaction', needsList: true, test: (c, tags) => tags.some(t => t === 'removal' || t === 'counter' || t === 'wipe') },
+    creature: { label: 'Creatures', name: 'Creatures', unit: 'creatures', needsList: true, test: c => !isLand(c) && /\bcreature\b/i.test(String(c.type_line ?? '').split('//')[0]) }
+});
 
-const DEFAULT_COLORS = ['#55c97f', '#5b8db8', '#e8635c', '#f0a92c', '#9878b8', '#b8738f', '#5fa8a0', '#f0a92c'];
+const LAND_ROW = Object.freeze({ source: 'land', required: 3, byTurn: 3, max: 5 });
 
-// Card type management
-let cardTypes = [
-    { id: 1, name: 'Lands', count: 39, required: 3, byTurn: 3, color: DEFAULT_COLORS[0] },
-    { id: 2, name: 'Ramp', count: 14, required: 1, byTurn: 3, color: DEFAULT_COLORS[1] }
-];
-let nextTypeId = 3;
+/** One-click starting points, filled in from the deck. */
+export const TEMPLATES = Object.freeze([
+    { key: 'lands', name: 'Enough lands', rule: '3 lands by turn 3, no more than 5', rows: [LAND_ROW] },
+    { key: 'ramp', name: 'Lands + ramp', rule: '…plus a ramp piece by turn 3', rows: [LAND_ROW, { source: 'ramp', required: 1, byTurn: 3, max: null }] },
+    { key: 'cheap', name: 'Lands + an early play', rule: '…plus a card costing 2 or less by turn 2', rows: [LAND_ROW, { source: 'cheap', required: 1, byTurn: 2, max: null }] }
+]);
 
-// ... (Hypergeometric functions remain the same) ...
-/**
- * Calculate probability of drawing specific combination of multiple types
- */
-function multiTypeProb(deckSize, typeCounts, drawn, typeDrawn) {
-    const numTypes = typeCounts.length;
-    const totalDrawn = typeDrawn.reduce((sum, n) => sum + n, 0);
+// ── State ────────────────────────────────────────────────────────────────────
 
-    if (totalDrawn > drawn) return 0;
+let cardTypes = [];
+let nextTypeId = 1;
+let templateKey = 'lands';
+let onPlay = true;
+let freeOverride = null;      // null = follow the format's rule
+let lastFormatKey = null;
+let viewStep = 0;
+let shownGames = GAMES_SHOWN;
+let simSeed = 0;
+let sim = { key: null, data: null };
+let scheduleUpdate = () => updateUI();
 
-    const othersTotal = deckSize - typeCounts.reduce((sum, n) => sum + n, 0);
-    const othersDrawn = drawn - totalDrawn;
+const planCache = createCache(40);
+const gainsCache = createCache(20);
+let tagCache = { ref: null, byCard: {} };
+let deckVersion = 0;
 
-    if (othersDrawn < 0 || othersDrawn > othersTotal) return 0;
+const $ = id => (typeof document !== 'undefined' ? document.getElementById(id) : null);
+const sum = arr => arr.reduce((s, n) => s + n, 0);
+const groupColor = i => `var(--series-${(i % 6) + 1})`;
+const isHex = v => typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v.trim());
 
-    let numerator = choose(othersTotal, othersDrawn);
-    for (let i = 0; i < numTypes; i++) {
-        numerator *= choose(typeCounts[i], typeDrawn[i]);
+const pct = formatChance;
+
+// ── Deck groups ──────────────────────────────────────────────────────────────
+
+function deckData() {
+    const { cardsByName } = DeckConfig.getImportedCardData();
+    const hasList = DeckConfig.hasCardList();
+    if (tagCache.ref !== cardsByName) {
+        tagCache = { ref: cardsByName, byCard: hasList ? tagDeck(cardsByName).byCard : {} };
+        deckVersion++;
     }
-
-    const denominator = choose(deckSize, drawn);
-    return numerator / denominator;
+    const cards = hasList ? Object.values(cardsByName).filter(c => c?.name && Number(c.count) > 0) : [];
+    const config = DeckConfig.getDeckConfig();
+    return { hasList, cards, tags: tagCache.byCard, lands: Number(config.lands) || 0, deckSize: DeckConfig.getDeckSize(true) };
 }
 
 /**
- * Calculate cumulative probability: P(at least typeDrawn[i] of each type)
- * Optimized to use built-in hypergeometric functions for common cases
+ * Count each linked group from the list; a card goes to the first group it fits.
+ * @param {Array<{source?:string|null}>} types
+ * @param {Array<Object>} cards - card records with `count`
+ * @param {Record<string,string[]>} tagsByCard
+ * @returns {{counts:number[], groupOf:Map<string,number>}}
  */
-function multiTypeProbCumulative(deckSize, typeCounts, drawn, typeDrawnMin) {
-    // Fast path for common cases
-    if (typeCounts.length === 2) {
-        return drawTwoTypeMin(deckSize, typeCounts[0], typeCounts[1], drawn, typeDrawnMin[0], typeDrawnMin[1]);
-    }
-    if (typeCounts.length === 3) {
-        return drawThreeTypeMin(deckSize, typeCounts[0], typeCounts[1], typeCounts[2], drawn, typeDrawnMin[0], typeDrawnMin[1], typeDrawnMin[2]);
-    }
-
-    // General case: enumerate all valid combinations
-    let totalProb = 0;
-    function enumerate(typeIndex, currentDrawn, remainingSlots) {
-        if (typeIndex === typeCounts.length) {
-            totalProb += multiTypeProb(deckSize, typeCounts, drawn, currentDrawn);
-            return;
-        }
-        const minForType = typeDrawnMin[typeIndex];
-        const maxForType = Math.min(typeCounts[typeIndex], remainingSlots);
-        for (let count = minForType; count <= maxForType; count++) {
-            enumerate(typeIndex + 1, [...currentDrawn, count], remainingSlots - count);
+export function assignCards(types, cards = [], tagsByCard = {}) {
+    const counts = types.map(() => 0);
+    const groupOf = new Map();
+    for (const card of cards) {
+        const tags = tagsByCard[card.name] ?? [];
+        const idx = types.findIndex(t => t.source && SOURCES[t.source]?.test(card, tags));
+        if (idx >= 0) {
+            counts[idx] += Number(card.count) || 0;
+            groupOf.set(card.name, idx);
         }
     }
-    enumerate(0, [], drawn);
-    return totalProb;
+    return { counts, groupOf };
 }
 
-/**
- * Calculate success probability for a multi-type hand
- */
-/**
- * Calculate success probability for a multi-type hand with multiple deadlines.
- * Uses memoization and sequential deadlines for correctness.
- */
-export function calcMultiTypeSuccess(deckSize, types, handCounts) {
-    const activeTypes = types.map((t, i) => ({ ...t, index: i }));
-    const unsatisfied = activeTypes.filter(t => handCounts[t.index] < t.required);
-
-    if (unsatisfied.length === 0) return 1;
-
-    // Sort unique deadlines
-    const uniqueDeadlines = [...new Set(unsatisfied.map(t => t.byTurn))].sort((a, b) => a - b);
-    
-    // Check for impossible Turn 0 requirements
-    if (uniqueDeadlines[0] <= 0) return 0;
-
-    const initialCardsInDeck = deckSize - 7;
-    
-    // Memoization cache
-    const cache = new Map();
-
-    function solve(deadlineStep, currentCounts) {
-        // If we processed all deadlines, we succeeded
-        if (deadlineStep === uniqueDeadlines.length) return 1;
-
-        const targetTurn = uniqueDeadlines[deadlineStep];
-        const prevTurn = deadlineStep === 0 ? 0 : uniqueDeadlines[deadlineStep - 1];
-        const cardsToDraw = targetTurn - prevTurn;
-        
-        if (cardsToDraw <= 0) return 0; // Should not happen if logic is correct
-
-        const cacheKey = `${deadlineStep}:${currentCounts.join(',')}`;
-        if (cache.has(cacheKey)) return cache.get(cacheKey);
-
-        const currentDeckCounts = types.map((t, i) => t.count - currentCounts[i]);
-        // Total cards in deck at this stage
-        const currentCardsInDeck = initialCardsInDeck - prevTurn;
-
-        let totalProb = 0;
-
-        // Generate all possible draw combinations for this step
-        function generateDraws(typeIdx, currentDraw, remainingSlots) {
-            if (typeIdx === types.length) {
-                const prob = multiTypeProb(
-                    currentCardsInDeck,
-                    currentDeckCounts,
-                    cardsToDraw,
-                    currentDraw
-                );
-
-                if (prob > 0) {
-                    const nextCounts = currentCounts.map((c, i) => c + currentDraw[i]);
-                    
-                    // Check requirements for CURRENT deadline
-                    const metRequirements = unsatisfied
-                        .filter(t => t.byTurn === targetTurn)
-                        .every(t => nextCounts[t.index] >= t.required);
-
-                    if (metRequirements) {
-                        totalProb += prob * solve(deadlineStep + 1, nextCounts);
-                    }
-                }
-                return;
-            }
-
-            const maxDraw = Math.min(currentDeckCounts[typeIdx], remainingSlots);
-            for (let c = 0; c <= maxDraw; c++) {
-                generateDraws(typeIdx + 1, [...currentDraw, c], remainingSlots - c);
-            }
-        }
-
-        generateDraws(0, [], cardsToDraw);
-
-        cache.set(cacheKey, totalProb);
-        return totalProb;
-    }
-
-    return solve(0, handCounts);
+function linkable(source, deck) {
+    const s = SOURCES[source];
+    if (!s) return false;
+    return !s.needsList || deck.hasList;
 }
 
-/**
- * Calculate mulligan strategy for multiple card types
- */
-function mullStratMultiType(deckSize, types, penalty, freeMulligan, confidenceThreshold) {
-    const strategy = [];
-    let bestKeepProb = 0;
-    const threshold = confidenceThreshold;
-
-    // Generate all possible hand combinations
-    function generateHandCombinations(typeIndex, currentCombination, remainingCards) {
-        if (typeIndex === types.length) {
-            if (currentCombination.reduce((sum, n) => sum + n, 0) <= 7) {
-                // Calculate hand probability
-                const handProb = multiTypeProb(
-                    deckSize,
-                    types.map(t => t.count),
-                    7,
-                    currentCombination
-                );
-
-                if (handProb > 0) {
-                    const successProb = calcMultiTypeSuccess(deckSize, types, currentCombination);
-
-                    strategy.push({
-                        counts: [...currentCombination],
-                        handProb,
-                        successProb,
-                        keep: false
-                    });
-
-                    if (successProb > bestKeepProb) {
-                        bestKeepProb = successProb;
-                    }
-                }
-            }
-            return;
-        }
-
-        const maxForType = Math.min(types[typeIndex].count, remainingCards);
-        for (let count = 0; count <= maxForType; count++) {
-            generateHandCombinations(
-                typeIndex + 1,
-                [...currentCombination, count],
-                remainingCards - count
-            );
-        }
-    }
-
-    generateHandCombinations(0, [], 7);
-
-    // We calculate the Expected Value (EV) for each mulligan step (0 to 6)
-    // London Mulligan: You always see 7 cards, penalty applies to success rate.
-    const evs = new Array(8).fill(0);
-    const stepStats = new Array(7).fill(null);
-    
-    for (let i = 6; i >= 0; i--) {
-        const penaltyFactor = i === 0 ? 0 : (freeMulligan ? (i - 1) : i);
-        const k = Math.pow(1 - penalty, penaltyFactor);
-        const nextEV = evs[i+1];
-        
-        // At this step, we keep if the hand's penalized success rate meets our confidence floor
-        // The floor decays with the penalty (fewer cards = lower threshold)
-        // We also consider the EV of mulliganing, but confidence threshold is the primary control
-        const floor = threshold * k;
-        const decisionThreshold = floor;
-        
-        let stepEV = 0;
-        let keepProbAtStep = 0;
-        let successIfKeptAtStep = 0;
-        
-        strategy.forEach(hand => {
-            const handSuccess = hand.successProb * k;
-            if (handSuccess >= decisionThreshold) {
-                stepEV += hand.handProb * handSuccess;
-                keepProbAtStep += hand.handProb;
-                successIfKeptAtStep += hand.handProb * handSuccess;
-            } else {
-                stepEV += hand.handProb * nextEV;
-            }
-        });
-        
-        evs[i] = stepEV;
-        stepStats[i] = {
-            keepProb: keepProbAtStep,
-            successIfKept: keepProbAtStep > 0 ? successIfKeptAtStep / keepProbAtStep : 0,
-            ev: stepEV
-        };
-        
-        // Update the 'keep' flag for the sampler (using opening hand decision by default)
-        if (i === 0) {
-            strategy.forEach(hand => {
-                hand.keep = (hand.successProb * k) >= decisionThreshold;
-            });
-        }
-    }
-
-    const expectedSuccess = evs[0];
-    const keepProb = stepStats[0].keepProb;
-    const expectedSuccessOnKeep = stepStats[0].successIfKept;
-
-    return { 
-        strategy, 
-        expectedSuccess, 
-        threshold, 
-        bestKeepProb, 
-        keepProb, 
-        expectedSuccessOnKeep,
-        stepStats 
-    };
-}
-
-/**
- * Calculate marginal benefit of replacing one "other" card with each type
- * This simulates real deck tuning: swapping a card rather than increasing deck size
- */
-function calculateMarginalBenefits(deckSize, types, penalty, freeMulligan, confidenceThreshold) {
-    const baseResult = mullStratMultiType(deckSize, types, penalty, freeMulligan, confidenceThreshold);
-    // Baseline = No Mulligan, just natural draw
-    const baseBaseline = calculateNoMulliganSuccess(deckSize, types);
-    const benefits = [];
-
-    types.forEach((type, index) => {
-        // Simulate replacing one "other" card with this type
-        // Deck size stays the same, only the type count increases by 1
-        const modifiedTypes = types.map((t, i) =>
-            i === index ? { ...t, count: t.count + 1 } : t
-        );
-        const modifiedResult = mullStratMultiType(deckSize, modifiedTypes, penalty, freeMulligan, confidenceThreshold);
-        const modifiedBaseline = calculateNoMulliganSuccess(deckSize, modifiedTypes);
-
-        benefits.push({
-            overall: modifiedResult.expectedSuccess - baseResult.expectedSuccess,
-            baseline: modifiedBaseline - baseBaseline
-        });
+/** Linked rows take their count from the deck (in place, so share links see it). */
+function syncLinkedCounts(deck = deckData()) {
+    if (!cardTypes.some(t => t.source)) return deck;
+    const { counts } = deck.hasList ? assignCards(cardTypes, deck.cards, deck.tags) : { counts: [] };
+    cardTypes.forEach((t, i) => {
+        if (!t.source || !linkable(t.source, deck)) return;
+        t.count = deck.hasList ? counts[i] : deck.lands;
     });
-
-    return benefits;
-}
-
-/**
- * Calculate average number of mulligans and expected cards in hand
- */
-function calculateAvgMulligans(strategy, penalty, freeMulligan) {
-    const keepProb = strategy.filter(h => h.keep).reduce((sum, h) => sum + h.handProb, 0);
-    // Geometric distribution: E[mulligans] = (1-p) / p where p is keep probability
-    const avgMulligans = keepProb > 0 ? (1 - keepProb) / keepProb : 0;
-
-    // Expected cards in hand calculation
-    let expectedCards = 0;
-    
-    let remainingProb = 1.0;
-    let currentCards = 7;
-    let mulliganCount = 0;
-    let accumulatedProb = 0;
-    
-    // Sum the first 10 mulligan layers (sufficient precision)
-    for (let i = 0; i < 10; i++) {
-        // Probability of keeping at this stage
-        const pKeepHere = remainingProb * keepProb;
-        
-        // Cards we have if we keep here
-        let cardsIfKeep = 7;
-        if (mulliganCount > 0) {
-            if (freeMulligan) {
-                cardsIfKeep = 7 - (mulliganCount - 1);
-            } else {
-                cardsIfKeep = 7 - mulliganCount;
-            }
-        }
-        // Cap at 0 cards
-        cardsIfKeep = Math.max(0, cardsIfKeep);
-        
-        expectedCards += pKeepHere * cardsIfKeep;
-        accumulatedProb += pKeepHere;
-        
-        // Advance to next mulligan
-        remainingProb *= (1 - keepProb);
-        mulliganCount++;
-        
-        if (remainingProb < 0.0001) break;
-    }
-    
-    // Normalize if we didn't reach 100% (truncation)
-    if (accumulatedProb > 0) {
-        expectedCards = expectedCards / accumulatedProb;
-    }
-
-    return { avgMulligans, expectedCards };
-}
-
-/**
- * Calculate success rate without any mulligans (baseline)
- */
-function calculateNoMulliganSuccess(deckSize, types) {
-    const allHands = [];
-
-    function generateHandCombinations(typeIndex, currentCombination, remainingCards) {
-        if (typeIndex === types.length) {
-            if (currentCombination.reduce((sum, n) => sum + n, 0) <= 7) {
-                const handProb = multiTypeProb(
-                    deckSize,
-                    types.map(t => t.count),
-                    7,
-                    currentCombination
-                );
-
-                if (handProb > 0) {
-                    const successProb = calcMultiTypeSuccess(deckSize, types, currentCombination);
-                    allHands.push({ handProb, successProb });
-                }
-            }
-            return;
-        }
-
-        const maxForType = Math.min(types[typeIndex].count, remainingCards);
-        for (let count = 0; count <= maxForType; count++) {
-            generateHandCombinations(
-                typeIndex + 1,
-                [...currentCombination, count],
-                remainingCards - count
-            );
-        }
-    }
-
-    generateHandCombinations(0, [], 7);
-
-    // Weighted average of success probability across all possible hands
-    return allHands.reduce((sum, hand) => sum + hand.handProb * hand.successProb, 0);
-}
-
-/**
- * Generate stable samples from the deck
- */
-function generateStableSamples(deck, count) {
-    stableSamples = [];
-    for (let i = 0; i < Math.max(count, SAMPLE_COUNT_DEFAULT); i++) {
-        stableSamples.push(shuffleDeck([...deck]));
-    }
-}
-
-/**
- * Force refresh of stable samples
- */
-function refreshSamples() {
-    const config = getDeckConfig();
-    
-    // Always generate from the current configuration (Virtual Deck)
-    // This ensures it works with the manual sliders/inputs
-    const deck = createVirtualDeck(config.deckSize, config.types);
-    
-    const countInput = document.getElementById('mulligan-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || SAMPLE_COUNT_DEFAULT);
-    
-    generateStableSamples(deck, numSims);
-    runSampleReveals();
-}
-
-/**
- * Run sample Opening Hand reveals with strategy decision using virtual deck
- */
-export function runSampleReveals() {
-    const config = getDeckConfig();
-    
-    // Create virtual deck from configuration
-    const deck = createVirtualDeck(config.deckSize, config.types);
-    const countInput = document.getElementById('mulligan-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || SAMPLE_COUNT_DEFAULT);
-
-    // Ensure we have stable samples
-    if (stableSamples.length < numSims) {
-        generateStableSamples(deck, numSims);
-    }
-
-    // Get strategy result
-    const { result } = calculate();
-    if (!result) return;
-
-    // Initialize scenarios for tracking (Decision Cheat Sheet)
-    // We partition the space into independent buckets that sum to 100%
-    const scenarios = [];
-    
-    // 1. Success (Meets or exceeds all)
-    scenarios.push({
-        label: '✓ Meets or exceeds',
-        match: (c) => config.types.every((t, idx) => c[idx] >= t.required),
-        sampleCount: 0,
-        type: 'success'
-    });
-    
-    // 2. Missing exactly 1 card of a specific type (and others are met)
-    config.types.forEach((t, i) => {
-        scenarios.push({
-            label: `✗ Missing 1: ${t.name}`,
-            match: (c) => {
-                // This type is exactly 1 short
-                if (c[i] !== t.required - 1) return false;
-                // Every other type is met
-                for (let j = 0; j < config.types.length; j++) {
-                    if (i === j) continue;
-                    if (c[j] < config.types[j].required) return false;
-                }
-                return true;
-            },
-            sampleCount: 0,
-            type: 'fail-1',
-            typeIdx: i
-        });
-    });
-
-    // 3. Catch-all: Missing >1 cards (Multiple types failing OR one type failing by >1)
-    scenarios.push({
-        label: '💀 Missing >1 cards',
-        match: (c) => {
-            // It's not a success
-            const isSuccess = config.types.every((t, idx) => c[idx] >= t.required);
-            if (isSuccess) return false;
-            
-            // It's not one of the "Missing 1" scenarios
-            const isMissingOne = config.types.some((t, i) => {
-                if (c[i] !== t.required - 1) return false;
-                for (let j = 0; j < config.types.length; j++) {
-                    if (i === j) continue;
-                    if (c[j] < config.types[j].required) return false;
-                }
-                return true;
-            });
-            
-            return !isMissingOne;
-        },
-        sampleCount: 0,
-        type: 'fail-many'
-    });
-
-    const HAND_SIZE = 7;
-    // Determine max turns to simulate based on requirements
-    const maxTurn = Math.max(...config.types.map(t => t.byTurn));
-    // Simulate draws up to maxTurn
-    const DRAW_COUNT = maxTurn;
-
-    // Outcome tracking
-    let instantSuccessCount = 0;
-    let drawSuccessCount = 0;
-    let failCount = 0;
-
-    let correctKeepCount = 0;
-    let overconfidentKeepCount = 0;
-    let missedOpportunityCount = 0;
-    let correctMulliganCount = 0;
-
-    // 1. STATS LOOP (Full Simulation)
-    for (let i = 0; i < numSims; i++) {
-        const shuffled = stableSamples[i] ? [...stableSamples[i]] : shuffleDeck([...deck]);
-        
-        const hand = shuffled.slice(0, HAND_SIZE);
-        const draws = shuffled.slice(HAND_SIZE, HAND_SIZE + DRAW_COUNT);
-
-        const handCounts = config.types.map(t => 0);
-        const countCard = (card, countsArray) => {
-            config.types.forEach((confType, idx) => {
-                if (card.typeIds && card.typeIds.includes(confType.id)) {
-                    countsArray[idx]++;
-                }
-            });
-        };
-
-        hand.forEach(c => countCard(c, handCounts));
-
-        // Track scenario occurrences
-        scenarios.forEach(s => {
-            if (s.match(handCounts)) {
-                s.sampleCount++;
-            }
-        });
-
-        const decision = result.strategy.find(s => 
-            s.counts.every((c, idx) => c === handCounts[idx])
-        );
-        const keep = decision ? decision.keep : false;
-
-        const needs = config.types.map((type, idx) => {
-            const have = handCounts[idx];
-            const need = type.required;
-            if (have < need) return { idx, diff: need - have, name: type.name };
-            return null;
-        }).filter(x => x);
-        
-        const runningCounts = [...handCounts];
-        let fixedByTurn = null;
-        
-        if (needs.length > 0) {
-            for (let d = 0; d < draws.length; d++) {
-                countCard(draws[d], runningCounts);
-                const stillMissing = config.types.some((t, idx) => runningCounts[idx] < t.required);
-                if (!stillMissing) {
-                    fixedByTurn = d + 1;
-                    break;
-                }
-            }
-        }
-
-        // Stats Logic
-        const isSuccess = (needs.length === 0 || fixedByTurn);
-        if (needs.length === 0) instantSuccessCount++;
-        else if (fixedByTurn) drawSuccessCount++;
-        else failCount++;
-
-        if (keep) {
-            if (isSuccess) correctKeepCount++;
-            else overconfidentKeepCount++;
-        } else {
-            if (isSuccess) missedOpportunityCount++;
-            else correctMulliganCount++;
-        }
-    }
-
-    // Build Summary UI
-    const pct = (val) => ((val / numSims) * 100).toFixed(1) + '%';
-    
-    let summaryContentHTML = '<div class="mull-summary-block">';
-
-    // Decision-quality breakdown. The four keep/mull outcomes are a confusion
-    // matrix, so render them as one — agreement lands on the diagonal and the
-    // two failure modes (too greedy vs too cautious) sit opposite each other,
-    // which is what tells you which slider to move.
-    const frac = (v) => (numSims > 0 ? v / numSims : 0);
-
-    summaryContentHTML += renderHeroStats([
-        {
-            label: 'NATURAL "GOD HANDS"',
-            value: pct(instantSuccessCount),
-            sub: 'meets every requirement on turn 0',
-            size: 'big',
-            color: 'var(--tx-green)'
-        }
-    ]);
-
-    summaryContentHTML += renderOutcomeMatrix({
-        title: 'DECISION QUALITY',
-        subtitle: `${numSims.toLocaleString('en-US')} SIMULATED HANDS`,
-        rowLabels: ['STRATEGY SAYS KEEP', 'STRATEGY SAYS MULL'],
-        colLabels: ['HAND WOULD HIT', 'HAND WOULD BRICK'],
-        cells: [
-            [
-                { label: 'Correct keep', value: frac(correctKeepCount), good: true,
-                  note: 'Kept, and you got there.' },
-                { label: 'Bad beat', value: frac(overconfidentKeepCount), good: false,
-                  note: 'Too greedy — raise the confidence threshold.' }
-            ],
-            [
-                { label: 'Missed opportunity', value: frac(missedOpportunityCount), good: false,
-                  note: 'Too cautious — lower the confidence threshold.' },
-                { label: 'Good mulligan', value: frac(correctMulliganCount), good: true,
-                  note: 'Mulled away a hand that would have bricked.' }
-            ]
-        ]
-    });
-
-    // Scenario Table (Cheat Sheet)
-    let tableHTML = `
-        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-color); overflow-x: auto;">
-            <div style="color:var(--text-dim); text-transform:uppercase; font-size:0.75em; letter-spacing:1px; margin-bottom:12px; text-align:center;">Decision Guidelines (Independent Scenarios)</div>
-            <table class="comparison-table" style="width:100%; font-size:0.85em; white-space: nowrap;">
-                <tr>
-                    <th style="text-align:left;">Scenario</th>
-                    ${config.types.map(t => `<th>${t.name}</th>`).join('')}
-                    <th>Win Chance</th>
-                    <th>Frequency</th>
-                    <th>Sample %</th>
-                    <th>Strategy</th>
-                </tr>
-                ${scenarios.map(s => {
-                    const matchingHands = result.strategy.filter(h => s.match(h.counts));
-                    const theoreticalProb = matchingHands.reduce((sum, h) => sum + h.handProb, 0);
-
-                    if (theoreticalProb === 0 && s.sampleCount === 0) return '';
-
-                    const avgSuccessProb = matchingHands.length > 0
-                        ? matchingHands.reduce((sum, h) => sum + (h.successProb * h.handProb), 0) / theoreticalProb
-                        : 0;
-
-                    // Use actual strategy decision from matching hands (majority vote weighted by probability)
-                    const keepProbability = matchingHands.length > 0
-                        ? matchingHands.filter(h => h.keep).reduce((sum, h) => sum + h.handProb, 0) / theoreticalProb
-                        : 0;
-                    const isKeep = keepProbability > 0.5; // Majority of hands in this scenario are kept
-
-                    // Color win chance based on the actual probability (independent of strategy decision)
-                    const winChanceColor = avgSuccessProb >= 0.75 ? '#55c97f' : avgSuccessProb >= 0.5 ? '#f0a92c' : '#e8635c';
-
-                    return `<tr>
-                        <td style="text-align:left; color:var(--text-light);">${s.label}</td>
-                        ${config.types.map((t, i) => {
-                            if (s.type === 'success') return `<td>${t.required}+</td>`;
-                            if (s.type === 'fail-1') {
-                                if (s.typeIdx === i) return `<td>${t.required - 1}</td>`;
-                                return `<td>${t.required}+</td>`;
-                            }
-                            return '<td style="color:var(--text-dim); font-style:italic;">Var.</td>';
-                        }).join('')}
-                        <td style="color:${winChanceColor}; font-weight:bold;">${formatPercentage(avgSuccessProb)}</td>
-                        <td style="color:var(--text-dim);">${formatPercentage(theoreticalProb)}</td>
-                        <td style="color:var(--text-dim);">${pct(s.sampleCount)}</td>
-                        <td style="color:${isKeep ? '#55c97f' : '#e8635c'}; font-weight:bold;">${isKeep ? 'KEEP' : 'MULL'}</td>
-                    </tr>`;
-                }).join('')}
-            </table>
-        </div>
-    `;
-    
-    summaryContentHTML += tableHTML + '</div>';
-
-    // 2. Prepare Samples List Structure
-    const listId = 'mulligan-samples-list';
-    const btnId = 'mulligan-load-more';
-    
-    const containerHTML = `
-        <div id="${listId}"></div>
-        <button id="${btnId}" class="import-btn" style="width: 100%; margin-top: 12px; display: none;">
-            Load More (50)
-        </button>
-    `;
-
-    const revealsSectionHTML = createCollapsibleSection(
-        `Show/Hide Individual Hands (${numSims} samples)`,
-        containerHTML,
-        true
-    );
-
-    const display = document.getElementById('mulligan-reveals-display');
-    if (display) {
-        display.innerHTML = summaryContentHTML + revealsSectionHTML;
-        
-        // 3. Render Batch Function
-        const listContainer = document.getElementById(listId);
-        const loadMoreBtn = document.getElementById(btnId);
-        renderedCount = 0;
-
-        const renderBatch = (batchSize) => {
-            const start = renderedCount;
-            const end = Math.min(start + batchSize, numSims);
-            let html = '';
-
-            for (let i = start; i < end; i++) {
-                const shuffled = stableSamples[i] ? [...stableSamples[i]] : shuffleDeck([...deck]);
-                
-                const hand = shuffled.slice(0, HAND_SIZE);
-                const draws = shuffled.slice(HAND_SIZE, HAND_SIZE + DRAW_COUNT);
-
-                const handCounts = config.types.map(t => 0);
-                const countCard = (card, countsArray) => {
-                    config.types.forEach((confType, idx) => {
-                        if (card.typeIds && card.typeIds.includes(confType.id)) {
-                            countsArray[idx]++;
-                        }
-                    });
-                };
-
-                hand.forEach(c => countCard(c, handCounts));
-
-                const decision = result.strategy.find(s => 
-                    s.counts.every((c, idx) => c === handCounts[idx])
-                );
-                const keep = decision ? decision.keep : false;
-                const successProb = decision ? decision.successProb : 0;
-
-                const needs = config.types.map((type, idx) => {
-                    const have = handCounts[idx];
-                    const need = type.required;
-                    if (have < need) return { idx, diff: need - have, name: type.name };
-                    return null;
-                }).filter(x => x);
-                
-                const summaryText = needs.length > 0 ? `Missing: ${needs.map(n => `${n.diff} ${n.name}`).join(', ')}` : 'Hand meets requirements';
-
-                const runningCounts = [...handCounts];
-                let fixedByTurn = null;
-                
-                if (needs.length > 0) {
-                    for (let d = 0; d < draws.length; d++) {
-                        countCard(draws[d], runningCounts);
-                        const stillMissing = config.types.some((t, idx) => runningCounts[idx] < t.required);
-                        if (!stillMissing) {
-                            fixedByTurn = d + 1;
-                            break;
-                        }
-                    }
-                }
-
-                const isSuccess = (needs.length === 0 || fixedByTurn);
-
-                let label;
-                let statusColor;
-                let statusBg;
-                let borderColor;
-
-                if (keep) {
-                    if (isSuccess) {
-                        label = '✓ Correct keep';
-                        statusColor = '#55c97f';
-                        statusBg = 'rgba(85, 201, 127, 0.05)';
-                        borderColor = 'rgba(85, 201, 127, 0.3)';
-                    } else {
-                        label = '✗ Bad beat';
-                        statusColor = '#e8635c';
-                        statusBg = 'rgba(232, 99, 92, 0.05)';
-                        borderColor = 'rgba(232, 99, 92, 0.3)';
-                    }
-                } else {
-                    if (isSuccess) {
-                        label = '✗ Missed opportunity';
-                        statusColor = '#f0a92c';
-                        statusBg = 'rgba(240, 169, 44, 0.05)';
-                        borderColor = 'rgba(240, 169, 44, 0.3)';
-                    } else {
-                        label = '✓ Good mulligan';
-                        statusColor = '#7d8a92';
-                        statusBg = 'rgba(125, 138, 146, 0.05)';
-                        borderColor = 'rgba(125, 138, 146, 0.3)';
-                    }
-                }
-
-                html += `<div class="sample-reveal" style="background:${statusBg}; border:1px solid ${borderColor}; padding: 12px; border-radius: 8px; margin-bottom: 12px;">`;
-                
-                html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <div style="font-weight:600; color:${statusColor}; font-size:0.95em;">${label} <span style="color:var(--text-dim); font-weight:normal; font-size:0.9em;">(Sample ${i + 1})</span></div>
-                    <div style="font-size:0.85em; color:var(--text-secondary);">Strategy: <span style="font-weight:bold; color:${keep ? '#55c97f' : '#e8635c'}">${keep ? 'KEEP' : 'MULL'}</span> <span style="color:var(--text-dim)">(${formatPercentage(successProb)} win chance)</span></div>
-                </div>`;
-                
-                html += '<div style="margin: 8px 0; display: flex; flex-wrap: wrap; gap: 4px;">';
-                hand.forEach(card => {
-                    html += renderVirtualCard(card);
-                });
-                html += '</div>';
-                
-                let fixColor;
-                let fixText;
-                if (needs.length === 0) {
-                    fixText = 'Started with requirements met';
-                    fixColor = '#55c97f';
-                } else if (fixedByTurn) {
-                    fixText = `Found missing pieces by Turn ${fixedByTurn}`;
-                    fixColor = '#55c97f';
-                } else {
-                    fixText = `Failed to find pieces (Checked ${maxTurn} draws)`;
-                    fixColor = '#e8635c';
-                }
-
-                html += `<div class="reveal-summary" style="font-size:0.85em; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:8px; border-top:1px dashed ${borderColor};">
-                    <span>${summaryText}</span>
-                    <span style="color:${fixColor}; font-weight:600;">${fixText}</span>
-                </div>`;
-
-                if (draws.length > 0) {
-                    html += `<div style="margin-top: 8px; font-size: 0.85em; color: var(--text-dim);">Next ${draws.length} natural draws:</div>`;
-                    html += '<div style="margin: 4px 0; display: flex; flex-wrap: wrap; gap: 4px; opacity: 0.9;">';
-                    draws.forEach(card => {
-                        html += renderVirtualCard(card);
-                    });
-                    html += '</div>';
-                }
-                
-                html += '</div>';
-            }
-
-            if (listContainer) {
-                listContainer.insertAdjacentHTML('beforeend', html);
-            }
-            
-            renderedCount = end;
-            
-            if (loadMoreBtn) {
-                if (renderedCount < numSims) {
-                    loadMoreBtn.style.display = 'block';
-                    loadMoreBtn.textContent = `Load More (Showing ${renderedCount}/${numSims})`;
-                } else {
-                    loadMoreBtn.style.display = 'none';
-                }
-            }
-        };
-
-        // Initial Render
-        renderBatch(50);
-
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener('click', () => renderBatch(50));
-        }
-    }
-}
-
-/**
- * Create a virtual deck based on configured types
- */
-function createVirtualDeck(deckSize, types) {
-    const deck = [];
-    let count = 0;
-
-    // We need to handle potential overlaps if user defined them, but for simulation
-    // we must create concrete cards. 
-    // Assumption: Types are effectively distinct for the purpose of "filling the deck"
-    // OR we create generic cards that simply have attributes.
-    // To allow overlap (e.g. "Land" and "Basic Land"), we'd need a more complex UI.
-    // For now, we assume the user adds disjoint types (Lands, Creatures, Ramp) 
-    // or we treat them as independent counts and fill linearly.
-    
-    // To support the sampler properly, we create cards that "belong" to types.
-    // If we have Type A (36) and Type B (10), we make 36 A's and 10 B's.
-    // If they sum > deckSize, we cap.
-    
-    types.forEach(type => {
-        for (let i = 0; i < type.count; i++) {
-            if (count >= deckSize) break;
-            deck.push({
-                name: type.name,
-                typeIds: [type.id], // Tag with type ID for easy counting
-                isKnown: true,
-                color: type.color
-            });
-            count++;
-        }
-    });
-
-    // Fill remainder
-    while (count < deckSize) {
-        deck.push({
-            name: 'Other',
-            typeIds: [],
-            isKnown: false
-        });
-        count++;
-    }
-
     return deck;
 }
 
-/**
- * Render a virtual card badge
- */
-function renderVirtualCard(card) {
-    const color = card.isKnown ? (card.color || 'var(--theme-secondary)') : '#2c322e';
-    const bg = card.isKnown 
-        ? (card.color ? card.color + '33' : 'rgba(152, 120, 184, 0.2)') 
-        : 'rgba(255, 255, 255, 0.05)';
-    return `<span style="
-        padding: 2px 6px; 
-        border-radius: 4px; 
-        background: ${bg}; 
-        border: 1px solid ${color}; 
-        color: var(--text-light); 
-        font-size: 0.85em;
-        display: inline-block;
-    ">${card.name}</span>`;
+function templateCounts(tpl, deck) {
+    if (!deck.hasList) return tpl.rows.map(r => (r.source === 'land' ? deck.lands : 0));
+    return assignCards(tpl.rows, deck.cards, deck.tags).counts;
 }
 
-/**
- * Get current configuration from UI
- */
-export function getDeckConfig() {
-    // Note: We ignore global deck config for Mulligans in favor of local overrides if needed,
-    // but we respect the imported card data if available for other tabs.
-    // For Mulligan Tab, we primarily use the manual inputs.
-    
-    const deckSizeInput = document.getElementById('mull-deck-size');
-    const deckSize = parseInt(deckSizeInput?.value) || 99;
-
-    const penalty = parseFloat(document.getElementById('mull-penalty')?.value || 20) / 100;
-    const freeMulligan = document.getElementById('mull-free')?.checked === true;
-    const confidenceThreshold = parseFloat(document.getElementById('mull-threshold')?.value || 75) / 100;
-
-    // Cache key now includes confidenceThreshold to ensure preset changes trigger recalc if logic uses it
-    // Or at least to track state changes.
-    const newHash = `${deckSize}-${JSON.stringify(cardTypes)}-${penalty}-${freeMulligan}-${confidenceThreshold}`;
-    
-    if (newHash !== lastConfigHash) {
-        simulationCache.clear();
-        lastConfigHash = newHash;
-        
-        // Regenerate samples if config changed significantly
-        // For virtual deck, we regenerate if counts changed.
-        const deck = createVirtualDeck(deckSize, cardTypes);
-        generateStableSamples(deck, SAMPLE_COUNT_DEFAULT);
-    }
-
-    return {
-        deckSize,
-        penalty,
-        freeMulligan,
-        confidenceThreshold,
-        types: cardTypes
-    };
+function templateAvailable(tpl, deck) {
+    if (!tpl.rows.every(r => linkable(r.source, deck))) return false;
+    return templateCounts(tpl, deck).every(n => n > 0);
 }
 
-/**
- * Calculate optimal strategy
- */
-export function calculate() {
-    const config = getDeckConfig();
-
-    if (config.deckSize === 0 || config.types.length === 0) {
-        return { config, result: null };
-    }
-
-    // Include confidenceThreshold in cache key
-    const cacheKey = `${config.deckSize}-${JSON.stringify(config.types)}-${config.penalty}-${config.freeMulligan}-${config.confidenceThreshold}`;
-    const cached = simulationCache.get(cacheKey);
-    let result = cached;
-
-    if (!result) {
-        result = mullStratMultiType(config.deckSize, config.types, config.penalty, config.freeMulligan, config.confidenceThreshold);
-        
-        // Calculate unpenalized result (Theoretical ceiling)
-        const unpenalizedResult = mullStratMultiType(config.deckSize, config.types, 0, config.freeMulligan, config.confidenceThreshold);
-        result.unpenalizedSuccess = unpenalizedResult.expectedSuccess;
-
-        const mulliganStats = calculateAvgMulligans(result.strategy, config.penalty, config.freeMulligan);
-        result.avgMulligans = mulliganStats.avgMulligans;
-        result.expectedCards = mulliganStats.expectedCards;
-        result.baselineSuccess = calculateNoMulliganSuccess(config.deckSize, config.types);
-        result.marginalBenefits = calculateMarginalBenefits(config.deckSize, config.types, config.penalty, config.freeMulligan, config.confidenceThreshold);
-        simulationCache.set(cacheKey, result);
-    }
-
-    return { config, result };
-}
-
-/**
- * Render card type inputs
- */
-function renderCardTypes() {
-    const container = document.getElementById('mull-types-container');
-    if (!container) return;
-
-    container.innerHTML = cardTypes.map(t => `<div class="card-type-row" data-type-id="${t.id}">
-        <div class="type-header">
-            <input type="color" class="type-color-input" value="${t.color || '#ffffff'}" data-type-id="${t.id}" style="height: 38px; width: 40px; padding: 2px; background: var(--input-bg); border: 1px solid var(--theme-border); border-radius: var(--radius-md); cursor: pointer;">
-            <input type="text" class="type-name-input" value="${t.name}" placeholder="Type name" data-type-id="${t.id}">
-            ${cardTypes.length > 1 ? `<button class="remove-type-btn" data-type-id="${t.id}" aria-label="Remove type">✕</button>` : ''}
-        </div>
-        <div class="type-grid">
-            <div class="type-input"><label>In deck</label><input type="number" class="type-count" value="${t.count}" min="0" data-type-id="${t.id}"></div>
-            <div class="type-input"><label>Need</label><input type="number" class="type-required" value="${t.required}" min="0" max="7" data-type-id="${t.id}"></div>
-            <div class="type-input"><label>By turn</label><input type="number" class="type-turn" value="${t.byTurn}" min="1" max="10" data-type-id="${t.id}"></div>
-        </div>
-    </div>`).join('');
-
-    // Unified event handler
-    const updateType = (selector, field, parser = v => v) => {
-        container.querySelectorAll(selector).forEach(input => {
-            input.addEventListener('input', e => {
-                const type = cardTypes.find(t => t.id === parseInt(e.target.dataset.typeId));
-                if (type) {
-                    type[field] = parser(e.target.value);
-                    updateUI();
-                }
-            });
-        });
-    };
-
-    updateType('.type-name-input', 'name');
-    updateType('.type-color-input', 'color');
-    updateType('.type-count', 'count', v => parseInt(v) || 0);
-    updateType('.type-required', 'required', v => parseInt(v) || 0);
-    updateType('.type-turn', 'byTurn', v => parseInt(v) || 1);
-
-    container.querySelectorAll('.remove-type-btn').forEach(btn => {
-        btn.addEventListener('click', e => {
-            cardTypes = cardTypes.filter(t => t.id !== parseInt(e.target.dataset.typeId));
-            renderCardTypes();
-            updateUI();
-        });
-    });
-}
-
-/**
- * Add new card type
- */
-function addCardType() {
-    cardTypes.push({
-        id: nextTypeId++,
-        name: `Type ${cardTypes.length + 1}`,
-        count: 0,
-        required: 1,
-        byTurn: 3,
-        color: DEFAULT_COLORS[cardTypes.length % DEFAULT_COLORS.length]
-    });
-    renderCardTypes();
-    updateUI();
-}
-
-/**
- * Update strategy table (Now merged into sampler, so we just hide the old container)
- */
-function updateStrategyTable(config, result, sharedData) {
-    const tableEl = document.getElementById('mull-strategyTable');
-    if (!tableEl) return;
-    
-    // Hide the separate strategy table panel as it's now merged into the sampler summary
-    const panel = tableEl.closest('.panel');
-    if (panel) {
-        panel.style.display = 'none';
-    }
-}
-
-/**
- * Calculate mulligan breakdown (probability of each mulligan)
- */
-function calculateMulliganBreakdown(result, freeMulligan, penalty) {
-    const { stepStats } = result;
-    const breakdown = [];
-    
-    let takeProbability = 1.0;
-    let cumulativeKeepProb = 0;
-    let cumulativeSuccessProb = 0;
-
-    for (let i = 0; i < stepStats.length; i++) {
-        const stats = stepStats[i];
-        const isFree = i === 1 && freeMulligan;
-        const penaltyFactor = (i === 0) ? 0 : (freeMulligan ? (i - 1) : i);
-        const cards = Math.max(0, 7 - penaltyFactor);
-        
-        const marginalKeep = takeProbability * stats.keepProb;
-        cumulativeKeepProb += marginalKeep;
-        cumulativeSuccessProb += marginalKeep * stats.successIfKept;
-
-        const label = i === 0 ? 'Opening hand (7 cards)' : 
-                     (isFree ? `Mulligan ${i} - Free (see 7, keep 7)` : `Mulligan ${i} (see 7, keep ${cards})`);
-
-        breakdown.push({ 
-            label, 
-            marginalKeep, 
-            successIfKept: stats.successIfKept,
-            conditionalKeepProb: stats.keepProb,
-            cumulativeKeep: cumulativeKeepProb, 
-            cumulativeSuccess: cumulativeSuccessProb,
-            hasPenalty: penaltyFactor > 0 && penalty > 0
-        });
-
-        takeProbability *= (1 - stats.keepProb);
-        if (takeProbability < 0.0001) break;
-    }
-
-    return breakdown;
-}
-
-/**
- * Update summary stats with clearer explanations
- */
-function updateSummary(config, result, sharedData) {
-    const summaryEl = document.getElementById('mull-summary');
-    if (!summaryEl) return;
-
-    // Marginal benefits helper
-    const getImpact = (pct) => pct > 1.5 ? ['▲ High impact', '#55c97f'] : pct > 0.5 ? ['✓ Medium impact', '#55c97f'] : pct < 0 ? ['✗ Negative impact', '#e8635c'] : ['· Low impact', 'var(--text-dim)'];
-
-    const marginalsHTML = result.marginalBenefits.map((b, i) => {
-        const benefitPct = b.overall * 100;
-        
-        // Trigger "Cut/Saturation" advice if:
-        // 1. Negative impact (Adding hurts)
-        // 2. Saturated (High success >90% AND low benefit <0.5%)
-        const isNegative = benefitPct < 0;
-        const isSaturated = result.expectedSuccess > 0.90 && benefitPct < 0.5;
-        
-        if (isNegative || isSaturated) {
-             const reason = isNegative 
-                ? "Adding more reduces consistency. You likely have too many." 
-                : `Diminishing returns. Adding more gives minimal gain (+${formatPercentage(Math.max(0, b.overall), 2)}).`;
-
-             return `<li style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="color:var(--text-light);font-weight:600">Consider Cutting 1 ${config.types[i].name}</span><span style="font-size:0.85em;font-weight:bold;color:#f0a92c;background:rgba(240, 169, 44, 0.1);padding:2px 8px;border-radius:0">✗ Cut recommendation</span></div><div style="font-size:0.9em;color:var(--text-secondary)">${reason}</div></li>`;
-        }
-
-        const [label, color] = getImpact(benefitPct);
-        return `<li style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.05)">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                <span style="color:var(--text-light);font-weight:600">+1 ${config.types[i].name}</span>
-                <span style="font-size:0.85em;font-weight:bold;color:${color};background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:0">${label}</span>
-            </div>
-            <div style="font-size:0.9em;color:var(--text-secondary)">
-                Improves win rate by <strong style="color:${color}">${formatPercentage(Math.max(0, b.overall), 2)}</strong>
-                <div style="font-size:0.85em;color:var(--text-dim);margin-top:4px;font-style:italic;">
-                    (God hand rate: +${formatPercentage(Math.max(0, b.baseline), 2)} if you never mulligan)
-                </div>
-            </div>
-        </li>`;
-    }).join('');
-
-    // Strategy Breakdown List
-    const breakdownHTML = `
-        <div style="display:flex; flex-direction:column; gap:8px;">
-            <div style="display:grid; grid-template-columns: 1.5fr 1fr 1fr; padding: 0 12px; font-size:0.75em; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px;">
-                <span>Mulligan Step</span>
-                <span style="text-align:right">Keep Chance</span>
-                <span style="text-align:right">Win Rate</span>
-            </div>
-            ${sharedData.breakdown.map((m, idx) => {
-                // Calculate average win rate for hands kept up to this point
-                const avgWinRate = m.cumulativeKeep > 0 ? m.cumulativeSuccess / m.cumulativeKeep : 0;
-                
-                return `
-                <div style="display:grid; grid-template-columns: 1.5fr 1fr 1fr; align-items:center; padding:8px 12px; background:${idx === 0 ? 'rgba(85,201,127,0.05)' : 'var(--tx-panel-alt)'}; border-radius:0; border:1px solid ${idx === 0 ? 'rgba(85,201,127,0.15)' : 'var(--tx-rule)'}">
-                    <div style="font-size:0.9em; color:${idx === 0 ? '#55c97f' : 'var(--text-light)'}">
-                        ${m.label.split('(')[0].trim()}
-                        <div style="font-size:0.8em; color:var(--text-dim);">Keep ${7 - (m.label.includes('Opening') || m.label.includes('Free') ? 0 : idx - (config.freeMulligan ? 1 : 0))}</div>
-                    </div>
-                    <div style="text-align:right; font-weight:bold; color:${m.cumulativeKeep > 0.9 ? '#55c97f' : '#9878b8'}">
-                        ${formatPercentage(m.cumulativeKeep)}
-                    </div>
-                    <div style="text-align:right; font-weight:bold; color:${avgWinRate >= config.confidenceThreshold ? '#55c97f' : '#f0a92c'}">
-                        ${formatPercentage(avgWinRate)}
-                    </div>
-                </div>`;
-            }).join('')}
-        </div>
-        <div style="margin-top:12px; font-size:0.8em; color:var(--text-dim); font-style:italic;">
-            * <strong>Keep Chance:</strong> Probability you find a keepable hand by this step (Cumulative).<br>
-            <span style="opacity:0.8; font-size:0.9em; display:block; margin-top:2px; margin-bottom:6px; color:#939c97;">&nbsp;&nbsp;↳ Note: This uses probability math, not simple addition. (e.g. Two 50% chances = 75% total chance, not 100%).</span>
-            * <strong>Win Rate:</strong> Average success rate of hands kept by this step.
-        </div>
-    `;
-
-    // Colour the headline by its verdict tier rather than a fixed accent, so the
-    // number itself tells you whether the plan is reliable.
-    const successVerdict = probabilityVerdict(result.expectedSuccess);
-
-    summaryEl.innerHTML = `
-        ${renderHeroStats([
-            { label: 'SUCCESS RATE', value: formatPercentage(result.expectedSuccess), sub: `optimal mulligans · ${formatPercentage(result.unpenalizedSuccess)} unpenalized`, color: successVerdict.color, size: 'big' },
-            { label: 'AVG STARTING HAND', value: '~' + formatNumber(result.expectedCards, 1), sub: 'cards kept', color: 'var(--tx-green)' },
-            { label: 'AVG MULLIGANS', value: formatNumber(result.avgMulligans, 2), sub: 'to a keepable hand', color: 'var(--tx-amber)' }
-        ])}
-
-        <div style="border:1px solid var(--tx-rule); border-top:0; background:var(--tx-panel-alt); padding:14px;">
-            <h3 style="margin:0 0 12px 0; font-size:10px; color:var(--tx-dim); text-transform:uppercase; letter-spacing:0.12em;">Strategy Breakdown</h3>
-            <details><summary style="cursor:pointer; color:var(--tx-mid); font-size:11px;">View step-by-step stats</summary><div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--tx-rule);">${breakdownHTML}</div></details>
-        </div>
-
-        <div style="border:1px solid var(--tx-rule); border-top:0; background:var(--tx-panel); padding:14px;">
-            <h3 style="margin:0 0 16px 0; font-size:10px; color:var(--tx-dim); text-transform:uppercase; letter-spacing:0.12em;">Deck Tuning Tips</h3>
-            <ul style="margin:0; padding:0; list-style:none">${marginalsHTML}</ul>
-        </div>`;
-}
-
-/**
- * Common chart options generator
- */
-function getChartOptions(xLabel, yLabel = 'Probability', title = null) {
-    return {
-        plugins: {
-            ...(title && { title: { display: true, text: title, color: TX.mid, font: { size: 11, weight: 'normal' }, padding: { bottom: 15 } } }),
-            legend: {
-                display: true,
-                position: 'top',
-                labels: { color: TX.mid, font: { size: 10 }, padding: 12, boxWidth: 10, boxHeight: 2 }
-            },
-            tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%` } }
-        },
-        scales: {
-            x: {
-                grid: { color: TX.rule, drawBorder: false },
-                ticks: { color: TX.dim, font: { size: 9 } },
-                title: { display: true, text: xLabel, color: TX.dim, font: { size: 9 } }
-            },
-            y: {
-                beginAtZero: true,
-                max: 100,
-                grid: { color: TX.rule, drawBorder: false },
-                ticks: { color: TX.dim, font: { size: 9 }, callback: v => v + '%' },
-                title: { display: true, text: yLabel, color: TX.dim, font: { size: 9 } }
-            }
-        }
-    };
-}
-
-/**
- * Calculate turn-by-turn probabilities
- */
-function calculateTurnProbabilities(config) {
-    const maxTurn = Math.max(...config.types.map(t => t.byTurn)) + 3;
-    const turnData = [];
-
-    for (let turn = 0; turn <= maxTurn; turn++) {
-        // Standard draw: Turn 0 = 7 cards. Turn N = 7 + N.
-        const cardsSeen = 7 + turn;
-
-        // Individual type probabilities
-        const typeProbabilities = config.types.map(type => {
-            let prob = 0;
-            for (let drawn = type.required; drawn <= Math.min(type.count, cardsSeen); drawn++) {
-                prob += multiTypeProb(config.deckSize, [type.count], cardsSeen, [drawn]);
-            }
-            return prob;
-        });
-
-        // Combined probability using cumulative function
-        const combinedProb = multiTypeProbCumulative(
-            config.deckSize,
-            config.types.map(t => t.count),
-            cardsSeen,
-            config.types.map(t => t.required)
-        );
-
-        turnData.push({ turn, typeProbabilities, combinedProb });
-    }
-
-    return turnData;
-}
-
-/**
- * Update visualization charts
- */
-function updateChart(config, sharedData) {
-    // Turn-by-Turn Chart (compute once if not cached in sharedData)
-    if (document.getElementById('mull-turn-chart')) {
-        if (!sharedData.turnData) {
-            sharedData.turnData = calculateTurnProbabilities(config);
-        }
-        // Per-type series use the colour the user picked for that row in the
-        // requirements list, so the chart matches the swatches above it.
-        const datasets = [
-            ...config.types.map((type, i) => ({
-                label: type.name,
-                data: sharedData.turnData.map(d => d.typeProbabilities[i] * 100),
-                borderColor: type.color || TX.series[i % TX.series.length],
-                backgroundColor: 'transparent',
-                borderWidth: 1,
-                fill: false,
-                tension: 0,
-                pointRadius: 0,
-                pointHoverRadius: 3,
-                borderDash: [4, 3]
-            })),
-            {
-                label: 'Confidence threshold',
-                data: sharedData.turnData.map(() => config.confidenceThreshold * 100),
-                borderColor: TX.amber,
-                borderWidth: 1,
-                borderDash: [2, 2],
-                pointRadius: 0,
-                fill: false,
-                order: 0
-            },
-            {
-                label: 'Combined (all requirements)',
-                data: sharedData.turnData.map(d => d.combinedProb * 100),
-                borderColor: TX.green,
-                backgroundColor: TX.greenFill,
-                borderWidth: 2,
-                fill: true,
-                tension: 0,
-                pointRadius: 0,
-                pointHoverRadius: 4,
-                pointBackgroundColor: TX.green
-            }
-        ];
-
-        turnChart = createOrUpdateChart(turnChart, 'mull-turn-chart', {
-            type: 'line',
-            data: { labels: sharedData.turnData.map(d => d.turn), datasets },
-            options: getChartOptions('Turn', 'Probability', 'Natural Draw Probability (No Mulligan)')
-        });
-    }
-}
-
-/**
- * Update all UI elements
- */
-export function updateUI() {
-    const { config, result } = calculate();
-
-    if (!result) {
-        document.getElementById('mull-strategyTable').innerHTML = '<tr><td>Configure card types to see strategy</td></tr>';
-        document.getElementById('mull-summary').innerHTML = '<p>Set up your card type requirements to calculate optimal mulligan strategy.</p>';
-        return;
-    }
-
-    // Pre-compute shared data once
-    const sharedData = {
-        breakdown: calculateMulliganBreakdown(result, config.freeMulligan, config.penalty),
-        totalKeepProb: result.keepProb,
-        typeCounts: config.types.map(t => t.count),
-        turnData: null  // Lazy computed on first use
-    };
-
-    updateChart(config, sharedData);
-    updateStrategyTable(config, result, sharedData);
-    updateSummary(config, result, sharedData);
-    
-    // Validation Warning
-    const totalCards = config.types.reduce((sum, t) => sum + t.count, 0);
-    const warningId = 'mull-deck-oversize-warning';
-    let warningEl = document.getElementById(warningId);
-    
-    // Collect all errors
-    const errors = [];
-    if (totalCards > config.deckSize) {
-        errors.push(`Total cards in types (${totalCards}) exceeds deck size (${config.deckSize}). Results will be inaccurate.`);
-    }
-    
-    config.types.forEach(t => {
-        if (t.count === 0) {
-            errors.push(`Type "${t.name}" has 0 cards in deck.`);
-        } else if (t.count < t.required) {
-            errors.push(`Type "${t.name}" count (${t.count}) is less than required in hand (${t.required}).`);
-        }
-    });
-
-    if (errors.length > 0) {
-        if (!warningEl) {
-             warningEl = document.createElement('div');
-             warningEl.id = warningId;
-             warningEl.style.color = '#e8635c';
-             warningEl.style.marginTop = '16px';
-             warningEl.style.marginBottom = '16px';
-             warningEl.style.padding = '12px';
-             warningEl.style.background = 'rgba(232, 99, 92, 0.1)';
-             warningEl.style.border = '1px solid rgba(232, 99, 92, 0.3)';
-             warningEl.style.borderRadius = '8px';
-             warningEl.style.textAlign = 'left';
-             warningEl.style.fontWeight = '600';
-             warningEl.style.fontSize = '0.95em';
-             
-             // Insert after types container
-             const container = document.getElementById('mull-types-container');
-             if (container && container.parentNode) {
-                 container.parentNode.insertBefore(warningEl, container.nextSibling);
-             }
-        }
-        warningEl.innerHTML = errors.map(e => `<div>✗ Warning: ${e}</div>`).join('');
-        warningEl.style.display = 'block';
-    } else {
-        if (warningEl) warningEl.style.display = 'none';
-    }
-
-    // Auto-run samples (virtual deck allows this without import)
-    // We only run if the display element exists (it should)
-    if (document.getElementById('mulligan-reveals-display')) {
-        runSampleReveals();
-    }
-}
-
-/**
- * Handle Preset Change
- */
-function applyPreset(preset) {
-    const presets = {
-        casual: [50, 60],      // 50% penalty, 60% threshold
-        balanced: [20, 75],    // 20% penalty, 75% threshold
-        competitive: [5, 92]   // 5% penalty, 92% threshold
-    };
-
-    const [penalty, threshold] = presets[preset] || presets.balanced;
-    const els = {
-        penalty: document.getElementById('mull-penalty'),
-        penaltyDisplay: document.getElementById('mull-penalty-display'),
-        threshold: document.getElementById('mull-threshold'),
-        thresholdDisplay: document.getElementById('mull-threshold-display')
-    };
-
-    if (!els.penalty || !els.threshold) return;
-
-    els.penalty.value = penalty;
-    els.penaltyDisplay.textContent = penalty + '%';
-    els.threshold.value = threshold;
-    els.thresholdDisplay.textContent = threshold + '%';
-    
-    // Update active button state — styling lives in CSS (.preset-btn.active) so
-    // the buttons stay on-theme instead of carrying hard-coded inline colors.
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.preset === preset);
-    });
-
-    updateDescriptions();
-    updateUI();
-}
-
-/**
- * Update slider descriptions based on values
- */
-function updateDescriptions() {
-    const penalty = parseInt(document.getElementById('mull-penalty')?.value || 0);
-    const threshold = parseInt(document.getElementById('mull-threshold')?.value || 0);
-    
-    const penaltyDesc = document.getElementById('mull-penalty-desc');
-    const thresholdDesc = document.getElementById('mull-threshold-desc');
-
-    if (penaltyDesc) {
-        if (penalty <= 5) penaltyDesc.textContent = "Aggressive. You dig deep for combo pieces.";
-        else if (penalty <= 25) penaltyDesc.textContent = "Standard. A balanced approach to risk.";
-        else if (penalty <= 40) penaltyDesc.textContent = "Conservative. You prefer keeping 7 cards.";
-        else penaltyDesc.textContent = "Very Conservative. You almost never mulligan.";
-    }
-
-    if (thresholdDesc) {
-        if (threshold >= 90) thresholdDesc.textContent = "Perfectionist. You only keep amazing hands.";
-        else if (threshold >= 75) thresholdDesc.textContent = "Disciplined. You want consistent strong starts.";
-        else if (threshold >= 60) thresholdDesc.textContent = "Loose. You trust your topdecks.";
-        else thresholdDesc.textContent = "Gambler. You keep risky hands often.";
-    }
-}
-
-/**
- * Set card types programmatically (e.g. from share link)
- * @param {Array} types - Array of card type objects
- */
-export function setCardTypes(types) {
-    if (Array.isArray(types)) {
-        cardTypes = types;
-        nextTypeId = Math.max(...types.map(t => t.id), 0) + 1;
+function applyTemplate(key, { render = true } = {}) {
+    const tpl = TEMPLATES.find(t => t.key === key) ?? TEMPLATES[0];
+    cardTypes = tpl.rows.map((r, i) => ({
+        id: i + 1, name: SOURCES[r.source].name, count: 0,
+        required: r.required, byTurn: r.byTurn, max: r.max ?? null, source: r.source
+    }));
+    nextTypeId = cardTypes.length + 1;
+    templateKey = tpl.key;
+    viewStep = 0;
+    syncLinkedCounts();
+    if (render) {
         renderCardTypes();
         updateUI();
     }
 }
 
+// ── Config & calculation ─────────────────────────────────────────────────────
+
+function readPercent(id, fallback) {
+    const v = parseFloat($(id)?.value);
+    return (Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : fallback) / 100;
+}
+
 /**
- * Get current calculator state for sharing
- * @returns {Object} - Current state
+ * Current inputs. Deck size and format come from the active deck.
+ * @returns {{deckSize:number, penalty:number, freeMulligan:boolean, confidenceThreshold:number, types:Array, format:Object, onPlay:boolean}}
+ */
+export function getDeckConfig() {
+    const deck = syncLinkedCounts();
+    const format = DeckConfig.getFormat();
+    if (lastFormatKey !== null && lastFormatKey !== format.key) freeOverride = null;
+    lastFormatKey = format.key;
+    return {
+        deckSize: deck.deckSize,
+        penalty: readPercent('mull-penalty', 20),
+        freeMulligan: freeOverride ?? format.freeMulligan,
+        confidenceThreshold: readPercent('mull-threshold', 75),
+        types: cardTypes,
+        format,
+        onPlay: format.firstPlayerDraws ? true : onPlay
+    };
+}
+
+function planParams(config) {
+    return {
+        deckSize: config.deckSize,
+        types: config.types,
+        threshold: config.confidenceThreshold,
+        penalty: config.penalty,
+        freeMulligan: config.freeMulligan,
+        drawsBy: drawSchedule({ format: config.format, onPlay: config.onPlay })
+    };
+}
+
+function planKey(config) {
+    return JSON.stringify([
+        config.deckSize, config.format.key, config.onPlay, config.freeMulligan, config.penalty, config.confidenceThreshold,
+        config.types.map(t => [t.count, t.required, t.byTurn, t.max ?? null])
+    ]);
+}
+
+/**
+ * Exact plan for the current inputs, cached by input values.
+ * @returns {{config:Object, result:Object|null}}
+ */
+export function calculate() {
+    const config = getDeckConfig();
+    if (config.types.length === 0 || config.deckSize <= HAND_SIZE) return { config, result: null };
+    const key = planKey(config);
+    let result = planCache.get(key);
+    if (!result) {
+        result = mulliganPlan(planParams(config));
+        result.key = key;
+        // Older names, kept for callers and tests.
+        result.expectedSuccess = result.success;
+        result.keepProb = result.keepSeven;
+        result.expectedCards = result.avgHandSize;
+        result.baselineSuccess = result.noMulligan;
+        result.strategy = result.hands.map((h, i) => ({
+            counts: h.counts, handProb: h.p,
+            successProb: result.steps[0].decisions[i].success,
+            keep: result.steps[0].decisions[i].keep
+        }));
+        planCache.set(key, result);
+    }
+    return { config, result };
+}
+
+/**
+ * Chance of meeting every requirement on time for a given seven (no bottoming).
+ * Defaults to Commander draws (one per turn from turn 1); pass `drawsBy` for
+ * other formats.
+ */
+export function calcMultiTypeSuccess(deckSize, types, handCounts, opts) {
+    return handSuccess(deckSize, types, handCounts, opts);
+}
+
+// ── Words ────────────────────────────────────────────────────────────────────
+
+function typeNames(types) {
+    return types.map((t, i) => String(t.name ?? '').trim() || `Group ${i + 1}`);
+}
+
+/** "At least 3 by turn 3, no more than 5 in the hand you keep" */
+export function describeRequirement(t) {
+    const req = Number(t.required) || 0;
+    const turn = Number(t.byTurn) || 0;
+    const max = t.max === null || t.max === undefined || t.max === '' ? null : Number(t.max);
+    const parts = [];
+    if (req > 0) parts.push(turn === 0 ? `At least ${req} in the opening hand` : `At least ${req} by turn ${turn}`);
+    if (max !== null) parts.push(`${parts.length ? 'no' : 'No'} more than ${max} in the hand you keep`);
+    return parts.length ? parts.join(', ') : 'Nothing required';
+}
+
+/**
+ * The plain-language answer.
+ * @param {Object|null} plan - from mulliganPlan()
+ * @param {{names?:string[], freeMulligan?:boolean}} [opts]
+ * @returns {{html:string, tone:'good'|'warn'|'bad'|'flat'}}
+ */
+export function summarizeMulligan(plan, { names = [], freeMulligan = false } = {}) {
+    if (!plan || !plan.types?.length) {
+        return { html: 'Pick a starting point or add a requirement to see which hands to keep.', tone: 'flat' };
+    }
+    const byFirst = plan.steps[1]?.foundBy ?? plan.steps[0].foundBy;
+    const first = freeMulligan ? 'your free mulligan' : 'your first mulligan';
+    let html = `You keep <strong>${pct(plan.keepSeven)}</strong> of opening sevens and have a keeper by ${first} <strong>${pct(byFirst)}</strong> of the time. `
+        + `The hand you keep has everything on time in <strong>${pct(plan.success)}</strong> of games.`;
+    let tone = plan.success >= 0.85 ? 'good' : plan.success >= 0.65 ? 'warn' : 'bad';
+
+    if (plan.avgHandSize < 6.2) {
+        html += ` That bar is expensive — you keep <strong>${plan.avgHandSize.toFixed(1)}</strong> cards on average.`;
+        if (tone === 'good') tone = 'warn';
+    }
+    if (plan.success < 0.65 && plan.alone?.length > 1) {
+        const worst = plan.alone.indexOf(Math.min(...plan.alone));
+        html += ` The hard part is <strong>${escapeHtml(names[worst] ?? `group ${worst + 1}`)}</strong>: on its own, a random seven gets it only ${pct(plan.alone[worst])} of the time.`;
+    }
+    return { html, tone };
+}
+
+function toneColor(tone) {
+    return { good: 'var(--tx-good)', warn: 'var(--tx-warn)', bad: 'var(--tx-bad)' }[tone] ?? 'var(--tx-bright)';
+}
+
+function stepLabel(step, free) {
+    if (step.step === 0) return 'Opener';
+    if (free && step.step === 1) return 'Free mull';
+    return `Mull to ${step.handSize}`;
+}
+
+function stepSentence(step, free) {
+    if (step.step === 0) return 'your opening seven';
+    if (free && step.step === 1) return 'the seven after your free mulligan';
+    const n = step.step;
+    const ord = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'][n] ?? `${n}th`;
+    return `a seven after your ${ord} mulligan, keeping ${step.handSize}`;
+}
+
+// ── Rail ─────────────────────────────────────────────────────────────────────
+
+function renderTemplates(deck) {
+    const el = $('mull-templates');
+    if (!el) return;
+    el.innerHTML = TEMPLATES.map(tpl => {
+        const ok = templateAvailable(tpl, deck);
+        const counts = templateCounts(tpl, deck);
+        const sub = ok
+            ? tpl.rows.map((r, i) => `${counts[i]} ${SOURCES[r.source].unit}`).join(' · ')
+            : (deck.hasList ? `None found in this list` : 'Import a decklist to use this');
+        return `
+            <button type="button" class="mull-tpl${templateKey === tpl.key ? ' active' : ''}" data-template="${tpl.key}"
+                aria-pressed="${templateKey === tpl.key}" ${ok ? '' : 'disabled'}>
+                <span class="mull-tpl-name">${tpl.name}</span>
+                <span class="mull-tpl-sub">${tpl.rule} · ${sub}</span>
+            </button>`;
+    }).join('');
+    const note = $('mull-deck-note');
+    if (note) note.textContent = deck.hasList ? 'built from your list' : 'from your land count';
+}
+
+function renderCardTypes() {
+    const container = $('mull-types-container');
+    if (!container) return;
+    if (cardTypes.length === 0) {
+        container.innerHTML = '<p class="mull-type-read">No requirements yet — pick a starting point above or add one below.</p>';
+        renderAddSelect();
+        return;
+    }
+    const deck = deckData();
+    container.innerHTML = cardTypes.map((t, i) => {
+        const linked = t.source && linkable(t.source, deck);
+        const safeName = escapeHtml(t.name);
+        return `
+        <div class="mull-type" data-type-id="${t.id}">
+            <div class="mull-type-head">
+                <span class="mull-dot" style="background:${groupColor(i)}" aria-hidden="true"></span>
+                <input type="text" class="mull-type-name" value="${safeName}" maxlength="40" data-field="name" data-type-id="${t.id}" aria-label="Group name">
+                <span class="mull-src">${linked ? 'from your list' : 'set by hand'}</span>
+                <button type="button" class="icon-btn icon-btn-sm" data-remove="${t.id}" aria-label="Remove ${safeName}">✕</button>
+            </div>
+            <div class="mull-type-fields">
+                <label>Need<input type="number" class="field field-sm" data-field="required" data-type-id="${t.id}" value="${t.required}" min="0" max="20" inputmode="numeric"></label>
+                <label>By turn<input type="number" class="field field-sm" data-field="byTurn" data-type-id="${t.id}" value="${t.byTurn}" min="0" max="20" inputmode="numeric"></label>
+                <label>At most<input type="number" class="field field-sm" data-field="max" data-type-id="${t.id}" value="${t.max ?? ''}" min="0" max="7" placeholder="any" inputmode="numeric"></label>
+                <label>In deck<input type="number" class="field field-sm" data-field="count" data-type-id="${t.id}" value="${t.count}" min="0" max="250" inputmode="numeric"></label>
+            </div>
+            <p class="mull-type-read" id="mull-read-${t.id}"></p>
+        </div>`;
+    }).join('');
+    renderAddSelect(deck);
+}
+
+function renderAddSelect(deck = deckData()) {
+    const select = $('mull-add-type');
+    if (!select) return;
+    const used = new Set(cardTypes.map(t => t.source).filter(Boolean));
+    const options = Object.entries(SOURCES).filter(([key]) => !used.has(key)).map(([key, s]) => {
+        if (!linkable(key, deck)) return `<option value="${key}" disabled>${s.label} — import a list to count</option>`;
+        const n = deck.hasList
+            ? assignCards([...cardTypes, { source: key }], deck.cards, deck.tags).counts[cardTypes.length]
+            : deck.lands;
+        return `<option value="${key}">${s.label} — ${n} in your deck</option>`;
+    });
+    select.innerHTML = `<option value="">+ Add a requirement…</option>${options.join('')}<option value="custom">Something else (type a count)</option>`;
+    select.value = '';
+}
+
+function addRequirement(source) {
+    const deck = deckData();
+    const s = SOURCES[source];
+    const id = nextTypeId++;
+    cardTypes.push(s && linkable(source, deck)
+        ? { id, name: s.name, count: 0, required: 1, byTurn: 3, max: null, source }
+        : { id, name: `Group ${cardTypes.length + 1}`, count: 0, required: 1, byTurn: 3, max: null, source: null });
+    templateKey = null;
+    syncLinkedCounts(deck);
+    renderCardTypes();
+    updateUI();
+}
+
+function refreshRows(config, result) {
+    cardTypes.forEach((t, i) => {
+        const el = $(`mull-read-${t.id}`);
+        if (el) {
+            const alone = result?.alone?.[i];
+            el.innerHTML = `${escapeHtml(describeRequirement(t))}.`
+                + (Number.isFinite(alone) ? ` On its own, a random seven gets there <strong>${pct(alone)}</strong> of the time.` : '');
+        }
+        // Linked counts follow the deck; never overwrite a field being typed in.
+        if (t.source) {
+            const input = typeof document !== 'undefined'
+                ? document.querySelectorAll?.(`#mull-types-container input[data-field="count"][data-type-id="${t.id}"]`)?.[0]
+                : null;
+            if (input && document.activeElement !== input && String(input.value) !== String(t.count)) input.value = t.count;
+        }
+    });
+
+    const warnings = [];
+    const total = sum(config.types.map(t => Number(t.count) || 0));
+    if (total > config.deckSize) warnings.push(`Your groups add up to ${total} cards — more than the ${config.deckSize} in your deck.`);
+    const deck = deckData();
+    const names = typeNames(config.types);
+    config.types.forEach((t, i) => {
+        if (t.required > 0 && t.count < t.required) warnings.push(`${escapeHtml(names[i])}: you need ${t.required} but the deck has ${t.count}.`);
+        if (t.max !== null && t.max !== undefined && t.byTurn === 0 && t.max < t.required) warnings.push(`${escapeHtml(names[i])}: the limit (${t.max}) is below what you need (${t.required}).`);
+        if (t.source && !linkable(t.source, deck)) warnings.push(`${escapeHtml(names[i])}: import a decklist to count these from your cards — using the number you typed.`);
+    });
+    const warnEl = $('mull-warnings');
+    if (warnEl) warnEl.innerHTML = warnings.map(w => `<div>${w}</div>`).join('');
+}
+
+function describeThreshold(v) {
+    if (v >= 90) return 'Picky: only near-certain hands.';
+    if (v >= 75) return 'Disciplined: you want a strong start most games.';
+    if (v >= 60) return 'Relaxed: you trust your draws to fill gaps.';
+    return 'Loose: you keep risky hands.';
+}
+
+function describePenalty(v) {
+    if (v === 0) return 'Never lowered — you dig as deep as it takes.';
+    if (v <= 10) return 'Barely lowered — you will go to five for the right hand.';
+    if (v <= 30) return 'A typical amount: each lost card matters.';
+    if (v <= 50) return 'Lowered a lot — you rarely mulligan twice.';
+    return 'You take almost anything after one mulligan.';
+}
+
+function refreshRule(config) {
+    const t = Math.round(config.confidenceThreshold * 100);
+    const p = Math.round(config.penalty * 100);
+    const set = (id, text) => { const el = $(id); if (el) el.textContent = text; };
+    set('mull-threshold-display', `${t}%`);
+    set('mull-penalty-display', `${p}%`);
+    set('mull-threshold-desc', describeThreshold(t));
+    set('mull-penalty-desc', describePenalty(p));
+
+    const bars = [0, 1, 2].map(b => pct(keepBar(config.confidenceThreshold, config.penalty, b)));
+    const readback = $('mull-bar-readback');
+    if (readback) {
+        readback.innerHTML = `Keep a seven at <strong>${bars[0]}</strong>+${config.freeMulligan ? ' (after the free mulligan too)' : ''}, `
+            + `a six at <strong>${bars[1]}</strong>+, a five at <strong>${bars[2]}</strong>+.`;
+    }
+    const root = $(`${NAME}-tab`);
+    (root?.querySelectorAll?.('[data-preset]') ?? []).forEach(btn => {
+        const preset = PRESETS[btn.dataset.preset];
+        const on = !!preset && preset.penalty === p && preset.threshold === t;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+    });
+}
+
+function refreshGame(config) {
+    const { format } = config;
+    const label = $('mull-format-label');
+    if (label) label.textContent = format.label;
+    const order = $('mull-turn-order');
+    if (order) {
+        order.hidden = !!format.firstPlayerDraws;
+        (order.querySelectorAll?.('[data-play]') ?? []).forEach(btn => {
+            const on = (btn.dataset.play === '1') === config.onPlay;
+            btn.classList.toggle('active', on);
+            btn.setAttribute('aria-pressed', String(on));
+        });
+    }
+    const free = $('mull-free');
+    if (free) free.checked = config.freeMulligan;
+    const note = $('mull-format-note');
+    if (note) {
+        note.textContent = format.firstPlayerDraws
+            ? 'Multiplayer Commander: everyone draws on turn one, and the first mulligan is free.'
+            : (config.onPlay ? 'On the play you skip your first draw, so every deadline sees one card fewer.' : 'On the draw you draw on turn one.');
+    }
+}
+
+// ── Results ──────────────────────────────────────────────────────────────────
+
+function renderSummary(config, result) {
+    const el = $('mull-summary');
+    if (!el) return;
+    const names = typeNames(config.types);
+    const { html, tone } = summarizeMulligan(result, { names, freeMulligan: config.freeMulligan });
+    if (!result) {
+        el.innerHTML = renderBottomLine({ html, tone });
+        return;
+    }
+    const byFirst = result.steps[1]?.foundBy ?? result.steps[0].foundBy;
+    el.innerHTML = renderBottomLine({ html, tone }) + renderHeroStats([
+        {
+            label: 'Hands that get there', value: pct(result.success), size: 'big', color: toneColor(tone),
+            sub: 'after mulligans',
+            tip: 'Chance the hand you finally keep meets every requirement by its turn, counting every mulligan your rule takes.'
+        },
+        {
+            label: 'Sevens you keep', value: pct(result.keepSeven),
+            sub: `${pct(byFirst)} within one mulligan`,
+            tip: 'Share of opening sevens your rule keeps. A fresh seven after a mulligan has the same odds — only the bar changes.'
+        },
+        {
+            label: 'Average mulligans', value: result.avgMulligans.toFixed(1),
+            sub: config.freeMulligan ? 'the free one included' : 'per game', term: 'mulligan'
+        },
+        {
+            label: 'Average hand kept', value: result.avgHandSize.toFixed(1),
+            sub: 'cards, after bottoming',
+            tip: 'Cards in the hand you keep, after putting cards on the bottom for each mulligan.'
+        }
+    ]);
+}
+
+function renderStepSeg(config, result) {
+    const seg = $('mull-step-seg');
+    if (!seg) return;
+    if (!result) {
+        seg.innerHTML = '';
+        return;
+    }
+    const steps = result.steps.slice(0, STEP_TABS);
+    if (viewStep >= steps.length) viewStep = 0;
+    seg.innerHTML = steps.map((s, i) => `<button type="button" class="seg-btn${i === viewStep ? ' active' : ''}" data-step="${i}" aria-pressed="${i === viewStep}">${stepLabel(s, config.freeMulligan)}</button>`).join('');
+}
+
+function cellTip(names, counts, h, d, step) {
+    const what = counts.map((c, i) => `${c} ${names[i].toLowerCase()}`).join(', ');
+    if (!d.legal) return `${what}: over a limit even after bottoming — mulligan. Seen in ${pct(h.p)} of sevens.`;
+    return `${what}: seen in ${pct(h.p)} of sevens; gets there ${pct(d.success)} of the time → ${d.keep ? 'keep' : 'mulligan'}${step.bottom ? ` (bottom ${step.bottom})` : ''}.`;
+}
+
+function cellHtml(h, d, step, names, maxP) {
+    if (!h) return '<td class="is-none"></td>';
+    const cls = !d.legal ? 'is-over' : d.keep ? 'is-keep' : '';
+    const text = !d.legal ? '–' : pct(d.success);
+    const w = Math.max(6, Math.round((h.p / maxP) * 92));
+    return `<td class="${cls}" data-tip="${escapeHtml(cellTip(names, h.counts, h, d, step))}">${text}<span class="mull-freq" style="width:${w}%"></span></td>`;
+}
+
+function renderKeepGrid(result, step, names) {
+    const n = result.types.length;
+    const hands = result.hands.map((h, i) => ({ h, d: step.decisions[i] }));
+    const maxP = Math.max(...result.hands.map(h => h.p));
+
+    if (n === 1) {
+        const cols = hands.filter(x => x.h.p >= 0.0005).sort((a, b) => a.h.counts[0] - b.h.counts[0]);
+        return `
+            <div class="mull-grid-wrap">
+                <table class="mull-kgrid">
+                    <thead><tr><th class="mull-axis" scope="col">${escapeHtml(names[0])} in hand</th>${cols.map(c => `<th scope="col">${c.h.counts[0]}</th>`).join('')}</tr></thead>
+                    <tbody><tr><th class="mull-axis" scope="row">Gets there</th>${cols.map(c => cellHtml(c.h, c.d, step, names, maxP)).join('')}</tr></tbody>
+                </table>
+            </div>`;
+    }
+
+    if (n === 2) {
+        const at = new Map(hands.map(x => [`${x.h.counts[0]},${x.h.counts[1]}`, x]));
+        const total = (idx, v) => hands.filter(x => x.h.counts[idx] === v).reduce((s, x) => s + x.h.p, 0);
+        const rows = [...new Set(hands.map(x => x.h.counts[0]))].sort((a, b) => a - b).filter(v => total(0, v) >= 0.0005);
+        const cols = [...new Set(hands.map(x => x.h.counts[1]))].sort((a, b) => a - b).filter(v => total(1, v) >= 0.0005);
+        return `
+            <div class="mull-grid-wrap">
+                <table class="mull-kgrid">
+                    <thead><tr><th class="mull-axis" scope="col">${escapeHtml(names[0])} ↓ · ${escapeHtml(names[1])} →</th>${cols.map(c => `<th scope="col">${c}</th>`).join('')}</tr></thead>
+                    <tbody>${rows.map(r => `<tr><th scope="row">${r}</th>${cols.map(c => {
+                        const x = at.get(`${r},${c}`);
+                        return x ? cellHtml(x.h, x.d, step, names, maxP) : '<td class="is-none"></td>';
+                    }).join('')}</tr>`).join('')}</tbody>
+                </table>
+            </div>`;
+    }
+
+    // Three or more groups: the most common sevens.
+    const top = hands.slice().sort((a, b) => b.h.p - a.h.p).slice(0, 12);
+    return `
+        <div class="mull-grid-wrap">
+            <table class="mull-table">
+                <thead><tr><th>Hand</th>${names.map(nm => `<th>${escapeHtml(nm)}</th>`).join('')}<th>Seen in</th><th>Gets there</th><th>Call</th></tr></thead>
+                <tbody>${top.map((x, i) => `<tr>
+                    <td>#${i + 1}</td>${x.h.counts.map(c => `<td>${c}</td>`).join('')}
+                    <td>${pct(x.h.p)}</td><td>${x.d.legal ? pct(x.d.success) : '–'}</td>
+                    <td>${!x.d.legal ? 'Mulligan (over a limit)' : x.d.keep ? 'Keep' : 'Mulligan'}</td>
+                </tr>`).join('')}</tbody>
+            </table>
+            <p class="mull-note">The 12 most common sevens. With three or more groups the full grid has too many cells to read.</p>
+        </div>`;
+}
+
+function renderKeep(config, result) {
+    const el = $('mull-keep');
+    if (!el) return;
+    if (!result) {
+        el.innerHTML = '<p class="mull-empty">Add a requirement to see the keep chart.</p>';
+        return;
+    }
+    const step = result.steps[viewStep] ?? result.steps[0];
+    const names = typeNames(config.types);
+    const rules = keepRules(result, viewStep, names.map(nm => nm.toLowerCase()));
+    const reachNote = step.step === 0 ? '' : ` You get here in ${pct(step.reach)} of games.`;
+    const caption = step.forced
+        ? `Down to one card you keep whatever you see.${reachNote}`
+        : `For ${stepSentence(step, config.freeMulligan)}: keep if it gets there at least <strong>${pct(step.bar)}</strong> of the time${step.bottom ? `, after putting ${step.bottom} on the bottom` : ''}.${reachNote}`;
+
+    el.innerHTML = `
+        <div class="mull-keep-body">
+            <p class="mull-keep-caption">${caption}</p>
+            ${rules ? `<ul class="mull-rules">${rules.map(r => `
+                <li class="is-${r.call}"><span class="mull-rule-call">${r.call === 'keep' ? 'Keep' : r.call === 'mull' ? 'Mulligan' : 'Depends'}</span>
+                <span><span class="mull-rule-label">${escapeHtml(r.label)}</span>${r.call === 'some' ? ` — ${escapeHtml(r.detail)}` : ''}</span></li>`).join('')}</ul>` : ''}
+            ${renderKeepGrid(result, step, names)}
+            ${result.types.length <= 2 ? `<div class="mull-legend"><span class="lg-keep">Keep</span><span>Mulligan</span><span class="lg-over">Over a limit</span><span>Number: chance that hand gets there · bar: how often you see it</span></div>` : ''}
+        </div>`;
+}
+
+function renderSteps(config, result) {
+    const el = $('mull-steps');
+    if (!el) return;
+    if (!result) {
+        el.innerHTML = '';
+        return;
+    }
+    const rows = result.steps.filter(s => s.reach >= 0.0005);
+    el.innerHTML = `
+        <div class="mull-grid-wrap"><table class="mull-table">
+            <thead><tr><th></th><th>Cards kept</th><th>Keep if at least</th><th>Keep this seven</th><th>Have a keeper by now</th><th>Kept hands get there</th></tr></thead>
+            <tbody>${rows.map(s => `<tr>
+                <td>${stepLabel(s, config.freeMulligan)}</td>
+                <td>${s.handSize}</td>
+                <td>${s.forced ? 'anything' : pct(s.bar)}</td>
+                <td>${pct(s.keepChance)}</td>
+                <td>${pct(s.foundBy)}</td>
+                <td>${s.keepChance > 0 ? pct(s.successIfKept) : '—'}</td>
+            </tr>`).join('')}</tbody>
+        </table></div>
+        <p class="mull-note">Every mulligan sees a fresh seven with the same odds; only the cards you must bottom and the bar change. If you never mulliganed, ${pct(result.noMulligan)} of sevens would get there.</p>`;
+}
+
+function renderTuning(config, result) {
+    const el = $('mull-tuning');
+    if (!el) return;
+    if (!result) {
+        el.innerHTML = '';
+        return;
+    }
+    const q = result.quality;
+    const mulled = q.mullGood + q.mullMissed;
+    let advice = 'Your bar looks balanced for these requirements.';
+    if (q.mullMissed > 0.12 && q.mullMissed > 2 * q.keepBad) advice = 'Many hands you mulligan would have been fine — try a lower bar.';
+    else if (q.keepBad > 0.1 && q.keepBad > q.mullMissed) advice = 'A fair share of keeps fall short — try a higher bar or a later deadline.';
+
+    const details = $('mull-tuning-details');
+    let gainsHtml = '<p class="mull-note">Open this section to work out what one more card of each group is worth.</p>';
+    if (details?.open) {
+        const key = result.key;
+        let gains = gainsCache.get(key);
+        if (!gains) {
+            gains = marginalGains(planParams(config));
+            gainsCache.set(key, gains);
+        }
+        const names = typeNames(config.types);
+        gainsHtml = `<ul class="mull-gains">${gains.map((g, i) => {
+            const label = `${escapeHtml(names[i])}: ${config.types[i].count} → ${config.types[i].count + 1}`;
+            if (g === null) return `<li><span>${label}</span><span class="num is-flat">no spare card to swap</span></li>`;
+            const pts = g * 100;
+            const cls = pts >= 0.5 ? 'is-good' : 'is-flat';
+            const text = Math.abs(pts) < 0.05 ? '±0.0' : `${pts > 0 ? '+' : '−'}${Math.abs(pts).toFixed(1)}`;
+            return `<li><span>${label}</span><span class="num ${cls}">${text} pts</span></li>`;
+        }).join('')}</ul>
+        <p class="mull-note">Change in “hands that get there” from swapping a card that counts toward nothing for one more of each group.</p>`;
+    }
+
+    el.innerHTML = `
+        <div class="mull-tune">
+            <div>
+                <h4>Is the bar right?</h4>
+                <p>Of all opening sevens, you mulligan ${pct(mulled)}. <strong>${pct(q.mullMissed)}</strong> are mulligans that would have got there anyway; <strong>${pct(q.keepBad)}</strong> are keeps that won’t. ${advice}</p>
+            </div>
+            <div>
+                <h4>One more card</h4>
+                ${gainsHtml}
+            </div>
+        </div>`;
+}
+
+// ── Sample games ─────────────────────────────────────────────────────────────
+
+function shuffleInPlace(arr, rng) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(rng() * (i + 1));
+        const t = arr[i];
+        arr[i] = arr[j];
+        arr[j] = t;
+    }
+    return arr;
+}
+
+/**
+ * Build the card pool for sample games: the real list when every group is
+ * linked to it, otherwise stand-in cards named after each group.
+ */
+function usesRealCards(config, deck) {
+    return deck.hasList && config.types.length > 0 && config.types.every(t => t.source && linkable(t.source, deck));
+}
+
+function samplePool(config, deck) {
+    const real = usesRealCards(config, deck);
+    if (real) {
+        const { groupOf } = assignCards(config.types, deck.cards, deck.tags);
+        const pool = [];
+        deck.cards.forEach(c => {
+            const group = groupOf.get(c.name) ?? -1;
+            for (let k = 0; k < Number(c.count); k++) pool.push({ name: c.name, group, real: true });
+        });
+        return { pool, real };
+    }
+    // Stand-ins carry no name: the group's current name is filled in when
+    // rendering, so renaming a group never re-runs the simulation.
+    const pool = [];
+    config.types.forEach((t, i) => { for (let k = 0; k < t.count; k++) pool.push({ name: null, group: i }); });
+    while (pool.length < config.deckSize) pool.push({ name: 'Other card', group: -1 });
+    return { pool, real: false };
+}
+
+/**
+ * Play the keep rule out on shuffled decks.
+ *
+ * @param {Object} p
+ * @param {Array<{name:string, group:number}>} p.pool - the library, one entry per card
+ * @param {Object} p.plan - from mulliganPlan()
+ * @param {(turn:number)=>number} p.drawsBy
+ * @param {boolean} p.freeMulligan
+ * @param {number} [p.games=500]
+ * @param {number} [p.detail=40] - games to keep in full for display
+ * @param {() => number} [p.rng=Math.random]
+ * @returns {{stats:{games:number, keptSeven:number, success:number, avgMulligans:number, avgHandSize:number}, games:Array}}
+ */
+export function simulateGames({ pool, plan, drawsBy, freeMulligan, games = SAMPLE_DEFAULT, detail = 40, rng = Math.random }) {
+    const types = plan.types;
+    const n = types.length;
+    const handIndex = new Map(plan.hands.map((h, i) => [h.counts.join(','), i]));
+    const due = types.map(t => drawsBy(t.byTurn));
+    const lastTurn = Math.max(1, ...types.filter(t => t.required > 0).map(t => t.byTurn));
+    const drawCount = Math.max(0, drawsBy(lastTurn));
+    const lastStep = freeMulligan ? HAND_SIZE : HAND_SIZE - 1;
+    const order = pool.map((_, i) => i);
+    const out = [];
+    let keptSeven = 0;
+    let success = 0;
+    let mulls = 0;
+    let handSizes = 0;
+
+    for (let g = 0; g < games; g++) {
+        const mulled = [];
+        for (let step = 0; step <= lastStep; step++) {
+            shuffleInPlace(order, rng);
+            const seven = order.slice(0, HAND_SIZE);
+            const counts = new Array(n).fill(0);
+            seven.forEach(ci => { const grp = pool[ci].group; if (grp >= 0) counts[grp]++; });
+            const others = HAND_SIZE - sum(counts);
+            const planStep = plan.steps[step];
+            const decision = planStep?.decisions[handIndex.get(counts.join(','))];
+            const keep = step === lastStep || !planStep || !!decision?.keep;
+            if (!keep) {
+                if (g < detail) mulled.push(seven.slice());
+                continue;
+            }
+
+            const bottom = bottomCount(step, freeMulligan);
+            const pick = chooseBottom(counts, others, bottom, types, decision?.cut ?? null);
+            const bottomed = new Set();
+            if (pick.legal) {
+                let needOthers = pick.bottomOthers;
+                const needType = pick.bottomByType.slice();
+                for (let k = seven.length - 1; k >= 0; k--) {
+                    const grp = pool[seven[k]].group;
+                    if (grp < 0 && needOthers > 0) { bottomed.add(k); needOthers--; }
+                    else if (grp >= 0 && needType[grp] > 0) { bottomed.add(k); needType[grp]--; }
+                }
+            }
+            const kept = new Array(n).fill(0);
+            seven.forEach((ci, k) => { const grp = pool[ci].group; if (grp >= 0 && !bottomed.has(k)) kept[grp]++; });
+            const draws = order.slice(HAND_SIZE, HAND_SIZE + drawCount);
+            const missing = [];
+            types.forEach((t, i) => {
+                if (t.required <= 0) return;
+                let have = kept[i];
+                for (let d = 0; d < Math.min(due[i], draws.length); d++) if (pool[draws[d]].group === i) have++;
+                if (have < t.required) missing.push(i);
+            });
+            const ok = pick.legal && missing.length === 0;
+
+            if (step === 0) keptSeven++;
+            if (ok) success++;
+            mulls += step;
+            handSizes += HAND_SIZE - bottom;
+            if (g < detail) {
+                out.push({
+                    mulled,
+                    seven: seven.slice(),
+                    bottomed,
+                    draws,
+                    step,
+                    handSize: HAND_SIZE - bottom,
+                    ok,
+                    legal: pick.legal,
+                    missing
+                });
+            }
+            break;
+        }
+    }
+    return {
+        stats: {
+            games,
+            keptSeven: games ? keptSeven / games : 0,
+            success: games ? success / games : 0,
+            avgMulligans: games ? mulls / games : 0,
+            avgHandSize: games ? handSizes / games : 0
+        },
+        games: out,
+        drawsBy,
+        lastTurn
+    };
+}
+
+function sampleCount() {
+    const v = parseInt($('mulligan-sample-count')?.value, 10);
+    return Number.isFinite(v) ? Math.min(10000, Math.max(1, v)) : SAMPLE_DEFAULT;
+}
+
+function chip(card, names, bottomed = false) {
+    const dot = card.group >= 0 ? `<span class="mull-dot" style="background:${groupColor(card.group)}" aria-hidden="true"></span>` : '';
+    const cls = `mull-card${card.group < 0 ? ' is-other' : ''}${bottomed ? ' is-bottom' : ''}`;
+    const attrs = card.real ? ` data-card="${escapeHtml(card.name)}" tabindex="0"` : '';
+    const name = escapeHtml(card.name ?? names[card.group] ?? '');
+    const label = bottomed ? `${name} (bottom)` : name;
+    return `<span class="${cls}"${attrs}${bottomed ? ' title="Put on the bottom"' : ''}>${dot}${label}</span>`;
+}
+
+function renderGame(game, idx, pool, names, data, free) {
+    const steps = game.mulled.map((seven, m) => `
+        <div class="mull-line is-mulled"><span class="mull-line-label">${m === 0 ? 'Opener' : (free && m === 1 ? 'Free mull' : `Mull to ${HAND_SIZE - bottomCount(m, free)}`)}</span>
+        <div class="mull-cards">${seven.map(ci => chip(pool[ci], names)).join('')}</div></div>`).join('');
+    const keptLabel = game.step === 0 ? 'Kept' : `Kept ${game.handSize}`;
+    const turns = [];
+    for (let t = 1; t <= data.lastTurn; t++) {
+        const from = data.drawsBy(t - 1);
+        const to = data.drawsBy(t);
+        for (let d = from; d < to && d < game.draws.length; d++) {
+            turns.push(`<span class="mull-draw"><span class="mull-turn">T${t}</span>${chip(pool[game.draws[d]], names)}</span>`);
+        }
+    }
+    const verdict = !game.legal
+        ? 'Over a limit'
+        : game.ok ? 'Everything on time' : `Missed: ${game.missing.map(i => escapeHtml(names[i].toLowerCase())).join(', ')}`;
+    return `
+        <article class="mull-game">
+            <div class="mull-game-head">
+                <span><strong>Game ${idx + 1}</strong> · ${game.step === 0 ? 'kept the opener' : `${game.step} mulligan${game.step > 1 ? 's' : ''}, kept ${game.handSize}`}</span>
+                <span class="mull-result ${game.ok ? 'is-good' : 'is-bad'}">${game.ok ? '✓' : '✕'} ${verdict}</span>
+            </div>
+            ${steps}
+            <div class="mull-line"><span class="mull-line-label">${keptLabel}</span>
+                <div class="mull-cards">${game.seven.map((ci, k) => chip(pool[ci], names, game.bottomed.has(k))).join('')}</div></div>
+            ${turns.length ? `<div class="mull-line"><span class="mull-line-label">Draws</span><div class="mull-cards">${turns.join('')}</div></div>` : ''}
+        </article>`;
+}
+
+/**
+ * Run (or reuse) the sample games and render them.
+ */
+export function runSampleReveals() {
+    const display = $('mulligan-reveals-display');
+    if (!display) return;
+    const { config, result } = calculate();
+    if (!result) {
+        display.innerHTML = '<p class="mull-empty">Add a requirement to deal sample games.</p>';
+        return;
+    }
+    const deck = deckData();
+    const games = sampleCount();
+    const key = `${result.key}|${games}|${simSeed}|${deckVersion}|${usesRealCards(config, deck)}`;
+    if (sim.key !== key) {
+        const { pool, real } = samplePool(config, deck);
+        const drawsBy = drawSchedule({ format: config.format, onPlay: config.onPlay });
+        sim = { key, pool, real, data: simulateGames({ pool, plan: result, drawsBy, freeMulligan: config.freeMulligan, games }) };
+        shownGames = GAMES_SHOWN;
+    }
+    const { data } = sim;
+    const names = typeNames(config.types);
+    const source = $('mull-sim-source');
+    if (source) source.textContent = sim.real ? 'shuffles of your list' : 'stand-in cards for the counts';
+    const s = data.stats;
+    const stats = `In ${s.games.toLocaleString('en-US')} shuffled games you kept the opener ${pct(s.keptSeven)} of the time, `
+        + `averaged ${s.avgMulligans.toFixed(1)} mulligans, and the kept hand got there in <strong>${pct(s.success)}</strong> `
+        + `(exact: ${pct(result.success)}).`;
+    const list = data.games.slice(0, shownGames).map((g, i) => renderGame(g, i, sim.pool, names, data, config.freeMulligan)).join('');
+    const more = shownGames < data.games.length
+        ? `<button type="button" class="btn btn-ghost btn-sm mull-more" id="mull-more-games">Show ${Math.min(6, data.games.length - shownGames)} more games</button>`
+        : '';
+    display.innerHTML = `<p class="mull-sim-stats">${stats}</p><div class="mull-games">${list}</div>${more}`;
+}
+
+// ── Render all ───────────────────────────────────────────────────────────────
+
+/** Re-render the page. Cheap when inputs are unchanged: the plan is cached. */
+export function updateUI() {
+    const { config, result } = calculate();
+    const deck = deckData();
+    renderTemplates(deck);
+    refreshRows(config, result);
+    refreshRule(config);
+    refreshGame(config);
+    renderSummary(config, result);
+    renderStepSeg(config, result);
+    renderKeep(config, result);
+    renderSteps(config, result);
+    renderTuning(config, result);
+    runSampleReveals();
+}
+
+// ── Sharing & external setters ───────────────────────────────────────────────
+
+/**
+ * Replace the requirement rows (share links, tests).
+ * @param {Array<{id?:number, name:string, count:number, required:number, byTurn:number, max?:number|null, source?:string|null}>} types
+ */
+export function setCardTypes(types) {
+    if (!Array.isArray(types)) return;
+    cardTypes = types.map((t, i) => ({
+        id: Number.isFinite(t.id) ? t.id : i + 1,
+        name: String(t.name ?? `Group ${i + 1}`).slice(0, 60),
+        count: Math.max(0, Number(t.count) || 0),
+        required: Math.max(0, Number(t.required) || 0),
+        byTurn: Math.max(0, Number(t.byTurn) || 0),
+        max: t.max === null || t.max === undefined || t.max === '' ? null : Math.max(0, Number(t.max) || 0),
+        source: t.source && SOURCES[t.source] ? t.source : null
+    }));
+    nextTypeId = Math.max(0, ...cardTypes.map(t => t.id)) + 1;
+    templateKey = null;
+    viewStep = 0;
+    renderCardTypes();
+    updateUI();
+}
+
+/**
+ * Current state for share links: the rows (with a hex colour per row, which
+ * the link format requires) and the keep-rule settings.
  */
 export function getState() {
-    return getDeckConfig();
+    const config = getDeckConfig();
+    const fallback = isHex(TX_CHART.dim) ? TX_CHART.dim : TX_CHART.series.find(isHex);
+    return {
+        ...config,
+        types: config.types.map((t, i) => {
+            const c = TX_CHART.series[i % TX_CHART.series.length];
+            return { ...t, color: isHex(c) ? c.trim() : fallback };
+        })
+    };
+}
+
+/** Settings share.js doesn't carry on its own. */
+export function getShareParams() {
+    const format = DeckConfig.getFormat();
+    const params = {};
+    if (!format.firstPlayerDraws && !onPlay) params.mullDraw = 1;
+    if (freeOverride !== null && freeOverride !== format.freeMulligan) params.mullFree = freeOverride ? 1 : 0;
+    if (cardTypes.some(t => t.max !== null)) params.mullMax = cardTypes.map(t => t.max ?? '').join(',');
+    if (cardTypes.some(t => t.source)) params.mullSrc = cardTypes.map(t => t.source ?? '').join(',');
+    return params;
+}
+
+/** Apply the params from getShareParams(); every value is validated. */
+export function applyShareParams(params) {
+    if (!params?.get) return;
+    if (params.get('mullDraw') === '1') onPlay = false;
+    if (params.has('mullFree')) freeOverride = params.get('mullFree') === '1';
+    const maxes = (params.get('mullMax') ?? '').split(',');
+    const sources = (params.get('mullSrc') ?? '').split(',');
+    const deck = deckData();
+    const linked = deck.hasList ? assignCards(cardTypes.map((t, i) => ({ source: SOURCES[sources[i]] ? sources[i] : null })), deck.cards, deck.tags).counts : [];
+    cardTypes.forEach((t, i) => {
+        const m = parseInt(maxes[i], 10);
+        if (Number.isFinite(m) && m >= 0 && m <= 7) t.max = m;
+        const src = sources[i];
+        // Re-link only when the shared count matches this deck's, so a link
+        // never silently changes the numbers it was shared with.
+        if (src && SOURCES[src] && linkable(src, deck)) {
+            const n = deck.hasList ? linked[i] : deck.lands;
+            if (n === t.count) t.source = src;
+        }
+    });
+    renderCardTypes();
+    updateUI();
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+
+function setRange(id, value) {
+    const el = $(id);
+    if (el) el.value = value;
+}
+
+function bindEvents() {
+    const root = $(`${NAME}-tab`);
+    if (!root?.addEventListener) return;
+
+    root.addEventListener('click', e => {
+        const target = e.target instanceof Element ? e.target : null;
+        if (!target) return;
+
+        const tpl = target.closest('[data-template]');
+        if (tpl && !tpl.disabled) {
+            applyTemplate(tpl.dataset.template);
+            return;
+        }
+        const remove = target.closest('[data-remove]');
+        if (remove) {
+            const id = Number(remove.dataset.remove);
+            cardTypes = cardTypes.filter(t => t.id !== id);
+            templateKey = null;
+            viewStep = 0;
+            renderCardTypes();
+            updateUI();
+            return;
+        }
+        const preset = target.closest('[data-preset]');
+        if (preset && PRESETS[preset.dataset.preset]) {
+            const { penalty, threshold } = PRESETS[preset.dataset.preset];
+            setRange('mull-penalty', penalty);
+            setRange('mull-threshold', threshold);
+            updateUI();
+            return;
+        }
+        const play = target.closest('[data-play]');
+        if (play) {
+            onPlay = play.dataset.play === '1';
+            updateUI();
+            return;
+        }
+        const step = target.closest('[data-step]');
+        if (step) {
+            viewStep = Number(step.dataset.step) || 0;
+            const { config, result } = calculate();
+            renderStepSeg(config, result);
+            renderKeep(config, result);
+            return;
+        }
+        if (target.closest('#mull-more-games')) {
+            shownGames += 6;
+            runSampleReveals();
+            return;
+        }
+        if (target.closest('#mulligan-draw-reveals-btn')) {
+            simSeed++;
+            runSampleReveals();
+        }
+    });
+
+    root.addEventListener('input', e => {
+        const input = e.target;
+        if (!(input instanceof HTMLInputElement)) return;
+        if (input.id === 'mull-threshold' || input.id === 'mull-penalty') {
+            refreshRule(getDeckConfig());
+            scheduleUpdate();
+            return;
+        }
+        const field = input.dataset.field;
+        if (!field) return;
+        const type = cardTypes.find(t => t.id === Number(input.dataset.typeId));
+        if (!type) return;
+        if (field === 'name') {
+            type.name = input.value;
+            scheduleUpdate();
+            return;
+        }
+        const raw = input.value.trim();
+        if (field === 'max') {
+            type.max = raw === '' ? null : Math.min(7, Math.max(0, parseInt(raw, 10) || 0));
+        } else {
+            if (raw === '') return; // mid-edit: wait for a number
+            const value = Math.max(0, parseInt(raw, 10) || 0);
+            type[field] = value;
+            if (field === 'count' && type.source) {
+                type.source = null;
+                const src = input.closest('.mull-type')?.querySelector('.mull-src');
+                if (src) src.textContent = 'set by hand';
+            }
+        }
+        templateKey = null;
+        scheduleUpdate();
+    });
+
+    root.addEventListener('change', e => {
+        const el = e.target;
+        if (el?.id === 'mull-add-type' && el.value) {
+            addRequirement(el.value === 'custom' ? null : el.value);
+        } else if (el?.id === 'mull-free') {
+            freeOverride = el.checked;
+            updateUI();
+        } else if (el?.id === 'mulligan-sample-count') {
+            runSampleReveals();
+        }
+    });
+
+    $('mull-tuning-details')?.addEventListener('toggle', () => {
+        const { config, result } = calculate();
+        renderTuning(config, result);
+    });
 }
 
 /**
- * Initialize the mulligan calculator
+ * Initialise the page: default template from the deck, events, deck listeners.
  */
 export function init() {
-    // Render initial card types
-    renderCardTypes();
+    const deck = deckData();
+    const debounced = registerCalculator({ name: NAME, calculate, updateUI }).updateUI;
+    scheduleUpdate = debounce(() => updateUI(), 120);
 
-    const container = document.getElementById('mulligan-sample-reveals');
-    if (container) {
-        container.innerHTML = generateSampleRevealsHTML('mulligan', 'Sample Opening Hands', { requiresImport: false });
-    }
-
-    // Add type button
-    const addBtn = document.getElementById('mull-add-type');
-    if (addBtn) {
-        addBtn.addEventListener('click', addCardType);
-    }
-
-    // Preset Buttons
-    document.querySelectorAll('.preset-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            applyPreset(e.target.dataset.preset);
-        });
-    });
-
-    // Sliders with unified handler
-    const setupSlider = (id, displayId, formatter) => {
-        const slider = document.getElementById(id);
-        const display = document.getElementById(displayId);
-        if (slider && display) {
-            slider.addEventListener('input', () => {
-                display.textContent = formatter(slider.value);
-                updateDescriptions();
-                updateUI();
-            });
+    // A newly loaded deck re-fills an untouched template (and drops one the
+    // new deck can't support).
+    DeckConfig.onDeckImport(() => {
+        const now = deckData();
+        if (templateKey) {
+            const tpl = TEMPLATES.find(t => t.key === templateKey);
+            applyTemplate(tpl && templateAvailable(tpl, now) ? templateKey : 'lands', { render: false });
+        } else {
+            syncLinkedCounts(now);
         }
-    };
-
-    setupSlider('mull-penalty', 'mull-penalty-display', v => v + '%');
-    setupSlider('mull-threshold', 'mull-threshold-display', v => v + '%');
-
-    // Checkboxes with unified handler
-    ['mull-free'].forEach(id => {
-        const checkbox = document.getElementById(id);
-        if (checkbox) checkbox.addEventListener('change', () => updateUI());
-    });
-    
-    // Bind Sample Button
-    const sampleBtn = document.getElementById('mulligan-draw-reveals-btn');
-    if (sampleBtn) {
-        sampleBtn.addEventListener('click', refreshSamples);
-    }
-
-    // Listen for deck configuration changes
-    DeckConfig.onDeckUpdate(() => {
-        updateCalculatorIfActive('mulligan', updateUI);
+        renderCardTypes();
+        debounced();
     });
 
-    updateDescriptions(); // Initial description set
+    renderAddSelect(deck);
+    renderCardTypes();
+    bindEvents();
 }
+
+// Default rows exist before init() so calculate() works headless (tests, share links).
+applyTemplate('lands', { render: false });

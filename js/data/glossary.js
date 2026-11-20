@@ -69,7 +69,7 @@ export const GLOSSARY = Object.freeze({
     },
     keepable: {
         term: 'Keepable hand',
-        def: 'A hand that meets the requirements you set — by default, two to four lands in the opening seven.'
+        def: 'A hand you would keep rather than mulligan. By default that means two to four lands in the opening seven; pages that use it let you change the rule.'
     },
     whiff: {
         term: 'Whiff',

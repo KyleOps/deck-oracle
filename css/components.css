@@ -347,8 +347,7 @@
     /* auto-fit alongside an explicit track produced phantom 0px columns; sizing
        tracks to content and packing them left keeps the stats as a readable
        cluster rather than stretching them to the panel edges. */
-    grid-template-columns: repeat(auto-fit, minmax(190px, 260px));
-    justify-content: start;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     background: var(--tx-panel);
     border-bottom: 1px solid var(--tx-rule);
 }

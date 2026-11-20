@@ -156,6 +156,9 @@ kbd {
 
 /* ==================== UTILITY CLASSES ==================== */
 
+/* The hidden attribute always wins, even over components that set display. */
+[hidden] { display: none !important; }
+
 .sr-only {
     position: absolute;
     width: 1px;

@@ -28,7 +28,6 @@ export const SLIDERS = Object.freeze([
     { tab: 'vow', param: 'vowCard', id: 'vow-card-value', min: 0, max: 20, float: true },
     { tab: 'vortex', param: 'vortexCMC', id: 'vortex-cmcSlider', min: 5, max: 15 },
     { tab: 'rashmi', param: 'rashmiCMC', id: 'rashmi-cmcSlider', min: 0, max: 15 },
-    { tab: 'lands', param: 'lands', id: 'lands-opening-slider', min: 0, max: 60 },
     { tab: 'lumra', param: 'lumraGY', id: 'lumra-gySlider', min: 0, max: 30 },
     { tab: 'lumra', param: 'lumraMult', id: 'lumra-multSlider', min: 1, max: 10 },
     { tab: 'lumra', param: 'lumraFetch', id: 'lumra-fetchLands', min: 0, max: 100 },

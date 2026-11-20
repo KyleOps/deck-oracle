@@ -67,7 +67,7 @@ export const CALCULATORS = Object.freeze({
     mulligan: {
         name: 'Mulligan Planner', short: 'MUL', group: 'deck', card: 'Serum Powder',
         question: 'Which hands should I keep, and how often will I find one?',
-        summary: 'Set what a keepable hand needs and get the best mulligan strategy for this deck.',
+        summary: 'Say what a keepable hand needs; see exactly which sevens to keep and how often you find one.',
         method: 'exact + simulation', keywords: ['mulligan', 'keep', 'london', 'requirements'],
         load: () => import('../calculators/mulligan.js'), view: () => import('../views/mulligan.js')
     },
