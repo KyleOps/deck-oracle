@@ -190,21 +190,40 @@ defineCardRule('Selvala, Eager Trailblazer', rule(
 ));
 ```
 
-A rule is data plus small hooks (`mana`, `tapBoost`, `onMainPhase`,
-`onEnter`, `onCast`, `creature`, `power`, `rampValue`) that act on the game
-only through its rules API (`powerOf`, `distinctPowers`, `controlsPower`,
-`countSubtype`, `addMana`, `createToken`, `fetchLand`, `copySpell`, …), so
-a new card never touches the engine loop. When a whole wording family
-shares a rule (every "Ferocious — {T}: Add …"), add a detector to
-`DETECTORS` instead; named rules win over detected ones. Test each rule with
-an exact scripted game (`playScriptedPlanGame`) in
-`tests/models/plan.node.test.js`.
+A rule is data plus small hooks (`mana`, `tapBoost`, `landBoost`,
+`onMainPhase`, `onEnter`, `onResolve`, `onCast`, `onOtherEnter`,
+`onLandEnter`, `onCombat`, `onEndStep`, `creature`, `power`, `anthem`,
+`castable`, `discount`, `rampValue`) that act on the game only through its
+rules API (`powerOf`, `distinctPowers`, `controlsPower`, `countSubtype`,
+`addMana`, `createToken`, `fetchLand`, `revealTop`, `revealUntil`, `mill`,
+`explore`, `copySpell`, …), so a new card never touches the engine loop.
+Lands take a `landRule()` (shocks, battle lands, verges, hideaway,
+Yavimaya) and modal double-faced cards a `faceLand()` (`use: 'land'` plays
+only the land; `'either'` keeps the spell and plays the land only to save
+a land drop). A named rule that sets `ramp` (`rampSpec()`, or `null`)
+replaces `ramp.js`'s reading for that card, so a plan doesn't move when
+the shared ramp rule does. When a whole wording family shares a rule
+(every "Ferocious — {T}: Add …", every battle land), add a detector to
+`DETECTORS` / `detectLand` instead; named rules win over detected ones.
+Test each rule with an exact scripted game (`playScriptedPlanGame`: hand,
+library top first, a starting battlefield; it reports `avail` — mana before
+casting — `mana`, `life`, the board, hand and graveyard) in
+`tests/models/plan.node.test.js` or, for a preset's cards,
+`tests/models/planPresets.node.test.js`.
+
+Plans are plain data (`js/utils/planSchema.js`): steps of `cast` (with
+`after`, `paid: n`, `copied`), `mana`, `package`, `spend` (n mana in one
+turn on spells from hand matching a group, X at the X paid) and `ramp` (end
+a turn able to make n mana next turn — the outcome, whatever card did
+it). A step with `info: true` is measured but neither pursued nor scored.
+Every addition keeps old share links (`gp=`) reading as they did.
 
 Presets — a plan that comes with its deck — are modules in
 `js/data/plans/<id>.js` (`id`, `title`, `deckUrl`, `commanders`, `plan`,
-`notes`, `snapshot`) listed in `js/data/plans/index.js`, imported the first
-time they are used. Plans are plain data (`js/utils/planSchema.js`), so a
-preset's plan is exactly what a share link (`gp=`) carries.
+`notes` — paragraphs, every number from the simulator — and `snapshot`, the
+deck in the importers' card-record shape) listed in
+`js/data/plans/index.js`, imported the first time they are used, so a
+preset's plan is exactly what a share link carries.
 
 ## Styling
 
