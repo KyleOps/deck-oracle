@@ -12,7 +12,7 @@
 
 import { drawType } from './hypergeometric.js';
 import { COLORS, landColors, parseManaCost, deckColorIdentity } from './mana.js';
-import { asLibrary, isLand } from './library.js';
+import { asLibrary, cardTypes, isLand, isPermanent } from './library.js';
 import { hashString, mulberry32, partialShuffle, shuffled } from './random.js';
 import { inflect as plural } from './text.js';
 import { tagCard } from './cardTags.js';
@@ -87,9 +87,9 @@ const TYPE_WORD = {
 
 function primaryType(card) {
     if (isLand(card)) return 'lands';
-    const front = String(card?.type_line ?? '').split('//')[0].toLowerCase();
+    const types = cardTypes(card?.type_line);
     for (const t of ['creature', 'planeswalker', 'battle', 'artifact', 'enchantment', 'instant', 'sorcery']) {
-        if (front.includes(t)) return t === 'sorcery' ? 'sorceries' : `${t}s`;
+        if (types.includes(t)) return t === 'sorcery' ? 'sorceries' : `${t}s`;
     }
     return card?.category ?? card?.allCategories?.[0] ?? 'creatures';
 }
@@ -114,7 +114,6 @@ export function toLabCard(card, uid, identity) {
     const type = primaryType(card);
     const tags = land ? [] : tagCard(card);
     const colors = land ? landColors(card, identity) : [];
-    const front = String(card.type_line ?? '').split('//')[0];
     const mv = land ? 0 : Math.max(0, Math.floor(Number(card.cmc) || 0));
     return {
         uid,
@@ -128,7 +127,7 @@ export function toLabCard(card, uid, identity) {
         playMv: land ? 0 : mv + parseManaCost(card.mana_cost).x,
         pips: land ? [] : pipMasks(card.mana_cost),
         mask: maskOf(colors),
-        permanent: land || /\b(creature|artifact|enchantment|planeswalker|battle|land)\b/i.test(front),
+        permanent: land || isPermanent(String(card.type_line ?? '')),
         ramp: tags.includes('ramp'),
         draw: tags.includes('draw'),
         placeholder: false
