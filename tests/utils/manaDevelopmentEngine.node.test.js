@@ -71,8 +71,9 @@ function project(r) {
     if (!r) return r;
     const t = r.target;
     return {
+        // (How the uncounted cards are grouped is the classifier's business, not the engine's.)
         games: r.games, lands: r.lands, librarySize: r.librarySize, placeholder: r.placeholder,
-        rampCount: r.rampCount, notCounted: r.notCounted, treasure: r.treasure,
+        rampCount: r.rampCount, treasure: r.treasure,
         mana: r.mana, landsOnly: r.landsOnly, reach: r.reach, reachLands: r.reachLands,
         mulliganRate: r.mulliganRate,
         ramp: r.ramp.map(x => ({ name: x.name, count: x.count, counted: x.counted, castBy3: x.castBy3, castBy4: x.castBy4, seenBy4: x.seenBy4 })),

@@ -4,11 +4,13 @@
  * Two halves, both pure and DOM-free (tested in
  * tests/calculators/manadev.node.test.js):
  *
- *   1. A ramp classifier that reads rules text: mana rocks and dorks (how much
- *      they add, in which colours, whether they need a turn), land-fetch spells
- *      (how many lands, tapped or not, battlefield or hand), extra land drops.
- *      Rituals, cost reducers, mana doublers and triggered Treasure are
- *      recognised but deliberately NOT counted — each says so in its label.
+ *   1. The ramp classifier (ramp.js — the rule every page counts ramp by):
+ *      mana rocks and dorks (how much they add, in which colours, whether they
+ *      need a turn), land-fetch spells (how many lands, tapped or not,
+ *      battlefield or hand), extra land drops. Ramp it can't simulate (mana
+ *      doublers, triggered Treasure …) and things that help your mana without
+ *      being ramp (rituals, cost reducers) are listed but NOT counted — each
+ *      says so in its label. Lands are read here (classifyLand).
  *   2. A goldfish simulator: shuffle, London mulligan with the Opening Hands
  *      keep rule, then each turn draw → play a land → greedily cast the ramp
  *      you can afford. It records the mana you can make each turn, the turn
@@ -23,12 +25,12 @@
  * twice, with ramp and lands-only, so "turns saved" is measured game by game.
  */
 
-import { COLORS, COLOR_NAMES } from './mana.js';
+import { COLORS } from './mana.js';
 import { asLibrary, commandersOf, isLand, isLibrary } from './library.js';
 import { mulberry32, shuffle } from './random.js';
 import { quantile } from './stats.js';
 import { inflect as plural } from './text.js';
-import { tagCard } from './cardTags.js';
+import { BASIC_TYPES, basicTypesIn, classifyRamp, describeRamp, rampRole, stripReminder, typeBits } from './ramp.js';
 import {
     toLabCard, buildPlaceholderLibrary, identityOf, libraryKey, meetsRule, chooseBottom,
     DEFAULT_RULE, MIN_HAND, OPENING_HAND, maskOf, COLOR_BIT
@@ -51,19 +53,8 @@ export const CHECK_TURN = 4;
 /** Sample games kept for the page. */
 export const SAMPLE_GAMES = 4;
 
-const WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5 };
-const BASIC_TYPES = ['plains', 'island', 'swamp', 'mountain', 'forest'];
-
-/** Basic land types as bits (same order as BASIC_TYPES), for fast type checks. */
-export function typeBits(words = []) {
-    let m = 0;
-    BASIC_TYPES.forEach((t, i) => { if (words.includes(t)) m |= 1 << i; });
-    return m;
-}
-
 function typeLineBits(typeLine) {
-    const lower = String(typeLine ?? '').toLowerCase();
-    return typeBits(BASIC_TYPES.filter(t => new RegExp(`\\b${t}\\b`).test(lower)));
+    return typeBits(basicTypesIn(typeLine));
 }
 
 /** How a land enters. */
@@ -73,16 +64,6 @@ function popcount(m) {
     let n = 0;
     while (m) { n += m & 1; m >>= 1; }
     return n;
-}
-
-function stripReminder(text) {
-    return String(text ?? '').replace(/\([^)]*\)/g, '').replace(/[ \t]+/g, ' ');
-}
-
-function symbolMask(symbols) {
-    let m = 0;
-    for (const s of symbols) m |= COLOR_BIT[s.toUpperCase()] ?? 0;
-    return m;
 }
 
 // ── Lands ────────────────────────────────────────────────────────────────────
@@ -123,315 +104,12 @@ export function classifyLand(card, { multiplayer = true } = {}) {
 }
 
 // ── Ramp ─────────────────────────────────────────────────────────────────────
+//
+// The classifier lives in ramp.js: it is the one rule for what counts as ramp,
+// shared with the role tags every other page reads. Re-exported here for the
+// page and the tests.
 
-function blankRamp() {
-    return {
-        kind: null,
-        modelled: false,
-        mana: 0, mask: 0, any: false, ready: 'now', variable: false, activation: 0,
-        lands: 0, toHand: 0, landsTapped: false, landFilter: null, filterKind: 0, filterBits: 0, extraCost: 0, sacrificeLand: 0,
-        extraDrops: 0, extraDropsOnce: 0, putLand: 0, fromTop: false,
-        treasure: 0, draws: 0,
-        unmodelled: null,
-        label: ''
-    };
-}
-
-/**
- * Amount and colours of an "add …" phrase (lower case, after the word "add").
- * @returns {{amount:number, mask:number, variable:boolean}|null}
- */
-function parseAdd(phrase, idMask) {
-    const p = phrase.trim();
-    if (/\bfor each\b|\bequal to\b|^x mana|^an amount/.test(p)) {
-        const syms = p.match(/\{([wubrgc])\}/g) ?? [];
-        const mask = syms.length ? symbolMask(syms.map(s => s[1])) : idMask;
-        return { amount: 1, mask, variable: true, any: !syms.length };
-    }
-    let m = p.match(/^((?:\{[wubrgc]\})+)((?: or \{[wubrgc]\})*)/);
-    if (m) {
-        const first = m[1].match(/\{([wubrgc])\}/g).map(s => s[1]);
-        const alts = (m[2].match(/\{([wubrgc])\}/g) ?? []).map(s => s[1]);
-        if (alts.length) return { amount: 1, mask: symbolMask([...first, ...alts]), variable: false, any: false };
-        return { amount: first.length, mask: symbolMask(first), variable: false, any: false };
-    }
-    m = p.match(/^(one|two|three|four|five) mana (?:of any (?:one )?colou?r|in any combination of colou?rs|of the chosen colou?r|of any type)/);
-    if (m) return { amount: WORDS[m[1]], mask: idMask, variable: false, any: true };
-    return null;
-}
-
-/** "tapped"/"untapped" destination of a land search, from the clause after "card(s)". */
-function searchDestination(rest, count) {
-    if (/put one (of them )?onto the battlefield( tapped)? and the other into your hand/.test(rest)) {
-        return { lands: 1, toHand: Math.max(0, count - 1), tapped: /onto the battlefield tapped and/.test(rest) };
-    }
-    const bf = rest.match(/put (?:them|it|that card|those cards|those lands|the cards?) onto the battlefield( tapped)?/);
-    if (bf) return { lands: count, toHand: 0, tapped: Boolean(bf[1]) };
-    if (/into your hand/.test(rest)) return { lands: 0, toHand: count, tapped: false };
-    return null;
-}
-
-const TRIGGER = /\bwhenever\b|\bat the beginning\b|\bdies\b|\battacks?\b|\blandfall\b|\bdeals combat damage\b|\bwhen [^,]*\b(leaves|is put into)\b/;
-
-/**
- * What a nonland card does for your mana, read from its rules text.
- *
- * Counted (modelled): mana abilities on permanents (rocks, dorks, auras like
- * Utopia Sprawl, planeswalker mana abilities), land searches on spells, ETBs
- * and sacrifice abilities, extra land drops, playing lands from the top, and
- * one-shot Treasure (only when the caller turns Treasure on).
- * Recognised but not counted: rituals, mana that doesn't untap, cost reducers,
- * mana doublers, and anything that only happens on a later trigger.
- *
- * @param {Object} card - Scryfall-shaped record
- * @param {{identity?:string[]}} [opts] - deck colour identity ("any colour" means these)
- * @returns {Object|null} a ramp descriptor (see blankRamp) or null if it isn't ramp
- */
-export function classifyRamp(card, { identity = COLORS } = {}) {
-    if (!card || isLand(card)) return null;
-    const text = stripReminder(String(card.oracle_text ?? '').toLowerCase());
-    if (!text.trim()) return null;
-    const typeLine = String(card.type_line ?? '').split('//')[0].toLowerCase();
-    const isSpell = /\b(instant|sorcery)\b/.test(typeLine);
-    const isCreature = /\bcreature\b/.test(typeLine);
-    const isWalker = /\bplaneswalker\b/.test(typeLine);
-    const idMask = maskOf(identity);
-    const r = blankRamp();
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-
-    // 1. Mana abilities on permanents — the best one counts (you tap once).
-    if (!isSpell) {
-        const noUntap = /doesn't untap during your untap step/.test(text);
-        let best = null;
-        for (const line of lines) {
-            const loyalty = isWalker ? line.match(/^[+−-]?\d+: add (.+)$/) : null;
-            const tapAbility = line.match(/^([^:]*\{t\}[^:]*): (.+)$/);
-            let parsed = null;
-            let activation = 0;
-            if (loyalty) {
-                parsed = parseAdd(loyalty[1], idMask);
-            } else if (tapAbility) {
-                const [, cost, effect] = tapAbility;
-                if (/sacrifice/.test(cost)) {
-                    if (/^add\b/.test(effect)) r.unmodelled = r.unmodelled ?? 'oneShot';
-                    continue;
-                }
-                const add = effect.match(/^add (.+?)(?:\.|$)/);
-                if (add) parsed = parseAdd(add[1], idMask);
-                else if (/\badd (one|two|x)? ?mana\b|\badd \{/.test(effect)) parsed = { amount: 1, mask: idMask, variable: true, any: true };
-                for (const s of cost.match(/\{([^}]+)\}/g) ?? []) {
-                    const sym = s.slice(1, -1);
-                    if (/^\d+$/.test(sym)) activation += Number(sym);
-                    else if (sym !== 't' && sym !== 'q') activation += 1;
-                }
-            }
-            if (!parsed) continue;
-            // Variable mana (Selvala, Priest of Titania) counts as one more than it costs.
-            if (parsed.variable) parsed.amount = Math.max(parsed.amount, activation + 1);
-            const net = parsed.amount - activation;
-            if (net <= 0) continue; // filters that don't add mana
-            if (!best || net > best.net) best = { ...parsed, net, activation };
-            else if (net === best.net) { best.mask |= parsed.mask; best.any = best.any || parsed.any; }
-        }
-        if (best && noUntap) {
-            r.unmodelled = 'noUntap';
-        } else if (best) {
-            r.kind = isWalker ? 'walker' : isCreature ? 'dork' : 'rock';
-            r.mana = best.net;
-            r.mask = best.mask;
-            r.variable = best.variable;
-            r.any = best.any;
-            r.activation = best.activation;
-            const entersTapped = /enters tapped/.test(text);
-            r.ready = entersTapped ? 'tapped' : (isCreature && !/\bhaste\b/.test(text) && !isWalker) ? 'sick' : 'now';
-        }
-
-        // Auras like Utopia Sprawl / Wild Growth: extra mana whenever the land taps.
-        const aura = text.match(/whenever enchanted (?:land|forest|plains|island|swamp|mountain) is tapped for mana, its controller adds (?:an additional )?(.+?)(?:\.|$)/);
-        if (!r.kind && aura) {
-            const parsed = parseAdd(aura[1].replace(/^additional /, ''), idMask);
-            if (parsed) {
-                r.kind = 'aura';
-                r.mana = parsed.amount;
-                r.mask = parsed.mask;
-                r.any = parsed.any;
-                r.ready = 'next'; // the land usually paid for the aura this turn
-            }
-        }
-    } else if (lines.some(l => /^add \{|^add (one|two|three|x) mana/.test(l))) {
-        r.unmodelled = 'ritual';
-    }
-
-    // 2. Land searches (spells, ETBs, sacrifice abilities).
-    for (const line of lines) {
-        for (const sentence of line.split(/\.(?:\s|$)/)) {
-            const at = sentence.indexOf('search your library for ');
-            if (at < 0) continue;
-            const prefix = sentence.slice(0, at);
-            const linePrefix = line.slice(0, line.indexOf(sentence) + at);
-            // The words before "card" are space-separated tokens ("forest," "or" "and/or"):
-            // one way to split them, so text that never says "card" can't backtrack exponentially.
-            const m = sentence.slice(at).match(/^search your library for (a|an|one|two|three|four|up to (?:one|two|three|four)) ((?:[a-z/,]+ )*?)(?:land )?cards?\b(.*)$/);
-            if (!m) continue;
-            const what = m[2];
-            const isLandSearch = /\bland\b/.test(sentence.slice(at, at + 80)) && !/\bnonland\b/.test(what)
-                || BASIC_TYPES.some(t => new RegExp(`\\b${t}\\b`).test(what));
-            if (!isLandSearch) continue;
-            const count = WORDS[m[1].replace(/^up to /, '')] ?? 1;
-            const dest = searchDestination(m[3], count);
-            if (!dest) continue;
-            if (TRIGGER.test(linePrefix)) {
-                r.unmodelled = r.unmodelled ?? 'trigger';
-                continue;
-            }
-            const filter = /\bbasic\b/.test(what) ? 'basic'
-                : BASIC_TYPES.filter(t => new RegExp(`\\b${t}\\b`).test(what));
-            r.landFilter = Array.isArray(filter) && filter.length === 0 ? 'any' : filter;
-            r.filterKind = r.landFilter === 'basic' ? 1 : r.landFilter === 'any' ? 0 : 2;
-            r.filterBits = Array.isArray(r.landFilter) ? typeBits(r.landFilter) : 0;
-            r.lands += dest.lands;
-            r.toHand += dest.toHand;
-            r.landsTapped = dest.tapped;
-            // An activated search ("{2}, {T}, Sacrifice …:") costs its mana on top.
-            const colon = prefix.lastIndexOf(':');
-            if (colon >= 0) {
-                for (const s of prefix.slice(0, colon).match(/\{(\d+)\}/g) ?? []) r.extraCost += Number(s.slice(1, -1));
-            }
-            if (!r.kind) r.kind = 'fetch';
-        }
-    }
-    if ((r.lands || r.toHand) && /additional cost to cast this spell, sacrifice a land/.test(text)) r.sacrificeLand = 1;
-
-    // 3. Extra land drops.
-    const drops = text.match(/you may play (an|one|two|three) additional lands? on each of your turns/);
-    if (drops) {
-        r.extraDrops = WORDS[drops[1]];
-        if (!r.kind) r.kind = 'drops';
-    }
-    if (/you may play an additional land this turn/.test(text)) {
-        r.extraDropsOnce = 1;
-        if (!r.kind) r.kind = 'drops';
-    }
-    if (/you may play lands from the top of your library/.test(text)) {
-        r.fromTop = true;
-        if (!r.kind) r.kind = 'drops';
-    }
-    for (const line of lines) {
-        const at = line.search(/put a land card from your hand(?: or graveyard)? onto the battlefield/);
-        if (at < 0) continue;
-        if (TRIGGER.test(line.slice(0, at))) { r.unmodelled = r.unmodelled ?? 'trigger'; continue; }
-        r.putLand = 1;
-        if (!r.kind) r.kind = 'drops';
-    }
-
-    // 4. Treasure (one-shot mana). Counted only when the caller turns it on.
-    for (const line of lines) {
-        const tm = line.match(/create (a|an|one|two|three|four|five|x) (?:food token or a )?treasure tokens?/);
-        if (!tm) continue;
-        const prefix = line.slice(0, tm.index);
-        // Saga chapter I happens as it enters; later chapters and triggers don't count.
-        const chapterOne = /^i — /.test(line);
-        if (tm[1] === 'x' || (!chapterOne && (TRIGGER.test(prefix) || /^[iv]+(, [iv]+)* — /.test(line)))) {
-            r.unmodelled = r.unmodelled ?? 'treasureTrigger';
-            continue;
-        }
-        r.treasure += WORDS[tm[1]] ?? 1;
-        if (!r.kind) r.kind = 'treasure';
-    }
-
-    // 5. Things recognised but not modelled.
-    if (/spells? you cast [^.]*cost (\{\d+\}|\{x\}|\w+ generic mana) less|costs? \{\d+\} less to cast/.test(text)) {
-        r.unmodelled = r.unmodelled ?? 'reducer';
-    }
-    if (/whenever you tap (?:a|an) (?:land|permanent|creature|forest|[a-z]+) for mana, (?:add|its controller adds)/.test(text) && !r.kind) {
-        r.unmodelled = r.unmodelled ?? 'doubler';
-    }
-
-    // Cards drawn by the ramp spell itself (Explore, Growth Spiral, Big Score).
-    if (isSpell) {
-        const draw = text.match(/(?:^|\. |\n)draw (a|one|two|three) cards?/);
-        if (draw) r.draws = WORDS[draw[1]] ?? 0;
-    }
-
-    r.modelled = Boolean(r.mana || r.lands || r.toHand || r.extraDrops || r.extraDropsOnce || r.putLand || r.fromTop);
-    if (!r.modelled && !r.treasure && !r.unmodelled) return null;
-    if (!r.kind) r.kind = r.unmodelled ?? 'other';
-    r.label = describeRamp(r);
-    return r;
-}
-
-/** A descriptor for a card other pages count as ramp but this model can't read. */
-export function unreadRamp() {
-    const r = blankRamp();
-    r.kind = 'unread';
-    r.unmodelled = 'unread';
-    r.label = describeRamp(r);
-    return r;
-}
-
-function manaWords(n, r) {
-    const amount = r.variable ? `${n}+` : String(n);
-    if (r.any) return `${amount} mana of any colour`;
-    if (!r.mask) return `${amount} colourless mana`;
-    return `${amount} ${COLORS.filter(c => r.mask & COLOR_BIT[c]).map(c => COLOR_NAMES[c].toLowerCase()).join(' or ')} mana`;
-}
-
-function landWords(n, filter, { article = false } = {}) {
-    const types = Array.isArray(filter) ? filter.map(t => t[0].toUpperCase() + t.slice(1)) : [];
-    if (types.length > 1) {
-        const list = `${types.slice(0, -1).join(', ')} or ${types[types.length - 1]}`;
-        return n === 1 ? `${article ? 'a' : '1'} ${list}` : `${n} lands (${list})`;
-    }
-    const kind = filter === 'basic' ? 'basic land' : types[0] ?? 'land';
-    if (n === 1) return article ? `${/^[aeiouAEIOU]/.test(kind) ? 'an' : 'a'} ${kind}` : `1 ${kind}`;
-    return `${n} ${kind}s`;
-}
-
-const UNMODELLED_LABEL = {
-    ritual: 'One burst of mana for a single turn — not counted',
-    oneShot: 'Sacrifice for one burst of mana — not counted',
-    noUntap: 'Doesn’t untap each turn — not counted',
-    trigger: 'Gets lands on a later trigger — not counted',
-    treasureTrigger: 'Makes Treasure on a trigger — not counted',
-    reducer: 'Makes spells cheaper — not counted',
-    doubler: 'Doubles mana from your lands — not counted',
-    unread: 'Tagged as ramp, but the model can’t read what it does — not counted'
-};
-
-/**
- * What the model thinks a ramp card does, in plain words — shown in the ramp
- * table so a misread is easy to spot.
- */
-export function describeRamp(r) {
-    const parts = [];
-    if (r.mana) {
-        const when = r.ready === 'now' ? 'from the turn you cast it'
-            : r.ready === 'sick' ? 'from the next turn (summoning sick)'
-                : r.ready === 'tapped' ? 'from the next turn (enters tapped)'
-                    : 'from the next turn';
-        const net = r.activation ? ` (net of its {${r.activation}} cost)` : '';
-        parts.push(`Adds ${manaWords(r.mana, r)} a turn${net}, ${when}${r.variable ? ' — varies, counted as 1' : ''}`);
-    }
-    if (r.lands || r.toHand) {
-        const where = [];
-        if (r.lands) where.push(`${landWords(r.lands, r.landFilter, { article: r.lands === 1 })} onto the battlefield${r.landsTapped ? ' tapped' : ' untapped'}`);
-        if (r.toHand) where.push(`${r.lands ? `${r.toHand} more` : landWords(r.toHand, r.landFilter, { article: r.toHand === 1 })} into your hand`);
-        let s = `Puts ${where.join(' and ')}`;
-        if (r.extraCost) s += ` (plus {${r.extraCost}} to activate)`;
-        if (r.sacrificeLand) s += `, sacrificing a land`;
-        parts.push(s);
-    }
-    if (r.extraDrops) parts.push(`Lets you play ${r.extraDrops === 1 ? 'an extra land' : `${r.extraDrops} extra lands`} each turn`);
-    if (r.fromTop) parts.push('Lets you play lands from the top of your library');
-    if (r.extraDropsOnce) parts.push('One extra land drop the turn you cast it');
-    if (r.putLand) parts.push('Puts a land from your hand onto the battlefield');
-    if (r.treasure) parts.push(`Makes ${r.treasure} Treasure — one-shot mana, counted only with Treasure on`);
-    if (r.draws && parts.length) parts.push(`draws ${r.draws === 1 ? 'a card' : `${r.draws} cards`}`);
-    if (!parts.length && r.unmodelled) return UNMODELLED_LABEL[r.unmodelled] ?? 'Not counted';
-    let label = parts.join('; ');
-    if (r.unmodelled && r.unmodelled !== 'unread' && !r.modelled) label += `. ${UNMODELLED_LABEL[r.unmodelled]}`;
-    return label;
-}
+export { classifyRamp, describeRamp, rampRole, typeBits };
 
 // ── Library ──────────────────────────────────────────────────────────────────
 
@@ -452,7 +130,7 @@ function annotate(lab, card, identity, multiplayer) {
     const l = lab.land ? classifyLand(card, { multiplayer }) : null;
     lab.types = String(lab.typeLine ?? '').toLowerCase();
     lab.generic = lab.playMv == null ? 0 : Math.max(0, lab.playMv - lab.pips.length);
-    lab.rampInfo = lab.land ? null : (classifyRamp(card, { identity }) ?? (lab.ramp ? unreadRamp() : null));
+    lab.rampInfo = lab.land ? null : classifyRamp(card, { identity });
     lab.rampIndex = -1;
     lab.lmana = l ? l.mana : 0;
     lab.ltap = l ? l.tap : TAP.UNTAPPED;
@@ -557,7 +235,15 @@ export function buildCountsLibrary(counts = {}) {
 
 /** Number of ramp copies the simulator actually plays. */
 export function countedRamp(lib, { treasure = false } = {}) {
-    return (lib?.ramp ?? []).filter(r => r.info.modelled || (treasure && r.info.treasure)).reduce((s, r) => s + r.count, 0);
+    return (lib?.ramp ?? []).filter(r => rampRole(r.info, { treasure }) === 'counted').reduce((s, r) => s + r.count, 0);
+}
+
+/**
+ * Ramp copies in the library by the shared rule (ramp.js) — the count every
+ * other page shows: what the simulator plays plus the ramp it can't.
+ */
+export function rampTotal(lib) {
+    return (lib?.ramp ?? []).filter(r => r.info.ramp).reduce((s, r) => s + r.count, 0);
 }
 
 // ── Paying for things ───────────────────────────────────────────────────────
@@ -1075,6 +761,15 @@ function fetchLands(run, g, r, slot, n, toBattlefield, notes) {
     }
 }
 
+/** The first land (or basic land) in hand, or -1. */
+function landInHandAt(g, basic) {
+    for (let i = 0; i < g.handLen; i++) {
+        const c = g.hand[i];
+        if (c.land && (!basic || c.basic)) return i;
+    }
+    return -1;
+}
+
 /** Lands a search could still find, up to `want`. */
 function landsAvailable(g, r, slot, want) {
     if (slot >= 0) return Math.min(want, g.found[slot]);
@@ -1112,7 +807,7 @@ function pickRamp(run, g) {
         if (r.extraDrops) value += 0.6 * r.extraDrops;
         if (r.fromTop && !g.fromTop) value += 0.3;
         if (r.extraDropsOnce && landInHand && g.dropsUsed >= g.drops) value += 0.8;
-        if (r.putLand && landInHand) value += 0.8;
+        if (r.putLand && (r.putLandBasic ? landInHandAt(g, true) >= 0 : landInHand)) value += 0.8;
         if (treasureOn && r.treasure) value += 0.5 * r.treasure;
         value -= r.sacrificeLand;
         if (value <= 0) continue;
@@ -1159,12 +854,11 @@ function castRamp(run, g, at) {
     if (r.extraDropsOnce) g.drops += r.extraDropsOnce;
     if (r.fromTop) g.fromTop = true;
     if (r.putLand) {
-        let landAt = -1;
-        for (let i = 0; i < g.handLen; i++) if (hand[i].land) { landAt = i; break; }
+        const landAt = landInHandAt(g, r.putLandBasic);
         if (landAt >= 0) {
             const c = hand[landAt];
             handRemoveAt(g, landAt);
-            const tapped = c.lbounce || entersTapped(g, c);
+            const tapped = r.putLandTapped || c.lbounce || entersTapped(g, c);
             putLand(g, c, tapped);
             if (!tapped) poolAdd(c.mask, c.lmana);
             if (notes) notes.push(c.name);
@@ -1588,23 +1282,30 @@ export function finishRun(run) {
     if (!games || run.cards.length < OPENING_HAND) return null;
     const lib = run.lib;
     const target = run.target;
-    const ramp = (lib.ramp ?? []).map((r, i) => ({
-        name: r.name,
-        count: r.count,
-        mv: r.mv,
-        info: r.info,
-        counted: r.info.modelled || (run.treasure && r.info.treasure > 0),
-        castBy3: run.castBy3[i] / games,
-        castBy4: run.castBy4[i] / games,
-        seenBy4: run.seenBy4[i] / games
-    }));
+    const ramp = (lib.ramp ?? []).map((r, i) => {
+        const role = rampRole(r.info, { treasure: run.treasure });
+        return {
+            name: r.name,
+            count: r.count,
+            mv: r.mv,
+            info: r.info,
+            role,
+            counted: role === 'counted',
+            castBy3: run.castBy3[i] / games,
+            castBy4: run.castBy4[i] / games,
+            seenBy4: run.seenBy4[i] / games
+        };
+    });
+    const copies = role => ramp.filter(r => r.role === role).reduce((s, r) => s + r.count, 0);
     return {
         games,
         lands: lib.landCount,
         librarySize: run.cards.length,
         placeholder: Boolean(lib.placeholder),
-        rampCount: ramp.filter(r => r.counted).reduce((s, r) => s + r.count, 0),
-        notCounted: ramp.filter(r => !r.counted).reduce((s, r) => s + r.count, 0),
+        // counted + notCounted is the ramp count every other page shows.
+        rampCount: copies('counted'),
+        notCounted: copies('ramp'),
+        notRamp: copies('helps'),
         treasure: run.treasure,
         mana: bands(run.ramp, games),
         landsOnly: bands(run.lands, games),

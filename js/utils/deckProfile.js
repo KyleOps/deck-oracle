@@ -130,7 +130,7 @@ export function deckProfile(stats, format = { key: 'commander' }) {
         };
     };
     const n = tag => counts[tag] ?? 0;
-    rows.push(roleRow('ramp', 'Ramp', n('ramp'), 'Mana rocks, dorks and land-fetching spells.', ROLE_GUIDE.ramp));
+    rows.push(roleRow('ramp', 'Ramp', n('ramp'), 'Mana rocks and dorks, land ramp, extra land drops and Treasure — the cards Mana Development reads as ramp.', ROLE_GUIDE.ramp));
     rows.push({
         ...roleRow('flow', 'Card flow', n('draw') + n('tutor'), 'Card draw plus tutors.', ROLE_GUIDE.flow),
         sub: `${n('draw')} draw · ${plural(n('tutor'), 'tutor')}`

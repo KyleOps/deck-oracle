@@ -20,6 +20,8 @@ import { FORMATS } from '../../js/utils/format.js';
 import { COLOR_BIT, mulberry32 } from '../../js/utils/handLab.js';
 import { DEFAULT_DECK_DATA } from '../../js/utils/defaultDeckData.js';
 import { budget } from '../helpers/timing.js';
+import { libraryOf } from '../../js/utils/library.js';
+import { tagDeck } from '../../js/utils/cardTags.js';
 
 const CARDS = JSON.parse(readFileSync(new URL('../fixtures/ramp-cards.json', import.meta.url), 'utf8'));
 const GU = COLOR_BIT.G | COLOR_BIT.U;
@@ -340,7 +342,21 @@ describe('library and target', () => {
         assert.equal(lib.target.name, 'The Sixth Doctor');
         assert.equal(lib.target.mv, 6);
         assert.ok(lib.ramp.some(r => r.name === 'Explosive Vegetation' && r.info.modelled));
-        assert.ok(lib.ramp.some(r => r.name === "Aminatou's Augury" && r.info.unmodelled === 'unread'), 'tagged ramp the model can’t read is listed, not counted');
+        assert.ok(lib.ramp.some(r => r.name === 'Bonny Pall, Clearcutter' && r.info.ramp && !r.info.modelled), 'ramp the model can’t simulate is listed, not counted');
+        assert.ok(lib.ramp.some(r => r.name === 'Ugin, the Ineffable' && !r.info.ramp), 'a cost reducer is listed as not ramp');
+        assert.ok(!lib.ramp.some(r => r.name === "Aminatou's Augury"), 'a land off the top of eight exiled cards is not ramp');
+    });
+
+    it('counts ramp by the same rule as every other page', () => {
+        const lib = MD.buildManaLibrary(DEFAULT_DECK_DATA);
+        const library = libraryOf(DEFAULT_DECK_DATA, { format: 'commander' });
+        assert.equal(MD.rampTotal(lib), tagDeck(library.cards).counts.ramp);
+        assert.equal(MD.rampTotal(lib), 17);
+        assert.equal(MD.countedRamp(lib), 15);
+        assert.equal(MD.countedRamp(lib, { treasure: true }), 16);
+        const r = MD.simulateManaDevelopment(lib, { format: EDH, games: 50 });
+        assert.equal(r.rampCount + r.notCounted, MD.rampTotal(lib), 'counted + not counted is the ramp count');
+        assert.equal(r.notRamp, 2, 'Thryx and Ugin, the Ineffable make spells cheaper');
     });
 
     it('with partners, races towards the more expensive commander and takes both identities', () => {

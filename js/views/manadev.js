@@ -300,7 +300,7 @@ export const guide = {
         'Goldfish: no opponents, no removal, no counterspells. Real games are slower.',
         'Greedy ramp: every turn the simulator spends its mana on ramp before anything else, and never holds mana up. Your commander is checked before and after each ramp spell, so a Sol Ring that pays for itself still counts that turn.',
         'Counted: mana rocks and dorks (dorks from the turn after they’re cast), mana auras, planeswalker mana abilities, land searches (tapped or untapped, battlefield or hand), extra land drops and playing lands from the top of your library.',
-        'Not counted: rituals and other one-turn bursts, cost reducers, mana doublers, and anything that only happens on a later trigger (Treasure on landfall, lands when a creature dies). Treasure from a spell or as a permanent enters counts only if you turn it on.',
+        'Not counted, though still ramp: mana doublers, mana that doesn’t untap, sacrifice-for-mana, and anything that only happens on a later trigger (Treasure on landfall, lands when a creature dies). Treasure from a spell or as a permanent enters counts only if you turn it on. Listed but not ramp: rituals and cost reducers. Every page counts ramp by this same rule, so the overview’s ramp count is what this page counts plus what it can’t.',
         'Mana that varies (Priest of Titania, Bloom Tender) counts as one. Lands that enter tapped “unless” something are checked for the common cases (shocks, fast lands, slow lands, check lands, two or more opponents); other conditions are assumed met.',
         'Without a commander, the target is your top end: the middle of your three most expensive spells. You only need the mana for it, not the card in hand.'
     ],

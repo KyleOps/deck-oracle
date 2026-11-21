@@ -121,6 +121,7 @@ const STATIC_ASSETS = [
     'js/utils/opponentPages.js',
     'js/utils/opponentState.js',
     'js/utils/payback.js',
+    'js/utils/ramp.js',
     'js/utils/random.js',
     'js/utils/sampleSimulator.js',
     'js/utils/scryfall.js',

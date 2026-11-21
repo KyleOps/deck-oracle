@@ -210,8 +210,9 @@ function renderRail(lib, format, s) {
     }
     const facts = $('md-facts');
     if (facts) {
+        // The ramp every page counts (ramp.js), split into what the model plays and what it can't.
         const counted = MD.countedRamp(lib, { treasure: s.treasure });
-        const total = lib.ramp.reduce((n, r) => n + r.count, 0);
+        const total = MD.rampTotal(lib);
         const t = lib.target;
         const rows = [
             ['Cards in library', String(lib.cards.length)],
@@ -338,8 +339,11 @@ function renderRamp(r, lib) {
         return;
     }
     if (meta) meta.textContent = `${r.rampCount} counted${r.notCounted ? ` · ${r.notCounted} not` : ''}`;
-    const counted = r.ramp.filter(x => x.counted).sort((a, b) => b.castBy4 - a.castBy4 || b.castBy3 - a.castBy3 || a.name.localeCompare(b.name));
-    const off = r.ramp.filter(x => !x.counted).sort((a, b) => a.name.localeCompare(b.name));
+    const byName = (a, b) => a.name.localeCompare(b.name);
+    const counted = r.ramp.filter(x => x.role === 'counted').sort((a, b) => b.castBy4 - a.castBy4 || b.castBy3 - a.castBy3 || byName(a, b));
+    const off = r.ramp.filter(x => x.role === 'ramp').sort(byName);
+    const helps = r.ramp.filter(x => x.role === 'helps').sort(byName);
+    const group = (title, rows) => (rows.length ? `<tr class="md-ramp-group"><td colspan="4">${title}</td></tr>${rows.map(x => row(x, true)).join('')}` : '');
     const row = (x, isOff) => `
         <tr${isOff ? ' class="is-off"' : ''}>
             <td>
@@ -360,7 +364,8 @@ function renderRamp(r, lib) {
             </tr></thead>
             <tbody>
                 ${counted.map(x => row(x, false)).join('')}
-                ${off.length ? `<tr class="md-ramp-group"><td colspan="4">Recognised but not counted</td></tr>${off.map(x => row(x, true)).join('')}` : ''}
+                ${group('Ramp the model can’t simulate — not counted', off)}
+                ${group('Helps your mana, but not ramp — not counted', helps)}
             </tbody>
         </table>`;
 }
