@@ -1,0 +1,868 @@
+{
+  "Ancient Tomb": {
+    "name": "Ancient Tomb",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "{T}: Add {C}{C}. This land deals 2 damage to you.",
+    "color_identity": [],
+    "produced_mana": [
+      "C"
+    ]
+  },
+  "Arcane Signet": {
+    "name": "Arcane Signet",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+    "color_identity": [],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Arixmethes, Slumbering Isle": {
+    "name": "Arixmethes, Slumbering Isle",
+    "mana_cost": "{2}{G}{U}",
+    "cmc": 4,
+    "type_line": "Legendary Creature — Kraken",
+    "oracle_text": "Arixmethes enters tapped with five slumber counters on it.\nAs long as Arixmethes has a slumber counter on it, it's a land. (It's not a creature.)\nWhenever you cast a spell, you may remove a slumber counter from Arixmethes.\n{T}: Add {G}{U}.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "G",
+      "U"
+    ]
+  },
+  "Avacyn's Pilgrim": {
+    "name": "Avacyn's Pilgrim",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Creature — Human Monk",
+    "oracle_text": "{T}: Add {W}.",
+    "color_identity": [
+      "G",
+      "W"
+    ],
+    "produced_mana": [
+      "W"
+    ]
+  },
+  "Azusa, Lost but Seeking": {
+    "name": "Azusa, Lost but Seeking",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Legendary Creature — Human Monk",
+    "oracle_text": "You may play two additional lands on each of your turns.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Big Score": {
+    "name": "Big Score",
+    "mana_cost": "{3}{R}",
+    "cmc": 4,
+    "type_line": "Instant",
+    "oracle_text": "As an additional cost to cast this spell, discard a card.\nDraw two cards and create two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "color_identity": [
+      "R"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Birds of Paradise": {
+    "name": "Birds of Paradise",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Creature — Bird",
+    "oracle_text": "Flying\n{T}: Add one mana of any color.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Bloom Tender": {
+    "name": "Bloom Tender",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "Vivid — {T}: For each color among permanents you control, add one mana of that color.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Botanical Sanctum": {
+    "name": "Botanical Sanctum",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "This land enters tapped unless you control two or fewer other lands.\n{T}: Add {G} or {U}.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "G",
+      "U"
+    ]
+  },
+  "Breeding Pool": {
+    "name": "Breeding Pool",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land — Forest Island",
+    "oracle_text": "({T}: Add {G} or {U}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "G",
+      "U"
+    ]
+  },
+  "Burnished Hart": {
+    "name": "Burnished Hart",
+    "mana_cost": "{3}",
+    "cmc": 3,
+    "type_line": "Artifact Creature — Elk",
+    "oracle_text": "{3}, Sacrifice this creature: Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+    "color_identity": []
+  },
+  "Circuitous Route": {
+    "name": "Circuitous Route",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for up to two basic land cards and/or Gate cards, put them onto the battlefield tapped, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Command Tower": {
+    "name": "Command Tower",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+    "color_identity": [],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Commander's Sphere": {
+    "name": "Commander's Sphere",
+    "mana_cost": "{3}",
+    "cmc": 3,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add one mana of any color in your commander's color identity.\nSacrifice this artifact: Draw a card.",
+    "color_identity": [],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Courser of Kruphix": {
+    "name": "Courser of Kruphix",
+    "mana_cost": "{1}{G}{G}",
+    "cmc": 3,
+    "type_line": "Enchantment Creature — Centaur",
+    "oracle_text": "Play with the top card of your library revealed.\nYou may play lands from the top of your library.\nLandfall — Whenever a land you control enters, you gain 1 life.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Cultivate": {
+    "name": "Cultivate",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Cursed Mirror": {
+    "name": "Cursed Mirror",
+    "mana_cost": "{2}{R}",
+    "cmc": 3,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add {R}.\nAs this artifact enters, you may have it become a copy of any creature on the battlefield until end of turn, except it has haste.",
+    "color_identity": [
+      "R"
+    ],
+    "produced_mana": [
+      "R"
+    ]
+  },
+  "Dark Ritual": {
+    "name": "Dark Ritual",
+    "mana_cost": "{B}",
+    "cmc": 1,
+    "type_line": "Instant",
+    "oracle_text": "Add {B}{B}{B}.",
+    "color_identity": [
+      "B"
+    ],
+    "produced_mana": [
+      "B"
+    ]
+  },
+  "Dryad of the Ilysian Grove": {
+    "name": "Dryad of the Ilysian Grove",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Enchantment Creature — Nymph Dryad",
+    "oracle_text": "You may play an additional land on each of your turns.\nLands you control are every basic land type in addition to their other types.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Elvish Mystic": {
+    "name": "Elvish Mystic",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "{T}: Add {G}.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Emerald Medallion": {
+    "name": "Emerald Medallion",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact",
+    "oracle_text": "Green spells you cast cost {1} less to cast.",
+    "color_identity": []
+  },
+  "Evolving Wilds": {
+    "name": "Evolving Wilds",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+    "color_identity": []
+  },
+  "Exploration": {
+    "name": "Exploration",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Enchantment",
+    "oracle_text": "You may play an additional land on each of your turns.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Explore": {
+    "name": "Explore",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Sorcery",
+    "oracle_text": "You may play an additional land this turn.\nDraw a card.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Explosive Vegetation": {
+    "name": "Explosive Vegetation",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Farseek": {
+    "name": "Farseek",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for a Plains, Island, Swamp, or Mountain card, put it onto the battlefield tapped, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Fellwar Stone": {
+    "name": "Fellwar Stone",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add one mana of any color that a land an opponent controls could produce.",
+    "color_identity": [],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Gilded Lotus": {
+    "name": "Gilded Lotus",
+    "mana_cost": "{5}",
+    "cmc": 5,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add three mana of any one color.",
+    "color_identity": [],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Goreclaw, Terror of Qal Sisma": {
+    "name": "Goreclaw, Terror of Qal Sisma",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Legendary Creature — Bear",
+    "oracle_text": "Creature spells you cast with power 4 or greater cost {2} less to cast.\nWhenever Goreclaw attacks, each creature you control with power 4 or greater gets +1/+1 and gains trample until end of turn.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Growth Spiral": {
+    "name": "Growth Spiral",
+    "mana_cost": "{G}{U}",
+    "cmc": 2,
+    "type_line": "Instant",
+    "oracle_text": "Draw a card. You may put a land card from your hand onto the battlefield.",
+    "color_identity": [
+      "G",
+      "U"
+    ]
+  },
+  "Harrow": {
+    "name": "Harrow",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Instant",
+    "oracle_text": "As an additional cost to cast this spell, sacrifice a land.\nSearch your library for up to two basic land cards, put them onto the battlefield, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Hedron Archive": {
+    "name": "Hedron Archive",
+    "mana_cost": "{4}",
+    "cmc": 4,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add {C}{C}.\n{2}, {T}, Sacrifice this artifact: Draw two cards.",
+    "color_identity": [],
+    "produced_mana": [
+      "C"
+    ]
+  },
+  "Hinterland Harbor": {
+    "name": "Hinterland Harbor",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "This land enters tapped unless you control a Forest or an Island.\n{T}: Add {G} or {U}.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "G",
+      "U"
+    ]
+  },
+  "Kodama's Reach": {
+    "name": "Kodama's Reach",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Sorcery — Arcane",
+    "oracle_text": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Lightning Greaves": {
+    "name": "Lightning Greaves",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact — Equipment",
+    "oracle_text": "Equipped creature has haste and shroud. (It can't be the target of spells or abilities.)\nEquip {0}",
+    "color_identity": []
+  },
+  "Llanowar Elves": {
+    "name": "Llanowar Elves",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "{T}: Add {G}.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Mana Vault": {
+    "name": "Mana Vault",
+    "mana_cost": "{1}",
+    "cmc": 1,
+    "type_line": "Artifact",
+    "oracle_text": "This artifact doesn't untap during your untap step.\nAt the beginning of your upkeep, you may pay {4}. If you do, untap this artifact.\nAt the beginning of your draw step, if this artifact is tapped, it deals 1 damage to you.\n{T}: Add {C}{C}{C}.",
+    "color_identity": [],
+    "produced_mana": [
+      "C"
+    ]
+  },
+  "Mind Stone": {
+    "name": "Mind Stone",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add {C}.\n{1}, {T}, Sacrifice this artifact: Draw a card.",
+    "color_identity": [],
+    "produced_mana": [
+      "C"
+    ]
+  },
+  "Mistrise Village": {
+    "name": "Mistrise Village",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "This land enters tapped unless you control a Mountain or a Forest.\n{T}: Add {U}.\n{U}, {T}: The next spell you cast this turn can't be countered.",
+    "color_identity": [
+      "U"
+    ],
+    "produced_mana": [
+      "U"
+    ]
+  },
+  "Misty Rainforest": {
+    "name": "Misty Rainforest",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Forest or Island card, put it onto the battlefield, then shuffle.",
+    "color_identity": []
+  },
+  "Nature's Lore": {
+    "name": "Nature's Lore",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for a Forest card, put that card onto the battlefield, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Open the Way": {
+    "name": "Open the Way",
+    "mana_cost": "{X}{G}{G}",
+    "cmc": 2,
+    "type_line": "Sorcery",
+    "oracle_text": "X can't be greater than the number of players in the game.\nReveal cards from the top of your library until you reveal X land cards. Put those land cards onto the battlefield tapped and the rest on the bottom of your library in a random order.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Oracle of Mul Daya": {
+    "name": "Oracle of Mul Daya",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Creature — Elf Shaman",
+    "oracle_text": "You may play an additional land on each of your turns.\nPlay with the top card of your library revealed.\nYou may play lands from the top of your library.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Overgrowth": {
+    "name": "Overgrowth",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Enchantment — Aura",
+    "oracle_text": "Enchant land\nWhenever enchanted land is tapped for mana, its controller adds an additional {G}{G}.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Path to Exile": {
+    "name": "Path to Exile",
+    "mana_cost": "{W}",
+    "cmc": 1,
+    "type_line": "Instant",
+    "oracle_text": "Exile target creature. Its controller may search their library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+    "color_identity": [
+      "W"
+    ]
+  },
+  "Priest of Titania": {
+    "name": "Priest of Titania",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "{T}: Add {G} for each Elf on the battlefield.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Rampant Growth": {
+    "name": "Rampant Growth",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Rejuvenating Springs": {
+    "name": "Rejuvenating Springs",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "This land enters tapped unless you have two or more opponents.\n{T}: Add {G} or {U}.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "G",
+      "U"
+    ]
+  },
+  "Sakura-Tribe Elder": {
+    "name": "Sakura-Tribe Elder",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Snake Shaman",
+    "oracle_text": "Sacrifice this creature: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Selvala, Heart of the Wilds": {
+    "name": "Selvala, Heart of the Wilds",
+    "mana_cost": "{1}{G}{G}",
+    "cmc": 3,
+    "type_line": "Legendary Creature — Elf Scout",
+    "oracle_text": "Whenever another creature enters, its controller may draw a card if its power is greater than each other creature's power.\n{G}, {T}: Add X mana in any combination of colors, where X is the greatest power among creatures you control.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Simic Growth Chamber": {
+    "name": "Simic Growth Chamber",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "This land enters tapped.\nWhen this land enters, return a land you control to its owner's hand.\n{T}: Add {G}{U}.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "G",
+      "U"
+    ]
+  },
+  "Simic Signet": {
+    "name": "Simic Signet",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact",
+    "oracle_text": "{1}, {T}: Add {G}{U}.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "G",
+      "U"
+    ]
+  },
+  "Skyshroud Claim": {
+    "name": "Skyshroud Claim",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for up to two Forest cards, put them onto the battlefield, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Smothering Tithe": {
+    "name": "Smothering Tithe",
+    "mana_cost": "{3}{W}",
+    "cmc": 4,
+    "type_line": "Enchantment",
+    "oracle_text": "Whenever an opponent draws a card, that player may pay {2}. If the player doesn't, you create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "color_identity": [
+      "W"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Sol Ring": {
+    "name": "Sol Ring",
+    "mana_cost": "{1}",
+    "cmc": 1,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add {C}{C}.",
+    "color_identity": [],
+    "produced_mana": [
+      "C"
+    ]
+  },
+  "Solemn Simulacrum": {
+    "name": "Solemn Simulacrum",
+    "mana_cost": "{4}",
+    "cmc": 4,
+    "type_line": "Artifact Creature — Golem",
+    "oracle_text": "When this creature enters, you may search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.\nWhen this creature dies, you may draw a card.",
+    "color_identity": []
+  },
+  "Sylvan Scrying": {
+    "name": "Sylvan Scrying",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for a land card, reveal it, put it into your hand, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Talisman of Curiosity": {
+    "name": "Talisman of Curiosity",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add {C}.\n{T}: Add {G} or {U}. This artifact deals 1 damage to you.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "C",
+      "G",
+      "U"
+    ]
+  },
+  "Thornwood Falls": {
+    "name": "Thornwood Falls",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "This land enters tapped.\nWhen this land enters, you gain 1 life.\n{T}: Add {G} or {U}.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "G",
+      "U"
+    ]
+  },
+  "Thran Dynamo": {
+    "name": "Thran Dynamo",
+    "mana_cost": "{4}",
+    "cmc": 4,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add {C}{C}{C}.",
+    "color_identity": [],
+    "produced_mana": [
+      "C"
+    ]
+  },
+  "Three Visits": {
+    "name": "Three Visits",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for a Forest card, put it onto the battlefield, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Tireless Provisioner": {
+    "name": "Tireless Provisioner",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Creature — Elf Scout",
+    "oracle_text": "Landfall — Whenever a land you control enters, create a Food token or a Treasure token. (Food is an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\" Treasure is an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Ugin, Eye of the Storms": {
+    "name": "Ugin, Eye of the Storms",
+    "mana_cost": "{7}",
+    "cmc": 7,
+    "type_line": "Legendary Planeswalker — Ugin",
+    "oracle_text": "When you cast this spell, exile up to one target permanent that's one or more colors.\nWhenever you cast a colorless spell, exile up to one target permanent that's one or more colors.\n+2: You gain 3 life and draw a card.\n0: Add {C}{C}{C}.\n−11: Search your library for any number of colorless nonland cards, exile them, then shuffle. Until end of turn, you may cast those cards without paying their mana costs.",
+    "color_identity": [],
+    "produced_mana": [
+      "C"
+    ]
+  },
+  "Utopia Sprawl": {
+    "name": "Utopia Sprawl",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Enchantment — Aura",
+    "oracle_text": "Enchant Forest\nAs this Aura enters, choose a color.\nWhenever enchanted Forest is tapped for mana, its controller adds an additional one mana of the chosen color.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Wayfarer's Bauble": {
+    "name": "Wayfarer's Bauble",
+    "mana_cost": "{1}",
+    "cmc": 1,
+    "type_line": "Artifact",
+    "oracle_text": "{2}, {T}, Sacrifice this artifact: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+    "color_identity": []
+  },
+  "Wild Growth": {
+    "name": "Wild Growth",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Enchantment — Aura",
+    "oracle_text": "Enchant land\nWhenever enchanted land is tapped for mana, its controller adds an additional {G}.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Wood Elves": {
+    "name": "Wood Elves",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Creature — Elf Scout",
+    "oracle_text": "When this creature enters, search your library for a Forest card, put that card onto the battlefield, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Worn Powerstone": {
+    "name": "Worn Powerstone",
+    "mana_cost": "{3}",
+    "cmc": 3,
+    "type_line": "Artifact",
+    "oracle_text": "This artifact enters tapped.\n{T}: Add {C}{C}.",
+    "color_identity": [],
+    "produced_mana": [
+      "C"
+    ]
+  },
+  "Yavimaya Coast": {
+    "name": "Yavimaya Coast",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "{T}: Add {C}.\n{T}: Add {G} or {U}. This land deals 1 damage to you.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "C",
+      "G",
+      "U"
+    ]
+  },
+  "Yavimaya Elder": {
+    "name": "Yavimaya Elder",
+    "mana_cost": "{1}{G}{G}",
+    "cmc": 3,
+    "type_line": "Creature — Human Druid",
+    "oracle_text": "When this creature dies, you may search your library for up to two basic land cards, reveal them, put them into your hand, then shuffle.\n{2}, Sacrifice this creature: Draw a card.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Zendikar Resurgent": {
+    "name": "Zendikar Resurgent",
+    "mana_cost": "{5}{G}{G}",
+    "cmc": 7,
+    "type_line": "Enchantment",
+    "oracle_text": "Whenever you tap a land for mana, add one mana of any type that land produced. (The types of mana are white, blue, black, red, green, and colorless.)\nWhenever you cast a creature spell, draw a card.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  }
+}

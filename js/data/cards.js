@@ -193,5 +193,14 @@ export const CARD_META = Object.freeze({
         "art": "https://cards.scryfall.io/art_crop/front/8/8/881f6340-865f-437c-983e-df39aad032ab.jpg",
         "image": "https://cards.scryfall.io/normal/front/8/8/881f6340-865f-437c-983e-df39aad032ab.jpg",
         "artist": "Kev Walker"
+    },
+    "Cultivate": {
+        "name": "Cultivate",
+        "cost": "{2}{G}",
+        "type": "Sorcery",
+        "text": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
+        "art": "https://cards.scryfall.io/art_crop/front/2/e/2ef3dbe4-5c03-4be4-ab48-45b6689b6712.jpg",
+        "image": "https://cards.scryfall.io/normal/front/2/e/2ef3dbe4-5c03-4be4-ab48-45b6689b6712.jpg",
+        "artist": "Anthony Palumbo"
     }
 });

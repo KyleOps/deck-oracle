@@ -41,6 +41,23 @@ describe('deckLibrary', () => {
         assert.equal(snap.cardsByName.Bolt.junk, undefined);
     });
 
+    it('keeps the commander’s own card record, slimmed, and drops it without a commander', () => {
+        const commanderCard = {
+            name: 'The Sixth Doctor', mana_cost: '{4}{G}{U}', cmc: 6, type_line: 'Legendary Creature — Time Lord Doctor',
+            color_identity: ['G', 'U'], scryfall_id: 'c045ccb2-28d1-4bbe-9feb-3e86988fd24d', prices: { usd: '1' }
+        };
+        const snap = snapshotDeck({ ...deck('Doctor'), commanderName: 'The Sixth Doctor', commanderCard });
+        assert.equal(snap.commanderCard.mana_cost, '{4}{G}{U}');
+        assert.equal(snap.commanderCard.cmc, 6);
+        assert.deepEqual(snap.commanderCard.color_identity, ['G', 'U']);
+        assert.equal(snap.commanderCard.prices, undefined);
+        const id = saveDeck({ ...deck('Doctor'), commanderName: 'The Sixth Doctor', commanderCard }, storage);
+        assert.equal(getDeck(id, storage).commanderCard.name, 'The Sixth Doctor');
+
+        assert.equal(snapshotDeck({ ...deck('No commander'), commanderCard }).commanderCard, null);
+        assert.equal(snapshotDeck(deck('Plain')).commanderCard, null);
+    });
+
     it('saves, lists most-recent first, and re-saving updates in place', async () => {
         saveDeck(deck('First', 'https://moxfield.com/decks/1'), storage);
         await new Promise(r => setTimeout(r, 2));

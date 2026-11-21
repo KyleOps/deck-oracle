@@ -78,6 +78,13 @@ export const CALCULATORS = Object.freeze({
         method: 'exact', keywords: ['lands', 'mana screw', 'flood', 'land count'],
         load: () => import('../calculators/lands.js'), view: () => import('../views/lands.js')
     },
+    manadev: {
+        name: 'Mana Development', short: 'MDV', group: 'deck', card: 'Cultivate',
+        question: 'How fast does this deck’s mana come online?',
+        summary: 'Mana by turn from your lands and ramp, when you can cast your commander, and how many turns the ramp saves.',
+        method: 'simulation', keywords: ['ramp', 'mana rocks', 'dorks', 'acceleration', 'goldfish', 'commander', 'turn', 'fast mana', 'signets'],
+        load: () => import('../calculators/manadev.js'), view: () => import('../views/manadev.js')
+    },
     compare: {
         name: 'Compare Decks', short: 'CMP', group: 'deck', card: 'Clone',
         question: 'How do two decks — or two versions of one deck — differ?',

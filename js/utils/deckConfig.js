@@ -45,6 +45,10 @@ function initialState() {
         cardDetails: DEFAULT_DECK_DATA?.cardDetails ?? [],
         cardsByName: DEFAULT_DECK_DATA?.cardsByName ?? {},
         commanderName: DEFAULT_DECK_DATA?.commanderName ?? null,
+        // The commander's card record. Imports keep the commander out of
+        // cardsByName (it starts in the command zone), so this is the only
+        // place its cost and colours live. null = look in cardsByName.
+        commanderCard: DEFAULT_DECK_DATA?.commanderCard ?? null,
         importUrl: DEFAULT_DECK_DATA?.importUrl ?? null,
         deckName: DEFAULT_DECK_DATA?.deckName ?? null,
         importSource: DEFAULT_DECK_DATA?.importSource ?? 'moxfield', // 'moxfield' | 'archidekt' | 'paste' | 'manual'
@@ -126,6 +130,23 @@ export function getCommanderName() {
     return deckState.commanderName;
 }
 
+const frontName = name => String(name ?? '').split('//')[0].trim().toLowerCase();
+
+/**
+ * The commander's card record (mana cost, cmc, colours, type), or null.
+ * Imports store it as `commanderCard`; the bundled example and some pasted
+ * lists keep the commander in the list itself, so fall back to that.
+ * @returns {Object|null}
+ */
+export function getCommanderCard() {
+    const name = deckState.commanderName;
+    if (!name) return null;
+    const target = frontName(name);
+    const own = deckState.commanderCard;
+    if (own && frontName(own.name) === target) return own;
+    return Object.values(deckState.cardsByName ?? {}).find(c => c && frontName(c.name) === target) ?? null;
+}
+
 /**
  * Library size.
  * @param {boolean} includeNonPermanents - false excludes instants and sorceries
@@ -173,6 +194,7 @@ function becomeCountsOnly() {
     deckState.cardsByName = {};
     deckState.cardDetails = [];
     deckState.commanderName = null;
+    deckState.commanderCard = null;
     deckState.importUrl = null;
     deckState.deckName = MANUAL_NAME;
     deckState.importSource = 'manual';
@@ -198,6 +220,8 @@ export function updateDeck(config = {}) {
         const value = config[key];
         if (STRING_FIELDS.has(key)) {
             deckState[key] = value ?? null;
+        } else if (key === 'commanderCard') {
+            deckState[key] = value && typeof value === 'object' ? value : null;
         } else if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
             deckState[key] = value;
         } else if (key === 'actualCardCount' && (value === null || value === undefined)) {
@@ -250,6 +274,7 @@ export function loadSnapshot(snapshot, { persistActive = true } = {}) {
     next.cardDetails = snapshot.cardDetails ?? [];
     next.cardsByName = snapshot.cardsByName ?? {};
     next.commanderName = snapshot.commanderName ?? null;
+    next.commanderCard = snapshot.commanderCard ?? null;
     next.importUrl = snapshot.importUrl ?? null;
     next.deckName = snapshot.name ?? snapshot.deckName ?? null;
     next.importSource = snapshot.importSource ?? null;
@@ -295,6 +320,7 @@ function applyImport(result, meta) {
     // The paste path returns no commander, so it must be cleared explicitly or
     // the previous deck's commander leaks into this one.
     next.commanderName = result.commanderName ?? null;
+    next.commanderCard = result.commanderName ? (result.commanderCard ?? null) : null;
     next.importUrl = meta.importUrl ?? null;
     next.importSource = meta.source;
     next.deckName = result.importMetadata?.deckName ?? meta.deckName ?? null;

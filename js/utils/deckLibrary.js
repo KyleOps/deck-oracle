@@ -62,18 +62,26 @@ export function deckId(deck = {}) {
  * Reduce a DeckConfig snapshot to what needs persisting.
  * @param {Object} deck - DeckConfig.getDeckConfig() output
  */
+function slimCard(card) {
+    const slim = {};
+    CARD_FIELDS.forEach(f => { if (card[f] !== undefined && card[f] !== null && card[f] !== '') slim[f] = card[f]; });
+    return slim;
+}
+
 export function snapshotDeck(deck = {}) {
     const cardsByName = {};
     for (const [key, card] of Object.entries(deck.cardsByName ?? {})) {
         if (!card) continue;
-        const slim = {};
-        CARD_FIELDS.forEach(f => { if (card[f] !== undefined && card[f] !== null && card[f] !== '') slim[f] = card[f]; });
-        cardsByName[key] = slim;
+        cardsByName[key] = slimCard(card);
     }
+    const commander = deck.commanderName && deck.commanderCard && typeof deck.commanderCard === 'object'
+        ? slimCard(deck.commanderCard) : null;
     return {
         id: deckId(deck),
         name: deck.deckName || deck.commanderName || 'Untitled deck',
         commanderName: deck.commanderName ?? null,
+        // The commander's own record (cost, colours, art) — it is never in cardsByName.
+        commanderCard: commander?.name ? commander : null,
         importUrl: deck.importUrl ?? null,
         importSource: deck.importSource ?? null,
         format: deck.format ?? 'auto',

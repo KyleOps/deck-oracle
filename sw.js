@@ -13,7 +13,7 @@
  * Bump CACHE_VERSION whenever shipped assets change.
  */
 
-const CACHE_VERSION = 'v30';
+const CACHE_VERSION = 'v31';
 const CACHE_NAME = `deck-oracle-${CACHE_VERSION}`;
 const IMAGE_CACHE = 'deck-oracle-images-v1';
 const IMAGE_CACHE_LIMIT = 160;
@@ -42,6 +42,7 @@ const STATIC_ASSETS = [
     'js/calculators/lands.js',
     'js/calculators/lumra.js',
     'js/calculators/manabase.js',
+    'js/calculators/manadev.js',
     'js/calculators/mara.js',
     'js/calculators/mindsdilation.js',
     'js/calculators/mulligan.js',
@@ -90,6 +91,7 @@ const STATIC_ASSETS = [
     'js/utils/hypergeometric.js',
     'js/utils/landDrops.js',
     'js/utils/mana.js',
+    'js/utils/manaDevelopment.js',
     'js/utils/mulliganModel.js',
     'js/utils/opponentPages.js',
     'js/utils/opponentState.js',
@@ -108,6 +110,7 @@ const STATIC_ASSETS = [
     'js/views/lands.js',
     'js/views/lumra.js',
     'js/views/manabase.js',
+    'js/views/manadev.js',
     'js/views/mara.js',
     'js/views/mindsdilation.js',
     'js/views/mulligan.js',
