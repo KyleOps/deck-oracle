@@ -8,13 +8,15 @@
 
 import { analyzeDeckStats } from './deckStats.js';
 import { resolveFormat } from './format.js';
+import { readCommanders, commanderLabel, commandZoneExtras } from './commanders.js';
 
 /**
  * Metric definitions. `better` says which direction is an improvement:
  * 'up', 'down', or null for neutral counts (shown, never judged).
  */
 export const METRICS = Object.freeze([
-    { key: 'cards', label: 'Cards', better: null, fmt: 'int', get: s => s.deckSize },
+    // Counted as players count a deck: the library plus its commanders.
+    { key: 'cards', label: 'Cards', better: null, fmt: 'int', get: (s, deck) => s.deckSize + (deck?.commandZone ?? 0) },
     { key: 'lands', label: 'Lands', better: null, fmt: 'int', get: s => s.lands },
     { key: 'landGap', label: 'Lands vs typical', better: 'closer', fmt: 'signed', get: s => s.lands - s.landRec.recommended, hint: 'Your land count minus the count Frank Karsten’s regression suggests for this curve. Closer to zero is more typical.' },
     { key: 'avgMV', label: 'Average mana value', better: 'down', fmt: 'dec2', get: s => s.curve.average, hint: 'Nonland cards only. Lower means a faster, cheaper curve.' },
@@ -33,13 +35,21 @@ function weakestColor(stats) {
     return values.length ? Math.min(...values) : null;
 }
 
-/** Normalise a library snapshot or DeckConfig object to what analyzeDeckStats reads. */
+/**
+ * Normalise a library snapshot or DeckConfig object to what analyzeDeckStats
+ * reads. Old snapshots with a single `commanderName` work too.
+ */
 export function toDeck(deck = {}) {
+    const commanders = readCommanders(deck);
+    const cardsByName = deck.cardsByName ?? {};
     return {
-        name: deck.name ?? deck.deckName ?? 'Untitled deck',
-        commanderName: deck.commanderName ?? null,
+        name: deck.name ?? deck.deckName ?? commanderLabel(commanders) ?? 'Untitled deck',
+        commanders,
+        commanderName: commanders[0]?.name ?? null,
+        // Commanders not already in the list (they start in the command zone).
+        commandZone: commandZoneExtras(commanders, cardsByName),
         format: deck.format ?? 'auto',
-        cardsByName: deck.cardsByName ?? {},
+        cardsByName,
         actualCardCount: deck.actualCardCount ?? null,
         lands: deck.counts?.lands ?? deck.lands ?? 0
     };
@@ -86,14 +96,14 @@ export function diffCards(a = {}, b = {}) {
 export function compareDecks(deckA, deckB, { onPlay = true } = {}) {
     const a = toDeck(deckA);
     const b = toDeck(deckB);
-    const fmtA = resolveFormat(a.format, { deckSize: a.actualCardCount ?? cardCount(a.cardsByName), commanderName: a.commanderName });
-    const fmtB = resolveFormat(b.format, { deckSize: b.actualCardCount ?? cardCount(b.cardsByName), commanderName: b.commanderName });
+    const fmtA = resolveFormat(a.format, { deckSize: a.actualCardCount ?? cardCount(a.cardsByName), commanders: a.commanders });
+    const fmtB = resolveFormat(b.format, { deckSize: b.actualCardCount ?? cardCount(b.cardsByName), commanders: b.commanders });
     const statsA = analyzeDeckStats(a, { format: fmtA, onPlay });
     const statsB = analyzeDeckStats(b, { format: fmtB, onPlay });
 
     const metrics = METRICS.map(m => {
-        const va = m.get(statsA);
-        const vb = m.get(statsB);
+        const va = m.get(statsA, a);
+        const vb = m.get(statsB, b);
         const both = typeof va === 'number' && typeof vb === 'number';
         let winner = null;
         if (both && m.better) {
