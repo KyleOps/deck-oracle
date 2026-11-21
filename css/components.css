@@ -28,39 +28,6 @@
     text-align: right;
 }
 
-/* ==================== TERMINAL RANGE SLIDER ==================== */
-
-.tx-slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 4px;
-    background: var(--tx-rule);
-    outline: none;
-    border-radius: 0;
-    cursor: ew-resize;
-}
-
-.tx-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    cursor: ew-resize;
-    border-radius: 0;
-    border: 0;
-}
-
-.tx-slider::-moz-range-thumb {
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    cursor: ew-resize;
-    border-radius: 0;
-    border: 0;
-}
-
 /* ==================== HERO STAT BLOCK ==================== */
 
 .tx-stat {
@@ -210,9 +177,106 @@
 
 .tx-sweep-table tbody tr.rec-row td:first-child { box-shadow: inset 3px 0 0 var(--tx-accent); }
 
-/* ==================== INPUT GROUPS ==================== */
+/* ==================== CONTROLS ====================
+   Text, number and select inputs use the shell's .field / .field-sm, the same
+   control as the deck dialog. The base below has zero specificity, so it only
+   catches a control a page forgot to class and never out-ranks .field or a
+   page rule. (The terminal-era .calculator-content skin it replaces sat at
+   0,2,1 and silently beat .field on every calculator page.) */
+
+:where(.calc-body) :where(input:not([type="range"], [type="checkbox"], [type="radio"]), select, textarea) {
+    padding: 0 8px;
+    background: var(--tx-bg);
+    border: 1px solid var(--tx-rule-hi);
+    border-radius: var(--radius-sm);
+}
+
+/* Typed numbers read in mono, like every other number. */
+.calc-body input[type="number"] { font-family: var(--font-mono); }
+
+.calc-body input[type="checkbox"],
+.calc-body input[type="radio"] { accent-color: var(--tx-accent); }
+
+/* Range: a rounded track and a real, grabbable thumb. Draw Odds paints the
+   filled part of its track over this. */
+.calc-body input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: var(--tx-rule);
+    border-radius: 6px;
+    outline: none;
+    cursor: pointer;
+}
+
+/* Chrome paints its own light runnable-track over an appearance:none range;
+   clear it so the input's own background is the only track. */
+.calc-body input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    background: transparent;
+    border: 0;
+}
+
+.calc-body input[type="range"]::-moz-range-track { background: transparent; border: 0; }
+
+.calc-body input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--tx-accent);
+    border: 3px solid var(--tx-panel);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--tx-accent), var(--shadow-sm);
+    cursor: grab;
+    transition: transform var(--transition-fast);
+}
+
+.calc-body input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--tx-accent);
+    border: 3px solid var(--tx-panel);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--tx-accent);
+    cursor: grab;
+}
+
+.calc-body input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
+
+.calc-body input[type="range"]:focus-visible {
+    outline: 2px solid var(--tx-accent);
+    outline-offset: 6px;
+}
+
+.calc-body input[type="range"]:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 1px var(--tx-accent), 0 0 0 5px var(--accent-soft);
+}
+
+/* A slider with its exact number beside it (Lumra, Rashmi). */
+.x-slider-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    width: 100%;
+}
+
+.x-slider-row input[type="range"] { flex: 1; min-width: 0; }
+
+input.x-number {
+    width: 60px;
+    flex-shrink: 0;
+    padding: 0 6px;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* ==================== INPUT GROUPS ====================
+   A labelled control with a one-line hint, in a calculator's settings rail. */
 
 .input-group {
+    max-width: 720px;
     margin-bottom: var(--spacing-lg);
     padding: 0 14px;
 }
@@ -221,59 +285,21 @@
 
 .input-group label {
     display: block;
-    margin-bottom: var(--spacing-xs);
-    font-size: var(--t-micro);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    margin-bottom: 6px;
+    font-size: var(--t-label);
+    font-weight: 600;
+    color: var(--tx-mid);
+}
+
+.input-group small {
+    display: block;
+    margin-top: 5px;
+    font-size: var(--t-label);
     color: var(--tx-dim);
 }
 
-.input-group input[type="text"],
-.input-group input[type="number"],
-.input-group textarea {
-    width: 100%;
-    padding: 7px 10px;
-    border-radius: 0;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    font-size: var(--t-xs);
-    font-family: inherit;
-    transition: border-color 0.12s;
-    resize: vertical;
-    min-height: 30px;
-}
-
-.input-group input:hover,
-.input-group textarea:hover {
-    border-color: var(--tx-rule-hi);
-}
-
-.input-group input:focus,
-.input-group textarea:focus {
-    outline: none;
-    border-color: var(--tx-amber);
-    box-shadow: none;
-    background: var(--tx-bg);
-}
-
-.input-group textarea {
-    font-family: var(--font-mono);
-    line-height: 1.5;
-}
-
-.input-group textarea::placeholder {
-    font-family: var(--font-body);
-    color: var(--tx-dim);
-    font-style: normal;
-}
-
-.input-group input[type="checkbox"] {
-    width: 14px;
-    height: 14px;
-    accent-color: var(--tx-amber);
-    cursor: pointer;
-}
+/* Sliders read as controls, not progress bars, when they stop short. */
+.input-group input[type="range"] { max-width: 520px; }
 
 .checkbox-label {
     display: flex;
@@ -283,117 +309,6 @@
     user-select: none;
     font-size: var(--t-xs);
     color: var(--tx-text);
-}
-
-/* ==================== TYPE GRID ==================== */
-
-/* Intrinsically responsive: as many across as fit, folding with no breakpoint. */
-.type-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
-    gap: 10px;
-    margin: 0 16px 16px;
-}
-
-.type-input {
-    display: grid;
-    gap: 5px;
-    align-content: start;
-}
-
-.type-input label {
-    font-size: var(--t-label);
-    font-weight: 600;
-    color: var(--tx-mid);
-}
-
-.type-input input {
-    width: 100%;
-    height: 36px;
-    padding: 0 10px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule-hi);
-    border-radius: var(--radius-sm);
-    color: var(--tx-bright);
-    font-family: var(--font-mono);
-    font-size: var(--t-sm);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.type-input input:focus {
-    outline: none;
-    border-color: var(--tx-accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-/* ==================== DECK TOTAL ==================== */
-
-.deck-total {
-    margin: 0;
-    font-size: var(--t-xs);
-    color: var(--tx-dim);
-}
-
-.deck-total strong,
-.deck-total span {
-    font-family: var(--font-mono);
-    font-weight: 600;
-    color: var(--tx-bright);
-}
-
-/* ==================== X SLIDER ROW ==================== */
-
-.x-slider-row {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-    width: 100%;
-}
-
-.x-slider-row input[type="range"] {
-    flex: 1;
-    -webkit-appearance: none;
-    appearance: none;
-    height: 4px;
-    background: var(--tx-rule);
-    outline: none;
-    cursor: ew-resize;
-    min-width: 0;
-    border-radius: 0;
-    box-shadow: none;
-}
-
-.x-slider-row input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    cursor: ew-resize;
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-    transition: none;
-}
-
-.x-slider-row input[type="range"]::-moz-range-thumb {
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    cursor: ew-resize;
-    border-radius: 0;
-    border: none;
-}
-
-.x-number {
-    width: 60px !important;
-    min-width: 60px;
-    max-width: 60px;
-    text-align: center;
-    flex-shrink: 0;
-    padding: 4px 6px !important;
-    font-weight: 600;
-    font-feature-settings: 'tnum' 1;
 }
 
 /* ==================== CHARTS ==================== */
@@ -457,173 +372,6 @@
 .reveal-card.land         { background: var(--tx-panel-alt); border-color: var(--type-land); color: var(--type-land); }
 .reveal-card.dual         { border-style: dashed; }
 
-/* ==================== GLOBAL CONTROL THEMING ====================
-   Native form controls inside calculator panels used to render with the OS
-   default chrome (white number spinners, blue-and-white range tracks), which
-   broke the terminal look on any tab that hadn't been hand-styled — most
-   visibly Mulligan, the landing tab. These rules make every control terminal
-   by default; .tx-* classes remain as explicit overrides. */
-
-.calculator-content input[type="number"],
-.calculator-content input[type="text"],
-.calculator-content select,
-.calculator-content textarea {
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    font-family: inherit;
-    font-size: var(--t-xs);
-    padding: 5px 8px;
-    border-radius: 0;
-    outline: none;
-    font-feature-settings: 'tnum' 1;
-    transition: border-color 0.12s;
-}
-
-.calculator-content input[type="number"]:hover,
-.calculator-content input[type="text"]:hover,
-.calculator-content select:hover {
-    border-color: var(--tx-rule-hi);
-}
-
-.calculator-content input[type="number"]:focus,
-.calculator-content input[type="text"]:focus,
-.calculator-content select:focus,
-.calculator-content textarea:focus {
-    border-color: var(--tx-amber);
-}
-
-/* Range inputs: flat terminal track with a hard-edged amber handle. Applied to
-   every range so calculators don't have to remember the .tx-slider class. */
-.calculator-content input[type="range"],
-input[type="range"].tx-slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 4px;
-    background: var(--tx-rule);
-    border: 0;
-    border-radius: 0;
-    outline: none;
-    cursor: ew-resize;
-}
-
-.calculator-content input[type="range"]::-webkit-slider-thumb,
-input[type="range"].tx-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    border: 0;
-    border-radius: 0;
-    cursor: ew-resize;
-}
-
-.calculator-content input[type="range"]::-moz-range-thumb,
-input[type="range"].tx-slider::-moz-range-thumb {
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    border: 0;
-    border-radius: 0;
-    cursor: ew-resize;
-}
-
-.calculator-content input[type="range"]::-moz-range-track {
-    height: 4px;
-    background: var(--tx-rule);
-    border: 0;
-}
-
-.calculator-content input[type="range"]:focus-visible {
-    outline: 1px solid var(--tx-amber);
-    outline-offset: 4px;
-}
-
-/* Colour swatches (mulligan card-type rows) */
-.calculator-content input[type="color"] {
-    border: 1px solid var(--tx-rule);
-    border-radius: 0;
-    background: var(--tx-bg);
-    padding: 2px;
-    cursor: pointer;
-}
-
-/* Generic action buttons: outlined, not filled. Solid amber is reserved for the
-   single primary action in the sub-bar. tx-* and viz-* components style their
-   own buttons. */
-.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn) {
-    background: transparent;
-    border: 1px solid var(--tx-rule-hi);
-    color: var(--tx-text);
-    font-family: inherit;
-    font-size: var(--t-xs);
-    font-weight: 600;
-    padding: 7px 14px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
-}
-
-.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):hover {
-    background: var(--tx-panel-alt);
-    color: var(--tx-bright);
-    border-color: var(--tx-amber);
-}
-
-.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    border-color: var(--tx-rule);
-}
-
-/* Section headings inside calculators — keep the terminal label voice rather
-   than falling back to browser-default h1/h2 sizing. */
-/* Only bare headings: anything with its own class styles itself. */
-.calc-body h2:not([class]),
-.calc-body h3:not([class]) {
-    font-family: inherit;
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-mid);
-    margin: 0 0 10px;
-    text-shadow: none;
-}
-
-/* Labelled slider block */
-.calculator-content .input-group > label {
-    display: block;
-    font-size: var(--t-micro);
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 6px;
-}
-
-.calculator-content .input-group small {
-    display: block;
-    margin-top: 5px;
-    font-size: var(--t-label);
-    color: var(--tx-dim);
-}
-
-/* Chrome paints its own light runnable-track over an appearance:none range;
-   clear it so the input's own background is the only track. */
-.calculator-content input[type="range"]::-webkit-slider-runnable-track {
-    background: transparent;
-    border: 0;
-    height: 4px;
-}
-
-.calculator-content input[type="checkbox"] {
-    accent-color: var(--tx-amber);
-    width: 13px;
-    height: 13px;
-}
-
 /* ==================== FOCUS ====================
    One visible, consistent focus ring in the brand accent. Keyboard users get
    the same affordance everywhere instead of the browser default in some places
@@ -642,15 +390,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 /* Config panels become a persistent left rail on wide screens (see below),
    so inputs sit beside their results instead of scrolling away above them. */
-
-/* Sliders read as controls, not progress bars, when they stop short. */
-.calculator-content .input-group input[type="range"] {
-    max-width: 520px;
-}
-
-.calculator-content .input-group {
-    max-width: 720px;
-}
 
 /* Body copy directly in a panel: dense, and a ~70-character measure. */
 .calculator-content .panel > p,
@@ -1173,19 +912,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
    accent rather than by being drawn differently. The centre column carries the
    tally so the eye has a fixed pivot between them. */
 
-.vs-select {
-    width: 100%;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule-hi);
-    color: var(--tx-bright);
-    font-family: inherit;
-    font-size: var(--t-body);
-    padding: 8px 10px;
-    outline: none;
-}
-
-.vs-select:focus-visible { border-color: var(--tx-accent); }
-
 .vs-board {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -1356,96 +1082,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
     .vs-side.is-leader { box-shadow: inset 2px 0 0 var(--tx-accent); }
 
-}
-
-/* ==================== V3 REFRESH — SHARED PRIMITIVES ====================
-   The calculator primitives above were built for the square, all-mono
-   terminal skin. These rules restate them in the v3 language (rounded,
-   sentence-case labels, mono only for numbers) in one place, so every
-   calculator inherits the new look without per-page overrides. */
-
-.input-group input[type="text"],
-.input-group input[type="number"],
-.input-group textarea,
-.calc-body select {
-    border: 1px solid var(--tx-rule-hi);
-    border-radius: var(--radius-sm);
-    background: var(--tx-bg);
-    color: var(--tx-bright);
-    min-height: 34px;
-    padding: 6px 10px;
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.calc-body input[type="number"] { font-family: var(--font-mono); }
-
-.input-group input:focus,
-.input-group textarea:focus,
-.calc-body select:focus {
-    outline: none;
-    border-color: var(--tx-accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.input-group label,
-.calculator-content .input-group > label {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--tx-mid);
-}
-
-.input-group input[type="checkbox"],
-.calc-body input[type="checkbox"],
-.calc-body input[type="radio"] {
-    accent-color: var(--tx-accent);
-}
-
-/* Range slider: a rounded track and a real, grabbable thumb */
-.tx-slider,
-.calc-body input[type="range"] {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 6px;
-    border-radius: 6px;
-    background: var(--tx-rule);
-    outline: none;
-    cursor: pointer;
-}
-
-.tx-slider::-webkit-slider-thumb,
-.calc-body input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--tx-accent);
-    border: 3px solid var(--tx-panel);
-    box-shadow: 0 0 0 1px var(--tx-accent), var(--shadow-sm);
-    cursor: grab;
-    transition: transform var(--transition-fast);
-}
-
-.tx-slider::-moz-range-thumb,
-.calc-body input[type="range"]::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--tx-accent);
-    border: 3px solid var(--tx-panel);
-    box-shadow: 0 0 0 1px var(--tx-accent);
-    cursor: grab;
-}
-
-.tx-slider:active::-webkit-slider-thumb,
-.calc-body input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
-
-.tx-slider:focus-visible::-webkit-slider-thumb,
-.calc-body input[type="range"]:focus-visible::-webkit-slider-thumb {
-    box-shadow: 0 0 0 1px var(--tx-accent), 0 0 0 5px var(--accent-soft);
 }
 
 /* ==================== VISUALISATIONS (js/utils/viz.js) ====================

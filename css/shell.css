@@ -1041,6 +1041,58 @@
     border-radius: var(--radius-md);
 }
 
+/* Manual card-type counts: as many across as fit, folding with no breakpoint. */
+.type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+    gap: 10px;
+    margin: 0 16px 16px;
+}
+
+.type-input {
+    display: grid;
+    gap: 5px;
+    align-content: start;
+}
+
+.type-input label {
+    font-size: var(--t-label);
+    font-weight: 600;
+    color: var(--tx-mid);
+}
+
+.type-input input {
+    width: 100%;
+    height: 36px;
+    padding: 0 10px;
+    background: var(--tx-bg);
+    border: 1px solid var(--tx-rule-hi);
+    border-radius: var(--radius-sm);
+    color: var(--tx-bright);
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.type-input input:focus {
+    outline: none;
+    border-color: var(--tx-accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.deck-total {
+    margin: 0;
+    font-size: var(--t-xs);
+    color: var(--tx-dim);
+}
+
+.deck-total strong,
+.deck-total span {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--tx-bright);
+}
+
 .deck-dialog .type-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     margin: 14px 0 0;
@@ -1797,15 +1849,6 @@
     .deck-dialog .seg { margin: 0 18px; }
     .sk-row { grid-template-columns: minmax(0, 1fr); }
     .toasts { left: 16px; right: 16px; align-items: stretch; }
-}
-
-/* Bare <h2> section labels inside legacy panels act as panel header bands. */
-.calc-body .panel > h2:not([class]),
-.calc-body .panel-content > h2:not([class]),
-.calc-body .portent-grid > div > h2:not([class]) {
-    margin: 0;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--tx-rule);
 }
 
 .finding-link {

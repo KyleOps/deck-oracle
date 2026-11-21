@@ -15,7 +15,7 @@ export const template = `
                 <span class="wp-big-unit">power + toughness</span>
             </div>
             <p class="wp-rail-sum" id="wildpair-total-summary">&mdash;</p>
-            <input class="tx-slider" type="range" id="wildpair-totalSlider" value="0" min="0" max="0" step="1">
+            <input type="range" id="wildpair-totalSlider" value="0" min="0" max="0" step="1">
             <div class="wp-scale" id="wildpair-total-scale"><span>&mdash;</span><span>&mdash;</span></div>
             <p class="field-hint" id="wildpair-total-stops"></p>
             <p class="field-hint">A 5/5 and a 3/7 match; a 5/5 and a 5/6 never do. Click any group to jump to it.</p>
@@ -146,8 +146,9 @@ export const styles = `
     color: inherit;
     font: inherit;
     text-align: left;
+    cursor: pointer;
 }
-#wildpair-tab .wp-gc .wp-gc-head:hover { background: none; }
+#wildpair-tab .wp-gc .wp-gc-head:hover { background: none; color: var(--tx-bright); }
 #wildpair-tab .wp-gc .wp-gc-head:focus-visible { outline: 2px solid var(--tx-accent); outline-offset: 4px; }
 #wildpair-tab .wp-gc-total { border-radius: var(--radius-sm); }
 #wildpair-tab .wp-gc-n { font-size: var(--t-xs); letter-spacing: 0; text-transform: none; color: var(--tx-mid); }

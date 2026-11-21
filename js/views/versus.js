@@ -10,10 +10,10 @@ export const template = `
         <div class="tx-h"><span>Compare</span></div>
         <div class="vs-rail">
             <label class="vs-label" for="versus-engine-a">First engine</label>
-            <select id="versus-engine-a" class="vs-select"></select>
+            <select id="versus-engine-a" class="field"></select>
             <button type="button" class="btn btn-ghost btn-sm vs-swap" id="versus-swap" aria-label="Swap the two engines">&#8645; Swap sides</button>
             <label class="vs-label" for="versus-engine-b">Second engine</label>
-            <select id="versus-engine-b" class="vs-select"></select>
+            <select id="versus-engine-b" class="field"></select>
         </div>
 
         <div class="tx-h"><span>Variable power</span></div>
@@ -54,12 +54,6 @@ export const styles = `
 /* ---- Rail ---- */
 #versus-tab .vs-rail { padding: 16px; display: grid; gap: 8px; }
 #versus-tab .vs-label { font-size: var(--t-xs); font-weight: 600; color: var(--tx-mid); }
-#versus-tab .vs-select {
-    height: 40px;
-    padding: 0 10px;
-    border-radius: var(--radius-sm);
-    font-size: var(--t-sm);
-}
 #versus-tab .vs-swap { justify-self: start; }
 #versus-tab .vs-check {
     display: flex;

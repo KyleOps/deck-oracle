@@ -11,7 +11,7 @@ export const template = `
             <label for="lumra-turn">Turn Lumra enters</label>
             <div class="x-slider-row">
                 <input type="range" id="lumra-turnSlider" value="6" min="1" max="20" step="1" aria-label="Turn Lumra enters">
-                <input type="number" id="lumra-turn" value="6" min="1" max="30" class="x-number" inputmode="numeric">
+                <input type="number" id="lumra-turn" value="6" min="1" max="30" class="field field-sm x-number" inputmode="numeric">
             </div>
             <small>Sets how many land drops you have made: a seven-card hand plus one draw a turn, one land a turn when you have one.</small>
         </div>
@@ -19,14 +19,14 @@ export const template = `
         <div class="tx-h"><span>Your graveyard</span></div>
         <div class="input-group lm-input">
             <label for="lumra-fetchLands">Fetch lands in your deck</label>
-            <input type="number" id="lumra-fetchLands" value="0" min="0" max="100" step="1" inputmode="numeric">
+            <input type="number" id="lumra-fetchLands" value="0" min="0" max="100" step="1" class="field field-sm x-number" inputmode="numeric">
             <small id="lumra-fetch-hint">Detected from your decklist.</small>
         </div>
         <div class="input-group lm-input">
             <label for="lumra-gyLands">Other lands already in your graveyard</label>
             <div class="x-slider-row">
                 <input type="range" id="lumra-gySlider" value="0" min="0" max="30" step="1" aria-label="Other lands already in your graveyard">
-                <input type="number" id="lumra-gyLands" value="0" min="0" max="100" class="x-number" inputmode="numeric">
+                <input type="number" id="lumra-gyLands" value="0" min="0" max="100" class="field field-sm x-number" inputmode="numeric">
             </div>
             <small>Lands discarded, destroyed or milled earlier. Leave at 0 for the deck as built.</small>
         </div>
@@ -37,7 +37,7 @@ export const template = `
                 <label for="lumra-multiplier">Times the trigger resolves</label>
                 <div class="x-slider-row">
                     <input type="range" id="lumra-multSlider" value="1" min="1" max="5" step="1" aria-label="Times Lumra’s enter trigger resolves">
-                    <input type="number" id="lumra-multiplier" value="1" min="1" max="10" class="x-number" inputmode="numeric">
+                    <input type="number" id="lumra-multiplier" value="1" min="1" max="10" class="field field-sm x-number" inputmode="numeric">
                 </div>
                 <small>Panharmonicon, Roaming Throne and the like make Lumra mill four more cards per extra trigger.</small>
             </div>

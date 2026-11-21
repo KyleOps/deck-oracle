@@ -12,7 +12,7 @@ export const template = `
                 <span id="chimil-turns-display" class="ch-big-num">10</span>
                 <span class="ch-big-unit">of your end steps</span>
             </label>
-            <input class="tx-slider" type="range" id="chimil-turnsSlider" value="10" min="1" max="20" step="1">
+            <input type="range" id="chimil-turnsSlider" value="10" min="1" max="20" step="1">
             <div class="ch-scale" aria-hidden="true"><span>1</span><span>20</span></div>
             <p class="ch-hint">How long Chimil survives. More end steps means more free spells — and a wider gap between good and bad games.</p>
         </div>

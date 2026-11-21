@@ -14,7 +14,7 @@ export const template = `
                 <span class="vx-mv-num" id="vortex-mv-display">6</span>
                 <span class="vx-mv-unit">so Vortex discovers this much</span>
             </div>
-            <input class="tx-slider" type="range" id="vortex-cmcSlider" value="6" min="1" max="16" step="1">
+            <input type="range" id="vortex-cmcSlider" value="6" min="1" max="16" step="1">
             <div class="vx-scale" id="vortex-mv-scale"><span>&mdash;</span><span>&mdash;</span></div>
             <p class="field-hint vx-who" id="vortex-mv-who"></p>
         </div>

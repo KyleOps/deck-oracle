@@ -111,8 +111,9 @@ export const styles = `
     transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 #mulligan-tab .mull-tpl:hover:not(:disabled) { border-color: var(--tx-dim); }
+#mulligan-tab .mull-tpl:hover { background: var(--tx-panel-alt); }
 #mulligan-tab .mull-tpl.active { border-color: var(--tx-accent); background: var(--accent-soft); }
-#mulligan-tab .mull-tpl:disabled { opacity: 0.5; cursor: not-allowed; }
+#mulligan-tab .mull-tpl:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--tx-rule); }
 #mulligan-tab .mull-tpl-name { font-size: var(--t-sm); font-weight: 600; color: var(--tx-bright); }
 #mulligan-tab .mull-tpl-sub { font-size: var(--t-xs); color: var(--tx-dim); }
 

@@ -272,8 +272,8 @@ export function xControlHTML({ key, label = 'Cards revealed (X)', hint = '', val
                 <span class="bs-cost" id="${key}-cost">${costLabel}</span>
             </div>
             <div class="bs-x">
-                <input class="bs-x-num" type="number" id="${key}-xValue" value="${value}" min="1" max="50" inputmode="numeric" aria-describedby="${key}-x-hint">
-                <input class="tx-slider" type="range" id="${key}-xSlider" value="${value}" min="1" max="${max}" step="1" aria-label="${escapeHtml(label)}">
+                <input class="field bs-x-num" type="number" id="${key}-xValue" value="${value}" min="1" max="50" inputmode="numeric" aria-describedby="${key}-x-hint">
+                <input type="range" id="${key}-xSlider" value="${value}" min="1" max="${max}" step="1" aria-label="${escapeHtml(label)}">
             </div>
             ${chips ? `<div class="bs-presets" id="${key}-presets" role="group" aria-label="Common X values">${chips}</div>` : ''}
             ${hint ? `<p class="bs-hint" id="${key}-x-hint">${hint}</p>` : ''}
@@ -289,7 +289,7 @@ export function valueModelHTML({ fields = [], intro = '', footer = '' }) {
     const rows = fields.map(f => `
         <label class="bs-value-row" for="${f.id}">
             <span class="bs-value-name">${f.label}</span>
-            <input type="number" id="${f.id}" value="${f.value}" min="${f.min ?? 0}" max="${f.max ?? 20}" step="0.25" inputmode="decimal">
+            <input type="number" class="field field-sm" id="${f.id}" value="${f.value}" min="${f.min ?? 0}" max="${f.max ?? 20}" step="0.25" inputmode="decimal">
             <small>${f.hint}</small>
         </label>`).join('');
     return `
@@ -492,7 +492,7 @@ ${s} .bs-chip {
     background: transparent; color: var(--tx-mid); font: 500 var(--t-xs)/1.4 var(--font-mono);
     cursor: pointer; transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
-${s} .bs-chip:hover { color: var(--tx-bright); border-color: var(--tx-dim); }
+${s} .bs-chip:hover { color: var(--tx-bright); border-color: var(--tx-dim); background: var(--tx-panel-alt); }
 ${s} .bs-chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--tx-accent); color: var(--tx-accent); }
 ${s} .bs-check { display: flex; gap: 10px; align-items: flex-start; font-size: var(--t-sm); color: var(--tx-text); cursor: pointer; }
 ${s} .bs-check input { margin-top: 3px; flex-shrink: 0; }

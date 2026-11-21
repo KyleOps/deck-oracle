@@ -36,11 +36,11 @@
 @media (hover: none) and (pointer: coarse) {
     .nav-item { min-height: 44px; }
     .icon-btn { width: 40px; height: 40px; }
-    .calculator-content input[type="range"]::-webkit-slider-thumb {
+    .calc-body input[type="range"]::-webkit-slider-thumb {
         width: 22px;
         height: 22px;
     }
-    .calculator-content input[type="range"]::-moz-range-thumb {
+    .calc-body input[type="range"]::-moz-range-thumb {
         width: 22px;
         height: 22px;
     }

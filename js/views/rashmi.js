@@ -11,7 +11,7 @@ export const template = `
             <label for="rashmi-cmcValue">Its mana value</label>
             <div class="x-slider-row">
                 <input type="range" id="rashmi-cmcSlider" value="5" min="1" max="15" step="1" aria-label="Mana value of the spell you cast">
-                <input type="number" id="rashmi-cmcValue" value="5" min="1" max="15" class="x-number" inputmode="numeric">
+                <input type="number" id="rashmi-cmcValue" value="5" min="1" max="15" class="field field-sm x-number" inputmode="numeric">
             </div>
             <small>Rashmi compares the revealed card with the spell that triggered it. An X spell counts its X — Genesis Wave for X = 7 is mana value 10.</small>
         </div>
