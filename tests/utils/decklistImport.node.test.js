@@ -6,6 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { parseDecklistText } from '../../js/utils/decklistImport.js';
+import { budget, medianMs } from '../helpers/timing.js';
 
 describe('Decklist Import - parseDecklistText', () => {
     describe('Basic Parsing', () => {
@@ -333,12 +334,11 @@ Maybeboard (2)
             // 100 unique cards, which is a large Commander deck
             const cards = Array(100).fill(0).map((_, i) => `1 Card ${i}`).join('\n');
 
-            const start = Date.now();
-            const result = parseDecklistText(cards);
-            const duration = Date.now() - start;
+            let result;
+            const duration = medianMs(() => { result = parseDecklistText(cards); });
 
             assert.strictEqual(result.cards.length, 100);
-            assert.ok(duration < 100, 'Should parse 100 cards in < 100ms');
+            assert.ok(duration < budget(100), 'Should parse 100 cards in < 100ms');
         });
     });
 });
@@ -382,21 +382,17 @@ describe('Decklist Import - Security', () => {
         it('rejects excessively large input quickly', () => {
             const hugeInput = 'A'.repeat(100000);
 
-            const start = Date.now();
-            assert.throws(() => parseDecklistText(hugeInput));
-            const duration = Date.now() - start;
+            const duration = medianMs(() => assert.throws(() => parseDecklistText(hugeInput)));
 
-            assert.ok(duration < 10, 'Should reject huge input quickly (< 10ms)');
+            assert.ok(duration < budget(10), 'Should reject huge input quickly (< 10ms)');
         });
 
         it('rejects too many lines quickly', () => {
             const manyLines = Array(10000).fill('1 Card').join('\n');
 
-            const start = Date.now();
-            assert.throws(() => parseDecklistText(manyLines));
-            const duration = Date.now() - start;
+            const duration = medianMs(() => assert.throws(() => parseDecklistText(manyLines)));
 
-            assert.ok(duration < 50, 'Should reject many lines quickly (< 50ms)');
+            assert.ok(duration < budget(50), 'Should reject many lines quickly (< 50ms)');
         });
     });
 });

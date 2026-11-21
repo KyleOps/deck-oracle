@@ -7,6 +7,7 @@ import { template, styles, guide } from '../../js/views/hands.js';
 import { GLOSSARY } from '../../js/data/glossary.js';
 import { DEFAULT_DECK_DATA } from '../../js/utils/defaultDeckData.js';
 import { landDistribution, landsInRangeChance, DEFAULT_RULE } from '../../js/utils/handLab.js';
+import { budget } from '../helpers/timing.js';
 
 // Module state persists across tests, so these run in order on the built-in
 // example deck (a 99-card Commander list that includes its commander).
@@ -40,7 +41,7 @@ describe('Opening Hands calculator', () => {
         assert.strictEqual(total, 10000);
         // A free first mulligan keeps far more sevens than the first-hand keepable share
         assert.ok(r.sim.keptAt[7] / r.sim.games > r.keepable);
-        assert.ok(r.ms < 250, `simulation took ${r.ms.toFixed(1)}ms`);
+        assert.ok(r.ms < budget(250), `simulation took ${r.ms.toFixed(1)}ms`);
     });
 
     it('caches per deck and rule', () => {

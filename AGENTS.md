@@ -66,6 +66,7 @@ mtgcalcs/
 ├── .github/                # CI/deploy, CodeQL, "Update visual baselines" workflows; Dependabot
 └── tests/
     ├── node-test-helper.js # DOM mocks for headless tests
+    ├── helpers/timing.js   # medianMs() + budget(): wall-clock limits that hold under coverage
     ├── calculators/ utils/ performance/   # *.node.test.js (node:test)
     ├── e2e/                # Playwright: app.spec.js, performance.spec.js (budgets), helpers/network.js
     └── visual/             # Playwright screenshot comparisons (Linux baselines made by CI)
@@ -129,6 +130,9 @@ When making code changes to this project:
      `npm run test:e2e`, after the functional tests). If a change really needs
      more, re-measure as its header explains and raise the budget in the same
      PR with a reason; lower budgets when you make things faster.
+     Time limits in unit tests use `medianMs()` and `budget()` from
+     `tests/helpers/timing.js`: never a single timed run, and coverage
+     instrumentation (about 5× slower) scales the limit.
    - **Screenshots**: once `tests/visual/__screenshots__/linux/` exists, CI
      compares key pages against it. After a visual change, run the
      "Update visual baselines" workflow on your branch and commit its artifact.
@@ -203,6 +207,7 @@ import assert from 'node:assert';
 - Utility tests: `tests/utils/[name].node.test.js`
 - Performance: `tests/performance/benchmarks.node.test.js`
 - Helper: `tests/node-test-helper.js` (DOM mocks for headless testing)
+- Timing: `tests/helpers/timing.js` (`medianMs`, `budget`) for any wall-clock assertion
 
 **Commands:**
 - `npm test` - Run full test suite

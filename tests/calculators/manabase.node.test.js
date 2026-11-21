@@ -15,6 +15,7 @@ import {
 import { analyzeCastability } from '../../js/utils/castability.js';
 import { DEFAULT_DECK_DATA } from '../../js/utils/defaultDeckData.js';
 import { FORMATS } from '../../js/utils/format.js';
+import { budget } from '../helpers/timing.js';
 
 const text = html => html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
 
@@ -176,6 +177,6 @@ describe('manabase - performance', () => {
         const start = performance.now();
         analyzeCastability(DEFAULT_DECK_DATA.cardsByName, { deckSize: 99, format: FORMATS.commander });
         // The budget is 30 ms in the browser; keep head-room for slow CI machines.
-        assert.ok(performance.now() - start < 200);
+        assert.ok(performance.now() - start < budget(200));
     });
 });

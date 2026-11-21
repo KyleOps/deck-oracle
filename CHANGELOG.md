@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Keyboard shortcuts (<kbd>/</kbd>, <kbd>D</kbd>, <kbd>[</kbd> <kbd>]</kbd> and the rest) were ignored for a moment after choosing something in the command palette or closing the deck dialog: focus stayed on the closed dialog's hidden input until the next page loaded, so the app thought you were typing (`isTyping` in `js/main.js`). The palette browser test now presses <kbd>/</kbd> in that window; it failed about two runs in three before the fix and was the occasional CI flake.
+- Unit-test time limits no longer fail at random. Several timed a single run, so one garbage-collection pause could fail them, and under coverage (which CI now runs) the Draw Odds worst case went from ~3 ms to ~14 ms against a 20 ms limit. `tests/helpers/timing.js` gives every wall-clock assertion the median of several runs (`medianMs`) and a limit scaled for coverage instrumentation (`budget`).
 
 ## [3.0.0] - 2026-11-21
 

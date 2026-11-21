@@ -50,6 +50,7 @@ import {
 } from '../../js/utils/handLab.js';
 import { landOdds } from '../../js/utils/deckStats.js';
 import { FORMATS } from '../../js/utils/format.js';
+import { budget } from '../helpers/timing.js';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -480,7 +481,7 @@ describe('simulateMulligans', () => {
         const t0 = performance.now();
         simulateMulligans(sixty, { minLands: 2, maxLands: 4, playBy: 2 }, { games: 10000, freeMulligan: true });
         const ms = performance.now() - t0;
-        assert.ok(ms < 250, `took ${ms.toFixed(1)}ms`);
+        assert.ok(ms < budget(250), `took ${ms.toFixed(1)}ms`);
     });
 });
 

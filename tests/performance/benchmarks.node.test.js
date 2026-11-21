@@ -9,6 +9,7 @@ import { choose, drawTypeMin, drawTwoTypeMin, drawThreeTypeMin } from '../../js/
 import { calcMultiTypeSuccess } from '../../js/calculators/mulligan.js';
 import { simulatePrimalSurge } from '../../js/calculators/surge.js';
 import { simulateGenesisWave } from '../../js/calculators/wave.js';
+import { budget } from '../helpers/timing.js';
 
 // Performance thresholds (in milliseconds)
 const THRESHOLDS = {
@@ -22,7 +23,7 @@ function benchmark(fn, threshold) {
     const start = performance.now();
     fn();
     const elapsed = performance.now() - start;
-    assert.ok(elapsed < threshold, `Operation completed in ${elapsed.toFixed(2)}ms (threshold: ${threshold}ms)`);
+    assert.ok(elapsed < budget(threshold), `Operation completed in ${elapsed.toFixed(2)}ms (threshold: ${threshold}ms)`);
     return elapsed;
 }
 
