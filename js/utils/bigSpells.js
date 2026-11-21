@@ -619,6 +619,115 @@ ${s} .bsc-value strong { font-family: var(--font-mono); font-size: var(--t-sm); 
 ${s} .bsc-note { margin: 0; padding: 10px 18px 14px; font-size: var(--t-xs); line-height: 1.5; color: var(--tx-dim); border-top: 1px solid var(--tx-rule); }
 ${s} .bsc-empty { margin: 0; padding: 16px 18px; font-size: var(--t-sm); color: var(--tx-dim); }
 
+/* "Cast it": one resolution played card by card (js/utils/castAnimation.js) */
+${s} .bs-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+${s} .bs-cast-stage { padding: 14px 16px 4px; border-bottom: 1px solid var(--tx-rule); container-type: inline-size; }
+${s} .cast { display: grid; gap: 12px; }
+${s} .cast-top { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 16px; align-items: center; }
+${s} .cast-pile { position: relative; display: grid; justify-items: center; gap: 6px; }
+${s} .cast-back {
+    width: 64px;
+    height: 89px;
+    border-radius: 6px;
+    border: 1px solid var(--tx-rule-hi);
+    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--tx-flat) 22%, transparent) 0 6px, transparent 6px 12px),
+        var(--tx-panel-alt);
+    box-shadow: 3px 3px 0 -1px var(--tx-panel-alt), 3px 3px 0 0 var(--tx-rule-hi);
+}
+${s} .cast-left { font-family: var(--font-mono); font-size: var(--t-label); color: var(--tx-dim); white-space: nowrap; }
+${s} .cast-slot { width: 120px; height: 167px; perspective: 700px; }
+${s} .cast-card {
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 6px;
+    border: 1px solid var(--tx-rule-hi);
+    background: var(--tx-panel-alt);
+    color: var(--tx-text);
+}
+${s} .cast-card img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+${s} .cast-card-name {
+    padding: 4px;
+    font-size: var(--t-label);
+    line-height: 1.25;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+${s} .cast-big { width: 120px; height: 167px; box-shadow: var(--shadow-md); }
+${s} .cast-big .cast-card-name { font-size: var(--t-xs); }
+${s} .cast-big.is-flip { animation: cast-flip 0.22s var(--ease-out) both; transform-origin: center; }
+${s} .cast-big.is-stop { outline: 2px solid var(--tx-bad); outline-offset: 2px; }
+${s} .cast-big.is-graveyard { filter: saturate(0.5); }
+${s} .cast-read { display: grid; gap: 10px; min-width: 0; align-content: center; }
+${s} .cast-status {
+    margin: 0;
+    min-height: 3em;
+    font-size: var(--t-sm);
+    line-height: 1.5;
+    color: var(--tx-text);
+}
+${s} .cast-status strong { color: var(--tx-bright); font-weight: 600; }
+${s} .cast-totals { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 0; }
+${s} .cast-totals dd {
+    margin: 2px 0 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-lg);
+    font-weight: 600;
+    color: var(--tx-bright);
+}
+${s} .cast-totals dd small { font-size: var(--t-xs); font-weight: 400; color: var(--tx-dim); }
+${s} .cast-totals dd.tone-good { color: var(--tx-good); }
+${s} .cast-zone { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; }
+${s} .cast-zone-label { padding-top: 6px; }
+${s} .cast-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 61px;
+    padding: 0;
+}
+${s} .cast-mini { width: 44px; height: 61px; border-radius: 3px; }
+${s} .cast-mini .cast-card-name { font-size: 7.5px; padding: 2px; }
+${s} .cast-mini.is-new { animation: cast-land 0.2s var(--ease-out) both; }
+${s} .cast-mini.is-stop { outline: 2px solid var(--tx-bad); outline-offset: 1px; }
+${s} .cast-mini.is-graveyard { opacity: 0.55; filter: grayscale(0.6); }
+${s} .cast-more {
+    align-self: center;
+    padding: 0 6px;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--tx-mid);
+}
+${s} .cast-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px; }
+${s} .cast[data-state="done"] .cast-status { color: var(--tx-bright); }
+@keyframes cast-flip {
+    from { transform: rotateY(90deg) translateX(-24px); opacity: 0.4; }
+    to { transform: none; opacity: 1; }
+}
+@keyframes cast-land {
+    from { transform: translateY(-16px) scale(1.25); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+@container (max-width: 520px) {
+    ${s} .cast-top { grid-template-columns: auto minmax(0, 1fr); }
+    ${s} .cast-pile { display: none; }
+    ${s} .cast-slot, ${s} .cast-big { width: 92px; height: 128px; }
+    ${s} .cast-zone { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    ${s} .cast-zone-label { padding-top: 0; }
+    ${s} .cast-row { min-height: 51px; }
+    ${s} .cast-mini { width: 36px; height: 50px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    ${s} .cast-big.is-flip, ${s} .cast-mini.is-new { animation: none; }
+}
+
 /* Narrow: lead with the answer, then the controls */
 @container shell (max-width: 1039.98px) {
     ${s} .bs-answer { order: -1; }

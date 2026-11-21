@@ -119,7 +119,8 @@ describe('Big spell helpers — markup', () => {
     });
 
     it('scopes every shared style rule to the big-spell page root', () => {
-        const css = sharedStyles();
+        // @keyframes steps (from / to) are not selectors.
+        const css = sharedStyles().replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*\s*\}/g, '');
         const selectors = css.split('}').map(rule => rule.split('{')[0].trim()).filter(s => s && !s.startsWith('@') && !s.startsWith('/*'));
         selectors.forEach(selector => {
             selector.split(',').forEach(part => {
