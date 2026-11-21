@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Deck Oracle.zip`, `deck-oracle-design/` (the v3 design handoff, now built) and `.interface-design/system.md` (described the retired glassmorphism design). They remain in git history.
 - The unused `claude` npm dependency and the duplicate `test:node`, `serve` and `serve:test` scripts.
 
+### Fixed
+- Keyboard shortcuts (<kbd>/</kbd>, <kbd>D</kbd>, <kbd>[</kbd> <kbd>]</kbd> and the rest) were ignored for a moment after choosing something in the command palette or closing the deck dialog: focus stayed on the closed dialog's hidden input until the next page loaded, so the app thought you were typing (`isTyping` in `js/main.js`). The palette browser test now presses <kbd>/</kbd> in that window; it failed about two runs in three before the fix and was the occasional CI flake.
+
 ## [3.0.0] - 2026-11-21
 
 Deck Oracle 3 is a ground-up overhaul: it works with any deck, every page answers one question in plain words, and the app is faster to load.
