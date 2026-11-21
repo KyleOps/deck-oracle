@@ -97,6 +97,38 @@ test('editing the plan changes the answer, and the plan survives a share link', 
     expect(errors).toEqual([]);
 });
 
+test('spend, ramp, copy and measure-only steps can be built by hand', async ({ page }) => {
+    const errors = capturePageErrors(page);
+    await page.goto('/?tab=plan');
+    const tab = page.locator('#plan-tab');
+    await settled(tab);
+    const steps = tab.locator('#gp-steps .gp-step');
+
+    // Step 2 (ramp by turn 4) becomes "ramp to 6+ for next turn" by turn 3.
+    await steps.nth(1).locator('[data-field="kind"]').selectOption('ramp');
+    await steps.nth(1).locator('[data-field="turn"]').selectOption('3');
+    await steps.nth(1).locator('[data-field="atLeast"]').fill('6');
+    await expect(steps.nth(1).locator('.gp-step-read')).toContainText('Turn 3: ramp to 6+ mana for next turn');
+
+    // The last step: a historic spell costing 4+ that gets copied.
+    await steps.nth(3).locator('[data-field="is"]').selectOption('historic');
+    await steps.nth(3).locator('[data-field="paid"]').fill('4');
+    await steps.nth(3).locator('[data-field="copied"]').check();
+    await expect(steps.nth(3).locator('.gp-step-read')).toContainText('copy a historic spell with MV 8+ costing 4+');
+
+    // A spend step, measured only.
+    await tab.locator('#gp-add-step').click();
+    await steps.nth(4).locator('[data-field="kind"]').selectOption('spend');
+    await steps.nth(4).locator('[data-field="info"]').check();
+    await expect(steps.nth(4).locator('.gp-step-read')).toContainText('Measures:');
+    await expect(steps.nth(4).locator('.gp-step-read')).toContainText('spend');
+    await settled(tab);
+    await expect(tab.locator('#gp-funnel .gp-funnel-row')).toHaveCount(4);
+    await expect(tab.locator('#gp-measures')).toContainText('measure only');
+    await expect(tab.locator('#gp-measures')).toContainText('Mana ready for turn 4');
+    expect(errors).toEqual([]);
+});
+
 test('a preset loads its deck and plan, and a matching deck is offered its plan', async ({ page }) => {
     const errors = capturePageErrors(page);
     await page.goto('/?tab=plan');
