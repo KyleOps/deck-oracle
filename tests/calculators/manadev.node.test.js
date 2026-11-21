@@ -57,10 +57,14 @@ describe('ramp classifier: mana permanents', () => {
         'Elvish Mystic': { kind: 'dork', mana: 1, ready: 'sick' },
         'Birds of Paradise': { kind: 'dork', mana: 1, any: true, ready: 'sick' },
         "Avacyn's Pilgrim": { kind: 'dork', mana: 1, mask: COLOR_BIT.W },
-        'Bloom Tender': { kind: 'dork', mana: 1, variable: true },
+        'Bloom Tender': { kind: 'dork', mana: 1, variable: true, mask: COLOR_BIT.G, any: false },
         'Priest of Titania': { kind: 'dork', mana: 1, variable: true, mask: COLOR_BIT.G },
         'Selvala, Heart of the Wilds': { kind: 'dork', mana: 1, variable: true },
-        'Arixmethes, Slumbering Isle': { kind: 'dork', mana: 2, mask: GU, ready: 'tapped' },
+        'Arixmethes, Slumbering Isle': { kind: 'dork', mana: 2, mask: GU, units: [COLOR_BIT.G, COLOR_BIT.U], ready: 'tapped' },
+        'Fanatic of Rhonas': { kind: 'dork', mana: 1, mask: COLOR_BIT.G, variable: true, ready: 'sick' },
+        'Whisperer of the Wilds': { kind: 'dork', mana: 1, mask: COLOR_BIT.G, variable: true },
+        'Jadzia Dax, Living Legacy': { kind: 'dork', mana: 0, phaseMana: 1, growth: 1, mask: COLOR_BIT.G, ready: 'next' },
+        'Badgermole Cub': { kind: 'dork', mana: 0, mask: COLOR_BIT.G, ready: 'next' },
         'Ugin, Eye of the Storms': { kind: 'walker', mana: 3, mask: 0, ready: 'now' },
         'Utopia Sprawl': { kind: 'aura', mana: 1, any: true, ready: 'next' },
         'Wild Growth': { kind: 'aura', mana: 1, mask: COLOR_BIT.G },
@@ -95,7 +99,12 @@ describe('ramp classifier: land searches and land drops', () => {
         'Oracle of Mul Daya': { extraDrops: 1, fromTop: true },
         'Courser of Kruphix': { extraDrops: 0, fromTop: true },
         'Explore': { extraDropsOnce: 1, draws: 1 },
-        'Growth Spiral': { putLand: 1, draws: 1 }
+        'Growth Spiral': { putLand: 1, draws: 1 },
+        'Reshape the Earth': { lands: 10, landsTapped: true, landFilter: 'any' },
+        'Reach the Horizon': { lands: 2, landsTapped: true, landFilter: 'basic', distinct: true },
+        'U.S.S. Voyager, Lone Wanderer': { lands: 2, landsTapped: true, landFilter: 'any', reveal: true },
+        'Open the Way': { lands: 1, landsTapped: true, landFilter: 'any', reveal: true, landsVary: true },
+        'Lt. Arex, Ever-Adapting': { putLand: 3, putLandTapped: true, draws: 3 }
     };
     for (const [name, expected] of Object.entries(cases)) {
         it(name, () => like(ramp(name), { modelled: true, ...expected }, name));
@@ -120,7 +129,16 @@ describe('ramp classifier: recognised but not counted', () => {
         'Tireless Provisioner': 'treasureTrigger',
         'Emerald Medallion': 'reducer',
         'Goreclaw, Terror of Qal Sisma': 'reducer',
-        'Zendikar Resurgent': 'doubler'
+        'Zendikar Resurgent': 'doubler',
+        'Groundchuck & Dirtbag': 'doubler',
+        'Gyre Sage': 'varies',
+        'Omenpath Journey': 'trigger',
+        'The Earth King': 'trigger',
+        'Silverback Elder': 'trigger',
+        'Kodama of the East Tree': 'trigger',
+        'Through the Forest Gate': 'topLands',
+        "Kamahl's Druidic Vow": 'topLands',
+        'Lumra, Bellow of the Woods': 'graveyardLands'
     };
     for (const [name, why] of Object.entries(cases)) {
         it(`${name} (${why})`, () => {
@@ -136,7 +154,7 @@ describe('ramp classifier: recognised but not counted', () => {
     });
 
     it('ignores cards that are not ramp, including opponent-side land searches', () => {
-        for (const name of ['Lightning Greaves', 'Path to Exile', 'Open the Way']) assert.equal(ramp(name), null, name);
+        for (const name of ['Lightning Greaves', 'Path to Exile', 'Genesis Wave', "Aminatou's Augury"]) assert.equal(ramp(name), null, name);
         assert.equal(MD.classifyRamp(CARDS['Command Tower']), null, 'lands are never ramp spells');
         assert.equal(MD.classifyRamp(null), null);
     });
@@ -153,7 +171,10 @@ describe('ramp classifier: plain-word labels', () => {
         assert.equal(ramp('Farseek').label, 'Puts a Plains, Island, Swamp or Mountain onto the battlefield tapped');
         assert.equal(ramp('Burnished Hart').label, 'Puts 2 basic lands onto the battlefield tapped (plus {3} to activate)');
         assert.equal(ramp('Oracle of Mul Daya').label, 'Lets you play an extra land each turn; Lets you play lands from the top of your library');
-        assert.match(ramp('Priest of Titania').label, /varies, counted as 1/);
+        assert.equal(ramp('Priest of Titania').label, 'Adds 1 green mana a turn (1 per Elf on the battlefield), from the next turn (summoning sick) — counted as 1: the model doesn’t track your other Elves');
+        assert.equal(ramp('Fanatic of Rhonas').label, 'Adds 1 green mana a turn (4 with a power-4 creature), from the next turn (summoning sick) — counted as 1: the model doesn’t track creature power');
+        assert.equal(ramp('Arixmethes, Slumbering Isle').label, 'Adds 1 blue and 1 green mana a turn, from the next turn (enters tapped)');
+        assert.equal(ramp('Reach the Horizon').label, 'Puts 2 basic lands with different names onto the battlefield tapped');
     });
 });
 
@@ -369,9 +390,10 @@ describe('library and target', () => {
         const lib = MD.buildManaLibrary(DEFAULT_DECK_DATA);
         const library = libraryOf(DEFAULT_DECK_DATA, { format: 'commander' });
         assert.equal(MD.rampTotal(lib), tagDeck(library.cards).counts.ramp);
-        assert.equal(MD.rampTotal(lib), 17);
-        assert.equal(MD.countedRamp(lib), 15);
-        assert.equal(MD.countedRamp(lib, { treasure: true }), 16);
+        // Kamahl's Druidic Vow, Kodama of the East Tree and Omenpath Journey are ramp the model can't simulate; Open the Way it plays.
+        assert.equal(MD.rampTotal(lib), 21);
+        assert.equal(MD.countedRamp(lib), 16);
+        assert.equal(MD.countedRamp(lib, { treasure: true }), 17);
         const r = MD.simulateManaDevelopment(lib, { format: EDH, games: 50 });
         assert.equal(r.rampCount + r.notCounted, MD.rampTotal(lib), 'counted + not counted is the ramp count');
         assert.equal(r.notRamp, 2, 'Thryx and Ugin, the Ineffable make spells cheaper');
