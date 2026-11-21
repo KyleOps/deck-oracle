@@ -79,6 +79,7 @@ function dropBrokenImages(root) {
  * @param {Array<{label:string, value:string, tone?:string}>} plan.startTotals
  * @param {string} plan.summary - the sentence shown (and announced) at the end
  * @param {(name:string) => string} [plan.imageFor] - small card image URL
+ * @param {string} [plan.key] - the deck and settings this cast belongs to (see syncCast)
  * @param {() => void} [onReplay]
  * @returns {{skip:() => void}}
  */
@@ -88,8 +89,11 @@ export function playCast(root, plan, onReplay) {
     const steps = plan.steps ?? [];
     const timing = castTiming(steps.length);
     const instant = reduceMotion();
+    // "Cast again" rebuilds the panel; keep keyboard focus inside it.
+    const hadFocus = typeof document !== 'undefined' && root.contains(document.activeElement);
 
     root.hidden = false;
+    root.dataset.castKey = plan.key ?? '';
     root.innerHTML = `
         <div class="cast" data-state="playing">
             <div class="cast-top">
@@ -139,14 +143,15 @@ export function playCast(root, plan, onReplay) {
 
     let timer = 0;
     let done = false;
-    let shown = 0;
+    let shown = 0;   // cards turned over
+    let landed = 0;  // cards placed in their row (a card lands half-way through its turn)
     const finish = () => {
         if (done) return;
         done = true;
         clearTimeout(timer);
         // Land everything not yet placed, then show the result.
-        for (let i = shown; i < steps.length; i++) place(steps[i], false);
-        shown = steps.length;
+        for (let i = landed; i < steps.length; i++) place(steps[i], false);
+        shown = landed = steps.length;
         const last = steps[steps.length - 1];
         slot.innerHTML = last ? cardHtml(last, plan.imageFor, 'cast-big') : '';
         setLeft((plan.librarySize ?? 0) - steps.length);
@@ -154,13 +159,19 @@ export function playCast(root, plan, onReplay) {
         status.innerHTML = plan.summary ?? '';
         q('[data-cast="live"]').textContent = status.textContent;
         stage.dataset.state = 'done';
-        q('[data-cast="skip"]').hidden = true;
-        q('[data-cast="again"]').hidden = false;
+        const skip = q('[data-cast="skip"]');
+        const again = q('[data-cast="again"]');
+        const skipHadFocus = typeof document !== 'undefined' && document.activeElement === skip;
+        skip.hidden = true;
+        again.hidden = false;
+        if (skipHadFocus) again.focus({ preventScroll: true });
         dropBrokenImages(root);
     };
 
     const tick = () => {
         if (done) return;
+        // Left the page (it is hidden, not removed): land the rest, stop the timers.
+        if (!root.isConnected || root.getClientRects?.().length === 0) { finish(); return; }
         if (shown >= timing.animated) { finish(); return; }
         const step = steps[shown];
         slot.innerHTML = cardHtml(step, plan.imageFor, 'cast-big is-flip');
@@ -172,6 +183,7 @@ export function playCast(root, plan, onReplay) {
         timer = setTimeout(() => {
             if (done) return;
             place(step, true);
+            landed += 1;
             setTotals(step.totals);
             timer = setTimeout(tick, Math.round(timing.step * 0.45));
         }, Math.round(timing.step * 0.55));
@@ -186,9 +198,7 @@ export function playCast(root, plan, onReplay) {
         } else if (action === 'again') {
             onReplay?.();
         } else if (action === 'close') {
-            root._castStop?.();
-            root.hidden = true;
-            root.innerHTML = '';
+            closeCast(root);
             root.dispatchEvent(new CustomEvent('cast-closed', { bubbles: true }));
         }
     };
@@ -207,5 +217,26 @@ export function playCast(root, plan, onReplay) {
         first?.then(start);
         timer = setTimeout(start, 360);
     }
+    if (hadFocus) q(done ? '[data-cast="again"]' : '[data-cast="skip"]')?.focus({ preventScroll: true });
     return { skip: finish };
+}
+
+/** Stop a cast and empty its panel. */
+export function closeCast(root) {
+    if (!root) return;
+    root._castStop?.();
+    root.hidden = true;
+    root.innerHTML = '';
+    delete root.dataset.castKey;
+}
+
+/**
+ * Close the panel if what it shows no longer matches the page: the deck or a
+ * setting changed since the cast, so its cards and totals would be wrong.
+ * @param {HTMLElement} root
+ * @param {string|null} key - the current deck and settings, or null when the page can't cast
+ */
+export function syncCast(root, key) {
+    if (!root || root.hidden) return;
+    if (key == null || root.dataset.castKey !== key) closeCast(root);
 }

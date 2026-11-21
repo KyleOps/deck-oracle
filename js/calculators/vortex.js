@@ -30,7 +30,7 @@ import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/co
 import { buildDeckFromCardData } from '../utils/sampleSimulator.js';
 import {
     DISCOVER_RUNS, isBigCreature, discoverForCreature, sampleDiscoverFrom,
-    simulateDiscoverChain, seededShuffle, mulberry32, hashSeed, withoutOne
+    simulateDiscoverChain, seededShuffle, mulberry32, hashSeed, withoutOne, tailRows
 } from '../utils/discover.js';
 import { cardRef, term, escapeHtml } from '../data/glossary.js';
 import { describeDots, dotPlot, pmfQuantiles } from '../utils/viz.js';
@@ -447,13 +447,10 @@ function renderDots(point) {
     }
     const dots = vortexDots(s.manaDist);
     const legend = DOT_LEGEND.filter(l => dots.some(d => d.tone === l.tone));
-    const rows = [];
-    let atLeast = 1;
-    (s.manaDist ?? []).forEach((n, mana) => {
-        const p = n / s.runs;
-        if (n > 0 && p >= 0.0005) rows.push([`${mana} mana`, pct(p), pct(atLeast)]);
-        atLeast -= p;
-    });
+    // The top 1% is one "N+ mana" row: the table never ends on the sampled maximum.
+    const rows = tailRows(s.manaDist ?? [], s.runs)
+        .filter(r => r.share >= 0.0005 || r.plus)
+        .map(r => [`${r.value}${r.plus ? '+' : ''} mana`, pct(r.share), pct(r.atLeast)]);
     const spells = (s.chainDist ?? []).map((n, k) => (n / s.runs >= 0.005 ? `${k}${k === 1 ? ' spell' : ' spells'} ${pct(n / s.runs)}` : null)).filter(Boolean);
     el.innerHTML = `
         <div class="vx-dots-head"><span>Out of 100 triggers</span><span class="vx-dots-sub">free spells per trigger: ${spells.join(' · ')}</span></div>

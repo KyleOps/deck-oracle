@@ -34,6 +34,7 @@ import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.
 import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
 import { buildDeckFromCardData, shuffleDeck, renderDistributionChart } from '../utils/sampleSimulator.js';
 import { cardRef } from '../data/glossary.js';
+import { tailRows } from '../utils/discover.js';
 import { describeDots, dotPlot, sampleQuantiles } from '../utils/viz.js';
 
 /** Discover value printed on Chimil. */
@@ -753,12 +754,9 @@ function renderDots(result) {
     }
     const dots = chimilDots(games);
     const counts = cheatedDistribution(games);
-    const rows = [];
-    let atLeast = 1;
-    counts.forEach((n, total) => {
-        if (n > 0) rows.push([`${total} mana`, pct(n / games.length), pct(atLeast)]);
-        atLeast -= n / games.length;
-    });
+    // The top 1% is one "N+ mana" row: the table never ends on the sampled maximum.
+    const rows = tailRows(counts, games.length)
+        .map(r => [`${r.value}${r.plus ? '+' : ''} mana`, pct(r.share), pct(r.atLeast)]);
     el.innerHTML = dotPlot({
         dots,
         label: `Total free mana Chimil casts over ${plural(config.turns, 'end step')}, out of 100 games. ${describeDots(dots, { format: v => `${v} mana`, legend: DOT_LEGEND })}`,

@@ -347,7 +347,7 @@ function dotsHtml(rows) {
             legend: DOT_LEGEND.filter(l => dots.some(d => d.tone === l.tone)),
             maxColumns: 30,
             table: {
-                summary: 'Exact shares',
+                summary: 'Shares of simulated casts',
                 caption: 'Share of simulated casts by total mana stolen',
                 head: ['Mana stolen', 'Casts', 'At least this'],
                 rows: tableRows

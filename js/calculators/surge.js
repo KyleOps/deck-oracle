@@ -20,7 +20,7 @@ import { buildDeckFromCardData } from '../utils/sampleSimulator.js';
 import { describeDots, dotPlot, pmfQuantiles, splitDots } from '../utils/viz.js';
 import { escapeHtml } from '../data/glossary.js';
 import { cardImageUrl, findCard } from '../data/images.js';
-import { playCast } from '../utils/castAnimation.js';
+import { closeCast, playCast, syncCast } from '../utils/castAnimation.js';
 import { shuffle } from '../utils/simulation.js';
 import {
     avg, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList, expandCards, fade,
@@ -654,6 +654,7 @@ function renderSamples(config) {
     if (!el) return;
     const castBtn = document.getElementById('surge-cast-btn');
     if (castBtn) castBtn.hidden = !config.cards.length;
+    syncCast(document.getElementById('surge-cast'), config.cards.length ? castKey(config) : null);
     if (!config.cards.length) {
         el.innerHTML = noticeHTML('Sample casts need a decklist with card names — import one from the deck menu.', 'flat');
         return;
@@ -762,6 +763,9 @@ function imageFor(name) {
     return cardImageUrl(record ?? name, 'small');
 }
 
+/** What a cast depends on: a different deck or setting closes an open cast. */
+const castKey = config => `${config.deckKey}|${JSON.stringify(config.settings)}`;
+
 /** "Cast it": a fresh shuffle resolved card by card. */
 function castIt() {
     const config = getDeckConfig();
@@ -770,7 +774,7 @@ function castIt() {
     const library = libraryCards(config.cards);
     shuffle(library);
     const plan = surgeCastPlan(library, config.settings);
-    playCast(stage, { ...plan, outLabel: 'Stopped by', librarySize: library.length, imageFor }, castIt);
+    playCast(stage, { ...plan, outLabel: 'Stopped by', librarySize: library.length, imageFor, key: castKey(config) }, castIt);
 }
 
 export function updateUI() {
@@ -778,6 +782,9 @@ export function updateUI() {
     if (!result) {
         const el = document.getElementById('surge-stats');
         if (el) el.innerHTML = renderBottomLine({ html: 'Add cards to your deck to see how far Primal Surge gets.', tone: 'flat' });
+        const dots = document.getElementById('surge-dots');
+        if (dots) dots.innerHTML = '';
+        closeCast(document.getElementById('surge-cast'));
         chart?.destroy?.();
         chart = null;
         return;

@@ -470,7 +470,8 @@ export function analyzeCastability(cardsByName = {}, { deckSize, format = FORMAT
         const t = i + 1;
         if (t < req.turn) return null;
         if (t === req.turn) return probFor(req).conditional;
-        const key = `${t}|${req.turn}|${req.pipTypes.map(x => `${x.mask}x${x.count}`).sort().join(',')}`;
+        // The chance on turn t depends only on t and the pips, not on the card's own turn.
+        const key = `${t}|${req.pipTypes.map(x => `${x.mask}x${x.count}`).sort().join(',')}`;
         if (!turnMemo.has(key)) {
             turnMemo.set(key, castProbability({ deckSize: N, landGroups, pipTypes: req.pipTypes, landsNeeded: t, seen: seenFor(t) }).conditional);
         }

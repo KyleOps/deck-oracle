@@ -37,6 +37,8 @@ let onPlay = true;
 let debouncedUpdate = null;
 /** The mana-curve bar whose cards are listed (0…7), or null. */
 let curvePick = null;
+/** Deck stats from the last render; picking a curve bar re-renders only the curve. */
+let lastStats = null;
 
 const pct = (p, digits = 0) => `${(p * 100).toFixed(digits)}%`;
 
@@ -344,6 +346,7 @@ export function calculate() {
 export function updateUI() {
     if (!isCalculatorActive(NAME)) return;
     const { config, format, stats, findings } = calculate();
+    lastStats = stats;
     const set = (id, html) => {
         const el = document.getElementById(id);
         if (el) el.innerHTML = html;
@@ -413,7 +416,7 @@ export function init() {
 
 /** Re-render just the curve card, keeping focus on the bar that was used. */
 function refreshCurve(focusIndex) {
-    const { stats } = calculate();
+    const stats = lastStats ?? calculate().stats;
     const el = document.getElementById('ov-curve');
     if (el) el.innerHTML = renderCurve(stats);
     if (focusIndex != null) document.querySelector(`#ov-curve [data-ov-mv="${focusIndex}"]`)?.focus({ preventScroll: true });

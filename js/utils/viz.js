@@ -197,6 +197,10 @@ export function binDots(dots, { threshold = null, maxColumns = 30 } = {}) {
         end: origin + (index + 1) * width,
         dots: []
     }));
+    // Lining the bins up on the threshold can start the first one below zero.
+    // When no value is negative that bin starts at 0, so its label and tooltip
+    // never read "-4.75 to under 0.25" for a count that can't be negative.
+    if (columns[0].start < 0 && Math.min(...values) >= 0) columns[0].start = 0;
     for (const d of list) {
         const i = Math.min(count - 1, Math.max(0, Math.floor((d.value - origin) / width + 1e-9)));
         columns[i].dots.push(d);
@@ -324,7 +328,8 @@ export function dotPlot(o = {}) {
     } else {
         const every = tickEvery(cols + 1, 10);
         const step = bins.width * every;
-        const round = i => Math.abs((bins.origin + i * bins.width) / step - Math.round((bins.origin + i * bins.width) / step)) < 1e-9;
+        const edge = i => (i === 0 ? bins.columns[0].start : bins.origin + i * bins.width);
+        const round = i => Math.abs(edge(i) / step - Math.round(edge(i) / step)) < 1e-9;
         const indices = Array.from({ length: cols + 1 }, (_, i) => i);
         // Prefer round numbers; a threshold-aligned grid may have none, so fall
         // back to every n-th boundary from the threshold.
@@ -337,7 +342,7 @@ export function dotPlot(o = {}) {
         // Drop a label that would sit right on top of the threshold's.
         picked = picked.filter(i => i === bins.thresholdIndex || bins.thresholdIndex == null || Math.abs(i - bins.thresholdIndex) >= Math.max(1, every));
         for (const i of picked.sort((x, y) => x - y)) {
-            ticks.push({ left: (i / cols) * 100, text: format(bins.origin + i * bins.width), edge: i === 0 ? 'start' : i === cols ? 'end' : '' });
+            ticks.push({ left: (i / cols) * 100, text: format(edge(i)), edge: i === 0 ? 'start' : i === cols ? 'end' : '' });
         }
     }
     const ticksHtml = ticks.map(t => `<span class="viz-dots-tick${t.edge ? ` is-${t.edge}` : ''}" style="left:${t.left.toFixed(3)}%">${escapeHtml(t.text)}</span>`).join('');
@@ -389,8 +394,9 @@ export function describeDots(dots, { unit = 'game', unitPlural, format = v => St
         .map(l => ({ label: l.label, n: list.filter(d => toneOf(d.tone) === toneOf(l.tone)).length }))
         .filter(p => p.n > 0)
         .map(p => `${p.n} ${p.label}`);
+    // The middle 8 in 10: with 100 dots, the 11th to the 90th.
     const lo = at(0.1);
-    const hi = at(0.9);
+    const hi = sorted[Math.max(0, Math.ceil(0.9 * sorted.length) - 1)];
     const spread = lo === hi ? `nearly all at ${format(lo)}` : `8 in 10 between ${format(lo)} and ${format(hi)}`;
     return `Out of ${list.length} ${units}${parts.length ? `: ${parts.join(', ')}` : ''}. Typical result ${format(at(0.5))}; ${spread}.`;
 }

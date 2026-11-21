@@ -194,6 +194,28 @@ export function foldTail(dist, q = 0.99) {
     return { counts: out, cut, folded: tail > 0 };
 }
 
+/**
+ * Table rows for a sampled distribution: each value's share and the chance of
+ * at least that much, with the top 1% folded into a final "N or more" row
+ * (`plus`), so a table never ends on the sampled maximum.
+ *
+ * @param {number[]} dist - counts[value]
+ * @param {number} runs - total observations
+ * @returns {Array<{value:number, plus:boolean, share:number, atLeast:number}>} values with any observations
+ */
+export function tailRows(dist, runs) {
+    if (!(runs > 0)) return [];
+    const { counts, cut, folded } = foldTail(dist);
+    const rows = [];
+    let atLeast = 1;
+    counts.forEach((n, value) => {
+        const share = n / runs;
+        if (n > 0) rows.push({ value, plus: folded && value === cut, share, atLeast: Math.max(0, atLeast) });
+        atLeast -= share;
+    });
+    return rows;
+}
+
 /** Fill holes in a sparse counts array with zeros, in place. */
 function densify(arr) {
     for (let i = 0; i < arr.length; i++) if (!arr[i]) arr[i] = 0;

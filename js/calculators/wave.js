@@ -20,7 +20,7 @@ import { calculateFixedDrawPayback, fixedDrawValuePmf, paybackShareByHits, score
 import { describeDots, dotPlot, pmfQuantiles, splitDots } from '../utils/viz.js';
 import { escapeHtml } from '../data/glossary.js';
 import { cardImageUrl, findCard } from '../data/images.js';
-import { playCast } from '../utils/castAnimation.js';
+import { closeCast, playCast, syncCast } from '../utils/castAnimation.js';
 import { shuffle } from '../utils/simulation.js';
 import {
     avg, bindXPresets, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList,
@@ -335,7 +335,7 @@ function renderDots(config, a) {
     const spread = waveSpread(config.library, config.x, config.settings, config.deckKey);
     const dots = waveDots(a, spread);
     const hasValue = Boolean(dots.value);
-    if (!hasValue) dotView = 'permanents';
+    // Without values (counts-only deck) show permanents, but keep the choice for the next deck.
     const byValue = dotView === 'value' && hasValue;
     document.querySelectorAll('#wave-tab [data-wave-view]').forEach(btn => {
         const on = btn.dataset.waveView === (byValue ? 'value' : 'permanents');
@@ -533,6 +533,9 @@ function imageFor(name) {
     return cardImageUrl(record ?? name, 'small');
 }
 
+/** What a cast depends on: a different deck, X or setting closes an open cast. */
+const castKey = config => `${config.deckKey}|${config.x}|${JSON.stringify(config.settings)}`;
+
 /** "Cast it": a fresh shuffle resolved at the chosen X, card by card. */
 function castIt() {
     const config = getDeckConfig();
@@ -541,7 +544,7 @@ function castIt() {
     const library = expandCards(config.cards);
     shuffle(library);
     const plan = waveCastPlan(library, config.x, config.settings);
-    playCast(stage, { ...plan, outLabel: 'Graveyard', librarySize: library.length, imageFor }, castIt);
+    playCast(stage, { ...plan, outLabel: 'Graveyard', librarySize: library.length, imageFor, key: castKey(config) }, castIt);
 }
 
 function renderSamples(config) {
@@ -551,6 +554,7 @@ function renderSamples(config) {
     if (!el) return;
     const castBtn = document.getElementById('wave-cast-btn');
     if (castBtn) castBtn.hidden = !config.cards.length;
+    syncCast(document.getElementById('wave-cast'), config.cards.length ? castKey(config) : null);
     if (!config.cards.length) {
         el.innerHTML = noticeHTML('Sample casts need a decklist with card names — import one from the deck menu.', 'flat');
         return;
@@ -630,6 +634,9 @@ export function updateUI() {
     if (config.deckSize === 0 || !results[config.x]) {
         const el = document.getElementById('wave-stats');
         if (el) el.innerHTML = renderBottomLine({ html: 'Add cards to your deck to see what Genesis Wave does.', tone: 'flat' });
+        const dots = document.getElementById('wave-dots');
+        if (dots) dots.innerHTML = '';
+        closeCast(document.getElementById('wave-cast'));
         chart?.destroy?.();
         chart = null;
         return;

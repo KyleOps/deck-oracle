@@ -92,6 +92,18 @@ describe('binDots', () => {
         assert.strictEqual(bins.columns.reduce((s, c) => s + c.dots.length, 0), 100);
     });
 
+    it('never labels a bin below zero when no value is negative', () => {
+        // Bins aligned on a 10.25 threshold would start at -4.75.
+        const dots = Array.from({ length: 61 }, (_, value) => ({ value, tone: value >= 10.25 ? 'good' : 'bad' }));
+        const bins = binDots(dots, { threshold: 10.25, maxColumns: 24 });
+        assert.strictEqual(bins.discrete, false);
+        assert.ok(bins.origin < 0, 'the threshold-aligned grid starts below zero');
+        assert.strictEqual(bins.columns[0].start, 0);
+        assert.strictEqual(bins.columns[bins.thresholdIndex].start, 10.25);
+        const html = dotPlot(dots, { threshold: 10.25, maxColumns: 24 });
+        assert.doesNotMatch(html, /-d/, 'no negative tick or tooltip');
+    });
+
     it('stacks misses under hits inside a column', () => {
         const bins = binDots([{ value: 2, tone: 'good' }, { value: 2, tone: 'bad' }, { value: 2, tone: 'good' }]);
         assert.deepStrictEqual(bins.columns[0].dots.map(d => d.tone), ['bad', 'good', 'good']);
@@ -158,7 +170,8 @@ describe('describeDots', () => {
     it('summarises the picture in words built from the same dots', () => {
         const dots = pmfQuantiles([0.3, 0.2, 0.2, 0.2, 0.1], 100).map(value => ({ value, tone: value >= 2 ? 'good' : 'bad' }));
         const text = describeDots(dots, { unit: 'cast', legend: [{ tone: 'good', label: 'pay for themselves' }, { tone: 'bad', label: 'fall short' }] });
-        assert.strictEqual(text, 'Out of 100 casts: 50 pay for themselves, 50 fall short. Typical result 2; 8 in 10 between 0 and 4.');
+        // Cumulative 0.3, 0.5, 0.7, 0.9, 1: the 10th–90th percentile range is 0 to 3.
+        assert.strictEqual(text, 'Out of 100 casts: 50 pay for themselves, 50 fall short. Typical result 2; 8 in 10 between 0 and 3.');
     });
 });
 
