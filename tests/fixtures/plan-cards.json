@@ -1,0 +1,515 @@
+{
+  "Ancestral Statue": {
+    "name": "Ancestral Statue",
+    "mana_cost": "{4}",
+    "cmc": 4,
+    "type_line": "Artifact Creature — Golem",
+    "oracle_text": "When this creature enters, return a nonland permanent you control to its owner's hand.",
+    "power": "3",
+    "toughness": "4",
+    "colors": [],
+    "color_identity": []
+  },
+  "Arcane Signet": {
+    "name": "Arcane Signet",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+    "color_identity": [],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Badgermole Cub": {
+    "name": "Badgermole Cub",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Badger Mole",
+    "oracle_text": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
+    "power": "2",
+    "toughness": "2",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Bloom Tender": {
+    "name": "Bloom Tender",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "Vivid — {T}: For each color among permanents you control, add one mana of that color.",
+    "power": "1",
+    "toughness": "1",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Breeding Pool": {
+    "name": "Breeding Pool",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land — Forest Island",
+    "oracle_text": "({T}: Add {G} or {U}.)\nAs this land enters, you may pay 2 life. If you don't, it enters tapped.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "G",
+      "U"
+    ]
+  },
+  "Colossal Dreadmaw": {
+    "name": "Colossal Dreadmaw",
+    "mana_cost": "{4}{G}{G}",
+    "cmc": 6,
+    "type_line": "Creature — Dinosaur",
+    "oracle_text": "Trample",
+    "power": "6",
+    "toughness": "6",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Cultivate": {
+    "name": "Cultivate",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Elvish Archdruid": {
+    "name": "Elvish Archdruid",
+    "mana_cost": "{1}{G}{G}",
+    "cmc": 3,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "Other Elf creatures you control get +1/+1.\n{T}: Add {G} for each Elf you control.",
+    "power": "2",
+    "toughness": "2",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Evolving Wilds": {
+    "name": "Evolving Wilds",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+    "color_identity": []
+  },
+  "Explosive Vegetation": {
+    "name": "Explosive Vegetation",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Fanatic of Rhonas": {
+    "name": "Fanatic of Rhonas",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Snake Druid",
+    "oracle_text": "{T}: Add {G}.\nFerocious — {T}: Add {G}{G}{G}{G}. Activate only if you control a creature with power 4 or greater.\nEternalize {2}{G}{G} ({2}{G}{G}, Exile this card from your graveyard: Create a token that's a copy of it, except it's a 4/4 black Zombie Snake Druid with no mana cost. Eternalize only as a sorcery.)",
+    "power": "1",
+    "toughness": "4",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Forest": {
+    "name": "Forest",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Basic Land — Forest",
+    "oracle_text": "({T}: Add {G}.)",
+    "colors": [],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Grizzly Bears": {
+    "name": "Grizzly Bears",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Bear",
+    "oracle_text": "",
+    "power": "2",
+    "toughness": "2",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Ilysian Caryatid": {
+    "name": "Ilysian Caryatid",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Plant",
+    "oracle_text": "{T}: Add one mana of any color. If you control a creature with power 4 or greater, add two mana of any one color instead.",
+    "power": "1",
+    "toughness": "1",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Island": {
+    "name": "Island",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Basic Land — Island",
+    "oracle_text": "({T}: Add {U}.)",
+    "colors": [],
+    "color_identity": [
+      "U"
+    ],
+    "produced_mana": [
+      "U"
+    ]
+  },
+  "Jadzia Dax, Living Legacy": {
+    "name": "Jadzia Dax, Living Legacy",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Legendary Creature — Trill Scientist",
+    "oracle_text": "At the beginning of your first main phase, put a +1/+1 counter on Jadzia Dax, then add an amount of {G} equal to the number of counters on her.\nTransfer Symbiont — {2}{G}, Discard this card: Put two +1/+1 counters on target creature.",
+    "power": "0",
+    "toughness": "1",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Karametra, God of Harvests": {
+    "name": "Karametra, God of Harvests",
+    "mana_cost": "{3}{G}{W}",
+    "cmc": 5,
+    "type_line": "Legendary Enchantment Creature — God",
+    "oracle_text": "Indestructible\nAs long as your devotion to green and white is less than seven, Karametra isn't a creature.\nWhenever you cast a creature spell, you may search your library for a Forest or Plains card, put it onto the battlefield tapped, then shuffle.",
+    "power": "6",
+    "toughness": "7",
+    "colors": [
+      "G",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "W"
+    ]
+  },
+  "Llanowar Elves": {
+    "name": "Llanowar Elves",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "{T}: Add {G}.",
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Mind Stone": {
+    "name": "Mind Stone",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add {C}.\n{1}, {T}, Sacrifice this artifact: Draw a card.",
+    "color_identity": [],
+    "produced_mana": [
+      "C"
+    ]
+  },
+  "Misty Rainforest": {
+    "name": "Misty Rainforest",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "{T}, Pay 1 life, Sacrifice this land: Search your library for a Forest or Island card, put it onto the battlefield, then shuffle.",
+    "color_identity": []
+  },
+  "Plains": {
+    "name": "Plains",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Basic Land — Plains",
+    "oracle_text": "({T}: Add {W}.)",
+    "colors": [],
+    "color_identity": [
+      "W"
+    ],
+    "produced_mana": [
+      "W"
+    ]
+  },
+  "Priest of Titania": {
+    "name": "Priest of Titania",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "{T}: Add {G} for each Elf on the battlefield.",
+    "power": "1",
+    "toughness": "1",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Raucous Audience": {
+    "name": "Raucous Audience",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Human Citizen",
+    "oracle_text": "{T}: Add {G}. If you control a creature with power 4 or greater, add {G}{G} instead.",
+    "power": "2",
+    "toughness": "1",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "Selvala, Eager Trailblazer": {
+    "name": "Selvala, Eager Trailblazer",
+    "mana_cost": "{2}{G}{W}",
+    "cmc": 4,
+    "type_line": "Legendary Creature — Elf Scout",
+    "oracle_text": "Vigilance\nWhenever you cast a creature spell, create a 1/1 red Mercenary creature token with \"{T}: Target creature you control gets +1/+0 until end of turn. Activate only as a sorcery.\"\n{T}: Choose a color. Add one mana of that color for each different power among creatures you control.",
+    "power": "4",
+    "toughness": "5",
+    "colors": [
+      "G",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "W"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Selvala, Heart of the Wilds": {
+    "name": "Selvala, Heart of the Wilds",
+    "mana_cost": "{1}{G}{G}",
+    "cmc": 3,
+    "type_line": "Legendary Creature — Elf Scout",
+    "oracle_text": "Whenever another creature enters, its controller may draw a card if its power is greater than each other creature's power.\n{G}, {T}: Add X mana in any combination of colors, where X is the greatest power among creatures you control.",
+    "power": "2",
+    "toughness": "3",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "B",
+      "G",
+      "R",
+      "U",
+      "W"
+    ]
+  },
+  "Serra Angel": {
+    "name": "Serra Angel",
+    "mana_cost": "{3}{W}{W}",
+    "cmc": 5,
+    "type_line": "Creature — Angel",
+    "oracle_text": "Flying, vigilance",
+    "power": "4",
+    "toughness": "4",
+    "colors": [
+      "W"
+    ],
+    "color_identity": [
+      "W"
+    ]
+  },
+  "Simic Growth Chamber": {
+    "name": "Simic Growth Chamber",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "This land enters tapped.\nWhen this land enters, return a land you control to its owner's hand.\n{T}: Add {G}{U}.",
+    "color_identity": [
+      "G",
+      "U"
+    ],
+    "produced_mana": [
+      "G",
+      "U"
+    ]
+  },
+  "Skyshroud Claim": {
+    "name": "Skyshroud Claim",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for up to two Forest cards, put them onto the battlefield, then shuffle.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Sol Ring": {
+    "name": "Sol Ring",
+    "mana_cost": "{1}",
+    "cmc": 1,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add {C}{C}.",
+    "color_identity": [],
+    "produced_mana": [
+      "C"
+    ]
+  },
+  "Susan Foreman": {
+    "name": "Susan Foreman",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Legendary Creature — Time Lord",
+    "oracle_text": "If you would planeswalk, instead look at the top two cards of your planar deck, put one on the bottom of your planar deck and the other on top, then planeswalk.\n{T}: Add {G}.\nDoctor's companion (You can have two commanders if the other is the Doctor.)",
+    "power": "1",
+    "toughness": "1",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  },
+  "The Sixth Doctor": {
+    "name": "The Sixth Doctor",
+    "mana_cost": "{4}{G}{U}",
+    "cmc": 6,
+    "type_line": "Legendary Creature — Time Lord Doctor",
+    "oracle_text": "Time Lord's Prerogative — Whenever you cast a historic spell, copy it, except the copy isn't legendary. This ability triggers only once each turn. (Artifacts, legendaries, and Sagas are historic. A copy of a permanent spell becomes a token.)",
+    "power": "3",
+    "toughness": "3",
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ]
+  },
+  "Topiary Stomper": {
+    "name": "Topiary Stomper",
+    "mana_cost": "{1}{G}{G}",
+    "cmc": 3,
+    "type_line": "Creature — Plant Dinosaur",
+    "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)\nWhen this creature enters, search your library for a basic land card, put it onto the battlefield tapped, then shuffle.\nThis creature can't attack or block unless you control seven or more lands.",
+    "power": "4",
+    "toughness": "4",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Whisperer of the Wilds": {
+    "name": "Whisperer of the Wilds",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Human Shaman",
+    "oracle_text": "{T}: Add {G}.\nFerocious — {T}: Add {G}{G}. Activate only if you control a creature with power 4 or greater.",
+    "power": "0",
+    "toughness": "2",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "produced_mana": [
+      "G"
+    ]
+  }
+}
