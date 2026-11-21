@@ -1131,7 +1131,8 @@ class Game {
         if (card.fetch) {
             this.life -= card.fetch.life;
             this.grave.push(card);
-            const found = this.searchLand(card.fetch.kind, card.fetch.bits, true, card.fetch.tapped, `${drop ?? ''}${card.name} → `);
+            // A fetchland put onto the battlefield tapped cracks next turn: its land is no help this turn either.
+            const found = this.searchLand(card.fetch.kind, card.fetch.bits, true, card.fetch.tapped || tapped, `${drop ?? ''}${card.name} → `);
             if (found) return;
             this.grave.pop();
             this.life += card.fetch.life;
@@ -1545,7 +1546,7 @@ class Game {
             if (at >= 0) zone.splice(at, 1);
         }
         if (from === 'hand') this.castsThisTurn.push(card);
-        if (card.isRamp) this.rampCast++;
+        if (card.isRamp && !card.commander) this.rampCast++;
         const stackMv = card.mv + x * card.xCount;
         const record = this.entry ? { name: card.name, from, step: -1, paid, x: card.xCount ? x : null, notes: [] } : null;
         if (record) this.entry.cast.push(record);
@@ -1766,8 +1767,22 @@ class Game {
         return false;
     }
 
-    /** Mana you could make after casting `card` with X = x (its permanent and cast tokens counted). */
+    /**
+     * Mana you could make after casting `card` with X = x: its permanent and
+     * cast tokens join the board, and the cost is paid the way pay() pays —
+     * fixed sources first, then the sources that grow (Selvala, Bloom
+     * Tender), which are tapped at what they make now and grow no more.
+     */
     projectAfter(card, x) {
+        const cost = this.costOf(card, x);
+        let fixed = this.poolLen;
+        const grow = [];
+        for (const p of this.perms) {
+            if (!this.canTap(p) || !this.output(p)) continue;
+            const n = this.oN + this.oBoostN;
+            if (this.oPri === PRI.GROWS) grow.push({ p, n, next: n });
+            else fixed += n;
+        }
         const before = this.perms.length;
         if (card.permanent) {
             const g = this.newPerm(card);
@@ -1782,12 +1797,26 @@ class Game {
             }
         }
         this.version++;
-        const after = this.potential() - this.costOf(card, x);
+        let added = 0;
+        for (const q of this.perms) {
+            if (!this.canTap(q) || !this.output(q)) continue;
+            const g = grow.find(o => o.p === q);
+            if (g) g.next = this.oN + this.oBoostN;
+            else if (q.ready === this.turn && this.perms.indexOf(q) >= before) added += this.oN + this.oBoostN;
+        }
+        this.potential();
         const colors = this.availColors;
         while (this.perms.length > before) this.spare.push(this.perms.pop());
         this.version++;
         this.potential();
-        return { mana: after, colors };
+        // Pay: fixed first, then the growers that grow least.
+        let need = cost - fixed;
+        let mana = fixed + added - cost;
+        grow.sort((a, b) => (a.next - a.n) - (b.next - b.n));
+        for (const g of grow) {
+            if (need > 0) { need -= g.n; mana += g.n; } else mana += g.next;
+        }
+        return { mana, colors };
     }
 
     /**
@@ -2062,6 +2091,12 @@ class Game {
             }
             if (!pips) return REASON.NO_PACKAGE;
         }
+        // A colour no land you have can make is the reason, whatever the amount.
+        let handLands = 0;
+        for (const c of this.hand) if (c.land) handLands |= c.mask;
+        for (const pip of pips) {
+            if (!(pip & (this.turnColors | handLands))) return REASON.COLOUR | ((pip & 31) << 8);
+        }
         if (this.peak < cost) return short;
         for (const pip of pips) {
             if (!(pip & this.turnColors)) return REASON.COLOUR | ((pip & 31) << 8);
@@ -2247,6 +2282,9 @@ function playGame(run, hand, lib, libLen, log, setup = []) {
     for (const c of setup) {
         if (c.land) g.putLand(c, false);
         else g.enter(c, { setup: true });
+        // A commander already on the battlefield has left the command zone.
+        const at = g.command.indexOf(c);
+        if (at >= 0) g.command.splice(at, 1);
     }
     const mana = new Int32Array(run.lastTurn + 1);
     for (let t = 1; t <= run.lastTurn; t++) {
