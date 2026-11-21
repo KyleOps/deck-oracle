@@ -109,7 +109,10 @@ describe('manabase - summarize', () => {
     });
 
     it('gives the default Commander deck a sentence that matches its numbers', () => {
-        const result = analyzeCastability(DEFAULT_DECK_DATA.cardsByName, { deckSize: 99, format: FORMATS.commander });
+        // The 98-card library; both commanders (in the command zone) set the identity.
+        const commanderCards = DEFAULT_DECK_DATA.commanders.map(c => c.card);
+        const result = analyzeCastability(DEFAULT_DECK_DATA, { deckSize: 98, format: FORMATS.commander, commanderCards });
+        assert.ok(!result.cards.some(c => c.name === 'The Sixth Doctor' || c.name === 'Susan Foreman'), 'commanders are not library cards');
         const line = text(summarize(result).html);
         assert.ok(line.startsWith(`${result.under} of your ${result.total} coloured spells`));
         if (result.bottleneck) assert.ok(line.includes(`${result.bottleneck.sources} sources`));
@@ -176,9 +179,9 @@ describe('manabase - caching and sharing', () => {
 
 describe('manabase - performance', () => {
     it('analyses a 99-card Commander deck quickly', () => {
-        analyzeCastability(DEFAULT_DECK_DATA.cardsByName, { deckSize: 99 }); // warm the JIT and choose() cache
+        analyzeCastability(DEFAULT_DECK_DATA, { deckSize: 98 }); // warm the JIT and choose() cache
         const start = performance.now();
-        analyzeCastability(DEFAULT_DECK_DATA.cardsByName, { deckSize: 99, format: FORMATS.commander });
+        analyzeCastability(DEFAULT_DECK_DATA, { deckSize: 98, format: FORMATS.commander });
         // The budget is 30 ms in the browser; keep head-room for slow CI machines.
         assert.ok(performance.now() - start < budget(200));
     });
