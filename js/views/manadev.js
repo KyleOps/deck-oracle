@@ -84,6 +84,7 @@ export const styles = `
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
 }
 #manadev-tab .md-answer .tx-hero .tx-stat:first-child .tx-stat-value { font-size: clamp(36px, 3.6vw, 52px); }
+#manadev-tab .md-answer .md-scroll { border-top: 1px solid var(--tx-rule); }
 #manadev-tab .md-pending {
     display: flex;
     align-items: center;
@@ -283,6 +284,7 @@ export const styles = `
     #manadev-tab .md-ramp-table th.md-col-seen, #manadev-tab .md-ramp-table td.md-col-seen { display: none; }
     #manadev-tab .md-ramp-table th, #manadev-tab .md-ramp-table td { padding: 8px 8px; }
     #manadev-tab .md-turn { grid-template-columns: 26px 58px minmax(0, 1fr); gap: 6px; }
+    #manadev-tab .md-cmd-table .md-cmd-alone { display: none; }
 }
 `;
 
@@ -291,8 +293,8 @@ export const guide = {
     howToRead: [
         '<strong>Mana on a turn</strong> is what your lands and mana permanents can make that turn after your land drop, before you cast anything. A Sol Ring cast on turn 1 counts from turn 2.',
         'The <strong>chart</strong> shows the typical game as a line, the middle half of games as the dark band and eight games in ten as the light band. The dashed line is the same shuffles with every ramp card left uncast — the gap between the two lines is what your ramp does.',
-        'The <strong>grid</strong> gives the chance to have had at least that much mana by each turn. The highlighted row is your commander’s mana value, and the outlined cell is casting it on curve.',
-        '<strong>Turns saved</strong> compares each game with its lands-only twin and averages the difference in the turn your commander becomes castable.',
+        'The <strong>grid</strong> gives the chance to have had at least that much mana by each turn. The highlighted rows are your commanders’ mana values, and the outlined cells are casting each on curve.',
+        '<strong>Turns saved</strong> compares each game with its lands-only twin and averages the difference in the turn your commander becomes castable. With two or more commanders, a table lists each one — on-curve chance, the turns it usually becomes castable, lands alone, turns saved — and a last row for all of them together.',
         'The <strong>ramp table</strong> says what the model thinks each ramp card does. If a line is wrong, that card’s effect is wrong in every number above.'
     ],
     method: '5,000 simulated games from a fixed seed, so the same deck always gives the same numbers. Each game: shuffle, London mulligan with the Opening Hands keep rule (2–4 lands; free first mulligan in Commander), then up to 12 turns of draw, land drop and ramp. The land drop plays an untapped land when the extra mana lets you cast something in hand that turn, and a tapped land when it doesn’t. Then the simulator casts the best ramp it can afford — pieces that pay for themselves first (Sol Ring), then the most mana gained, then the cheapest — until nothing fits. Colours are checked pip by pip against the lands and rocks you have. Every shuffle is played twice: once with ramp and once with every ramp card blank.',
@@ -302,7 +304,8 @@ export const guide = {
         'Counted: mana rocks and dorks (dorks from the turn after they’re cast), mana auras, planeswalker mana abilities, land searches (tapped or untapped, battlefield or hand), extra land drops and playing lands from the top of your library.',
         'Not counted, though still ramp: mana doublers, mana that doesn’t untap, sacrifice-for-mana, and anything that only happens on a later trigger (Treasure on landfall, lands when a creature dies). Treasure from a spell or as a permanent enters counts only if you turn it on. Listed but not ramp: rituals and cost reducers. Every page counts ramp by this same rule, so the overview’s ramp count is what this page counts plus what it can’t.',
         'Mana that varies (Priest of Titania, Bloom Tender) counts as one. Lands that enter tapped “unless” something are checked for the common cases (shocks, fast lands, slow lands, check lands, two or more opponents); other conditions are assumed met.',
-        'Without a commander, the target is your top end: the middle of your three most expensive spells. You only need the mana for it, not the card in hand.'
+        'Every commander is checked on its own, cast from the command zone (never drawn). With partners, a Doctor and their companion or a commander and a background, the land drop and the colours a search fetches aim at every commander you can’t cast yet. The model checks whether you could cast each one; it never spends mana on them, so “both castable” is the turn by which each has been castable at least once.',
+        'Without a commander (or without any commander’s card), the target is your top end: the middle of your three most expensive spells. You only need the mana for it, not the card in hand.'
     ],
     tips: [
         'Two-mana rocks and one-mana dorks move turn 3–4 the most; four-mana land ramp mostly moves turn 5 and later.',

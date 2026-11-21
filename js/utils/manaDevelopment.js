@@ -26,7 +26,7 @@
  */
 
 import { COLORS } from './mana.js';
-import { asLibrary, commandersOf, isLand, isLibrary } from './library.js';
+import { asLibrary, commandersOf, isLand, isLibrary, sameCard } from './library.js';
 import { mulberry32, shuffle } from './random.js';
 import { quantile } from './stats.js';
 import { inflect as plural } from './text.js';
@@ -146,19 +146,34 @@ function annotate(lab, card, identity, multiplayer) {
 }
 
 /**
- * The card your mana is racing towards: the commander when there is one (its
- * mana value and colours) — with partners, the more expensive of them —
- * otherwise your top end: the middle of your three most expensive spells.
- * @param {{commanderCards?:Array<Object|null>, commanderCard?:Object|null, cards?:Object[], identity?:string[]}} [opts]
- * @returns {{kind:'commander'|'top-end', name:string, mv:number, cost:string, card:Object, names:string[]}|null}
+ * The cards your mana is racing towards.
+ *
+ * Every commander (one, partners, a Doctor and their companion, a commander
+ * and a background) is a target of its own: its mana value AND colours, cast
+ * from the command zone. The most expensive is the primary target — the one
+ * the bottom line leads with (ties: the first listed). Without a commander
+ * (or without any commander's card record), the one target is your top end:
+ * the middle of your three most expensive spells.
+ *
+ * @param {{commanders?:Array<{name:string, card:Object|null}>, cards?:Object[], identity?:string[]}} [opts]
+ *   commanders: the command zone in deck order, records when known
+ * @returns {{targets:Array<Object>, primary:Object|null, missing:string[]}}
+ *   targets: `{kind:'commander'|'top-end', name, mv, cost, card, names}` in deck
+ *   order; missing: commanders whose cost can't be checked (no card record)
  */
-export function chooseTarget({ commanderCards = [], commanderCard = null, cards = [], identity = COLORS } = {}) {
-    const castable = [...(commanderCards ?? []), commanderCard]
-        .filter(c => c && c.name && !isLand(c) && Number.isFinite(Number(c.cmc)))
-        .map(c => ({ card: c, lab: annotate(toLabCard(c, -1, identity), c, identity, true) }));
+export function chooseTargets({ commanders = [], cards = [], identity = COLORS } = {}) {
+    const zone = (commanders ?? []).filter(c => c?.name);
+    const castable = [];
+    const missing = [];
+    for (const { name, card } of zone) {
+        if (card && !isLand(card) && Number.isFinite(Number(card.cmc))) castable.push({ card, lab: annotate(toLabCard(card, -1, identity), card, identity, true) });
+        else missing.push(name);
+    }
     if (castable.length) {
-        const { card, lab } = castable.reduce((best, c) => (c.lab.playMv > best.lab.playMv ? c : best));
-        return { kind: 'commander', name: card.name, mv: lab.playMv, cost: lab.cost, card: lab, names: castable.map(c => c.card.name) };
+        const names = castable.map(c => c.card.name);
+        const targets = castable.map(({ card, lab }) => ({ kind: 'commander', name: card.name, mv: lab.playMv, cost: lab.cost, card: lab, names }));
+        const primary = targets.reduce((best, t) => (t.mv > best.mv ? t : best));
+        return { targets, primary, missing };
     }
     const seen = new Set();
     const spells = [];
@@ -167,28 +182,50 @@ export function chooseTarget({ commanderCards = [], commanderCard = null, cards 
         seen.add(c.name);
         spells.push(c);
     }
-    if (spells.length === 0) return null;
+    if (spells.length === 0) return { targets: [], primary: null, missing };
     spells.sort((a, b) => b.playMv - a.playMv || a.name.localeCompare(b.name));
     const top = spells.slice(0, 3);
     const pick = top.length >= 3 ? top[1] : top[0];
-    return { kind: 'top-end', name: pick.name, mv: pick.playMv, cost: pick.cost, card: pick, names: top.map(c => c.name) };
+    const primary = { kind: 'top-end', name: pick.name, mv: pick.playMv, cost: pick.cost, card: pick, names: top.map(c => c.name) };
+    return { targets: [primary], primary, missing };
+}
+
+/**
+ * The primary target alone (see chooseTargets): with partners, the more
+ * expensive commander.
+ * @param {{commanderCards?:Array<Object|null>, commanderCard?:Object|null, cards?:Object[], identity?:string[]}} [opts]
+ * @returns {{kind:'commander'|'top-end', name:string, mv:number, cost:string, card:Object, names:string[]}|null}
+ */
+export function chooseTarget({ commanderCards = [], commanderCard = null, cards = [], identity = COLORS } = {}) {
+    const commanders = [...(commanderCards ?? []), commanderCard].filter(c => c?.name).map(card => ({ name: card.name, card }));
+    return chooseTargets({ commanders, cards, identity }).primary;
+}
+
+/**
+ * The command zone as [{name, card}]: every commander the library keeps out,
+ * each with its record when one of `records` (or the snapshot) has it.
+ */
+function zoneOf(deck, library, records) {
+    if (!library.commanders.length) return [];
+    const known = (records ?? (isLibrary(deck) ? [] : commandersOf(deck).map(c => c.card))).filter(Boolean);
+    return library.commanders.map(name => ({ name, card: known.find(c => sameCard(c.name, name)) ?? null }));
 }
 
 /**
  * Expand a decklist into simulator cards (one per copy) with land and ramp
  * behaviour attached. Commanders start in the command zone, never the library
- * (see library.js); their records set the colour identity and the target.
+ * (see library.js); their records set the colour identity and the targets.
  *
  * @param {Object} deck - a DeckConfig snapshot, a Library, or a cardsByName map
  * @param {{format?:Object|string, commanders?:string[], commanderCards?:Array<Object|null>, multiplayer?:boolean}} [opts]
  *   commanderCards: the command zone's records (default: looked up on the
- *   snapshot — see commandersOf()); used only when the library has commanders
+ *   snapshot — see commandersOf()); used only when the library has commanders.
+ *   A commander without a record can't be checked: it is listed in `missing`.
  */
 export function buildManaLibrary(deck = {}, { format, commanders, commanderCards, multiplayer = true } = {}) {
     const library = asLibrary(deck, { format, commanders });
-    const zone = !library.commanders.length ? []
-        : (commanderCards ?? (isLibrary(deck) ? [] : commandersOf(deck).map(c => c.card))).filter(Boolean);
-    const identity = identityOf(library.cards, zone);
+    const zone = zoneOf(deck, library, commanderCards);
+    const identity = identityOf(library.cards, zone.map(c => c.card).filter(Boolean));
     const cards = [];
     const rampByName = new Map();
     let uid = 0;
@@ -204,6 +241,7 @@ export function buildManaLibrary(deck = {}, { format, commanders, commanderCards
     }
     const ramp = [...rampByName.values()];
     const searches = assignSearchSlots(ramp, cards);
+    const { targets, primary, missing } = chooseTargets({ commanders: zone, cards, identity });
     return {
         cards,
         identity,
@@ -212,7 +250,9 @@ export function buildManaLibrary(deck = {}, { format, commanders, commanderCards
         searchSlot: searches.slots,
         searchMasks: searches.masks,
         landCount: cards.filter(c => c.land).length,
-        target: chooseTarget({ commanderCards: zone, cards, identity }),
+        target: primary,
+        targets,
+        missingCommanders: missing,
         placeholder: false,
         commanders: library.commanders,
         key: libraryKey(cards)
@@ -228,7 +268,7 @@ export function buildCountsLibrary(counts = {}) {
         pipUnion: 0, fmatch: 0, rampUse: 0
     }));
     return {
-        cards, identity: [], idMask: 0, ramp: [], searchSlot: new Int8Array(0), searchMasks: [], landCount: cards.filter(c => c.land).length,
+        cards, identity: [], idMask: 0, ramp: [], searchSlot: new Int8Array(0), searchMasks: [], landCount: cards.filter(c => c.land).length, targets: [], missingCommanders: [],
         target: null, placeholder: true, commanders: [], key: `counts:${libraryKey(cards)}`
     };
 }
@@ -506,7 +546,9 @@ class Game {
         this.treasures = 0;
         this.floating = 0;      // a karoo's bounced land: you tap it before it leaves
         this.floatingMask = 0;
-        this.targetTurn = 0;
+        this.targetTurn = 0;    // the primary target's first castable turn
+        this.targetTurns = new Int8Array(MAX_TARGETS); // every target's
+        this.targetsLeft = 0;   // targets not castable yet
         this.lastCard = null;   // the land playLand() just played
         this.entry = null;
         this.firstCast = null;
@@ -514,11 +556,15 @@ class Game {
     }
 }
 
+/** Most targets tracked: every commander a deck can have (commanders.js MAX_COMMANDERS). */
+const MAX_TARGETS = 4;
+
 /** Per-game results, reused: the run records them before the next game. */
 function newOutcome(rampCount) {
     return {
         mana: new Uint8Array(SIM_TURNS + 1),
         targetTurn: 0,
+        targetTurns: new Int8Array(MAX_TARGETS),
         firstCast: new Int8Array(rampCount),
         firstSeen: new Int8Array(rampCount)
     };
@@ -649,8 +695,11 @@ function playLand(run, g) {
     if (bump > 0) {
         const cap0 = readyMana(g);
         const hi = cap0 + bump;
-        const target = run.targetCard;
-        if (target && !g.targetTurn && target.playMv > cap0 && target.playMv <= hi) matters = true;
+        // Every commander you can't cast yet counts, as if it were in hand.
+        for (let i = 0; i < run.targetCount && !matters; i++) {
+            const mv = run.targetCards[i].playMv;
+            if (!g.targetTurns[i] && mv > cap0 && mv <= hi) matters = true;
+        }
         for (let i = 0; i < n && !matters; i++) {
             const mv = hand[i].playMv;
             if (!hand[i].land && mv != null && mv > cap0 && mv <= hi) matters = true;
@@ -695,10 +744,18 @@ function playLand(run, g) {
     return tapped ? 1 : 2;
 }
 
+/** Mark every target the pool can pay for now (each checked on its own, nothing spent). */
 function checkTarget(run, g) {
-    if (run.targetCard && !g.targetTurn && pay(run.targetCard) >= 0) {
-        g.targetTurn = g.t;
-        if (g.entry) g.entry.target = true;
+    if (!g.targetsLeft) return;
+    for (let i = 0; i < run.targetCount; i++) {
+        if (g.targetTurns[i] || pay(run.targetCards[i]) < 0) continue;
+        g.targetTurns[i] = g.t;
+        g.targetsLeft--;
+        if (i === run.primary) g.targetTurn = g.t;
+        if (g.entry) {
+            if (i === run.primary) g.entry.target = true;
+            g.entry.castable.push(run.targets[i].name);
+        }
     }
 }
 
@@ -916,6 +973,8 @@ function resetGame(run, g, hand0, handLen, lib0, libLen, out, tracked, found0) {
     g.floating = 0;
     g.floatingMask = 0;
     g.targetTurn = 0;
+    g.targetTurns.fill(0);
+    g.targetsLeft = run.targetCount;
     g.lastCard = null;
     g.entry = null;
     g.firstCast = tracked ? out.firstCast.fill(0) : null;
@@ -961,6 +1020,8 @@ function copyGame(src, dst) {
     dst.floating = src.floating;
     dst.floatingMask = src.floatingMask;
     dst.targetTurn = src.targetTurn;
+    dst.targetTurns.set(src.targetTurns);
+    dst.targetsLeft = src.targetsLeft;
     dst.lastCard = src.lastCard;
     dst.entry = null;
     dst.firstCast = null;
@@ -977,7 +1038,7 @@ function copyGame(src, dst) {
  */
 function beginTurn(run, g, t, log, mana, rampOn) {
     g.t = t;
-    const entry = log ? { turn: t, drew: null, lands: [], cast: [], mana: 0, colors: 0, target: false, landsInPlay: 0 } : null;
+    const entry = log ? { turn: t, drew: null, lands: [], cast: [], mana: 0, colors: 0, target: false, castable: [], landsInPlay: 0 } : null;
     g.entry = entry;
     g.floating = 0;
     g.floatingMask = 0;
@@ -991,7 +1052,7 @@ function beginTurn(run, g, t, log, mana, rampOn) {
     g.dropsUsed = 0;
     while (g.dropsUsed < g.drops && playLand(run, g)) g.dropsUsed++;
 
-    if (!entry && g.targetTurn && !(rampOn && g.rampInHand > 0)) {
+    if (!entry && !g.targetsLeft && !(rampOn && g.rampInHand > 0)) {
         mana[t] = Math.min(MAX_MANA, readyMana(g));
         return;
     }
@@ -1034,6 +1095,12 @@ function endTurn(g, log) {
     }
 }
 
+/** Copy a finished game's target turns into its outcome. */
+function settle(g, out) {
+    out.targetTurn = g.targetTurn;
+    out.targetTurns.set(g.targetTurns);
+}
+
 /**
  * Play one goldfish game from a dealt hand into `out`.
  * @param {Object} run - simulator settings (see createRun)
@@ -1051,7 +1118,7 @@ function playGame(run, g, hand0, handLen, lib0, libLen, rampOn, log, out) {
         if (rampOn) rampPhase(run, g, -2);
         endTurn(g, log);
     }
-    out.targetTurn = g.targetTurn;
+    settle(g, out);
     return out;
 }
 
@@ -1080,9 +1147,10 @@ function playPair(run, log) {
         if (first !== -1) rampPhase(run, g, first);
         endTurn(g, log);
     }
-    a.targetTurn = g.targetTurn;
+    settle(g, a);
     b.mana.set(a.mana);
     b.targetTurn = a.targetTurn;
+    b.targetTurns.set(a.targetTurns);
     if (!fork) return;
     // The twin stands where the ramp game cast its first ramp spell: it ends
     // that turn without ramp and plays the rest with lands only.
@@ -1092,7 +1160,7 @@ function playPair(run, log) {
         beginTurn(run, twin, t, null, b.mana, false);
         endTurn(twin, null);
     }
-    b.targetTurn = twin.targetTurn;
+    settle(twin, b);
 }
 
 // ── Many games ──────────────────────────────────────────────────────────────
@@ -1108,7 +1176,9 @@ export function createRun(lib, { format = null, onPlay = true, treasure = false,
     const T = SIM_TURNS;
     const cards = lib?.cards ?? [];
     const rampCount = lib?.ramp?.length ?? 0;
-    const targetCard = lib?.target?.card ?? null;
+    // Every commander is a target; the primary one (the most expensive) leads.
+    const targets = (lib?.targets?.length ? lib.targets : lib?.target ? [lib.target] : []).slice(0, MAX_TARGETS);
+    const targetCards = targets.map(t => t.card);
     // Land-search counts over the whole deck: a dealt library is the deck less the hand.
     const found0 = new Int32Array(MAX_SEARCHES);
     for (const c of cards) for (let m = c.fmatch; m; m &= m - 1) found0[lowBit(m)]++;
@@ -1116,14 +1186,20 @@ export function createRun(lib, { format = null, onPlay = true, treasure = false,
         hist: Array.from({ length: T + 1 }, () => new Int32Array(MAX_MANA + 1)),
         // first[t][k]: games that first had k+ mana on turn t
         first: Array.from({ length: T + 1 }, () => new Int32Array(MAX_MANA + 1)),
-        target: new Int32Array(T + 2)
+        // games whose target was first castable on turn t (T + 1: not by turn T)
+        target: new Int32Array(T + 2),
+        targets: targets.map(() => new Int32Array(T + 2)),
+        all: new Int32Array(T + 2) // …every target castable (each at least once)
     });
     return {
         lib,
         cards,
         target: lib?.target ?? null,
-        targetCard,
-        targetPips: targetCard ? targetCard.pips.reduce((m, p) => m | p, 0) : 0,
+        targets,
+        targetCards,
+        targetCount: targets.length,
+        primary: Math.max(0, targets.indexOf(lib?.target)),
+        targetPips: targetCards.reduce((m, c) => c.pips.reduce((x, p) => x | p, m), 0),
         searchSlot: lib?.searchSlot && lib?.searchMasks ? lib.searchSlot : null,
         searchMasks: lib?.searchMasks ?? [],
         idMask: lib?.idMask ?? 0,
@@ -1150,6 +1226,8 @@ export function createRun(lib, { format = null, onPlay = true, treasure = false,
         ramp: mk(),
         lands: mk(),
         savedSum: 0,
+        savedBy: new Float64Array(targets.length),
+        savedAll: 0,
         mulligans: 0,
         castBy3: new Int32Array(rampCount),
         castBy4: new Int32Array(rampCount),
@@ -1158,7 +1236,14 @@ export function createRun(lib, { format = null, onPlay = true, treasure = false,
     };
 }
 
-function record(acc, res) {
+/** The turn every target had been castable by (SIM_TURNS + 1: not all of them in time). */
+function allTargetsTurn(res, count) {
+    let last = 0;
+    for (let i = 0; i < count; i++) last = Math.max(last, res.targetTurns[i] || SIM_TURNS + 1);
+    return last;
+}
+
+function record(acc, res, count) {
     let best = -1;
     for (let t = 1; t <= SIM_TURNS; t++) {
         const m = res.mana[t];
@@ -1170,6 +1255,8 @@ function record(acc, res) {
         }
     }
     acc.target[res.targetTurn || SIM_TURNS + 1]++;
+    for (let i = 0; i < count; i++) acc.targets[i][res.targetTurns[i] || SIM_TURNS + 1]++;
+    if (count > 1) acc.all[allTargetsTurn(res, count)]++;
 }
 
 /**
@@ -1191,9 +1278,12 @@ export function runBatch(run, count = run.games) {
         playPair(run, log);
         const withRamp = run.withRamp;
         const landsOnly = run.landsOnly;
-        record(run.ramp, withRamp);
-        record(run.lands, landsOnly);
+        const nT = run.targetCount;
+        record(run.ramp, withRamp, nT);
+        record(run.lands, landsOnly, nT);
         run.savedSum += (landsOnly.targetTurn || cap) - (withRamp.targetTurn || cap);
+        for (let i = 0; i < nT; i++) run.savedBy[i] += (landsOnly.targetTurns[i] || cap) - (withRamp.targetTurns[i] || cap);
+        if (nT > 1) run.savedAll += allTargetsTurn(landsOnly, nT) - allTargetsTurn(withRamp, nT);
         if (run.rampCount) {
             for (let i = 0; i < run.rampCount; i++) {
                 const c = withRamp.firstCast[i];
@@ -1206,6 +1296,8 @@ export function runBatch(run, count = run.games) {
         if (log) {
             log.targetTurn = withRamp.targetTurn;
             log.landsOnlyTargetTurn = landsOnly.targetTurn;
+            log.targetTurns = Array.from(withRamp.targetTurns.subarray(0, nT));
+            log.landsOnlyTargetTurns = Array.from(landsOnly.targetTurns.subarray(0, nT));
             run.sampleGames.push(log);
         }
     }
@@ -1276,6 +1368,17 @@ function targetStats(hist, games, mv) {
     };
 }
 
+function allStats(run, games) {
+    const mv = run.targets.reduce((m, t) => Math.max(m, t.mv), 0);
+    return {
+        count: run.targetCount,
+        mv,
+        ramp: targetStats(run.ramp.all, games, mv),
+        lands: targetStats(run.lands.all, games, mv),
+        turnsSaved: run.savedAll / games
+    };
+}
+
 /** Turn the accumulated games into the page's numbers. */
 export function finishRun(run) {
     const games = run.done;
@@ -1321,6 +1424,21 @@ export function finishRun(run) {
             lands: targetStats(run.lands.target, games, target.mv),
             turnsSaved: run.savedSum / games
         } : null,
+        // Every target (each commander), in deck order; the primary one is `target` above.
+        targets: run.targets.map((t, i) => ({
+            kind: t.kind,
+            name: t.name,
+            mv: t.mv,
+            cost: t.cost,
+            primary: i === run.primary,
+            ramp: targetStats(run.ramp.targets[i], games, t.mv),
+            lands: targetStats(run.lands.targets[i], games, t.mv),
+            turnsSaved: run.savedBy[i] / games
+        })),
+        // Every commander castable, each at least once (two or more commanders only):
+        // the per-game latest of their turns. On curve = by the most expensive one's turn.
+        all: run.targetCount > 1 ? allStats(run, games) : null,
+        missingCommanders: lib.missingCommanders ?? [],
         mulliganRate: run.mulligans / games,
         ramp,
         samples: run.sampleGames
@@ -1332,14 +1450,15 @@ export function finishRun(run) {
  * mulligan. For tests, and for checking what the model does with a hand.
  * @param {Object} lib - buildManaLibrary() output
  * @param {{hand:Object[], library:Object[], format?:Object, onPlay?:boolean, treasure?:boolean, rampOn?:boolean}} opts
- * @returns {{mana:number[], targetTurn:number, log:Object}} mana[t] for t = 1…SIM_TURNS (index 0 unused)
+ * @returns {{mana:number[], targetTurn:number, targetTurns:number[], log:Object}} mana[t] for t = 1…SIM_TURNS (index 0 unused);
+ *   targetTurns: each target's first castable turn (0 = not by SIM_TURNS)
  */
 export function playScriptedGame(lib, { hand = [], library = [], format = null, onPlay = true, treasure = false, rampOn = true } = {}) {
     const run = createRun(lib, { format, onPlay, treasure, games: 0 });
     const log = { hand: hand.map(c => c.name), mulligans: 0, turns: [] };
     const game = new Game(hand.length + library.length + run.cards.length);
     const res = playGame(run, game, hand, hand.length, library, library.length, rampOn, log, newOutcome(run.rampCount));
-    return { mana: Array.from(res.mana), targetTurn: res.targetTurn, log };
+    return { mana: Array.from(res.mana), targetTurn: res.targetTurn, targetTurns: Array.from(res.targetTurns.subarray(0, run.targetCount)), log };
 }
 
 /** Run everything synchronously (tests, workers, small decks). */
@@ -1350,6 +1469,38 @@ export function simulateManaDevelopment(lib, opts = {}) {
 }
 
 // ── Words ────────────────────────────────────────────────────────────────────
+
+/**
+ * One row per commander (deck order) and a last row for all of them together
+ * — the page's commanders table, for decks with two or more. Each says when
+ * the commander is usually castable (the middle half of games), its on-curve
+ * chance, and the same for lands alone. Empty with one commander or none.
+ * @param {Object|null} r - finishRun() output
+ * @returns {Array<{name:string|null, cost:string, mv:number, primary:boolean, all:boolean,
+ *   onCurve:number, onCurveTurn:number, when:string, landsOnCurve:number, landsWhen:string, saved:number}>}
+ */
+export function commanderRows(r) {
+    if (!r?.all || (r.targets?.length ?? 0) < 2) return [];
+    const row = (x, extra) => ({
+        cost: '', primary: false, all: false, ...extra,
+        mv: x.mv,
+        onCurve: x.ramp.onCurve,
+        onCurveTurn: x.ramp.onCurveTurn,
+        when: turnRange(x.ramp.p25, x.ramp.p75),
+        landsOnCurve: x.lands.onCurve,
+        landsWhen: turnRange(x.lands.p25, x.lands.p75),
+        saved: x.turnsSaved
+    });
+    return [
+        ...r.targets.map(x => row(x, { name: x.name, cost: x.cost, primary: x.primary })),
+        row(r.all, { name: null, all: true })
+    ];
+}
+
+/** "a", "a and b", "a, b and c". */
+function listWords(items) {
+    return items.length <= 2 ? items.join(' and ') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
 
 /** "turn 5", "turn 5 or 6", "turns 5–7", "after turn 12". */
 export function turnRange(lo, hi) {
@@ -1385,8 +1536,17 @@ export function summarize(r) {
         : `With <strong>${r.lands}</strong> ${plural(r.lands, 'land')} and <strong>${r.rampCount}</strong> ${plural(r.rampCount, 'ramp piece')}`;
     let html = `${opener} you typically have <strong>${typical} mana on turn ${CHECK_TURN}</strong>`;
     const t = r.target;
+    // Two or more commanders: each gets its own turn, and "both" carries the tone and the saving.
+    const all = r.all?.ramp && (r.targets?.length ?? 0) > 1 ? r.all : null;
     let tone = 'flat';
-    if (t?.ramp) {
+    if (all) {
+        const each = r.targets.slice().sort((a, b) => a.mv - b.mv).map(x => (x.ramp.median > SIM_TURNS
+            ? `${cardRef(x.name)} not until after <strong>turn ${SIM_TURNS}</strong>`
+            : `${cardRef(x.name)} on <strong>${turnRange(x.ramp.p25, x.ramp.p75)}</strong>`));
+        html += ` and can cast ${listWords(each)}`;
+        const p = all.ramp.onCurve;
+        tone = p >= 0.6 ? 'good' : p >= 0.35 ? 'warn' : 'bad';
+    } else if (t?.ramp) {
         const who = t.kind === 'commander' ? cardRef(t.name) : `your top end (${cardRef(t.name)}, ${t.mv} mana)`;
         const when = turnRange(t.ramp.p25, t.ramp.p75);
         html += t.ramp.median > SIM_TURNS
@@ -1399,6 +1559,12 @@ export function summarize(r) {
         html += '. Import a decklist to count ramp and colours.';
     } else if (r.rampCount === 0) {
         html += ' — the model found no ramp it can count, so this is your lands alone.';
+    } else if (all) {
+        const saved = all.turnsSaved;
+        const them = all.count === 2 ? 'both' : `all ${all.count}`;
+        html += saved >= 0.25
+            ? ` — ramp has ${them} castable <strong>${turnsWord(saved)}</strong> sooner than lands alone.`
+            : ` — your ramp barely changes when ${them} come down (${turnsWord(Math.max(0, saved))} sooner than lands alone).`;
     } else if (t?.ramp) {
         const saved = t.turnsSaved;
         html += saved >= 0.25

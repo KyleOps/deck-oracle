@@ -9,6 +9,12 @@
  * slow / check / karoo lands, land searches to the battlefield and to hand
  * with every filter, extra and one-off land drops, playing from the top,
  * sacrificing a land, Treasure on and off, play and draw, Commander, 60 and 40.
+ *
+ * One deliberate change since: with two or more commanders every commander is
+ * a target (the land drop and the colours you fetch care about each one you
+ * can't cast yet), where the reference raced the most expensive alone. So the
+ * comparison uses decks with one target — the example deck is played with The
+ * Sixth Doctor alone — where the rules are unchanged.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -54,9 +60,17 @@ const STOMPY = deckOf({
     'Wild Growth': 2, Overgrowth: 1, 'Priest of Titania': 2, Bear: 8, Shock: 4, Dreadmaw: 4, 'Courser of Kruphix': 2
 });
 
+/** The example deck with one commander in the command zone (Susan Foreman goes back to the list). */
+const SUSAN = DEFAULT_DECK_DATA.commanders.find(c => c.name === 'Susan Foreman');
+const DOCTOR = {
+    ...DEFAULT_DECK_DATA,
+    cardsByName: { ...DEFAULT_DECK_DATA.cardsByName, [SUSAN.name]: { ...SUSAN.card, count: 1 } },
+    commanders: DEFAULT_DECK_DATA.commanders.filter(c => c.name === 'The Sixth Doctor')
+};
+
 const CASES = [
-    ['the example Commander deck', () => MD.buildManaLibrary(DEFAULT_DECK_DATA), { format: FORMATS.commander }],
-    ['the example deck with Treasure', () => MD.buildManaLibrary(DEFAULT_DECK_DATA), { format: FORMATS.commander, treasure: true, seed: 99 }],
+    ['the example Commander deck (The Sixth Doctor alone)', () => MD.buildManaLibrary(DOCTOR), { format: FORMATS.commander }],
+    ['the example deck with Treasure', () => MD.buildManaLibrary(DOCTOR), { format: FORMATS.commander, treasure: true, seed: 99 }],
     ['a ramp-heavy 60 on the play', () => MD.buildManaLibrary(RAMPY, { multiplayer: false }), { format: FORMATS.constructed, onPlay: true }],
     ['a ramp-heavy 60 on the draw with Treasure', () => MD.buildManaLibrary(RAMPY, { multiplayer: false }), { format: FORMATS.constructed, onPlay: false, treasure: true, seed: 7 }],
     ['a 40-card dork deck', () => MD.buildManaLibrary(STOMPY, { multiplayer: false }), { format: FORMATS.limited, seed: 2024 }],
@@ -78,10 +92,15 @@ function project(r) {
         mulliganRate: r.mulliganRate,
         ramp: r.ramp.map(x => ({ name: x.name, count: x.count, counted: x.counted, castBy3: x.castBy3, castBy4: x.castBy4, seenBy4: x.seenBy4 })),
         target: t ? { kind: t.kind, name: t.name, mv: t.mv, cost: t.cost, ramp: t.ramp, lands: t.lands, turnsSaved: t.turnsSaved } : null,
-        samples: r.samples.map(g => ({
-            hand: g.hand, mulligans: g.mulligans, targetTurn: g.targetTurn, landsOnlyTargetTurn: g.landsOnlyTargetTurn,
-            turns: g.turns.map(e => ({ turn: e.turn, drew: e.drew, lands: e.lands, cast: e.cast, mana: e.mana, colors: e.colors, target: e.target, landsInPlay: e.landsInPlay }))
-        }))
+        samples: r.samples.map(g => ({ ...projectLog(g), targetTurn: g.targetTurn, landsOnlyTargetTurn: g.landsOnlyTargetTurn }))
+    };
+}
+
+/** A sample game's log, in the fields both engines write. */
+function projectLog(g) {
+    return {
+        hand: g.hand, mulligans: g.mulligans,
+        turns: g.turns.map(e => ({ turn: e.turn, drew: e.drew, lands: e.lands, cast: e.cast, mana: e.mana, colors: e.colors, target: e.target, landsInPlay: e.landsInPlay }))
     };
 }
 
@@ -117,13 +136,13 @@ describe('Mana Development engine matches the reference engine', () => {
                 const b = REF.playScriptedGame(lib, { hand, library, format: FORMATS.constructed, rampOn, treasure: s % 2 === 0 });
                 assert.deepEqual(a.mana, b.mana);
                 assert.equal(a.targetTurn, b.targetTurn);
-                assert.deepEqual(a.log, b.log);
+                assert.deepEqual(projectLog(a.log), projectLog(b.log));
             }
         }
     });
 
     it('is at least 30% faster than the reference on the example deck', () => {
-        const lib = MD.buildManaLibrary(DEFAULT_DECK_DATA);
+        const lib = MD.buildManaLibrary(DOCTOR);
         const opts = { format: FORMATS.commander, games: 2000 };
         const live = medianMs(() => MD.simulateManaDevelopment(lib, opts), 5);
         const ref = medianMs(() => REF.simulateManaDevelopment(lib, opts), 5);
