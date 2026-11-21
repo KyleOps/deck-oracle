@@ -233,9 +233,11 @@ describe('withAlpha', () => {
         assert.equal(withAlpha('rgba(1,2,3,0.9)', 0.25), 'rgba(1, 2, 3, 0.25)');
     });
 
-    it('returns anything else unchanged', () => {
+    it('returns anything else unchanged, and a missing colour as an empty string', () => {
         assert.equal(withAlpha('transparent', 0.5), 'transparent');
-        assert.equal(withAlpha('#abc', 0.5), '#abc');
+        assert.equal(withAlpha(' #abc ', 0.5), '#abc');
+        assert.equal(withAlpha(null, 0.5), '');
+        assert.equal(withAlpha(undefined, 0.5), '');
     });
 });
 

@@ -67,25 +67,27 @@ export const TX_CHART = {
 };
 
 /**
- * A colour at the given opacity: `#rrggbb`, `rgb()` and `rgba()` become
- * `rgba(r, g, b, alpha)`; anything else (a name, `transparent`) is returned
- * unchanged.
+ * A colour at the given opacity — pass live TX_CHART values, so faded series
+ * follow the theme. `#rrggbb`, `rgb()` and `rgba()` become
+ * `rgba(r, g, b, alpha)`; anything else (a name, `transparent`) comes back
+ * trimmed but otherwise unchanged, and a missing colour as ''.
  * @param {string} color
  * @param {number} alpha - 0..1
  * @returns {string}
  */
 export function withAlpha(color, alpha) {
-    const hex = String(color).trim().match(/^#([0-9a-f]{6})$/i);
+    const value = String(color ?? '').trim();
+    const hex = value.match(/^#([0-9a-f]{6})$/i);
     if (hex) {
         const n = parseInt(hex[1], 16);
         return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
     }
-    const rgb = String(color).match(/rgba?\(([^)]+)\)/);
+    const rgb = value.match(/rgba?\(([^)]+)\)/);
     if (rgb) {
         const [r, g, b] = rgb[1].split(',').map(v => v.trim());
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
-    return color;
+    return value;
 }
 
 /**
