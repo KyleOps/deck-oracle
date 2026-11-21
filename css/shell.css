@@ -735,57 +735,6 @@
 
 .panel { position: relative; }
 
-/* Panel header band */
-.calc-body .tx-h {
-    text-transform: none;
-    background: transparent;
-}
-
-.tx-h {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    min-height: 42px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--tx-rule);
-    font-size: var(--t-xs);
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    color: var(--tx-bright);
-}
-
-.tx-h-r {
-    font-size: var(--t-label);
-    font-weight: 500;
-    color: var(--tx-dim);
-    letter-spacing: 0;
-    text-align: right;
-}
-
-/* Hero stats: the answer, big */
-.tx-stat-label {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
-
-.tx-stat-value {
-    font-family: var(--font-mono);
-    font-weight: 600;
-    letter-spacing: -0.03em;
-    color: var(--tx-bright);
-    line-height: 1.05;
-    margin: 6px 0 4px;
-}
-
-.tx-stat-sub {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-}
-
 /* Sticky rail sits under the topbar now */
 @container shell (min-width: 1040px) {
     .calc-body .main-grid.single-column > .panel-config {
@@ -1101,7 +1050,9 @@
 
 .import-progress {
     height: 3px;
+    margin-top: 4px;
     background: var(--tx-rule);
+    border: 1px solid var(--tx-rule);
     border-radius: 3px;
     overflow: hidden;
     opacity: 0;
@@ -1121,11 +1072,13 @@
     min-height: 1.4em;
     margin-top: 8px;
     font-size: var(--t-xs);
+    letter-spacing: var(--track-label);
     color: var(--tx-mid);
 }
 
 .import-status.error { color: var(--tx-bad); }
 .import-status.success { color: var(--tx-good); }
+.import-status.loading { color: var(--tx-accent); }
 .import-warnings { display: block; margin-top: 4px; color: var(--tx-warn); }
 
 /* ---------- Command palette ---------- */
@@ -1677,7 +1630,7 @@
 }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-label); color: var(--tx-mid); }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-label); letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-mid); }
 .legend-swatch { width: 10px; height: 10px; border-radius: 3px; }
 
 .meter {

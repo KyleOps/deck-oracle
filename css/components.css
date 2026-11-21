@@ -1,30 +1,32 @@
-/* ==================== TERMINAL COMPONENTS ==================== */
+/* ==================== CALCULATOR COMPONENTS ====================
+   The shared pieces every calculator page is built from: panel header band,
+   hero stats, tables, controls, charts, samples, collapsibles and layout.
+   Page-specific styles live in each view's `styles` export (js/views). */
 
 /* ==================== PANEL HEADER BAND ==================== */
 
 .tx-h {
-    font-size: var(--t-label);
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--tx-rule);
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    background: var(--tx-panel);
-    font-family: inherit;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 42px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--tx-rule);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--tx-bright);
 }
 
-.tx-h .tx-h-r {
-    color: var(--tx-mid);
+/* Right-hand metadata: what the panel covers ("exact odds", "2,000 shuffles"). */
+.tx-h-r {
     font-size: var(--t-label);
-    letter-spacing: 0.08em;
-    text-transform: none;
-    cursor: pointer;
+    font-weight: 500;
+    letter-spacing: var(--track-label);
+    color: var(--tx-mid);
+    text-align: right;
 }
-
-.tx-h .tx-h-r:hover { color: var(--tx-bright); }
 
 /* ==================== TERMINAL RANGE SLIDER ==================== */
 
@@ -62,50 +64,53 @@
 /* ==================== HERO STAT BLOCK ==================== */
 
 .tx-stat {
-    padding: 20px 24px;
+    padding: 18px 20px;
     border-right: 1px solid var(--tx-rule);
 }
 
 .tx-stat:last-child { border-right: none; }
 
 .tx-stat-label {
-    font-size: var(--t-micro);
-    font-weight: 500;
-    letter-spacing: var(--track-wide);
+    margin-bottom: 4px;
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: var(--track-label);
     text-transform: uppercase;
     color: var(--tx-dim);
-    margin-bottom: 10px;
 }
 
 .tx-stat-value {
+    margin: 6px 0 4px;
+    font-family: var(--font-mono);
     font-size: var(--t-display);
-    font-weight: 700;
-    line-height: 0.92;
-    letter-spacing: var(--track-display);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    color: var(--tx-bright);
     font-feature-settings: 'tnum' 1;
 }
 
 .tx-stat-value.medium {
     font-size: var(--t-xl);
-    font-weight: 600;
     letter-spacing: var(--track-tight);
 }
 
 .tx-stat-sub {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
     margin-top: 10px;
-    letter-spacing: 0;
+    font-size: var(--t-xs);
     line-height: 1.45;
+    letter-spacing: 0;
+    color: var(--tx-mid);
 }
 
-/* Inline p-bar for sweep table */
+/* Inline probability bar for sweep tables */
 .tx-p-bar {
     display: inline-block;
     width: 90px;
     height: 6px;
     background: var(--tx-bg);
     border: 1px solid var(--tx-rule);
+    border-radius: 4px;
     vertical-align: middle;
     overflow: hidden;
 }
@@ -114,6 +119,7 @@
     display: block;
     height: 100%;
     background: var(--tx-green);
+    border-radius: 4px;
     opacity: 0.7;
     transition: width 0.15s;
 }
@@ -171,10 +177,9 @@
 }
 
 .tx-sweep-table thead th {
-    font-size: var(--t-micro);
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: 0.04em;
     color: var(--tx-dim);
     padding: 8px 14px;
     border-bottom: 1px solid var(--tx-rule);
@@ -190,8 +195,12 @@
     padding: 6px 14px;
     text-align: right;
     border-bottom: 1px solid var(--tx-rule);
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
     color: var(--tx-text);
 }
+
+.tx-sweep-table tbody td.ta-l { font-family: var(--font-body); }
 
 .tx-sweep-table tbody tr { transition: background 0.1s; }
 .tx-sweep-table tbody tr:hover { background: var(--tx-panel-alt); }
@@ -199,9 +208,7 @@
 .tx-sweep-table tbody tr.active-row { background: var(--tx-row-hi); }
 .tx-sweep-table tbody tr.active-row td { color: var(--tx-bright); font-weight: 600; }
 
-.tx-sweep-table tbody tr.rec-row td:first-child {
-    box-shadow: inset 2px 0 0 var(--tx-amber);
-}
+.tx-sweep-table tbody tr.rec-row td:first-child { box-shadow: inset 3px 0 0 var(--tx-accent); }
 
 /* ==================== INPUT GROUPS ==================== */
 
@@ -280,9 +287,10 @@
 
 /* ==================== TYPE GRID ==================== */
 
+/* Intrinsically responsive: as many across as fit, folding with no breakpoint. */
 .type-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
     gap: 10px;
     margin: 0 16px 16px;
 }
@@ -388,61 +396,26 @@
     font-feature-settings: 'tnum' 1;
 }
 
-/* ==================== IMPORT STATUS ==================== */
-
-.import-status {
-    margin-top: var(--spacing-sm);
-    font-size: var(--t-label);
-    letter-spacing: 0.08em;
-    min-height: 16px;
-}
-
-.import-status.success { color: var(--tx-green); }
-.import-status.error   { color: var(--tx-red); }
-.import-status.loading { color: var(--tx-amber); }
-
-.import-progress {
-    margin-top: var(--spacing-xs);
-    height: 2px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    overflow: hidden;
-    opacity: 0;
-    transition: opacity 0.12s;
-}
-
-.import-progress.visible { opacity: 1; }
-
-.import-progress-bar {
-    height: 100%;
-    width: 0%;
-    background: var(--tx-amber);
-    transition: width 0.3s ease;
-}
-
-.import-progress-bar::after { display: none; }
-
-@keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.8; } }
-@keyframes fadeInUp { from { opacity: 0; } to { opacity: 1; } }
-@keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
-
 /* ==================== CHARTS ==================== */
 
+/* Chart.js reflows to its container (including on container-query changes),
+   but its ResizeObserver settles a few hundred ms later. Clip during that
+   window so the canvas can't transiently push past the shell, and clear the
+   grid min-width:auto default that would otherwise stop the column shrinking. */
 .chart-container {
     position: relative;
-    padding: 0;
-    margin: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
 }
 
-.legend-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--tx-mid);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    font-size: var(--t-micro);
+.chart-container > canvas {
+    min-width: 0;
+    max-width: 100%;
 }
+
+/* Breathing room inside the card */
+.calc-body .chart-container { padding: 10px 12px 6px; }
 
 /* ==================== TABLE WRAPPER ==================== */
 
@@ -468,14 +441,11 @@
     padding: 2px 6px;
     margin: 2px;
     border: 1px solid var(--tx-rule);
+    border-radius: var(--radius-xs);
     font-size: var(--t-label);
     font-weight: 400;
     cursor: default;
-    border-radius: 0;
-    transition: none;
 }
-
-.reveal-card:hover { transform: none; }
 
 .reveal-card.creature     { background: var(--tx-panel-alt); border-color: var(--type-creature); color: var(--type-creature); }
 .reveal-card.sorcery      { background: var(--tx-panel-alt); border-color: var(--type-sorcery); color: var(--type-sorcery); }
@@ -486,64 +456,6 @@
 .reveal-card.battle       { background: var(--tx-panel-alt); border-color: var(--type-battle); color: var(--type-battle); }
 .reveal-card.land         { background: var(--tx-panel-alt); border-color: var(--type-land); color: var(--type-land); }
 .reveal-card.dual         { border-style: dashed; }
-
-/* ==================== DISTRIBUTION CHART ==================== */
-
-.distribution-chart {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 0.9em;
-    width: 100%;
-    padding: 0 14px;
-}
-
-.dist-row {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-}
-
-.dist-label {
-    min-width: 80px;
-    text-align: right;
-    color: var(--tx-mid);
-    white-space: nowrap;
-    font-size: var(--t-label);
-}
-
-.dist-bar-container {
-    flex: 1;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    height: 12px;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-}
-
-.dist-bar {
-    height: 100%;
-    min-width: 2px;
-    background: var(--tx-amber);
-    transition: width 0.3s ease;
-}
-
-.dist-value {
-    width: 52px;
-    text-align: right;
-    font-weight: 600;
-    color: var(--tx-bright);
-    font-feature-settings: 'tnum' 1;
-}
-
-.dist-marker {
-    font-size: var(--t-micro);
-    color: var(--tx-amber);
-    white-space: nowrap;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
 
 /* ==================== GLOBAL CONTROL THEMING ====================
    Native form controls inside calculator panels used to render with the OS
@@ -712,14 +624,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     height: 13px;
 }
 
-/* Body copy inside calculators: terminal-sized, not browser-default. */
-.calculator-content .panel > p,
-.calculator-content .panel > section > p {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-    line-height: 1.6;
-}
-
 /* ==================== FOCUS ====================
    One visible, consistent focus ring in the brand accent. Keyboard users get
    the same affordance everywhere instead of the browser default in some places
@@ -748,10 +652,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
     max-width: 720px;
 }
 
-/* Prose measure — roughly 70 characters. */
+/* Body copy directly in a panel: dense, and a ~70-character measure. */
 .calculator-content .panel > p,
 .calculator-content .panel > section > p {
     max-width: 70ch;
+    font-size: var(--t-xs);
+    line-height: 1.6;
+    color: var(--tx-mid);
     text-wrap: pretty;
 }
 
@@ -824,72 +731,22 @@ input[type="range"].tx-slider::-moz-range-thumb {
     .chart-container { min-height: 300px; }
 }
 
-/* ==================== FLUID SPACING ====================
-   Padding scales with the container so dense screens stay dense and roomy ones
-   breathe, without a stack of breakpoints. */
-.tx-h,
-.panel > .panel-content {
-    padding-inline: clamp(12px, 1.4cqi, 20px);
-}
-
-/* Card-type inputs: intrinsically responsive — three across when the rail has
-   room, folding to two or one as it narrows, with no breakpoint. */
-.type-grid {
-    grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
-}
-
-/* Chart containers: Chart.js reflows to its container (including on container-query
-   changes), but its ResizeObserver settles a few hundred ms later. Clip during that
-   window so the canvas can't transiently push past the shell, and clear the grid
-   min-width:auto default that would otherwise stop the column ever shrinking. */
-.chart-container,
-.chart-container > canvas {
-    min-width: 0;
-    max-width: 100%;
-}
-
-.chart-container { overflow: hidden; }
-
 /* Grid and flex children default to min-width:auto, which makes wide content
    (charts, long tables) prevent their column from shrinking at all. */
 .main-grid > .panel {
     min-width: 0;
 }
 
-/* ==================== ACCENT DISCIPLINE ====================
-   Solid amber is the loudest thing in the palette, so it marks exactly one
-   thing: the single primary action of a view. The opponent panel was filling
-   two buttons and a tab with it, which spends the accent's meaning. These
-   become outlined controls and an underlined tab, matching the main nav. */
+/* ==================== DISTRIBUTION ROWS ==================== */
 
-.import-btn,
-.calculator-content .import-btn {
-    background: transparent;
-    border: 1px solid var(--tx-accent);
-    color: var(--tx-accent);
-    font-family: inherit;
-    font-size: var(--t-xs);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 7px 16px;
-    border-radius: 0;
-    cursor: pointer;
-    transition: background var(--transition-fast), color var(--transition-fast);
+.distribution-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: 0 14px;
+    font-size: 0.9em;
 }
-
-.import-btn:hover:not(:disabled) {
-    background: var(--tx-accent);
-    color: var(--tx-bg);
-}
-
-.import-btn:disabled {
-    border-color: var(--tx-rule-hi);
-    color: var(--tx-dim);
-    cursor: not-allowed;
-}
-
-/* Distribution rows, shared by every calculator that shows one. */
-.distribution-chart { display: flex; flex-direction: column; gap: 2px; }
 
 .dist-row {
     display: grid;
@@ -899,31 +756,47 @@ input[type="range"].tx-slider::-moz-range-thumb {
     font-size: var(--t-xs);
 }
 
-.dist-label { color: var(--tx-mid); white-space: nowrap; }
+.dist-label {
+    min-width: 80px;
+    text-align: right;
+    font-size: var(--t-label);
+    color: var(--tx-mid);
+    white-space: nowrap;
+}
 
 .dist-bar-container {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    height: 10px;
     background: var(--tx-bg);
     border: 1px solid var(--tx-rule);
-    height: 10px;
     overflow: hidden;
 }
 
 .dist-bar {
     height: 100%;
+    min-width: 2px;
     background: var(--tx-good);
     transition: width 0.25s ease;
 }
 
+.dist-bar.is-bad  { background: var(--tx-bad); }
+.dist-bar.is-warn { background: var(--tx-accent); }
+
 .dist-value {
+    width: 52px;
     text-align: right;
+    font-weight: 600;
     color: var(--tx-bright);
     font-feature-settings: 'tnum' 1;
 }
 
 .dist-marker {
-    color: var(--tx-accent);
     font-size: var(--t-micro);
-    letter-spacing: 0.08em;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-accent);
     white-space: nowrap;
 }
 
@@ -931,9 +804,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     .dist-row { grid-template-columns: 72px 1fr 44px; }
     .dist-marker { display: none; }
 }
-
-.dist-bar.is-bad  { background: var(--tx-bad); }
-.dist-bar.is-warn { background: var(--tx-accent); }
 
 /* Shared sample-simulation controls (used by every calculator via
    generateSampleRevealsHTML). */
@@ -964,21 +834,38 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .tx-collapse { border-top: 1px solid var(--tx-rule); }
 
 .tx-collapse-head {
-    cursor: pointer;
-    padding: 10px 14px;
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-mid);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
     background: var(--tx-panel-alt);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--tx-mid);
     list-style: none;
+    cursor: pointer;
+    user-select: none;
     transition: color var(--transition-fast);
 }
 
 .tx-collapse-head::-webkit-details-marker { display: none; }
 .tx-collapse-head:hover { color: var(--tx-bright); }
-.tx-collapse-head::before { content: '▶ '; color: var(--tx-dim); }
-.tx-collapse[open] > .tx-collapse-head::before { content: '▼ '; }
+
+/* Chevron: points right when closed, down when open. */
+.tx-collapse-head::before {
+    content: '';
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    color: var(--tx-dim);
+    transform: rotate(-45deg);
+    transition: transform var(--transition-fast);
+}
+
+.tx-collapse[open] > .tx-collapse-head::before { transform: rotate(45deg); }
 
 .tx-collapse-body {
     max-height: 460px;
@@ -1560,75 +1447,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .calc-body input[type="range"]:focus-visible::-webkit-slider-thumb {
     box-shadow: 0 0 0 1px var(--tx-accent), 0 0 0 5px var(--accent-soft);
 }
-
-/* Hero stats */
-.tx-stat { padding: 18px 20px; }
-
-.tx-stat-label {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    margin-bottom: 4px;
-}
-
-.tx-stat-value { font-family: var(--font-mono); font-weight: 600; }
-
-/* Collapsible detail sections */
-.tx-collapse-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    font-size: var(--t-xs);
-    font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--tx-mid);
-    cursor: pointer;
-    list-style: none;
-    user-select: none;
-}
-
-.tx-collapse-head::before,
-.tx-collapse[open] > .tx-collapse-head::before {
-    content: '';
-    width: 7px;
-    height: 7px;
-    border-right: 1.5px solid currentColor;
-    border-bottom: 1.5px solid currentColor;
-    transform: rotate(-45deg);
-    transition: transform var(--transition-fast);
-    flex-shrink: 0;
-}
-
-.tx-collapse[open] > .tx-collapse-head::before { transform: rotate(45deg); }
-.tx-collapse-head:hover { color: var(--tx-bright); background: var(--tx-panel-alt); }
-
-/* Tables */
-.tx-sweep-table thead th {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: none;
-    color: var(--tx-dim);
-}
-
-.tx-sweep-table tbody td { font-family: var(--font-mono); font-size: var(--t-xs); }
-.tx-sweep-table tbody td.ta-l { font-family: var(--font-body); }
-
-.tx-sweep-table tbody tr.rec-row td:first-child { box-shadow: inset 3px 0 0 var(--tx-accent); }
-
-/* Probability bars inside tables */
-.tx-p-bar { border-radius: 4px; overflow: hidden; }
-.tx-p-fill { border-radius: 4px; }
-
-/* Sample reveal chips */
-.reveal-card {
-    border-radius: var(--radius-xs);
-}
-
-/* Chart wrapper: breathing room inside the card */
-.calc-body .chart-container { padding: 10px 12px 6px; }
 
 /* ==================== VISUALISATIONS (js/utils/viz.js) ====================
    Plain HTML charts: quantile dot plots, heat cells, bullet rows and
