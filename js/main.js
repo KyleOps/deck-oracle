@@ -15,13 +15,13 @@ import { findCard } from './data/images.js';
 import { FORMATS } from './utils/format.js';
 import { debounce } from './utils/simulation.js';
 import { CALCULATORS, DEFAULT_TAB } from './utils/calculatorRegistry.js';
-import { initRouter, navigate, ensureMounted, currentTab, refreshCurrent, onNavigate, onNavigated, step, tabFromUrl, mountedModule, afterFirstPage } from './shell/router.js';
+import { initRouter, navigate, ensureMounted, currentTab, onNavigate, onNavigated, step, tabFromUrl, mountedModule, afterFirstPage } from './shell/router.js';
 import { initSidebar, markRelevance, renderDeckSwitcher } from './shell/sidebar.js';
 import { initGuide, openGuide, isGuideOpen, refreshPageHeader } from './shell/pageHeader.js';
 import { initPalette, openPalette } from './shell/palette.js';
 import { initDeckDialog, openDeckDialog, renderSavedDecks } from './shell/deckDialog.js';
 import { initOverlays, toast } from './shell/overlays.js';
-import { initTheme, toggleTheme, onThemeChange } from './shell/theme.js';
+import { initTheme, toggleTheme } from './shell/theme.js';
 
 const EXAMPLE_OPPONENTS = [
     'https://moxfield.com/decks/NVsnEkQ3y02ATHYk6n1pTA',
@@ -238,7 +238,6 @@ async function init() {
         syncDeckChrome();
         renderSavedDecks();
     });
-    onThemeChange(() => refreshCurrent());
     syncDeckChrome();
     // Registers only once the first page is up (afterFirstPage), so it can be
     // wired here, before the awaits below, and still never compete with it.

@@ -5,12 +5,23 @@
  *
  * Mounting a calculator = fetch its module + view (in parallel with Chart.js
  * when it draws charts), inject the shared page header and its markup, run its
- * init() once. Every later visit is just a visibility toggle plus updateUI().
+ * init() once. Every later visit is a visibility toggle, plus updateUI() when
+ * something the page shows has changed since it last rendered (see "Revisit
+ * stamps" in calculatorBase.js).
  */
 
 import { CALCULATORS, CALCULATOR_ORDER, DEFAULT_TAB, getCalculator, loadCalculator } from '../utils/calculatorRegistry.js';
+import { invalidateRenders, markRendered, needsRender, owesRender } from '../utils/calculatorBase.js';
+import { onDeckUpdate } from '../utils/deckConfig.js';
 import { ensureChartJs } from './vendor.js';
 import { renderPageHeader, refreshPageHeader } from './pageHeader.js';
+import { onThemeChange } from './theme.js';
+
+/**
+ * Pages that render on every visit: they show state with no change event for
+ * the revisit stamp to follow (compare lists the saved-deck library).
+ */
+const RENDER_EVERY_VISIT = new Set(['compare']);
 
 let current = null;
 let navToken = 0;
@@ -143,6 +154,7 @@ export function ensureMounted(name) {
     if (mounting.has(name)) return mounting.get(name);
     const entry = getCalculator(name);
     preloadPage(name);
+    if (entry?.needsOpponents) followOpponents();
     const job = Promise.all([
         loadCalculator(name),
         entry?.charts === false ? Promise.resolve(true) : ensureChartJs()
@@ -246,12 +258,7 @@ export async function navigate(name, { history: historyMode = 'push', focus = fa
     if (token !== navToken) return; // the user moved on while this loaded
 
     panel.classList.remove('is-loading');
-    refreshPageHeader(name);
-    try {
-        record.module.updateUI?.();
-    } catch (err) {
-        console.error(`${name} failed to render:`, err);
-    }
+    if (needsRender(name) || RENDER_EVERY_VISIT.has(name)) render(name, record);
     afterListeners.forEach(cb => {
         try { cb(name, panel); } catch (err) { console.error('Navigation listener failed:', err); }
     });
@@ -259,15 +266,36 @@ export async function navigate(name, { history: historyMode = 'push', focus = fa
     settleFirstPage();
 }
 
-/** Re-render whatever is on screen (deck change, theme change). */
+/** Render a mounted page: its header's deck badge and its updateUI(). */
+function render(name, record) {
+    markRendered(name);
+    refreshPageHeader(name);
+    try {
+        record.module.updateUI?.();
+    } catch (err) {
+        owesRender(name);
+        console.error(`${name} failed to render:`, err);
+    }
+}
+
+/** Re-render whatever is on screen. */
 export function refreshCurrent() {
     if (!current || !mounted.has(current)) return;
-    refreshPageHeader(current);
-    try {
-        mounted.get(current).module.updateUI?.();
-    } catch (err) {
-        console.error(`${current} failed to re-render:`, err);
-    }
+    render(current, mounted.get(current));
+}
+
+let followingOpponents = false;
+
+/**
+ * Opponent decklists are shared state for the pages that read them. Loaded
+ * with the first such page, so other pages never pay for it.
+ */
+function followOpponents() {
+    if (followingOpponents) return;
+    followingOpponents = true;
+    import('../utils/opponentState.js')
+        .then(OpponentState => OpponentState.onOpponentChange(invalidateRenders))
+        .catch(() => { followingOpponents = false; });
 }
 
 /** Step to the previous/next calculator in navigation order. */
@@ -286,6 +314,15 @@ export function tabFromUrl() {
 export function initRouter() {
     window.addEventListener('popstate', () => {
         navigate(tabFromUrl(), { history: 'none' });
+    });
+
+    // Shared state every page may show: when it changes, hidden pages render
+    // on their next visit, and the visible page re-themes now (a deck change
+    // re-renders it through its own listener).
+    onDeckUpdate(invalidateRenders);
+    onThemeChange(() => {
+        invalidateRenders();
+        refreshCurrent();
     });
 
     // Any in-app link of the form <a data-tab-link="key"> navigates without a reload.

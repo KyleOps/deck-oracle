@@ -3,6 +3,13 @@
  * Standardizes chart creation and updates across all calculators.
  */
 
+import { owesRender } from './calculatorBase.js';
+
+/** The page (calculator key) a canvas belongs to, or null. */
+function pageOf(canvas) {
+    return canvas?.closest?.('.tab-content')?.id?.replace(/-tab$/, '') || null;
+}
+
 /**
  * Terminal chart palette.
  *
@@ -183,8 +190,12 @@ export function createOrUpdateChart(chartInstance, canvasId, config) {
     const ctx = document.getElementById(canvasId);
     if (!ctx) return null;
     // Chart.js loads lazily; offline (or before it arrives) charts are skipped
-    // rather than throwing and taking the rest of the calculator down.
-    if (typeof Chart === 'undefined') return null;
+    // rather than throwing and taking the rest of the calculator down. The
+    // page owes a render, so its next visit tries again.
+    if (typeof Chart === 'undefined') {
+        owesRender(pageOf(ctx));
+        return null;
+    }
 
     // A chart built under the other theme, or whose canvas has been replaced,
     // is rebuilt from scratch — the surgical update path below deliberately
@@ -199,12 +210,13 @@ export function createOrUpdateChart(chartInstance, canvasId, config) {
     // render on init while their tab is still display:none, so the canvas is
     // 0x0; Chart.js would lay out at a fallback size and then animate as it
     // resized on first reveal, which reads as the plot flying in from a corner.
-    // switchTab() calls updateUI() for the tab being shown, so a deferred chart
-    // gets built the moment it becomes visible — at its real size.
+    // The page owes a render, so the router calls updateUI() when it is shown
+    // again, and the deferred chart gets built then — at its real size.
     // Feature-detected: the headless test DOM has no getBoundingClientRect, and
     // there is nothing to defer for there.
     if (!chartInstance && typeof ctx.getBoundingClientRect === 'function'
         && ctx.getBoundingClientRect().width === 0) {
+        owesRender(pageOf(ctx));
         return null;
     }
 
