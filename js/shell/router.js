@@ -23,6 +23,45 @@ export function currentTab() {
     return current;
 }
 
+// ── After the first page ─────────────────────────────────────────────────────
+// Background work (prefetching likely pages, the service worker's precache)
+// waits until the landing page has rendered, painted and gone idle. Idle alone
+// is not enough: while the landing page's own modules are still downloading
+// the main thread is idle too, and a prefetch then competes with them.
+
+let firstPageSettled = false;
+const settledQueue = [];
+
+/** Run `task` when the browser is next idle (or after `timeout` ms regardless). */
+export function whenIdle(task, { timeout = 3000 } = {}) {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(() => task(), { timeout });
+    else setTimeout(task, 1);
+}
+
+/** Run `task` after the next frame has been painted. */
+export function afterNextPaint(task) {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => setTimeout(task, 0));
+    else setTimeout(task, 0);
+}
+
+/**
+ * Run `task` once the first page has mounted, painted and the browser is idle.
+ * Runs at idle straight away when that has already happened.
+ * @param {Function} task
+ */
+export function afterFirstPage(task) {
+    if (firstPageSettled) whenIdle(task);
+    else settledQueue.push(task);
+}
+
+function settleFirstPage() {
+    if (firstPageSettled) return;
+    firstPageSettled = true;
+    afterNextPaint(() => settledQueue.splice(0).forEach(task => whenIdle(() => {
+        try { task(); } catch (err) { console.error('Background task failed:', err); }
+    })));
+}
+
 /** Called synchronously at the start of every navigation with the new key. */
 /** Called after a page has mounted and rendered: (name, panelElement). */
 export function onNavigated(cb) {
@@ -151,7 +190,9 @@ export async function navigate(name, { history: historyMode = 'push', focus = fa
         el.classList.toggle('active', el === panel);
     });
     if (historyMode !== 'none') writeHistory(name, historyMode);
-    if (previous !== name) window.scrollTo({ top: 0, behavior: 'instant' });
+    // Not on the first navigation: the page is already at the top, and the
+    // call would force a layout before the page's modules are even requested.
+    if (previous !== null && previous !== name) window.scrollTo({ top: 0, behavior: 'instant' });
 
     if (!mounted.has(name)) {
         panel.classList.add('is-loading');
@@ -162,7 +203,10 @@ export async function navigate(name, { history: historyMode = 'push', focus = fa
     try {
         record = await ensureMounted(name);
     } catch (err) {
-        if (token === navToken) renderLoadError(panel, name, err);
+        if (token === navToken) {
+            renderLoadError(panel, name, err);
+            settleFirstPage();
+        }
         return;
     }
     if (token !== navToken) return; // the user moved on while this loaded
@@ -178,6 +222,7 @@ export async function navigate(name, { history: historyMode = 'push', focus = fa
         try { cb(name, panel); } catch (err) { console.error('Navigation listener failed:', err); }
     });
     if (focus) mainEl()?.focus({ preventScroll: true });
+    settleFirstPage();
 }
 
 /** Re-render whatever is on screen (deck change, theme change). */
@@ -218,10 +263,9 @@ export function initRouter() {
         navigate(link.dataset.tabLink, { focus: link.closest('.nav') !== null });
     });
 
-    // Warm the cache for likely next pages once the browser is idle, so the
-    // first visit to them is instant without slowing first paint.
-    const idle = window.requestIdleCallback ?? (cb => setTimeout(cb, 1500));
-    idle(() => {
+    // Warm the cache for likely next pages once the landing page is up, so the
+    // first visit to them is instant without slowing the landing page.
+    afterFirstPage(() => {
         ['odds', 'manabase', 'hands'].forEach(name => loadCalculator(name).catch(() => {}));
     });
 }
