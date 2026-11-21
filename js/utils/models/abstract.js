@@ -23,6 +23,12 @@ import { asLibrary, expandLibrary, isLand } from '../library.js';
 import { quantile } from '../stats.js';
 import { one, pct } from '../text.js';
 
+/** The card this page casts: the cast copy is on the stack, not in the library. */
+export const ABSTRACT_PERFORMANCE = 'Abstract Performance';
+
+/** libraryOf() / deckCardList() options while it resolves (one listed copy out). */
+export const ON_STACK = Object.freeze({ exclude: [ABSTRACT_PERFORMANCE] });
+
 export const ITERATIONS = 25000;
 
 export const PILE_SIZE = 4;

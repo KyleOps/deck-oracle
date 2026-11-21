@@ -20,6 +20,12 @@ import { recommendThresholdX } from '../analysis.js';
 import { asLibrary, isLand } from '../library.js';
 import { one, pct } from '../text.js';
 
+/** The card this page casts: it is on the battlefield, not in the library. */
+export const RASHMI = 'Rashmi, Eternities Crafter';
+
+/** libraryOf() / deckCardList() options while it resolves (one listed copy out). */
+export const ON_BATTLEFIELD = Object.freeze({ exclude: [RASHMI] });
+
 /** Highest mana value tracked; anything above is folded into it. */
 export const MAX_TRACKED_MV = 20;
 

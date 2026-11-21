@@ -7,9 +7,27 @@
  */
 
 import { hashString } from '../random.js';
-import { asLibrary, cardTypes } from '../library.js';
+import { asLibrary, cardTypes, sameCard } from '../library.js';
 
 const cardLists = new WeakMap();
+
+/**
+ * A card list with one copy of `name` taken out (the spell on the stack), or
+ * the same list when it does not name the card — the card-list counterpart of
+ * libraryOf(deck, { exclude: [name] }).
+ * @param {ReadonlyArray<{name:string, count:number}>} cards
+ * @param {string} name
+ * @returns {ReadonlyArray<Object>}
+ */
+export function withoutCopy(cards, name) {
+    const list = cards ?? [];
+    const at = list.findIndex(card => card?.count > 0 && sameCard(card.name, name));
+    if (at < 0) return list;
+    const card = list[at];
+    const rest = list.filter((_, i) => i !== at);
+    if (card.count > 1) rest.splice(at, 0, { ...card, count: card.count - 1 });
+    return rest;
+}
 
 /**
  * The library's card records, or [] when only type counts are known.

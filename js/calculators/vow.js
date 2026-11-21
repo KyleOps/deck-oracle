@@ -16,7 +16,7 @@ import {
     barsHTML, bindXPresets, createSampler, fade, noticeHTML, readX, renderHowItCompares, sampleCardHTML, syncXControl
 } from '../utils/bigSpells.js';
 import { cardListKey, deckCardList, expandCards } from '../utils/models/cardList.js';
-import { VOW, analyze, buildVowLibrary, classifyForVow, commanderCopiesVow, summarize, vowSweep } from '../utils/models/vow.js';
+import { ON_STACK, VOW, analyze, buildVowLibrary, classifyForVow, commanderCopiesVow, summarize, vowSweep } from '../utils/models/vow.js';
 
 const CONFIG = Object.freeze({
     MAX_X: 30,
@@ -59,7 +59,7 @@ function resolveCopy(commanders) {
 /** The page's inputs and the library they apply to (defaults when not mounted). */
 export function readInputs() {
     const deck = DeckConfig.getDeckConfig();
-    const cards = deckCardList(deck);
+    const cards = deckCardList(deck, ON_STACK);
     const library = buildVowLibrary(cards, deck);
     const maxX = Math.max(1, Math.min(library.deckSize, CONFIG.MAX_X));
     const x = Math.min(maxX, readX('vow', CONFIG.DEFAULT_X));

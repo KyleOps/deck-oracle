@@ -14,7 +14,7 @@ import { one, pct } from '../utils/text.js';
 import { cardRef } from '../data/glossary.js';
 import {
     MILL_PER_TRIGGER, SIM_GAMES, assignFetchRoles, buildLumraLibrary, calculateFetchLandSetup, calculateLumraStats,
-    countFetchLands, expectedLandDrops, playToLumra, pt, returnTone, summariseSizes, summarize
+    countFetchLands, expectedLandDrops, handFromLibrary, ON_BATTLEFIELD, playToLumra, pt, returnTone, summariseSizes, summarize
 } from '../utils/models/lumra.js';
 
 /** Sample games listed on the page. */
@@ -48,18 +48,20 @@ function syncFetchDetection(library) {
 
 /**
  * Current deck and inputs. With a decklist the library is the list less the
- * commanders (see library.js); with bare counts it is the counts.
- * @returns {{deckSize:number, landCount:number, gyLands:number, multiplier:number, library:Object|null, fetchCount:number, turn:number, fetchSetup:Object}}
+ * commanders and the Lumra being cast (see library.js); with bare counts it
+ * is the counts.
+ * @returns {{deckSize:number, landCount:number, gyLands:number, multiplier:number, library:Object|null, openingHand:number, fetchCount:number, turn:number, fetchSetup:Object}}
  */
 export function readInputs() {
     const config = DeckConfig.getDeckConfig();
-    const library = DeckConfig.hasCardList() ? libraryOf(config) : null;
+    const library = DeckConfig.hasCardList() ? libraryOf(config, ON_BATTLEFIELD) : null;
     const deckSize = library ? library.size : DeckConfig.getDeckSize(true);
     const landCount = library
         ? library.cards.reduce((n, c) => n + (isLand(c) ? c.count : 0), 0)
         : (config.lands ?? 0);
     syncFetchDetection(library);
 
+    const openingHand = handFromLibrary(library);
     const fetchCount = intInput('lumra-fetchLands', 0, 0, deckSize);
     const turn = intInput('lumra-turn', DEFAULTS.turn, 1, 30);
     return {
@@ -68,9 +70,10 @@ export function readInputs() {
         gyLands: intInput('lumra-gyLands', DEFAULTS.gyLands, 0, 100),
         multiplier: intInput('lumra-multiplier', DEFAULTS.multiplier, 1, 10),
         library,
+        openingHand,
         fetchCount,
         turn,
-        fetchSetup: calculateFetchLandSetup(deckSize, fetchCount, turn)
+        fetchSetup: calculateFetchLandSetup(deckSize, fetchCount, turn, openingHand)
     };
 }
 
@@ -96,8 +99,8 @@ export function calculate() {
     if (deckSize === 0) return { config, results: null };
 
     const results = calculateLumraStats(deckSize, landCount, gyLands, multiplier, config.fetchSetup.expectedCracked);
-    const drops = expectedLandDrops(deckSize, landCount, turn);
-    const games = ensureLibraries(config).map(lib => playToLumra(lib, { turn, multiplier }));
+    const drops = expectedLandDrops(deckSize, landCount, turn, config.openingHand);
+    const games = ensureLibraries(config).map(lib => playToLumra(lib, { turn, multiplier, openingHand: config.openingHand }));
     const sizes = summariseSizes(games, gyLands);
     return { config, ...results, drops, games, sizes };
 }
@@ -253,12 +256,12 @@ function renderDetails(r) {
             ${renderDistributionChart(r.distribution.map(d => d.probability), 1, k => `${k} land${k === 1 ? '' : 's'}`, () => null, k => (k === 0 ? 'bad' : null))}`;
     }
 
-    const { deckSize, landCount, gyLands, multiplier, fetchCount, turn } = r.config;
+    const { deckSize, landCount, gyLands, multiplier, fetchCount, turn, openingHand } = r.config;
     const rows = [];
     for (let t = 3; t <= 12; t++) {
-        const fetch = calculateFetchLandSetup(deckSize, fetchCount, t).expectedCracked;
+        const fetch = calculateFetchLandSetup(deckSize, fetchCount, t, openingHand).expectedCracked;
         const back = calculateLumraStats(deckSize, landCount, gyLands, multiplier, fetch).totalReturned;
-        const drops = expectedLandDrops(deckSize, landCount, t);
+        const drops = expectedLandDrops(deckSize, landCount, t, openingHand);
         rows.push({ x: t, drops, back, size: drops + back });
     }
     renderSweepTable('lumra-turn-table', {

@@ -40,6 +40,12 @@ import { sampleQuantiles } from '../viz.js';
 /** Discover value printed on Chimil. */
 export const DISCOVER_N = 5;
 
+/** The card this page casts: it is on the battlefield, not in the library. */
+export const CHIMIL = 'Chimil, the Inner Sun';
+
+/** libraryOf() / deckCardList() options while it resolves (one listed copy out). */
+export const ON_BATTLEFIELD = Object.freeze({ exclude: [CHIMIL] });
+
 /** Chimil's own mana cost — the bar its output has to clear to be worth a slot. */
 export const CHIMIL_COST = 6;
 

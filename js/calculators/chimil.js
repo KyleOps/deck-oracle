@@ -15,7 +15,7 @@ import { cardRef } from '../data/glossary.js';
 import { tailRows } from '../utils/discover.js';
 import { describeDots, dotPlot } from '../utils/viz.js';
 import {
-    AUTO_SIM_GAMES, CHIMIL_COST, MAX_TURNS, PROJECTION_TURNS, SMALL_HIT_MV, analyzeTrigger, cheatedDistribution,
+    AUTO_SIM_GAMES, CHIMIL_COST, MAX_TURNS, ON_BATTLEFIELD, PROJECTION_TURNS, SMALL_HIT_MV, analyzeTrigger, cheatedDistribution,
     chimilDots, finalOf, fitVerdict, isXSpell, paybackTurn, projectTurns, simulateGames, summariseGames, summarize,
     truncateGames, turnBands
 } from '../utils/models/chimil.js';
@@ -41,7 +41,7 @@ export function readInputs() {
     const slider = document.getElementById('chimil-turnsSlider');
     const raw = parseInt(slider?.value, 10);
     const turns = Math.max(1, Math.min(MAX_TURNS, Number.isFinite(raw) ? raw : PROJECTION_TURNS));
-    const library = DeckConfig.hasCardList() ? libraryOf(deck) : null;
+    const library = DeckConfig.hasCardList() ? libraryOf(deck, ON_BATTLEFIELD) : null;
     const details = Array.isArray(deck.cardDetails) ? deck.cardDetails : [];
 
     return {

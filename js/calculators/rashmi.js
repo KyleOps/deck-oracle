@@ -13,7 +13,7 @@ import { libraryOf } from '../utils/library.js';
 import { one, pct } from '../utils/text.js';
 import { cardRef } from '../data/glossary.js';
 import {
-    MAX_CAST_MV, RELIABLE_CHANCE, buildRashmiState, chanceTone, classifyReveal, curveRows, freeSpellOdds,
+    MAX_CAST_MV, ON_BATTLEFIELD, RELIABLE_CHANCE, buildRashmiState, chanceTone, classifyReveal, curveRows, freeSpellOdds,
     oddsAround, oddsByCastMv, reliableFrom, revealBreakdown, summarize
 } from '../utils/models/rashmi.js';
 
@@ -35,7 +35,7 @@ function readCastMv() {
 /** The cast mana value, the X-spell setting and the library (commanders are never in it). */
 export function readInputs() {
     return {
-        library: libraryOf(DeckConfig.getDeckConfig()),
+        library: libraryOf(DeckConfig.getDeckConfig(), ON_BATTLEFIELD),
         excludeX: Boolean(document.getElementById('rashmi-exclude-x')?.checked),
         castMv: readCastMv()
     };

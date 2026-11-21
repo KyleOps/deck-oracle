@@ -5,14 +5,14 @@ import assert from 'node:assert';
 import '../node-test-helper.js';
 import * as DeckConfig from '../../js/utils/deckConfig.js';
 import { calculate, readInputs } from '../../js/calculators/chimil.js';
-import { AUTO_SIM_GAMES, PROJECTION_TURNS, analyzeTrigger, projectTurns } from '../../js/utils/models/chimil.js';
+import { AUTO_SIM_GAMES, ON_BATTLEFIELD, PROJECTION_TURNS, analyzeTrigger, projectTurns } from '../../js/utils/models/chimil.js';
 import { libraryOf } from '../../js/utils/library.js';
 
 describe('Chimil page', () => {
     it('reads the default horizon and the library (no commanders)', () => {
         const config = readInputs();
         assert.strictEqual(config.turns, PROJECTION_TURNS);
-        assert.strictEqual(config.library, libraryOf(DeckConfig.getDeckConfig()));
+        assert.strictEqual(config.library, libraryOf(DeckConfig.getDeckConfig(), ON_BATTLEFIELD));
         assert.strictEqual(config.deckSize, config.library.size);
     });
 

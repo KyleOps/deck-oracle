@@ -22,6 +22,12 @@ import { CARD_TYPES, cardTypes } from '../library.js';
 import { avg, pct, plural } from '../text.js';
 import { deckCardList } from './cardList.js';
 
+/** The card this page casts: the cast copy is on the stack, not in the library. */
+export const PORTENT_OF_CALAMITY = 'Portent of Calamity';
+
+/** libraryOf() / deckCardList() options while it resolves (one listed copy out). */
+export const ON_STACK = Object.freeze({ exclude: [PORTENT_OF_CALAMITY] });
+
 export const PORTENT = Object.freeze({
     ITERATIONS: 25000,
     /** Four or more exiled cards make one of them a free spell. */

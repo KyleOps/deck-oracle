@@ -4,13 +4,13 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import * as DeckConfig from '../../js/utils/deckConfig.js';
 import { calculate, readInputs } from '../../js/calculators/abstract.js';
-import { ITERATIONS, PILE_SIZE } from '../../js/utils/models/abstract.js';
+import { ITERATIONS, ON_STACK, PILE_SIZE } from '../../js/utils/models/abstract.js';
 import { libraryOf } from '../../js/utils/library.js';
 
 describe('Abstract Performance page', () => {
     it('deals from the library: commanders are never in it', () => {
         const { library } = readInputs();
-        assert.strictEqual(library, libraryOf(DeckConfig.getDeckConfig()));
+        assert.strictEqual(library, libraryOf(DeckConfig.getDeckConfig(), ON_STACK));
         assert.ok(library.commanders.length > 0, 'the example deck has commanders');
     });
 

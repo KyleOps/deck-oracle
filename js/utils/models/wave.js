@@ -23,6 +23,12 @@ import { isLand, isPermanent } from '../library.js';
 import { avg, pct, plural } from '../text.js';
 import { listSize } from './cardList.js';
 
+/** The card this page casts: the cast copy is on the stack, not in the library. */
+export const GENESIS_WAVE = 'Genesis Wave';
+
+/** libraryOf() / deckCardList() options while it resolves (one listed copy out). */
+export const ON_STACK = Object.freeze({ exclude: [GENESIS_WAVE] });
+
 export const WAVE = Object.freeze({
     /** Genesis Wave costs X plus {G}{G}{G}. */
     EXTRA_MANA: 3,

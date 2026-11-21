@@ -17,7 +17,7 @@ import {
 } from '../utils/bigSpells.js';
 import { cardListKey, deckCardList, expandCards } from '../utils/models/cardList.js';
 import {
-    PORTENT, analyze, buildTypeMasks, masksKey, portentResults, resolvePortent, summarize, typeCounts
+    ON_STACK, PORTENT, analyze, buildTypeMasks, masksKey, portentResults, resolvePortent, summarize, typeCounts
 } from '../utils/models/portent.js';
 
 const CONFIG = Object.freeze({
@@ -37,7 +37,7 @@ let chart = null;
  */
 export function readInputs() {
     const deck = DeckConfig.getDeckConfig();
-    const cards = deckCardList(deck);
+    const cards = deckCardList(deck, ON_STACK);
     const masks = buildTypeMasks(cards, deck);
     const deckSize = masks.length;
     const maxX = Math.max(1, Math.min(deckSize, PORTENT.MAX_X));

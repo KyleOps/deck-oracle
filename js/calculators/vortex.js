@@ -17,7 +17,7 @@ import { tailRows } from '../utils/discover.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 import { describeDots, dotPlot } from '../utils/viz.js';
 import {
-    DEFAULT_MV, SAMPLE_BATCH, VORTEX_COST, analyzeVortex, discoverPool, drawSamples, pointAt, summarize, vortexDots
+    DEFAULT_MV, ON_BATTLEFIELD, SAMPLE_BATCH, VORTEX_COST, analyzeVortex, discoverPool, drawSamples, pointAt, summarize, vortexDots
 } from '../utils/models/vortex.js';
 
 const SAMPLE_MAX = 30;
@@ -38,7 +38,7 @@ export function readInputs() {
     return {
         mv: Number.isFinite(raw) ? raw : DEFAULT_MV,
         treatStarAs5Plus: document.getElementById('vortex-star-power')?.checked ?? true,
-        library: libraryOf(DeckConfig.getDeckConfig())
+        library: libraryOf(DeckConfig.getDeckConfig(), ON_BATTLEFIELD)
     };
 }
 

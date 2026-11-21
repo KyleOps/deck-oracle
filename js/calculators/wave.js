@@ -17,7 +17,7 @@ import { scoreBattlefieldValue } from '../utils/payback.js';
 import { avg, pct, plural } from '../utils/text.js';
 import { bindXPresets, createSampler, fade, noticeHTML, readX, renderHowItCompares, sampleCardHTML, syncXControl } from '../utils/bigSpells.js';
 import { cardListKey, deckCardList, expandCards } from '../utils/models/cardList.js';
-import { WAVE, analyze, buildWaveLibrary, summarize, waveCastPlan, waveDots, waveSpread, waveSweep } from '../utils/models/wave.js';
+import { ON_STACK, WAVE, analyze, buildWaveLibrary, summarize, waveCastPlan, waveDots, waveSpread, waveSweep } from '../utils/models/wave.js';
 
 const CONFIG = Object.freeze({
     MAX_X: 30,
@@ -42,7 +42,7 @@ function readNumber(id, fallback) {
 /** The page's inputs and the library they apply to (defaults when not mounted). */
 export function readInputs() {
     const deck = DeckConfig.getDeckConfig();
-    const cards = deckCardList(deck);
+    const cards = deckCardList(deck, ON_STACK);
     const library = buildWaveLibrary(cards, deck);
     const maxX = Math.max(1, Math.min(library.deckSize, CONFIG.MAX_X));
     const x = Math.min(maxX, readX('wave', CONFIG.DEFAULT_X));

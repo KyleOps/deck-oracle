@@ -21,15 +21,34 @@
 import { drawType } from '../hypergeometric.js';
 import { createCache } from '../simulation.js';
 import { buildDeckFromCardData } from '../sampleSimulator.js';
-import { isLand } from '../library.js';
+import { isLand, sameCard } from '../library.js';
 import { quantileSorted as quantile } from '../stats.js';
 import { one, pct } from '../text.js';
+
+/** The card this page casts: it is on the battlefield, not in the library. */
+export const LUMRA = 'Lumra, Bellow of the Woods';
+
+/** libraryOf() / deckCardList() options while it resolves (one listed copy out). */
+export const ON_BATTLEFIELD = Object.freeze({ exclude: [LUMRA] });
 
 /** Cards milled per Lumra trigger. */
 export const MILL_PER_TRIGGER = 4;
 
 /** Opening hand size; one card is drawn each turn after (Commander: no skipped draw). */
 export const OPENING_HAND = 7;
+
+/**
+ * Opening-hand cards that come from the library. You hold Lumra before you
+ * cast it, so when the list names Lumra (and the library leaves that copy
+ * out) one of the seven is Lumra and only six come from the library. A Lumra
+ * in the command zone is cast from there, not from your hand.
+ * @param {Object|null} library - libraryOf(deck, ON_BATTLEFIELD), or null for counts
+ * @returns {number}
+ */
+export function handFromLibrary(library) {
+    const copies = names => (names ?? []).filter(name => sameCard(name, LUMRA)).length;
+    return copies(library?.removed) > copies(library?.commanders) ? OPENING_HAND - 1 : OPENING_HAND;
+}
 
 /** Shuffled libraries kept per deck for the spread and sample games. */
 export const SIM_GAMES = 2000;

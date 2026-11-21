@@ -37,6 +37,12 @@ import { pmfQuantiles } from '../viz.js';
 /** The mana value the page opens on. */
 export const DEFAULT_MV = 6;
 
+/** The card this page casts: it is on the battlefield, not in the library. */
+export const MONSTROUS_VORTEX = 'Monstrous Vortex';
+
+/** libraryOf() / deckCardList() options while it resolves (one listed copy out). */
+export const ON_BATTLEFIELD = Object.freeze({ exclude: [MONSTROUS_VORTEX] });
+
 /** Monstrous Vortex's own mana value — the bar a trigger is measured against. */
 export const VORTEX_COST = 4;
 

@@ -46,6 +46,7 @@ import { libraryOf } from '../utils/library.js';
 import { pct } from '../utils/text.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 import { ENGINES, buildContext, compareEngines, curveSplit, summarize, verdict } from '../utils/models/versus.js';
+import { ON_BATTLEFIELD as VORTEX_ON_BATTLEFIELD } from '../utils/models/vortex.js';
 
 let curveChart = null;
 
@@ -59,7 +60,7 @@ export function readInputs() {
     const deck = DeckConfig.getDeckConfig();
     return {
         a, b: b === a ? (a === 'wildpair' ? 'vortex' : 'wildpair') : b, treatStarAs5Plus: star,
-        deck, library: libraryOf(deck)
+        deck, library: libraryOf(deck, VORTEX_ON_BATTLEFIELD)
     };
 }
 

@@ -13,7 +13,7 @@ import { libraryOf } from '../utils/library.js';
 import { one, pct } from '../utils/text.js';
 import { cardRef } from '../data/glossary.js';
 import {
-    BUCKETS, ITERATIONS, buildLibrary, dealSampleCasts, mvLabel, outcomeTone, simulateAbstractPerformance, summarize
+    BUCKETS, ITERATIONS, ON_STACK, buildLibrary, dealSampleCasts, mvLabel, outcomeTone, simulateAbstractPerformance, summarize
 } from '../utils/models/abstract.js';
 
 let chart = null;
@@ -24,7 +24,7 @@ const state = { ref: null, deck: null, isDefault: true, results: null, samples: 
 
 /** The library the piles are dealt from (commanders are never in it). */
 export function readInputs() {
-    return { library: libraryOf(DeckConfig.getDeckConfig()) };
+    return { library: libraryOf(DeckConfig.getDeckConfig(), ON_STACK) };
 }
 
 /** Simulate once per deck (the deck object is replaced on every import). */
