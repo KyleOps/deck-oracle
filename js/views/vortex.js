@@ -62,8 +62,6 @@ export const template = `
 `;
 
 export const styles = `
-/* Four supporting numbers in one row; the bottom line above is the answer. */
-#vortex-tab .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 #vortex-tab .vx-dots { border-top: 1px solid var(--tx-rule); }
 #vortex-tab .vx-dots-head {
     display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 16px;

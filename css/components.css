@@ -86,13 +86,14 @@
 
 /* ==================== SHARED TERMINAL COMPONENTS (used site-wide) ==================== */
 
-/* Hero numerics row — headline metrics at the top of every calculator */
+/* Hero numerics row — headline metrics at the top of every calculator.
+   One grid for every page: as many 150px-or-wider columns as fit (a stat
+   never overflows a narrower panel), two across on a phone (below). Pages
+   style their stats, never the columns, so heroes reflow the same way
+   everywhere. */
 .tx-hero {
     display: grid;
-    /* auto-fit alongside an explicit track produced phantom 0px columns; sizing
-       tracks to content and packing them left keeps the stats as a readable
-       cluster rather than stretching them to the panel edges. */
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
     background: var(--tx-panel);
     border-bottom: 1px solid var(--tx-rule);
 }
@@ -469,7 +470,6 @@ input.x-number {
 /* Hero rows reflow on available space, not viewport width: stacked stats
    get a rule between rows instead of columns, and a phone gets two across. */
 @container shell (max-width: 720px) {
-    .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
     .tx-hero .tx-stat { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
 }
 

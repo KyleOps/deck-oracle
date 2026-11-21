@@ -73,7 +73,6 @@ export const styles = `
 }
 #rashmi-tab .rs-check input { width: auto; margin: 0; }
 
-#rashmi-tab .rs-answer .tx-hero { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 #rashmi-tab .rs-answer .bottom-line { border-bottom: 1px solid var(--tx-rule); }
 
 #rashmi-tab .rs-split { padding: 14px var(--pad-x) 16px; }

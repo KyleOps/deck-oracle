@@ -86,10 +86,7 @@ export const template = `
 
 export const styles = `
 #hands-tab .hl-summary .bottom-line { border-bottom: 1px solid var(--tx-rule); }
-#hands-tab .hl-summary .tx-hero {
-    border-bottom: 0;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-}
+#hands-tab .hl-summary .tx-hero { border-bottom: 0; }
 #hands-tab .hl-summary .tx-hero .tx-stat:first-child .tx-stat-value { font-size: clamp(36px, 3.6vw, 52px); }
 
 /* ── Toolbar & prompt ─────────────────────────────────────────────── */

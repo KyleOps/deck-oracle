@@ -239,7 +239,6 @@ export const styles = `
 }
 
 /* ---- Answer ---- */
-#wildpair-tab .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 #wildpair-tab .tx-hero .tx-stat:first-child .tx-stat-value { font-size: var(--t-xxl); }
 #wildpair-tab .wp-fit-note, #wildpair-tab .wp-datanote p {
     margin: 0;

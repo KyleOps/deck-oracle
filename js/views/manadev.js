@@ -74,10 +74,7 @@ export const template = `
 
 export const styles = `
 #manadev-tab .md-answer .bottom-line { border-bottom: 1px solid var(--tx-rule); }
-#manadev-tab .md-answer .tx-hero {
-    border-bottom: 0;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-}
+#manadev-tab .md-answer .tx-hero { border-bottom: 0; }
 #manadev-tab .md-answer .tx-hero .tx-stat:first-child .tx-stat-value { font-size: clamp(36px, 3.6vw, 52px); }
 #manadev-tab .md-pending {
     display: flex;

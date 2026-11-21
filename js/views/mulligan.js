@@ -97,7 +97,6 @@ export const template = `
 
 export const styles = `
 #mulligan-tab .mull-block { padding: var(--pad-y) var(--pad-x) 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-#mulligan-tab .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 #mulligan-tab .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* Templates */

@@ -629,7 +629,7 @@ ${s} .bs-value-row input { width: 76px; text-align: right; border-radius: var(--
 ${s} .bs-value-row small { grid-column: 1 / -1; font-size: var(--t-label); color: var(--tx-dim); line-height: 1.4; }
 
 /* Answer */
-${s} .bs-answer .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); justify-content: stretch; border-bottom: 0; }
+${s} .bs-answer .tx-hero { justify-content: stretch; border-bottom: 0; }
 ${s} .bs-answer .tx-hero .tx-stat { border-bottom: 0; }
 ${s} .bs-notice { margin: 0; padding: 12px 18px; font-size: var(--t-sm); line-height: 1.5; color: var(--tx-text); border-bottom: 1px solid var(--tx-rule); }
 ${s} .bs-notice.tone-warn { background: var(--warn-soft); }
