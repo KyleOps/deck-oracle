@@ -69,6 +69,37 @@ function pips(color, count) {
  * @returns {{html:string, tone:'good'|'warn'|'bad'|'flat'}}
  */
 export function summarize(result) {
+    const base = summarizeLibrary(result);
+    const zone = commanderSentence(result);
+    if (!zone) return base;
+    // A commander under the target is never "all good".
+    const tone = result.commandersUnder > 0 && (base.tone === 'good' || base.tone === 'flat') ? 'warn' : base.tone;
+    return { html: `${base.html} ${zone}`, tone };
+}
+
+/**
+ * The commanders' own line: each one's on-curve chance, cast from the command
+ * zone (never drawn, so on curve is its mana value with that many land drops).
+ * Null without a checked commander.
+ */
+export function commanderSentence(result) {
+    const list = result?.commanders ?? [];
+    if (!list.length) return null;
+    const target = result.target ?? TARGET;
+    const each = list.map(c => `${cardRef(c.name)} <strong>${pct(c.chance)}</strong> on turn ${c.turn}`);
+    const joined = each.length <= 2 ? each.join(' and ') : `${each.slice(0, -1).join(', ')} and ${each[each.length - 1]}`;
+    const short = list.filter(c => c.chance < target - 1e-9).length;
+    const goal = `${Math.round(target * 100)}%`;
+    const verdict = short === 0 ? ''
+        : list.length === 1 ? ` — under ${goal}`
+            : short === list.length ? ` — ${list.length === 2 ? 'both' : 'all'} under ${goal}`
+                : ` — ${short === 1 ? 'one' : short} under ${goal}`;
+    return list.length > 1
+        ? `From the command zone, your commanders have their colours on curve: ${joined}${verdict}.`
+        : `From the command zone, your commander has its colours on curve: ${joined}${verdict}.`;
+}
+
+function summarizeLibrary(result) {
     if (!result || result.total === 0) {
         return {
             html: 'None of your spells have coloured mana symbols, so any lands cast them — only the land count matters here.',
@@ -91,7 +122,7 @@ export function summarize(result) {
         const h = b.hardest;
         const who = b.peers > 1
             ? `your turn-${h.turn} ${pips(b.color, h.pips)} cards`
-            : `${cardRef(h.name)} (${pips(b.color, h.pips)} on turn ${h.turn})`;
+            : `${cardRef(h.name)} (${h.commander ? 'your commander, ' : ''}${pips(b.color, h.pips)} on turn ${h.turn})`;
         const verb = b.peers > 1 ? 'want' : 'wants';
         html += b.want == null
             ? ` ${name} is the bottleneck: <strong>${b.sources}</strong> ${plural(b.sources, 'source')}, and ${who} would need more ${name.toLowerCase()} sources than you have lands.`
@@ -356,7 +387,7 @@ function renderColors(result) {
             const needs = want == null
                 ? ' Even all your lands would not reach 90%.'
                 : c.sources >= want ? '' : ` About <strong>${want}</strong> sources would reach 90%.`;
-            note = `<p class="mb-note">Hardest: ${cardRef(h.name)} — ${pips(c.color, h.pips)} on turn ${h.turn}, <strong>${pct(h.chance)}</strong>.${needs}</p>`;
+            note = `<p class="mb-note">Hardest: ${cardRef(h.name)}${h.commander ? ' (your commander)' : ''} — ${pips(c.color, h.pips)} on turn ${h.turn}, <strong>${pct(h.chance)}</strong>.${needs}</p>`;
         }
         const turns = (c.byTurn ?? []).length ? `
             <div class="mb-color-turns">
@@ -394,6 +425,7 @@ function renderColors(result) {
 
 function cardTags(card) {
     const tags = [];
+    if (card.commander) tags.push(`<span class="mb-tag" tabindex="0" data-tip="Your commander: cast from the command zone and never drawn, so on curve means turn ${card.turn} with ${card.turn} land ${card.turn === 1 ? 'drop' : 'drops'}. Not counted among the library’s coloured spells.">commander</span>`);
     if (card.x > 0) tags.push(`<span class="mb-tag" tabindex="0" data-tip="X counts as 1, so this is checked on turn ${card.turn} (mana value ${card.mv}).">X=1</span>`);
     if (card.phyrexian > 0) tags.push(`<span class="mb-tag" tabindex="0" data-tip="${card.phyrexian} Phyrexian ${plural(card.phyrexian, 'symbol')} can be paid with 2 life each, so ${card.phyrexian === 1 ? 'it is' : 'they are'} not counted.">Phyrexian</span>`);
     if (card.hybrid > 0) tags.push(`<span class="mb-tag" tabindex="0" data-tip="Hybrid symbols are paid by either of their colours.">hybrid</span>`);
@@ -423,15 +455,18 @@ function renderCards(result) {
     if (search && search.value !== query) search.value = query;
 
     const rows = filterCards(result.cards, { filter, query });
-    set('mb-cards-meta', `${result.total} checked · ${result.under} under 90%`);
-    if (rows.length === 0) {
-        set('mb-cards', `<p class="mb-none">${result.cards.length ? 'No coloured spells match.' : 'No spells with coloured mana symbols.'}</p>`);
+    // Commanders first, always shown (they're not among the library's counted spells).
+    const pinned = filterCards(result.commanders ?? [], { filter, query });
+    const zone = result.commanders?.length ? ` · ${plural(result.commanders.length, 'commander')}` : '';
+    set('mb-cards-meta', `${result.total} checked · ${result.under} under 90%${zone}`);
+    if (rows.length === 0 && pinned.length === 0) {
+        set('mb-cards', `<p class="mb-none">${result.cards.length || result.commanders?.length ? 'No coloured spells match.' : 'No spells with coloured mana symbols.'}</p>`);
     } else {
         const shown = showAll ? rows : rows.slice(0, DEFAULT_ROWS);
-        const body = shown.map(c => {
+        const body = [...pinned, ...shown].map(c => {
             const tone = chanceTone(c.chance, result.target);
             return `
-                <tr>
+                <tr${c.commander ? ' class="mb-commander"' : ''}>
                     <th scope="row">${cardRef(c.name)}${c.count > 1 ? `<span class="mb-copies">×${c.count}</span>` : ''}${cardTags(c)}<span class="mb-cost-inline" aria-hidden="true">${renderManaCost(c.cost)}<span class="mb-copies">turn ${c.turn}</span></span></th>
                     <td class="mb-cost mb-col-cost">${renderManaCost(c.cost)}</td>
                     <td class="num mb-col-turn">${c.turn}</td>
@@ -477,6 +512,18 @@ function renderCards(result) {
     if (result.phyrexianOnly) {
         notes.push(`${result.phyrexianOnly} ${plural(result.phyrexianOnly, 'card')} with only Phyrexian symbols can be paid with life, so ${result.phyrexianOnly === 1 ? 'it is' : 'they are'} left out.`);
     }
+    if (result.commanders?.length) {
+        notes.push(`Your ${plural(result.commanders.length, 'commander')} ${result.commanders.length === 1 ? 'is' : 'are'} listed first: cast from the command zone, never drawn, so on curve is ${result.commanders.length === 1 ? 'its' : 'each one’s'} mana value with that many land drops. ${result.commanders.length === 1 ? 'It counts' : 'They count'} toward each colour’s hardest card, not the coloured-spell counts above.`);
+    }
+    for (const c of result.commandersUnchecked ?? []) {
+        notes.push(c.why === 'colourless'
+            ? `${cardRef(c.name)} has no coloured symbols, so only your land count matters for it.`
+            : `${cardRef(c.name)} came in without a mana cost and isn’t checked.`);
+    }
+    const unknown = DeckConfig.getCommanders().filter(c => !c.card).map(c => escapeHtml(c.name));
+    if (unknown.length && DeckConfig.getFormat().key === 'commander') {
+        notes.push(`${unknown.join(' and ')} came without ${unknown.length === 1 ? 'its card' : 'their cards'}, so ${unknown.length === 1 ? 'its cost isn’t' : 'their costs aren’t'} checked — import the deck again to include ${unknown.length === 1 ? 'it' : 'them'}.`);
+    }
     set('mb-cards-caption', notes.join(' ') || 'Only lands count as sources here — mana rocks and dorks make real games a little better than this.');
 }
 
@@ -508,13 +555,13 @@ function renderSourcesTable(result, format, play) {
     // Which of this colour's cards sit in each cell (strict pips, turns 1–6).
     const cellCards = new Map();
     let offTable = 0;
-    for (const card of result.cards) {
+    for (const card of [...(result.commanders ?? []), ...result.cards]) {
         const k = card.pips[tableColor] ?? 0;
         if (k <= 0) continue;
         if (k > 3 || card.turn > 6) { offTable++; continue; }
         const key = `${k}|${card.turn}`;
         if (!cellCards.has(key)) cellCards.set(key, []);
-        cellCards.get(key).push(card.name);
+        cellCards.get(key).push(card.commander ? `${card.name} (commander)` : card.name);
     }
 
     const { turns, rows } = result.table;

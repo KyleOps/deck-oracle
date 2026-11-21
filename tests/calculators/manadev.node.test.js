@@ -20,6 +20,8 @@ import { FORMATS } from '../../js/utils/format.js';
 import { COLOR_BIT, mulberry32 } from '../../js/utils/handLab.js';
 import { DEFAULT_DECK_DATA } from '../../js/utils/defaultDeckData.js';
 import { budget } from '../helpers/timing.js';
+import { libraryOf } from '../../js/utils/library.js';
+import { tagDeck } from '../../js/utils/cardTags.js';
 
 const CARDS = JSON.parse(readFileSync(new URL('../fixtures/ramp-cards.json', import.meta.url), 'utf8'));
 const GU = COLOR_BIT.G | COLOR_BIT.U;
@@ -317,6 +319,24 @@ describe('scripted goldfish games', () => {
         }
     });
 
+    it('checks every commander, and plays the land that casts the cheap one on curve', () => {
+        const cheap = { name: 'Cheap Partner', mana_cost: '{G}', cmc: 1, type_line: 'Legendary Creature — Elf', oracle_text: '', color_identity: ['G'] };
+        const dear = { name: 'Dear Partner', mana_cost: '{4}{U}{U}', cmc: 6, type_line: 'Legendary Creature — Sphinx', oracle_text: '', color_identity: ['U'] };
+        const deck = { cardsByName: deckOf({ Forest: 30, 'Thornwood Falls': 2, 'Colossal Dreadmaw': 20 }), commanders: [{ name: cheap.name, card: cheap }, { name: dear.name, card: dear }], format: 'auto' };
+        const lib = MD.buildManaLibrary(deck);
+        const take = picker(lib);
+        const g = MD.playScriptedGame(lib, {
+            hand: take(['Forest', 'Thornwood Falls', ...rep('Colossal Dreadmaw', 5)]),
+            library: take(rep('Forest', 20)),
+            format: EDH
+        });
+        // Turn 1: the untapped Forest casts the one-drop commander, so it beats the tapped land.
+        assert.deepEqual(g.log.turns[0].lands, ['Forest']);
+        assert.deepEqual(g.targetTurns, [1, 0], 'no blue source: the Sphinx never comes down');
+        assert.deepEqual(g.log.turns[0].castable, ['Cheap Partner']);
+        assert.equal(g.targetTurn, 0, 'the primary target is the six-drop');
+    });
+
     it('skips the first draw only on the play in two-player formats', () => {
         const lib = MD.buildManaLibrary(deckOf({ Forest: 30, 'Colossal Dreadmaw': 10 }), { multiplayer: false });
         const take = picker(lib);
@@ -340,7 +360,21 @@ describe('library and target', () => {
         assert.equal(lib.target.name, 'The Sixth Doctor');
         assert.equal(lib.target.mv, 6);
         assert.ok(lib.ramp.some(r => r.name === 'Explosive Vegetation' && r.info.modelled));
-        assert.ok(lib.ramp.some(r => r.name === "Aminatou's Augury" && r.info.unmodelled === 'unread'), 'tagged ramp the model can’t read is listed, not counted');
+        assert.ok(lib.ramp.some(r => r.name === 'Bonny Pall, Clearcutter' && r.info.ramp && !r.info.modelled), 'ramp the model can’t simulate is listed, not counted');
+        assert.ok(lib.ramp.some(r => r.name === 'Ugin, the Ineffable' && !r.info.ramp), 'a cost reducer is listed as not ramp');
+        assert.ok(!lib.ramp.some(r => r.name === "Aminatou's Augury"), 'a land off the top of eight exiled cards is not ramp');
+    });
+
+    it('counts ramp by the same rule as every other page', () => {
+        const lib = MD.buildManaLibrary(DEFAULT_DECK_DATA);
+        const library = libraryOf(DEFAULT_DECK_DATA, { format: 'commander' });
+        assert.equal(MD.rampTotal(lib), tagDeck(library.cards).counts.ramp);
+        assert.equal(MD.rampTotal(lib), 17);
+        assert.equal(MD.countedRamp(lib), 15);
+        assert.equal(MD.countedRamp(lib, { treasure: true }), 16);
+        const r = MD.simulateManaDevelopment(lib, { format: EDH, games: 50 });
+        assert.equal(r.rampCount + r.notCounted, MD.rampTotal(lib), 'counted + not counted is the ramp count');
+        assert.equal(r.notRamp, 2, 'Thryx and Ugin, the Ineffable make spells cheaper');
     });
 
     it('with partners, races towards the more expensive commander and takes both identities', () => {
@@ -355,8 +389,33 @@ describe('library and target', () => {
         assert.deepEqual(lib.target.names, ['Cheap Partner', 'Dear Partner']);
         assert.deepEqual(lib.identity, ['U', 'G']);
         assert.equal(lib.cards.length, 60);
+        // Every commander is a target of its own, in deck order.
+        assert.deepEqual(lib.targets.map(t => [t.name, t.mv]), [['Cheap Partner', 1], ['Dear Partner', 6]]);
+        assert.deepEqual(lib.missingCommanders, []);
         // Outside Commander there is no command zone, so no commander target.
         assert.equal(MD.buildManaLibrary(deck, { format: 'constructed' }).target.kind, 'top-end');
+    });
+
+    it('lists a commander without a card record as unchecked, never guesses its cost', () => {
+        const dear = { name: 'Dear Partner', mana_cost: '{4}{U}{U}', cmc: 6, type_line: 'Legendary Creature — Sphinx', oracle_text: '', color_identity: ['U'] };
+        const deck = { cardsByName: deckOf({ Forest: 40, 'Colossal Dreadmaw': 20 }), commanders: [{ name: 'Lost Partner', card: null }, { name: dear.name, card: dear }], format: 'auto' };
+        const lib = MD.buildManaLibrary(deck);
+        assert.deepEqual(lib.targets.map(t => t.name), ['Dear Partner']);
+        assert.deepEqual(lib.missingCommanders, ['Lost Partner']);
+        // No record for any commander: race the top end and say why.
+        const none = MD.buildManaLibrary({ ...deck, commanders: [{ name: 'Lost Partner', card: null }] });
+        assert.equal(none.target.kind, 'top-end');
+        assert.deepEqual(none.missingCommanders, ['Lost Partner']);
+        // Records passed by the page are matched by name, in any order.
+        const passed = MD.buildManaLibrary(deck, { commanderCards: [dear, null] });
+        assert.deepEqual(passed.missingCommanders, ['Lost Partner']);
+        assert.equal(passed.target.name, 'Dear Partner');
+    });
+
+    it('the example deck: The Sixth Doctor and Susan Foreman, each a target', () => {
+        const lib = MD.buildManaLibrary(DEFAULT_DECK_DATA);
+        assert.deepEqual(lib.targets.map(t => [t.name, t.mv, t.cost]), [['The Sixth Doctor', 6, '{4}{G}{U}'], ['Susan Foreman', 2, '{1}{G}']]);
+        assert.equal(lib.target.name, 'The Sixth Doctor', 'the most expensive leads');
     });
 
     it('falls back to the top end: the middle of the three most expensive spells', () => {
@@ -415,6 +474,27 @@ describe('simulation', () => {
         assert.equal(veg.castBy3, 0, 'a four-mana spell can’t be cast by turn 3 without other ramp');
         assert.equal(r.samples.length, MD.SAMPLE_GAMES);
         assert.equal(r.samples[0].turns.length, MD.SIM_TURNS);
+    });
+
+    it('reports each commander and both together', () => {
+        assert.deepEqual(r.targets.map(t => [t.name, t.primary]), [['The Sixth Doctor', true], ['Susan Foreman', false]]);
+        const [doctor, susan] = r.targets;
+        assert.deepEqual(doctor.ramp, r.target.ramp, 'the primary row is the headline target');
+        assert.equal(susan.ramp.onCurveTurn, 2);
+        assert.ok(susan.ramp.onCurve > 0.9, 'a two-drop with 37 lands');
+        assert.equal(r.all.count, 2);
+        assert.equal(r.all.ramp.onCurveTurn, 6);
+        // Both castable by turn t can't beat either one alone.
+        for (let t = 1; t <= MD.SIM_TURNS; t++) {
+            assert.ok(r.all.ramp.castBy[t] <= Math.min(doctor.ramp.castBy[t], susan.ramp.castBy[t]) + 1e-12, `turn ${t}`);
+        }
+        assert.ok(r.all.turnsSaved > 0.5);
+        assert.equal(r.samples[0].targetTurns.length, 2);
+        const rows = MD.commanderRows(r);
+        assert.deepEqual(rows.map(x => x.name), ['The Sixth Doctor', 'Susan Foreman', null]);
+        assert.equal(rows[2].all, true);
+        assert.equal(rows[2].onCurve, r.all.ramp.onCurve);
+        assert.deepEqual(MD.commanderRows({ ...r, targets: [doctor], all: null }), [], 'one commander: no table');
     });
 
     it('counts spell Treasure only when asked', () => {
@@ -502,6 +582,20 @@ describe('words', () => {
         assert.match(MD.summarize(result({ target: { ...t, ramp: { ...t.ramp, median: 13, p25: 11, p75: 13 } } })).html, /can’t cast .* by <strong>turn 12<\/strong>/);
         assert.equal(MD.summarize(result({ target: null })).tone, 'flat');
         assert.equal(MD.summarize(null).tone, 'flat');
+    });
+
+    it('names every commander in the bottom line, cheapest first', () => {
+        const base = result();
+        const doctor = { ...base.target, primary: true };
+        const susan = { kind: 'commander', name: 'Susan Foreman', mv: 2, ramp: { p25: 2, p75: 2, median: 2, onCurve: 0.96 }, lands: { onCurve: 0.96 }, turnsSaved: 0 };
+        const both = result({ targets: [doctor, susan], all: { count: 2, mv: 6, ramp: { p25: 5, p75: 7, median: 5, onCurve: 0.3 }, lands: { onCurve: 0.1 }, turnsSaved: 2.4 } });
+        const s = MD.summarize(both);
+        assert.match(s.html, /can cast .*Susan Foreman.* on <strong>turn 2<\/strong> and .*The Sixth Doctor.* on <strong>turn 5 or 6<\/strong>/);
+        assert.match(s.html, /ramp has both castable <strong>about 2.5 turns<\/strong> sooner than lands alone/);
+        assert.equal(s.tone, 'bad', 'the tone is both on curve');
+        const late = MD.summarize(result({ targets: [doctor, { ...susan, ramp: { ...susan.ramp, median: 13 } }], all: { ...both.all, count: 3, turnsSaved: 0.1 } }));
+        assert.match(late.html, /Susan Foreman.* not until after <strong>turn 12<\/strong>/);
+        assert.match(late.html, /barely changes when all 3 come down/);
     });
 
     it('describes a sample turn with card links', () => {

@@ -6,13 +6,18 @@
  * than misses (a deck health check that counts Lightning Greaves as removal is
  * worse than one that misses an oddly-worded edict). Every rule is tested
  * against real card text in tests/utils/cardTags.node.test.js.
+ *
+ * Ramp is not decided here: it is the shared rule in ramp.js, the same
+ * classifier Mana Development simulates with, so every page counts the same
+ * cards as ramp (Mana Development then says which of them it can simulate).
  */
 
 import { isLand } from './mana.js';
+import { isRampCard } from './ramp.js';
 
 /** Display metadata, in the order the overview lists them. */
 export const TAGS = Object.freeze({
-    ramp:       { label: 'Ramp',         hint: 'Mana rocks, dorks, and land-fetching spells' },
+    ramp:       { label: 'Ramp',         hint: 'Mana rocks and dorks, land ramp, extra land drops and Treasure — the cards Mana Development reads as ramp' },
     draw:       { label: 'Card draw',    hint: 'Draws or impulse-draws extra cards' },
     removal:    { label: 'Removal',      hint: 'Destroys, exiles, bounces or damages a single target' },
     wipe:       { label: 'Board wipes',  hint: 'Hits every creature or permanent at once' },
@@ -23,12 +28,6 @@ export const TAGS = Object.freeze({
 });
 
 const RX = {
-    addMana: /\badd (\{[wubrgcs0-9x]\}|one mana|two mana|three mana|x mana|mana|an amount of)/,
-    landSearch: /search your library for (a|an|up to (one|two|three|x)|two|three) [^.]*?\b(land|forest|island|swamp|mountain|plains) cards?\b/,
-    landToBattlefield: /put (a|an|up to \w+) [^.]*?land cards? [^.]*?onto the battlefield/,
-    extraLand: /(play|put) (an|two|one) additional lands?/,
-    treasure: /create (a|an|one|two|three|x|\w+) treasure tokens?/,
-
     draw: /\bdraws? (a|an|one|two|three|four|five|six|seven|x|that many|\w+) cards?\b|\bdraw cards equal\b|\bdraw a card for each\b/,
     drawOpponentOnly: /^target opponent draws|each opponent draws/,
     impulse: /exile the top [^.]*? cards? of your library[^.]*?\. (until|you may (play|cast))/,
@@ -52,32 +51,35 @@ const RX = {
     protection: /(gains?|have|has) (hexproof|indestructible|shroud|protection from)|phases? out|can't be (countered|the target)|ward\b/
 };
 
+const NO_TAGS = Object.freeze([]);
+const memo = new WeakMap();
+
 /**
- * Tag one card.
+ * Tag one card. Memoised per card record (records are immutable), so tagging
+ * a deck on every render reads each card once.
  * @param {Object} card - Scryfall-shaped card record
- * @returns {string[]} tag keys from TAGS
+ * @returns {ReadonlyArray<string>} tag keys from TAGS (frozen, shared)
  */
 export function tagCard(card) {
-    if (!card) return [];
+    if (!card || typeof card !== 'object') return NO_TAGS;
+    let tags = memo.get(card);
+    if (!tags) {
+        tags = readTags(card);
+        memo.set(card, tags);
+    }
+    return tags;
+}
+
+function readTags(card) {
     const text = String(card.oracle_text ?? '').toLowerCase();
-    const typeLine = String(card.type_line ?? '').split('//')[0].toLowerCase();
     const tags = new Set();
     const land = isLand(card);
 
     if (!land) {
-        // Ramp: mana abilities on nonland permanents, land-fetch spells, extra
-        // land drops, treasure makers. "Add" inside a reminder-text-free
-        // activated ability is the classic rock/dork shape.
-        // One-shot rituals ("Add {B}{B}{B}" on an instant) are deliberately not
-        // ramp: they accelerate a single turn, not the deck.
-        const isPermanent = /\b(artifact|creature|enchantment|planeswalker)\b/.test(typeLine);
-        if ((isPermanent && RX.addMana.test(text))
-            || RX.landSearch.test(text)
-            || RX.landToBattlefield.test(text)
-            || RX.extraLand.test(text)
-            || (RX.treasure.test(text) && /instant|sorcery|artifact|enchantment/.test(typeLine))) {
-            tags.add('ramp');
-        }
+        // Ramp: the shared rule (ramp.js). One-shot rituals and cost reducers
+        // are deliberately not ramp: they make one turn or one spell cheaper,
+        // not the deck faster.
+        if (isRampCard(card)) tags.add('ramp');
 
         if ((RX.draw.test(text) && !RX.drawOpponentOnly.test(text)) || RX.impulse.test(text) || RX.investigate.test(text)) {
             tags.add('draw');
@@ -96,7 +98,7 @@ export function tagCard(card) {
         }
     }
 
-    return Object.keys(TAGS).filter(t => tags.has(t));
+    return Object.freeze(Object.keys(TAGS).filter(t => tags.has(t)));
 }
 
 /**

@@ -66,7 +66,8 @@ function settingsFor(format, lib) {
 }
 
 function cacheKey(lib, format, s) {
-    return [lib.key, format.key, s.onPlay ? 'play' : 'draw', s.treasure ? 't' : '', lib.target?.name ?? '', lib.target?.mv ?? ''].join('|');
+    const targets = (lib.targets ?? []).map(t => `${t.name}:${t.mv}:${t.cost}`).join(',');
+    return [lib.key, format.key, s.onPlay ? 'play' : 'draw', s.treasure ? 't' : '', targets].join('|');
 }
 
 /**
@@ -121,6 +122,39 @@ function targetLabel(t) {
     return t.kind === 'commander' ? cardRef(t.name) : `your top end (${cardRef(t.name)})`;
 }
 
+/** "Both commanders" / "All 3 commanders". */
+function allLabel(n) {
+    return n === 2 ? 'Both commanders' : `All ${n} commanders`;
+}
+
+/** Two or more commanders: when each can be cast, and all of them together. */
+function commandersTable(r) {
+    const rows = MD.commanderRows(r);
+    if (!rows.length) return '';
+    const body = rows.map(x => `
+        <tr${x.all ? ' class="md-cmd-all"' : ''}>
+            <td>
+                <div class="md-ramp-name">${x.all ? `<strong>${allLabel(rows.length - 1)}</strong>` : `${cardRef(x.name)}${renderManaCost(x.cost)}`}</div>
+                ${x.all ? '<div class="md-ramp-read">each castable at least once</div>' : ''}
+            </td>
+            <td class="num">${pct(x.onCurve)}<div class="md-ramp-read">by turn ${x.onCurveTurn}</div></td>
+            <td class="num">${x.when}<div class="md-ramp-read md-cmd-alone">lands alone: ${x.landsWhen}</div></td>
+            <td class="num">${x.saved.toFixed(1)}</td>
+        </tr>`).join('');
+    return `
+        <div class="md-scroll">
+            <table class="md-ramp-table md-cmd-table">
+                <thead><tr>
+                    <th scope="col">Commander</th>
+                    <th scope="col"><span class="term" tabindex="0" data-tip="Chance you can cast it — mana value and colours — by the turn matching its mana value.">On curve</span></th>
+                    <th scope="col"><span class="term" tabindex="0" data-tip="The middle half of games: the turn it first becomes castable.">Castable on</span></th>
+                    <th scope="col"><span class="term" tabindex="0" data-tip="Average turns sooner than the same games with every ramp card blank.">Turns saved</span></th>
+                </tr></thead>
+                <tbody>${body}</tbody>
+            </table>
+        </div>`;
+}
+
 function renderSummary(r) {
     const el = $('md-summary');
     if (!el) return;
@@ -147,7 +181,25 @@ function renderSummary(r) {
             sub: reach7Lands ? `lands alone: turn ${reach7Lands}` : `lands alone: after turn ${MD.SIM_TURNS}`
         }
     ];
-    if (t?.ramp) {
+    const all = (r.targets?.length ?? 0) > 1 ? r.all : null;
+    if (all?.ramp) {
+        // Two or more commanders: the hero speaks for all of them; the table below for each.
+        const p = all.ramp.onCurve;
+        const names = r.targets.map(x => x.name).join(' and ');
+        stats.push({
+            label: `${allLabel(r.targets.length)} on curve`,
+            tip: `Chance you can cast each of ${names} — mana value and colours — by turn ${all.ramp.onCurveTurn}, when the most expensive is due. The model checks your mana for each; it doesn’t spend it on them.`,
+            value: pct(p),
+            color: toneColor(toneFor(p, { good: 0.6, warn: 0.35 })),
+            sub: `by turn ${all.ramp.onCurveTurn} · lands alone ${pct(all.lands.onCurve)}`
+        });
+        stats.push({
+            label: 'Turns saved by ramp',
+            tip: 'Each shuffle is played twice — with your ramp and with every ramp card blank. This is the average difference in the turn every commander has become castable.',
+            value: all.turnsSaved.toFixed(1),
+            sub: 'vs. the same games, lands only'
+        });
+    } else if (t?.ramp) {
         const p = t.ramp.onCurve;
         stats.push({
             label: t.kind === 'commander' ? 'Commander on curve' : 'Top end on curve',
@@ -163,7 +215,7 @@ function renderSummary(r) {
             sub: r.placeholder ? 'needs a decklist' : 'vs. the same games, lands only'
         });
     }
-    el.innerHTML = renderBottomLine(MD.summarize(r)) + renderHeroStats(stats);
+    el.innerHTML = renderBottomLine(MD.summarize(r)) + renderHeroStats(stats) + commandersTable(r);
 }
 
 function renderPending(progress = 0) {
@@ -198,14 +250,19 @@ function renderRail(lib, format, s) {
             ? `${escapeHtml(format.label)}: everyone draws on turn one and the first mulligan is free.`
             : `${escapeHtml(format.label)}: no free mulligan.`];
         if (lib.commanders?.length) parts.push(lib.commanders.length > 1 ? 'Your commanders start in the command zone, so they’re never drawn.' : 'Your commander starts in the command zone, so it’s never drawn.');
+        const missing = lib.missingCommanders ?? [];
+        if (missing.length) {
+            parts.push(`${missing.map(n => escapeHtml(n)).join(' and ')} came without ${missing.length > 1 ? 'their cards' : 'its card'}, so ${missing.length > 1 ? 'their costs aren’t' : 'its cost isn’t'} checked — import the deck again to include ${missing.length > 1 ? 'them' : 'it'}.`);
+        }
         if (lib.placeholder) parts.push('This deck is bare type counts, so only lands are simulated. Import a decklist to count ramp.');
         note.innerHTML = parts.join(' ');
     }
     const facts = $('md-facts');
     if (facts) {
+        // The ramp every page counts (ramp.js), split into what the model plays and what it can't.
         const counted = MD.countedRamp(lib, { treasure: s.treasure });
-        const total = lib.ramp.reduce((n, r) => n + r.count, 0);
-        const t = lib.target;
+        const total = MD.rampTotal(lib);
+        const targets = lib.targets?.length ? lib.targets : lib.target ? [lib.target] : [];
         const rows = [
             ['Cards in library', String(lib.cards.length)],
             ['Lands', String(lib.landCount)],
@@ -213,8 +270,10 @@ function renderRail(lib, format, s) {
             ['Ramp it can’t count', lib.placeholder ? '—' : String(total - counted)]
         ];
         let html = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
-        if (t) {
-            html += `<div><dt>${t.kind === 'commander' ? 'Commander' : 'Top end'}</dt><dd class="md-fact-target">${cardRef(t.name)}${renderManaCost(t.cost)}</dd></div>`;
+        if (targets.length) {
+            const label = targets[0].kind !== 'commander' ? 'Top end' : targets.length > 1 ? 'Commanders' : 'Commander';
+            const each = targets.map(t => `<span>${cardRef(t.name)}${renderManaCost(t.cost)}</span>`).join('');
+            html += `<div><dt>${label}</dt><dd class="md-fact-target">${each}</dd></div>`;
         }
         facts.innerHTML = html;
     }
@@ -224,10 +283,14 @@ function updateChart(r) {
     const meta = $('md-chart-meta');
     if (meta) meta.textContent = r ? `${r.games.toLocaleString('en-US')} simulated games` : '';
     const keyTarget = $('md-key-target');
-    const t = r?.target;
+    const targets = targetsOf(r);
+    const mvs = [...new Set(targets.map(x => x.mv))].sort((a, b) => a - b);
     if (keyTarget) {
-        keyTarget.hidden = !t;
-        if (t) keyTarget.textContent = `${t.kind === 'commander' ? 'Commander' : 'Top end'}: ${t.mv} mana`;
+        keyTarget.hidden = !targets.length;
+        if (targets.length) {
+            const who = targets[0].kind !== 'commander' ? 'Top end' : targets.length > 1 ? 'Commanders' : 'Commander';
+            keyTarget.textContent = `${who}: ${mvs.join(' and ')} mana`;
+        }
     }
     if (!$('manadev-chart')) return;
     if (!r) {
@@ -245,7 +308,7 @@ function updateChart(r) {
         line(m.map(x => x.p50), { label: 'Typical game', borderColor: TX.green, backgroundColor: TX.green, borderWidth: 2, pointHoverRadius: 4 }),
         line(lands.map(x => x.p50), { label: 'Lands alone', borderColor: TX.mid, backgroundColor: TX.mid, borderWidth: 2, borderDash: [6, 4], pointHoverRadius: 3 })
     ];
-    if (t) datasets.push(line(m.map(() => t.mv), { label: 'target', borderColor: TX.amber, borderWidth: 1, borderDash: [3, 4] }));
+    for (const mv of mvs) datasets.push(line(m.map(() => mv), { label: 'target', borderColor: TX.amber, borderWidth: 1, borderDash: [3, 4] }));
     chart = createOrUpdateChart(chart, 'manadev-chart', {
         type: 'line',
         data: { labels: m.map(x => String(x.turn)), datasets },
@@ -277,8 +340,14 @@ function updateChart(r) {
     });
 }
 
+/** Every target of a result, in deck order (one commander, several, or the top end). */
+function targetsOf(r) {
+    if (r?.targets?.length) return r.targets;
+    return r?.target ? [r.target] : [];
+}
+
 function gridRows(r) {
-    const mv = r.target?.mv ?? 0;
+    const mv = targetsOf(r).reduce((m, x) => Math.max(m, x.mv), 0);
     const hi = Math.max(8, Math.min(14, mv + 2));
     const rows = [];
     for (let k = 2; k <= hi; k++) rows.push(k);
@@ -292,14 +361,16 @@ function renderGrid(r) {
         el.innerHTML = '<div class="tx-empty">Load a deck to see the odds.</div>';
         return;
     }
-    const mv = r.target?.mv ?? null;
+    const targets = targetsOf(r);
+    // Each target's row, and the cell that is casting it on curve.
+    const curveTurn = new Map(targets.map(x => [x.mv, x.ramp?.onCurveTurn]));
     const turns = Array.from({ length: MD.SHOWN_TURNS }, (_, i) => i + 1);
     const head = `<tr><th scope="col">Mana</th>${turns.map(t => `<th scope="col">T${t}</th>`).join('')}</tr>`;
     const body = gridRows(r).map(k => {
-        const isTarget = mv === k;
+        const isTarget = curveTurn.has(k);
         const cells = turns.map(t => {
             const p = r.reach[t]?.[k] ?? 0;
-            const cls = [p < 0.005 ? 'is-none' : '', p < 0.05 ? 'is-low' : '', p >= 0.75 ? 'is-high' : '', isTarget && t === r.target?.ramp?.onCurveTurn ? 'is-curve' : ''].filter(Boolean).join(' ');
+            const cls = [p < 0.005 ? 'is-none' : '', p < 0.05 ? 'is-low' : '', p >= 0.75 ? 'is-high' : '', isTarget && t === curveTurn.get(k) ? 'is-curve' : ''].filter(Boolean).join(' ');
             // The number without its % sign: "<1" / ">99" keep the honest ends.
             const label = p < 0.005 ? '·' : pct(p).replace('%', '');
             return `<td${cls ? ` class="${cls}"` : ''} style="--p:${Math.round(p * 38)}%" title="${pct(p)} of games had ${k}+ mana by turn ${t}">${label}</td>`;
@@ -311,8 +382,11 @@ function renderGrid(r) {
     if (meta) meta.textContent = 'percent of games';
     const caption = $('md-grid-caption');
     if (caption) {
+        const many = targets.length > 1;
         caption.innerHTML = 'Each cell is the share of games that had at least that much mana on some turn up to that one.'
-            + (r.target ? ` The highlighted row is ${targetLabel(r.target)}’s ${r.target.mv} mana; the outlined cell is casting it on curve (colours are checked in the stats above, not here).` : '');
+            + (many
+                ? ` The highlighted rows are your commanders’ mana values (${targets.map(x => `${cardRef(x.name)} ${x.mv}`).join(', ')}); the outlined cells are casting each on curve (colours are checked in the stats above, not here).`
+                : r.target ? ` The highlighted row is ${targetLabel(r.target)}’s ${r.target.mv} mana; the outlined cell is casting it on curve (colours are checked in the stats above, not here).` : '');
     }
 }
 
@@ -331,8 +405,11 @@ function renderRamp(r, lib) {
         return;
     }
     if (meta) meta.textContent = `${r.rampCount} counted${r.notCounted ? ` · ${r.notCounted} not` : ''}`;
-    const counted = r.ramp.filter(x => x.counted).sort((a, b) => b.castBy4 - a.castBy4 || b.castBy3 - a.castBy3 || a.name.localeCompare(b.name));
-    const off = r.ramp.filter(x => !x.counted).sort((a, b) => a.name.localeCompare(b.name));
+    const byName = (a, b) => a.name.localeCompare(b.name);
+    const counted = r.ramp.filter(x => x.role === 'counted').sort((a, b) => b.castBy4 - a.castBy4 || b.castBy3 - a.castBy3 || byName(a, b));
+    const off = r.ramp.filter(x => x.role === 'ramp').sort(byName);
+    const helps = r.ramp.filter(x => x.role === 'helps').sort(byName);
+    const group = (title, rows) => (rows.length ? `<tr class="md-ramp-group"><td colspan="4">${title}</td></tr>${rows.map(x => row(x, true)).join('')}` : '');
     const row = (x, isOff) => `
         <tr${isOff ? ' class="is-off"' : ''}>
             <td>
@@ -353,7 +430,8 @@ function renderRamp(r, lib) {
             </tr></thead>
             <tbody>
                 ${counted.map(x => row(x, false)).join('')}
-                ${off.length ? `<tr class="md-ramp-group"><td colspan="4">Recognised but not counted</td></tr>${off.map(x => row(x, true)).join('')}` : ''}
+                ${group('Ramp the model can’t simulate — not counted', off)}
+                ${group('Helps your mana, but not ramp — not counted', helps)}
             </tbody>
         </table>`;
 }
@@ -367,21 +445,37 @@ function renderSamples(r, lib) {
         return;
     }
     const t = r.target;
+    const targets = targetsOf(r);
+    const many = targets.length > 1;
     const html = games.map((g, i) => {
-        const last = Math.min(MD.SHOWN_TURNS, Math.max(6, g.targetTurn || 8));
+        const latest = many ? Math.max(...targets.map((_, k) => g.targetTurns?.[k] || 8)) : g.targetTurn || 8;
+        const last = Math.min(MD.SHOWN_TURNS, Math.max(6, latest));
         const lands = g.hand.filter(name => lib.cards.find(c => c.name === name)?.land).length;
         const kept = `${g.hand.length} card${g.hand.length === 1 ? '' : 's'}, ${lands} ${plural(lands, 'land')}`;
         const mull = g.mulligans ? `after ${g.mulligans} mulligan${g.mulligans === 1 ? '' : 's'}` : 'no mulligan';
-        const when = t
-            ? (g.targetTurn
-                ? `${targetLabel(t)} castable on <strong>turn ${g.targetTurn}</strong>${g.landsOnlyTargetTurn ? ` (lands alone: turn ${g.landsOnlyTargetTurn})` : ` (lands alone: after turn ${MD.SIM_TURNS})`}`
-                : `${targetLabel(t)} not castable by turn ${MD.SIM_TURNS}`)
-            : '';
+        const alone = turn => (turn ? `lands alone: turn ${turn}` : `lands alone: after turn ${MD.SIM_TURNS}`);
+        let when = '';
+        if (many) {
+            when = targets.map((x, k) => {
+                const turn = g.targetTurns?.[k];
+                return turn
+                    ? `${cardRef(x.name)} on <strong>turn ${turn}</strong> (${alone(g.landsOnlyTargetTurns?.[k])})`
+                    : `${cardRef(x.name)} not by turn ${MD.SIM_TURNS}`;
+            }).join(' · ');
+        } else if (t) {
+            when = g.targetTurn
+                ? `${targetLabel(t)} castable on <strong>turn ${g.targetTurn}</strong> (${alone(g.landsOnlyTargetTurn)})`
+                : `${targetLabel(t)} not castable by turn ${MD.SIM_TURNS}`;
+        }
+        const flag = e => {
+            if (many) return e.castable?.length ? `<span class="md-turn-flag">← ${escapeHtml(e.castable.join(' and '))} castable</span>` : '';
+            return e.target ? `<span class="md-turn-flag">← ${t?.kind === 'commander' ? 'commander' : 'top end'} castable</span>` : '';
+        };
         const turns = g.turns.slice(0, last).map(e => `
-            <li class="md-turn${e.target ? ' is-target' : ''}">
+            <li class="md-turn${e.target || (many && e.castable?.length) ? ' is-target' : ''}">
                 <span class="md-turn-n">T${e.turn}</span>
                 <span class="md-turn-mana" aria-label="${e.mana} mana">${e.mana}${MD.manaPips(e.colors)}</span>
-                <span class="md-turn-what">${MD.describeTurn(e)}${e.target ? `<span class="md-turn-flag">← ${t?.kind === 'commander' ? 'commander' : 'top end'} castable</span>` : ''}</span>
+                <span class="md-turn-what">${MD.describeTurn(e)}${flag(e)}</span>
             </li>`).join('');
         return `
             <article class="md-game">
@@ -395,12 +489,28 @@ function renderSamples(r, lib) {
         <p class="md-samples-foot">${games.length} of ${r.games.toLocaleString('en-US')} simulated games${reshuffles ? ', reshuffled' : ''}.</p>`;
 }
 
+let renderToken = 0;
+
+/** Run after the next paint (a task queued from requestAnimationFrame). */
+const afterPaint = fn => (typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame(() => setTimeout(fn, 0))
+    : setTimeout(fn, 0));
+
+/**
+ * The answer first, the evidence a frame later: the bottom line and hero
+ * paint without waiting for the chart, grid, ramp table and sample games,
+ * and no single task builds the whole page.
+ */
 function render(r, lib) {
+    const token = ++renderToken;
     renderSummary(r);
-    updateChart(r);
-    renderGrid(r);
-    renderRamp(r, lib);
-    renderSamples(r, lib);
+    afterPaint(() => {
+        if (token !== renderToken || !isCalculatorActive(NAME)) return;
+        updateChart(r);
+        renderGrid(r);
+        renderRamp(r, lib);
+        renderSamples(r, lib);
+    });
 }
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────

@@ -89,6 +89,15 @@ export function typeComposition(cardsByName = {}) {
 }
 
 /**
+ * Keep the card that is hardest to cast on curve: most pips, then lowest mana
+ * value (fewer cards seen to find the sources). Ties keep the first.
+ */
+function heavier(entry, candidate) {
+    const h = entry.heaviest;
+    if (!h || candidate.pips > h.pips || (candidate.pips === h.pips && candidate.mv < h.mv)) entry.heaviest = candidate;
+}
+
+/**
  * Colour demand (pips on nonland cards) and supply (lands that make each colour).
  * The identity includes the commanders' even though they are not in the library.
  * @param {Object} deck - a DeckConfig snapshot, a Library, or a cardsByName map
@@ -122,13 +131,16 @@ export function colorProfile(deck = {}, { commanderCards = commanderCardsOf(deck
             if (pips[c] <= 0) continue;
             out[c].pips += pips[c] * copies;
             out[c].cards += copies;
-            // "Heaviest" = the card that is hardest to cast on curve: most pips,
-            // then lowest mana value (fewer cards seen to find the sources).
-            const h = out[c].heaviest;
-            if (!h || pips[c] > h.pips || (pips[c] === h.pips && mv < h.mv)) {
-                out[c].heaviest = { name: card.name, pips: pips[c], mv };
-            }
+            heavier(out[c], { name: card.name, pips: pips[c], mv });
         }
+    }
+    // Commanders (never in the library) can be a colour's hardest card too, as
+    // on Mana Base; they don't add to the library's pip and card counts.
+    for (const card of commanderCards ?? []) {
+        if (!card?.mana_cost || isLand(card)) continue;
+        const { pips, x } = parseManaCost(card.mana_cost);
+        const mv = Math.floor(Number(card.cmc) || 0) + x;
+        for (const c of COLORS) if (pips[c] > 0) heavier(out[c], { name: card.name, pips: pips[c], mv, commander: true });
     }
 
     const colors = COLORS.filter(c => identity.includes(c) || out[c].pips > 0).map(c => out[c]);
@@ -345,7 +357,7 @@ export function healthChecks(stats, { format = FORMATS.commander } = {}) {
             color: c.color,
             status: p >= 0.88 ? 'good' : p >= 0.78 ? 'warn' : 'bad',
             title: plural(c.sources, `${colorWord(c.color).toLowerCase()} source`),
-            detail: `Your most demanding ${colorWord(c.color).toLowerCase()} card is ${c.heaviest.name} (${plural(c.heaviest.pips, 'pip')} at mana value ${c.heaviest.mv}). With your lands it has the colours on curve ${pct(p)} of the time${c.needed != null && c.needed > c.sources ? `; about ${c.needed} sources would reach 90%` : ''}.`,
+            detail: `Your most demanding ${colorWord(c.color).toLowerCase()} card is ${c.heaviest.commander ? `your commander, ${c.heaviest.name}` : c.heaviest.name} (${plural(c.heaviest.pips, 'pip')} at mana value ${c.heaviest.mv}). With your lands it has the colours on curve ${pct(p)} of the time${c.needed != null && c.needed > c.sources ? `; about ${c.needed} sources would reach 90%` : ''}.`,
             value: pct(p)
         });
     }

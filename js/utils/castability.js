@@ -433,12 +433,22 @@ export function sourcesTable({ deckSize, lands, format = FORMATS.commander, onPl
  * Full castability analysis of a deck's library (commanders are never in it —
  * see library.js — but they still set the colour identity).
  *
+ * The commanders are checked too (`commanders`): cast from the command zone,
+ * never drawn, so "on curve" is simply their mana value with that many land
+ * drops — the same lands, the same exact odds as any spell. The rule for the
+ * counts: a commander counts toward its colours' hardest card (so the
+ * bottleneck and the sources each colour wants include it) and the turn
+ * strips, but not toward the library's spell counts (`total`, `under`,
+ * `average`, `worst`, each colour's `pips` / `cards` / `under`), which stay
+ * "X of your Y coloured spells" in the library. The page gives the commanders
+ * their own line, so a 100-card deck's most-cast spells are never just 2 of 49.
+ *
  * @param {Object} deck - a Library from libraryOf(), a DeckConfig snapshot, or a cardsByName map
  * @param {{deckSize?:number, format?:object, onPlay?:boolean, target?:number, byTurn?:number, commanderCards?:Array<Object|null>}} [opts]
  *   deckSize: library size (default: the copies listed); byTurn: also give
  *   every card and colour its chance on turns 1…byTurn (the "when does it
  *   become reliable" strips), 0 skips the extra work; commanderCards: the
- *   command zone's records, for the colour identity.
+ *   command zone's records, for the colour identity and the commander rows.
  */
 export function analyzeCastability(deck = {}, { deckSize, format = FORMATS.commander, onPlay = true, target = 0.9, byTurn = 0, commanderCards = [] } = {}) {
     const cards = asLibrary(deck, { format }).cards;
@@ -492,22 +502,11 @@ export function analyzeCastability(deck = {}, { deckSize, format = FORMATS.comma
     const rows = [];
     const skipped = [];
     let phyrexianOnly = 0;
-    for (const card of cards) {
-        if (isLand(card)) continue;
-        if (!card.mana_cost) {
-            // Double-faced cards from some importers arrive without a cost.
-            if ((card.colors ?? card.color_identity ?? []).length > 0) skipped.push({ name: card.name, count: Number(card.count) });
-            continue;
-        }
-        const req = cardRequirement(card);
-        if (req.coloredPips === 0) {
-            if (req.phyrexian > 0) phyrexianOnly++;
-            continue;
-        }
+    const rowOf = (card, req, extra) => {
         const p = probFor(req);
-        rows.push({
+        return {
             name: card.name,
-            count: Number(card.count),
+            count: Number(card.count) || 1,
             cost: card.mana_cost,
             mv: req.mv,
             x: req.x,
@@ -521,29 +520,64 @@ export function analyzeCastability(deck = {}, { deckSize, format = FORMATS.comma
             chance: p.conditional,
             overall: p.joint,
             landsOk: p.landsOk,
+            ...extra,
             ...(stripTurns ? { byTurn: stripFor(req) } : {})
-        });
+        };
+    };
+    for (const card of cards) {
+        if (isLand(card)) continue;
+        if (!card.mana_cost) {
+            // Double-faced cards from some importers arrive without a cost.
+            if ((card.colors ?? card.color_identity ?? []).length > 0) skipped.push({ name: card.name, count: Number(card.count) });
+            continue;
+        }
+        const req = cardRequirement(card);
+        if (req.coloredPips === 0) {
+            if (req.phyrexian > 0) phyrexianOnly++;
+            continue;
+        }
+        rows.push(rowOf(card, req));
     }
     // Worst first; ties broken by the harder overall odds, then name.
-    rows.sort((a, b) => a.chance - b.chance || a.overall - b.overall || a.name.localeCompare(b.name));
+    const worstFirst = (a, b) => a.chance - b.chance || a.overall - b.overall || a.name.localeCompare(b.name);
+    rows.sort(worstFirst);
+
+    // The command zone, in deck order: each commander with coloured pips.
+    const commanders = [];
+    const commandersUnchecked = [];
+    for (const card of (commanderCards ?? []).filter(Boolean)) {
+        if (isLand(card)) continue;
+        if (!card.mana_cost) {
+            commandersUnchecked.push({ name: card.name, why: 'cost' });
+            continue;
+        }
+        const req = cardRequirement(card);
+        if (req.coloredPips === 0) {
+            commandersUnchecked.push({ name: card.name, why: 'colourless' });
+            continue;
+        }
+        commanders.push(rowOf({ ...card, count: 1 }, req, { commander: true }));
+    }
 
     const meets = p => p >= target - 1e-9;
     const colors = COLORS.filter(c => identity.includes(c) || rows.some(r => r.pips[c] > 0)).map(c => {
         const needing = rows.filter(r => r.pips[c] > 0 || r.colors.includes(c));
         const strict = rows.filter(r => r.pips[c] > 0);
+        // A colour's hardest card may be a commander: the sources it wants include them.
+        const demanding = [...strict, ...commanders.filter(r => r.pips[c] > 0)];
         let hardest = null;
-        for (const r of strict) {
+        for (const r of demanding) {
             const needed = neededFor(r.pips[c], r.turn);
             const rank = needed ?? Infinity;
             const hRank = hardest ? (hardest.needed ?? Infinity) : -1;
             if (!hardest || rank > hRank || (rank === hRank && r.chance < hardest.chance)) {
-                hardest = { name: r.name, pips: r.pips[c], turn: r.turn, mv: r.mv, chance: r.chance, needed };
+                hardest = { name: r.name, pips: r.pips[c], turn: r.turn, mv: r.mv, chance: r.chance, needed, commander: Boolean(r.commander) };
             }
         }
-        const peers = hardest ? strict.filter(r => r.pips[c] === hardest.pips && r.turn === hardest.turn).length : 0;
+        const peers = hardest ? demanding.filter(r => r.pips[c] === hardest.pips && r.turn === hardest.turn).length : 0;
         // One strip per pip count this colour's cards ask for (up to three):
         // with t land drops made by turn t, can they pay that many symbols?
-        const maxPips = Math.min(3, strict.reduce((m, r) => Math.max(m, r.pips[c]), 0));
+        const maxPips = Math.min(3, demanding.reduce((m, r) => Math.max(m, r.pips[c]), 0));
         const strips = stripTurns ? Array.from({ length: maxPips }, (_, i) => ({
             pips: i + 1,
             cells: Array.from({ length: stripTurns }, (__, j) => {
@@ -582,6 +616,10 @@ export function analyzeCastability(deck = {}, { deckSize, format = FORMATS.comma
         landGroups: groupLands(landInfo),
         colorlessLands: landInfo.filter(l => l.colors.length === 0).reduce((s, l) => s + l.count, 0),
         cards: rows,
+        // The command zone's coloured spells (deck order) — not in the counts below.
+        commanders,
+        commandersUnder: commanders.filter(r => !meets(r.chance)).length,
+        commandersUnchecked,
         skipped,
         phyrexianOnly,
         colors,

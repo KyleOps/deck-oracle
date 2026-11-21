@@ -180,4 +180,16 @@ describe('colorProfile', () => {
         assert.equal(blue.heaviest.name, 'Counterspell');
         assert.equal(profile.colorlessLands, 2);
     });
+
+    it('lets a commander be the hardest card without adding to the library counts', () => {
+        const cards = {
+            a: { name: 'Counterspell', count: 1, cmc: 2, mana_cost: '{U}{U}', type_line: 'Instant', color_identity: ['U'] },
+            l: { name: 'Island', count: 10, type_line: 'Basic Land — Island' }
+        };
+        const boss = { name: 'Blue Boss', cmc: 3, mana_cost: '{U}{U}{U}', type_line: 'Legendary Creature', color_identity: ['U'] };
+        const blue = colorProfile(cards, { commanderCards: [boss, null, { name: 'Costless' }] }).colors.find(x => x.color === 'U');
+        assert.deepEqual(blue.heaviest, { name: 'Blue Boss', pips: 3, mv: 3, commander: true });
+        assert.equal(blue.pips, 2);
+        assert.equal(blue.cards, 1);
+    });
 });

@@ -1,4 +1,14 @@
 {
+  "Aminatou's Augury": {
+    "name": "Aminatou's Augury",
+    "mana_cost": "{6}{U}{U}",
+    "cmc": 8,
+    "type_line": "Sorcery",
+    "oracle_text": "Exile the top eight cards of your library. You may put a land card from among them onto the battlefield. Until end of turn, for each nonland card type, you may cast a spell of that type from among the exiled cards without paying its mana cost.",
+    "color_identity": [
+      "U"
+    ]
+  },
   "Ancient Tomb": {
     "name": "Ancient Tomb",
     "mana_cost": "",
@@ -40,6 +50,14 @@
       "U"
     ]
   },
+  "Ashnod's Altar": {
+    "name": "Ashnod's Altar",
+    "mana_cost": "{3}",
+    "cmc": 3,
+    "type_line": "Artifact",
+    "oracle_text": "Sacrifice a creature: Add {C}{C}.",
+    "color_identity": []
+  },
   "Avacyn's Pilgrim": {
     "name": "Avacyn's Pilgrim",
     "mana_cost": "{G}",
@@ -60,6 +78,16 @@
     "cmc": 3,
     "type_line": "Legendary Creature — Human Monk",
     "oracle_text": "You may play two additional lands on each of your turns.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Beanstalk Giant // Fertile Footsteps": {
+    "name": "Beanstalk Giant // Fertile Footsteps",
+    "mana_cost": "{6}{G} // {2}{G}",
+    "cmc": 7,
+    "type_line": "Creature — Giant // Sorcery — Adventure",
+    "oracle_text": "Beanstalk Giant's power and toughness are each equal to the number of lands you control.\nSearch your library for a basic land card, put it onto the battlefield, then shuffle. (Then exile this card. You may cast the creature later from exile.)",
     "color_identity": [
       "G"
     ]
@@ -98,6 +126,26 @@
       "W"
     ]
   },
+  "Black Market Connections": {
+    "name": "Black Market Connections",
+    "mana_cost": "{2}{B}",
+    "cmc": 3,
+    "type_line": "Enchantment",
+    "oracle_text": "At the beginning of your first main phase, choose one or more —\n• Sell Contraband — Create a Treasure token. You lose 1 life.\n• Buy Information — Draw a card. You lose 2 life.\n• Hire a Mercenary — Create a 3/2 colorless Shapeshifter creature token with changeling. You lose 3 life. (It is every creature type.)",
+    "color_identity": [
+      "B"
+    ]
+  },
+  "Blasphemous Act": {
+    "name": "Blasphemous Act",
+    "mana_cost": "{8}{R}",
+    "cmc": 9,
+    "type_line": "Sorcery",
+    "oracle_text": "This spell costs {1} less to cast for each creature on the battlefield.\nBlasphemous Act deals 13 damage to each creature.",
+    "color_identity": [
+      "R"
+    ]
+  },
   "Bloom Tender": {
     "name": "Bloom Tender",
     "mana_cost": "{1}{G}",
@@ -130,6 +178,16 @@
       "U"
     ]
   },
+  "Boundless Realms": {
+    "name": "Boundless Realms",
+    "mana_cost": "{6}{G}",
+    "cmc": 7,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for up to X basic land cards, where X is the number of lands you control, put them onto the battlefield tapped, then shuffle.",
+    "color_identity": [
+      "G"
+    ]
+  },
   "Breeding Pool": {
     "name": "Breeding Pool",
     "mana_cost": "",
@@ -145,6 +203,16 @@
       "U"
     ]
   },
+  "Burgeoning": {
+    "name": "Burgeoning",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Enchantment",
+    "oracle_text": "Whenever an opponent plays a land, you may put a land card from your hand onto the battlefield.",
+    "color_identity": [
+      "G"
+    ]
+  },
   "Burnished Hart": {
     "name": "Burnished Hart",
     "mana_cost": "{3}",
@@ -152,6 +220,16 @@
     "type_line": "Artifact Creature — Elk",
     "oracle_text": "{3}, Sacrifice this creature: Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
     "color_identity": []
+  },
+  "Carpet of Flowers": {
+    "name": "Carpet of Flowers",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Enchantment",
+    "oracle_text": "At the beginning of each of your main phases, if you haven't added mana with this ability this turn, you may add X mana of any one color, where X is the number of Islands target opponent controls.",
+    "color_identity": [
+      "G"
+    ]
   },
   "Circuitous Route": {
     "name": "Circuitous Route",
@@ -239,12 +317,32 @@
       "B"
     ]
   },
+  "Dockside Extortionist": {
+    "name": "Dockside Extortionist",
+    "mana_cost": "{1}{R}",
+    "cmc": 2,
+    "type_line": "Creature — Goblin Pirate",
+    "oracle_text": "When this creature enters, create X Treasure tokens, where X is the number of artifacts and enchantments your opponents control. (Treasure tokens are artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "color_identity": [
+      "R"
+    ]
+  },
   "Dryad of the Ilysian Grove": {
     "name": "Dryad of the Ilysian Grove",
     "mana_cost": "{2}{G}",
     "cmc": 3,
     "type_line": "Enchantment Creature — Nymph Dryad",
     "oracle_text": "You may play an additional land on each of your turns.\nLands you control are every basic land type in addition to their other types.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Elvish Archdruid": {
+    "name": "Elvish Archdruid",
+    "mana_cost": "{1}{G}{G}",
+    "cmc": 3,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "Other Elf creatures you control get +1/+1.\n{T}: Add {G} for each Elf you control.",
     "color_identity": [
       "G"
     ]
@@ -259,6 +357,16 @@
       "G"
     ],
     "produced_mana": [
+      "G"
+    ]
+  },
+  "Elvish Pioneer": {
+    "name": "Elvish Pioneer",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "When this creature enters, you may put a basic land card from your hand onto the battlefield tapped.",
+    "color_identity": [
       "G"
     ]
   },
@@ -333,6 +441,14 @@
       "W"
     ]
   },
+  "Ghirapur Orrery": {
+    "name": "Ghirapur Orrery",
+    "mana_cost": "{4}",
+    "cmc": 4,
+    "type_line": "Artifact",
+    "oracle_text": "Each player may play an additional land on each of their turns.\nAt the beginning of each player's upkeep, if that player has no cards in hand, that player draws three cards.",
+    "color_identity": []
+  },
   "Gilded Lotus": {
     "name": "Gilded Lotus",
     "mana_cost": "{5}",
@@ -358,6 +474,14 @@
       "G"
     ]
   },
+  "Grim Monolith": {
+    "name": "Grim Monolith",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact",
+    "oracle_text": "This artifact doesn't untap during your untap step.\n{T}: Add {C}{C}{C}.\n{4}: Untap this artifact.",
+    "color_identity": []
+  },
   "Growth Spiral": {
     "name": "Growth Spiral",
     "mana_cost": "{G}{U}",
@@ -367,6 +491,16 @@
     "color_identity": [
       "G",
       "U"
+    ]
+  },
+  "Gyre Sage": {
+    "name": "Gyre Sage",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Elf Druid",
+    "oracle_text": "Evolve (Whenever a creature you control enters, if that creature has greater power or toughness than this creature, put a +1/+1 counter on this creature.)\n{T}: Add {G} for each +1/+1 counter on this creature.",
+    "color_identity": [
+      "G"
     ]
   },
   "Harrow": {
@@ -405,6 +539,24 @@
       "U"
     ]
   },
+  "Jeweled Lotus": {
+    "name": "Jeweled Lotus",
+    "mana_cost": "{0}",
+    "cmc": 0,
+    "type_line": "Artifact",
+    "oracle_text": "{T}, Sacrifice this artifact: Add three mana of any one color. Spend this mana only to cast your commander.",
+    "color_identity": []
+  },
+  "Kodama of the East Tree": {
+    "name": "Kodama of the East Tree",
+    "mana_cost": "{4}{G}{G}",
+    "cmc": 6,
+    "type_line": "Legendary Creature — Spirit",
+    "oracle_text": "Reach\nWhenever another permanent you control enters, if it wasn't put onto the battlefield with this ability, you may put a permanent card with equal or lesser mana value from your hand onto the battlefield.\nPartner (You can have two commanders if both have partner.)",
+    "color_identity": [
+      "G"
+    ]
+  },
   "Kodama's Reach": {
     "name": "Kodama's Reach",
     "mana_cost": "{2}{G}",
@@ -414,6 +566,14 @@
     "color_identity": [
       "G"
     ]
+  },
+  "Krosan Verge": {
+    "name": "Krosan Verge",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Land",
+    "oracle_text": "This land enters tapped.\n{T}: Add {C}.\n{2}, {T}, Sacrifice this land: Search your library for a Forest card and a Plains card, put them onto the battlefield tapped, then shuffle.",
+    "color_identity": []
   },
   "Lightning Greaves": {
     "name": "Lightning Greaves",
@@ -433,6 +593,34 @@
       "G"
     ],
     "produced_mana": [
+      "G"
+    ]
+  },
+  "Lotus Cobra": {
+    "name": "Lotus Cobra",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Snake",
+    "oracle_text": "Landfall — Whenever a land you control enters, add one mana of any color.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Lotus Petal": {
+    "name": "Lotus Petal",
+    "mana_cost": "{0}",
+    "cmc": 0,
+    "type_line": "Artifact",
+    "oracle_text": "{T}, Sacrifice this artifact: Add one mana of any color.",
+    "color_identity": []
+  },
+  "Mana Reflection": {
+    "name": "Mana Reflection",
+    "mana_cost": "{4}{G}{G}",
+    "cmc": 6,
+    "type_line": "Enchantment",
+    "oracle_text": "If you tap a permanent for mana, it produces twice as much of that mana instead.",
+    "color_identity": [
       "G"
     ]
   },
@@ -488,6 +676,14 @@
     "color_identity": [
       "G"
     ]
+  },
+  "Nykthos, Shrine to Nyx": {
+    "name": "Nykthos, Shrine to Nyx",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Legendary Land",
+    "oracle_text": "{T}: Add {C}.\n{2}, {T}: Choose a color. Add an amount of mana of that color equal to your devotion to that color. (Your devotion to a color is the number of mana symbols of that color in the mana costs of permanents you control.)",
+    "color_identity": []
   },
   "Open the Way": {
     "name": "Open the Way",
@@ -570,6 +766,16 @@
       "U"
     ]
   },
+  "Rites of Flourishing": {
+    "name": "Rites of Flourishing",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Enchantment",
+    "oracle_text": "At the beginning of each player's draw step, that player draws an additional card.\nEach player may play an additional land on each of their turns.",
+    "color_identity": [
+      "G"
+    ]
+  },
   "Sakura-Tribe Elder": {
     "name": "Sakura-Tribe Elder",
     "mana_cost": "{1}{G}",
@@ -578,6 +784,26 @@
     "oracle_text": "Sacrifice this creature: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
     "color_identity": [
       "G"
+    ]
+  },
+  "Sakura-Tribe Scout": {
+    "name": "Sakura-Tribe Scout",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Creature — Snake Shaman Scout",
+    "oracle_text": "{T}: You may put a land card from your hand onto the battlefield.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Seething Song": {
+    "name": "Seething Song",
+    "mana_cost": "{2}{R}",
+    "cmc": 3,
+    "type_line": "Instant",
+    "oracle_text": "Add {R}{R}{R}{R}{R}.",
+    "color_identity": [
+      "R"
     ]
   },
   "Selvala, Heart of the Wilds": {
@@ -699,6 +925,16 @@
       "U"
     ]
   },
+  "Tempt with Discovery": {
+    "name": "Tempt with Discovery",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Sorcery",
+    "oracle_text": "Tempting offer — Search your library for a land card and put it onto the battlefield. Each opponent may search their library for a land card and put it onto the battlefield. For each opponent who searches a library this way, search your library for a land card and put it onto the battlefield. Then each player who searched a library this way shuffles.",
+    "color_identity": [
+      "G"
+    ]
+  },
   "Thornwood Falls": {
     "name": "Thornwood Falls",
     "mana_cost": "",
@@ -735,6 +971,16 @@
       "G"
     ]
   },
+  "Thryx, the Sudden Storm": {
+    "name": "Thryx, the Sudden Storm",
+    "mana_cost": "{3}{U}{U}",
+    "cmc": 5,
+    "type_line": "Legendary Creature — Elemental Giant",
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)\nFlying\nSpells you cast with mana value 5 or greater cost {1} less to cast and can't be countered.",
+    "color_identity": [
+      "U"
+    ]
+  },
   "Tireless Provisioner": {
     "name": "Tireless Provisioner",
     "mana_cost": "{2}{G}",
@@ -763,6 +1009,25 @@
       "C"
     ]
   },
+  "Ugin, the Ineffable": {
+    "name": "Ugin, the Ineffable",
+    "mana_cost": "{6}",
+    "cmc": 6,
+    "type_line": "Legendary Planeswalker — Ugin",
+    "oracle_text": "Colorless spells you cast cost {2} less to cast.\n+1: Exile the top card of your library face down and look at it. Create a 2/2 colorless Spirit creature token. When that token leaves the battlefield, put the exiled card into your hand.\n−3: Destroy target permanent that's one or more colors.",
+    "color_identity": []
+  },
+  "Uro, Titan of Nature's Wrath": {
+    "name": "Uro, Titan of Nature's Wrath",
+    "mana_cost": "{1}{G}{U}",
+    "cmc": 3,
+    "type_line": "Legendary Creature — Elder Giant",
+    "oracle_text": "When Uro enters, sacrifice it unless it escaped.\nWhenever Uro enters or attacks, you gain 3 life and draw a card, then you may put a land card from your hand onto the battlefield.\nEscape—{G}{G}{U}{U}, Exile five other cards from your graveyard. (You may cast this card from your graveyard for its escape cost.)",
+    "color_identity": [
+      "G",
+      "U"
+    ]
+  },
   "Utopia Sprawl": {
     "name": "Utopia Sprawl",
     "mana_cost": "{G}",
@@ -787,6 +1052,16 @@
     "type_line": "Artifact",
     "oracle_text": "{2}, {T}, Sacrifice this artifact: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
     "color_identity": []
+  },
+  "Wayward Swordtooth": {
+    "name": "Wayward Swordtooth",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Creature — Dinosaur",
+    "oracle_text": "Ascend (If you control ten or more permanents, you get the city's blessing for the rest of the game.)\nYou may play an additional land on each of your turns.\nThis creature can't attack or block unless you have the city's blessing.",
+    "color_identity": [
+      "G"
+    ]
   },
   "Wild Growth": {
     "name": "Wild Growth",
