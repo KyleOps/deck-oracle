@@ -7,7 +7,6 @@
  */
 
 import * as DeckConfig from './utils/deckConfig.js';
-import * as OpponentState from './utils/opponentState.js';
 import * as Share from './utils/share.js';
 import { analyzeDeck } from './utils/deckRadar.js';
 import { featuredCardName } from './utils/deckStats.js';
@@ -23,12 +22,6 @@ import { initPalette, openPalette } from './shell/palette.js';
 import { initDeckDialog, openDeckDialog, renderSavedDecks } from './shell/deckDialog.js';
 import { initOverlays, toast } from './shell/overlays.js';
 import { initTheme, toggleTheme, onThemeChange } from './shell/theme.js';
-
-const EXAMPLE_OPPONENTS = [
-    'https://moxfield.com/decks/NVsnEkQ3y02ATHYk6n1pTA',
-    'https://moxfield.com/decks/Vpiz7R8Rfk-0J7yX0AUQtA',
-    'https://moxfield.com/decks/KP_jB2nYqUmQHVjYQeldyA'
-];
 
 // ── Deck-dependent chrome ────────────────────────────────────────────────────
 
@@ -70,45 +63,33 @@ function syncDeckChrome() {
 
 // ── Opponents bar (multiplayer pages) ────────────────────────────────────────
 
+/** Pages that read opponents' decks show the opponents bar. */
+const usesOpponentBar = name => Boolean(CALCULATORS[name]?.needsOpponents || CALCULATORS[name]?.group === 'multiplayer');
+
+/**
+ * The bar (js/shell/opponentBar.js) loads with the first page that uses it;
+ * every other page leaves it hidden and never downloads it.
+ */
 function initOpponentsBar() {
     const bar = document.getElementById('opponents-config');
-    const body = document.getElementById('opponents-body');
-    const toggle = document.getElementById('opponents-toggle');
+    let module = null;
+    let wanted = null;
+    const load = () => (module ??= import('./shell/opponentBar.js').then(m => {
+        m.initOpponentBar();
+        return m;
+    }).catch(err => {
+        module = null;
+        console.error('Opponents bar failed to load:', err);
+        return null;
+    }));
     onNavigate(name => {
-        if (bar) bar.hidden = CALCULATORS[name]?.group !== 'multiplayer';
+        wanted = usesOpponentBar(name) ? name : null;
+        if (bar && !wanted) bar.hidden = true;
+        if (wanted) load();
     });
-    // Seat the bar under the page header, so a multiplayer page opens with
-    // what the card does before asking for decklists.
     onNavigated((name, panel) => {
-        if (!bar || CALCULATORS[name]?.group !== 'multiplayer') return;
-        const body = panel.querySelector(':scope > .calc-body');
-        if (body && bar.nextElementSibling !== body) body.before(bar);
-    });
-    toggle?.addEventListener('click', () => {
-        const open = toggle.getAttribute('aria-expanded') !== 'true';
-        toggle.setAttribute('aria-expanded', String(open));
-        toggle.textContent = open ? 'Hide' : 'Show';
-        if (body) body.hidden = !open;
-    });
-
-    const exampleBtn = document.getElementById('load-example-opponents-btn');
-    exampleBtn?.addEventListener('click', async () => {
-        const label = exampleBtn.textContent;
-        exampleBtn.textContent = 'Loading…';
-        exampleBtn.disabled = true;
-        try {
-            while (OpponentState.getActiveOpponents().length < 3) OpponentState.addOpponent();
-            await Promise.all(EXAMPLE_OPPONENTS.map((url, i) =>
-                OpponentState.importOpponentDeck(`opponent${i + 1}`, url, true)));
-            OpponentState.renderOpponentTabs();
-            toast('Loaded three example opponents.', { tone: 'good' });
-        } catch (e) {
-            console.error('Failed to load example opponents', e);
-            toast('Couldn’t load the example opponents. Check your connection.', { tone: 'bad' });
-        } finally {
-            exampleBtn.textContent = label;
-            exampleBtn.disabled = false;
-        }
+        if (!usesOpponentBar(name)) return;
+        load().then(m => { if (m && wanted === name) m.showBar(panel); });
     });
 }
 
@@ -206,7 +187,6 @@ async function init() {
     // Restore the last active deck before anything renders. A deck in a share
     // link replaces it below once its import finishes.
     DeckConfig.initDeckConfig({ restore: true });
-    OpponentState.init();
 
     initSidebar();
     initRouter();

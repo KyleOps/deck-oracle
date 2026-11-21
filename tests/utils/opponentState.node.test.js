@@ -12,7 +12,9 @@ const CARDS = {
     Counterspell: { name: 'Counterspell', type_line: 'Instant', cmc: 2 },
     Island: { name: 'Island', type_line: 'Basic Land — Island', cmc: 0 },
     Mountain: { name: 'Mountain', type_line: 'Basic Land — Mountain', cmc: 0 },
-    'Lightning Bolt': { name: 'Lightning Bolt', type_line: 'Instant', cmc: 1 }
+    'Lightning Bolt': { name: 'Lightning Bolt', type_line: 'Instant', cmc: 1 },
+    'Tymna the Weaver': { name: 'Tymna the Weaver', type_line: 'Legendary Creature — Human Cleric', cmc: 3 },
+    'Kraum, Ludevic’s Opus': { name: 'Kraum, Ludevic’s Opus', type_line: 'Legendary Creature — Zombie Horror', cmc: 5 }
 };
 
 let realFetch;
@@ -109,8 +111,86 @@ describe('opponentState — seats and imports', () => {
     it('clearing and removing down to one seat', () => {
         OpponentState.clearOpponentDeck('opponent2');
         assert.deepStrictEqual(OpponentState.getOpponentsWithData(), ['opponent1']);
-        OpponentState.removeOpponent('opponent2');
-        OpponentState.removeOpponent('opponent1');
+        assert.deepStrictEqual(OpponentState.removeOpponent('opponent2'), { opponent1: 'opponent1' }, 'reports where each seat went');
+        assert.strictEqual(OpponentState.removeOpponent('opponent1'), null);
         assert.deepStrictEqual(OpponentState.getActiveOpponents(), ['opponent1'], 'the last seat is never removed');
+    });
+});
+
+describe('opponentState — names, progress and failures', () => {
+    it('names a pasted Commander list for its commanders', async () => {
+        const result = await OpponentState.importOpponentDeck('opponent1', 'Commander\n1 Tymna the Weaver\n1 Kraum, Ludevic’s Opus\nDeck\n1 Sol Ring\n7 Island', false);
+        assert.deepStrictEqual(result.commanders.map(c => c.name), ['Tymna the Weaver', 'Kraum, Ludevic’s Opus']);
+        const data = OpponentState.getOpponentData('opponent1');
+        assert.strictEqual(data.name, 'Tymna the Weaver + Kraum, Ludevic’s Opus');
+        assert.strictEqual(data.deckSize, 8, 'the library: commanders start in the command zone');
+        assert.strictEqual('cardDetails' in data, false, 'no derived data on seats');
+    });
+
+    it('reports progress to its own listeners, not the page listeners', async () => {
+        const seen = [];
+        OpponentState.onImportProgress(key => seen.push(key));
+        let thrown = false;
+        OpponentState.onImportProgress(() => {
+            if (thrown) return;
+            thrown = true;
+            throw new Error('a broken listener (expected in this test)');
+        });
+        await OpponentState.importOpponentDeck('opponent1', '1 Sol Ring\n9 Island', false, () => {});
+        assert.ok(seen.length > 0 && seen.every(k => k === 'opponent1'));
+    });
+
+    it('translates network failures and lets an edit clear them', async () => {
+        const saved = globalThis.fetch;
+        globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+        try {
+            await assert.rejects(OpponentState.importOpponentDeck('opponent2', '1 Brainstorm', false));
+        } finally {
+            globalThis.fetch = saved;
+        }
+        assert.strictEqual(OpponentState.getImportStatus('opponent2').message, 'Couldn’t reach Scryfall. Check your connection.');
+        OpponentState.clearImportError('opponent2');
+        assert.strictEqual(OpponentState.getImportStatus('opponent2'), null);
+        OpponentState.clearImportError('opponent2');
+    });
+
+    it('a newer import into a seat cancels the older one', async () => {
+        const saved = globalThis.fetch;
+        let first = true;
+        globalThis.fetch = (url, init) => {
+            if (first) {
+                first = false;
+                return new Promise((_r, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true }));
+            }
+            return saved(url, init);
+        };
+        try {
+            // Names no earlier test looked up, so this one really goes to the network.
+            const older = OpponentState.importOpponentDeck('opponent1', '1 Ponder\n9 Swamp', false);
+            await new Promise(r => setTimeout(r, 5));
+            const newer = OpponentState.importOpponentDeck('opponent1', '1 Lightning Bolt\n9 Mountain', false);
+            await assert.rejects(older, err => err.kind === 'aborted');
+            await newer;
+        } finally {
+            globalThis.fetch = saved;
+        }
+        assert.ok(OpponentState.getOpponentData('opponent1').cardsByName['Lightning Bolt']);
+        assert.strictEqual(OpponentState.getImportStatus('opponent1'), null);
+    });
+
+    it('rejects unknown seats', async () => {
+        await assert.rejects(OpponentState.importOpponentDeck('opponent9', '1 Sol Ring', false), /Unknown opponent seat/);
+        assert.strictEqual(OpponentState.getOpponentData('nope'), null);
+        assert.strictEqual(OpponentState.defaultName('opponent2'), 'Opponent 2');
+    });
+
+    it('queues a focus request until the bar can take it', () => {
+        let focused = 0;
+        OpponentState.focusImportField();
+        OpponentState.setFocusImportHandler(() => { focused++; });
+        assert.strictEqual(focused, 1, 'the early request runs once the bar registers');
+        OpponentState.focusImportField();
+        assert.strictEqual(focused, 2);
+        OpponentState.setFocusImportHandler(null);
     });
 });
