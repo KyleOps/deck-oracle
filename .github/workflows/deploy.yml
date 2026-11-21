@@ -36,21 +36,33 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Unit tests
-        run: npm test
+      # The unit suite with a coverage floor on the pure modules (js/utils,
+      # js/data); fails on a failing test or when coverage drops.
+      - name: Unit tests and coverage
+        run: npm run test:coverage
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Browser tests
+      # Functional tests, then the performance budgets (run alone).
+      - name: Browser tests and performance budgets
         run: npm run test:e2e
+
+      # Screenshot comparisons start once Linux baselines are committed (run
+      # the "Update visual baselines" workflow); until then this is skipped.
+      - name: Visual comparisons
+        if: hashFiles('tests/visual/__screenshots__/linux/**') != ''
+        run: npm run test:visual
 
       - name: Upload browser test report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            playwright-report/
+            playwright-report-visual/
+          if-no-files-found: ignore
           retention-days: 7
 
   # Build and deploy are separate jobs on purpose. In one job, deploy-pages

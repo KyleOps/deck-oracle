@@ -49,3 +49,11 @@ response.json
 /.claude
 playwright-report/
 test-results/
+
+# Test and build output
+_site/
+coverage/
+playwright-report-visual/
+# Visual baselines: only the Linux ones (made by CI) are committed
+tests/visual/__screenshots__/*
+!tests/visual/__screenshots__/linux/

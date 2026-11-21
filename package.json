@@ -6,16 +6,16 @@
     "main": "index.html",
     "scripts": {
         "test": "node --test tests/**/*.node.test.js",
-        "test:node": "node --test tests/**/*.node.test.js",
-        "test:perf": "node --test tests/performance/benchmarks.node.test.js",
+        "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"js/utils/**\" --test-coverage-include=\"js/data/**\" --test-coverage-lines=84 --test-coverage-branches=84 --test-coverage-functions=83 tests/**/*.node.test.js",
+        "test:perf": "node --test tests/performance/*.node.test.js",
         "test:e2e": "playwright test",
+        "test:visual": "playwright test --config playwright.visual.config.js",
+        "test:visual:update": "playwright test --config playwright.visual.config.js --update-snapshots=all",
         "test:watch": "node --test --watch tests/**/*.node.test.js",
         "sw:manifest": "node scripts/update-sw-manifest.mjs",
-        "lint": "eslint js serverless sw.js scripts tests/**/*.node.test.js tests/e2e playwright.config.js eslint.config.js",
-        "check": "npm run lint && npm test && npm run test:e2e",
-        "dev": "http-server . -p 3000 -c-1",
-        "serve": "http-server . -p 3000 -c-1",
-        "serve:test": "http-server . -p 4173 -c-1 -s"
+        "lint": "eslint js serverless sw.js scripts tests/**/*.node.test.js tests/e2e tests/visual playwright.config.js playwright.visual.config.js eslint.config.js",
+        "check": "npm run lint && npm run test:coverage && npm run test:e2e",
+        "dev": "http-server . -p 3000 -c-1"
     },
     "keywords": [
         "mtg",
@@ -29,15 +29,13 @@
     "devDependencies": {
         "@eslint/js": "10.0.1",
         "@playwright/test": "1.63.0",
+        "chart.js": "4.6.1",
         "eslint": "10.11.0",
         "globals": "17.12.0",
         "http-server": "14.1.1",
-        "lz-string": "^1.5.0"
+        "lz-string": "1.5.0"
     },
     "engines": {
         "node": ">=22.12.0"
-    },
-    "dependencies": {
-        "claude": "^0.1.1"
     }
 }
