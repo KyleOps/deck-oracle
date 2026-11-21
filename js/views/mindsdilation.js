@@ -83,7 +83,6 @@ export const styles = `
 #mindsdilation-tab .is-mid { background: color-mix(in srgb, var(--tx-good) 58%, var(--tx-panel-alt)); }
 #mindsdilation-tab .is-big { background: var(--tx-good); }
 #mindsdilation-tab .mnds-seg.is-big { color: var(--tx-void); }
-#mindsdilation-tab .mnds-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 2px 16px 16px; font-size: var(--t-xs); color: var(--tx-mid); }
 #mindsdilation-tab .mnds-key { display: inline-flex; align-items: center; gap: 6px; }
 #mindsdilation-tab .mnds-swatch { width: 12px; height: 12px; border-radius: 3px; }
 

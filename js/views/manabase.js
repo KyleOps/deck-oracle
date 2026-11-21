@@ -25,7 +25,7 @@ export const template = `
             <div class="tx-h"><h2 class="mb-title" id="mb-colors-title">Colours</h2><span class="tx-h-r" id="mb-colors-meta"></span></div>
             <div class="mb-body">
                 <div class="mb-colors" id="mb-colors"></div>
-                <p class="mb-caption">The bar is your sources against what the colour’s hardest card wants for a 90% chance on curve. Lands that make two colours count for both.</p>
+                <p class="tx-caption is-inset">The bar is your sources against what the colour’s hardest card wants for a 90% chance on curve. Lands that make two colours count for both.</p>
             </div>
         </section>
 
@@ -37,7 +37,7 @@ export const template = `
                     <input type="search" id="mb-search" class="field field-sm mb-search" placeholder="Find a card" aria-label="Find a card" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="mb-table-wrap" id="mb-cards"></div>
-                <p class="mb-caption" id="mb-cards-caption"></p>
+                <p class="tx-caption is-inset" id="mb-cards-caption"></p>
             </div>
         </section>
 
@@ -46,7 +46,7 @@ export const template = `
             <div class="mb-body">
                 <div class="mb-toolbar" id="mb-table-colors"></div>
                 <div class="mb-table-wrap" id="mb-table"></div>
-                <p class="mb-caption" id="mb-table-caption"></p>
+                <p class="tx-caption is-inset" id="mb-table-caption"></p>
             </div>
         </section>
 
@@ -78,16 +78,13 @@ export const styles = `
     padding: 16px clamp(12px, 1.4cqi, 20px);
 }
 
-#manabase-tab .mb-caption,
 #manabase-tab .mb-note {
     margin: 0;
     font-size: var(--t-xs);
     line-height: 1.55;
     color: var(--tx-mid);
 }
-#manabase-tab .mb-caption { color: var(--tx-dim); }
-#manabase-tab .mb-note strong,
-#manabase-tab .mb-caption strong { color: var(--tx-bright); font-weight: 600; }
+#manabase-tab .mb-note strong { color: var(--tx-bright); font-weight: 600; }
 
 /* Answer panel */
 #manabase-tab .mb-answer .tx-hero { background: transparent; }
@@ -323,7 +320,6 @@ export const styles = `
     font-weight: 500;
     color: var(--tx-mid);
 }
-#manabase-tab .mb-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--t-xs); color: var(--tx-mid); }
 #manabase-tab .mb-legend-swatch {
     display: inline-block;
     width: 12px;

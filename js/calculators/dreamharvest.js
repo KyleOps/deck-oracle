@@ -113,7 +113,7 @@ function multiplesHtml(rows) {
             ${miniBars({ title: 'Spells you can cast', probs: spellDists[i], label: v => (v === SPELL_CAP ? `${v}+` : `${v}`), scaleMax: spellMax, color: r.opp.color, dimFn: v => v === 0 })}
         </div>`).join('');
     return `<div class="opp-multiples">${cells}</div>
-        <p class="opp-caption">How many spells each opponent’s pile hands you, on the same scale for every opponent. The pile always reaches mana value 5, so what varies is whether it arrives as one big spell or several small ones.</p>`;
+        <p class="tx-caption is-below">How many spells each opponent’s pile hands you, on the same scale for every opponent. The pile always reaches mana value 5, so what varies is whether it arrives as one big spell or several small ones.</p>`;
 }
 
 const DOT_LEGEND = Object.freeze([
@@ -151,7 +151,7 @@ function dotsHtml(rows) {
                 rows: tableRows
             }
         })}
-        <p class="opp-caption">Each dot is one cast in a hundred, stacked by the mana value of everything you may cast for free${rows.length > 1 ? ', added up across opponents' : ''}. Solid dots steal at least the ${DREAM_HARVEST_COST} mana Dream Harvest costs.</p>`;
+        <p class="tx-caption is-below">Each dot is one cast in a hundred, stacked by the mana value of everything you may cast for free${rows.length > 1 ? ', added up across opponents' : ''}. Solid dots steal at least the ${DREAM_HARVEST_COST} mana Dream Harvest costs.</p>`;
 }
 
 function gameRow(opp, result) {

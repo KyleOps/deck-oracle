@@ -390,7 +390,7 @@ function renderSamples(r, lib) {
             </article>`;
     }).join('');
     el.innerHTML = `
-        <p class="md-caption">Each row is one turn: the mana you had after your land drop (with its colours), the land you played, and the ramp you cast — <span class="md-found">→</span> shows what it found.</p>
+        <p class="tx-caption is-below">Each row is one turn: the mana you had after your land drop (with its colours), the land you played, and the ramp you cast — <span class="md-found">→</span> shows what it found.</p>
         <div class="md-games">${html}</div>
         <p class="md-samples-foot">${games.length} of ${r.games.toLocaleString('en-US')} simulated games${reshuffles ? ', reshuffled' : ''}.</p>`;
 }

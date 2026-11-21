@@ -500,7 +500,7 @@ function renderSourcesTable(result, format, play) {
                     ${pip(c.color)} ${COLOR_NAMES[c.color]}<span class="seg-count">${c.sources}</span>
                 </button>`).join('')}
         </div>
-        <span class="mb-legend">
+        <span class="tx-legend">
             <span><span class="mb-legend-swatch mb-legend-met"></span>your ${color.sources} sources are enough</span>
             <span><span class="mb-legend-swatch mb-legend-short"></span>short, and you have cards there</span>
         </span>`);

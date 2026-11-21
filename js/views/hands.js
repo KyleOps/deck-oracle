@@ -409,8 +409,6 @@ export const styles = `
     align-items: start;
 }
 #hands-tab .hl-stat-title { font-size: var(--t-sm); font-weight: 600; color: var(--tx-bright); margin-bottom: 12px; }
-#hands-tab .hl-caption { margin-top: 10px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.55; }
-#hands-tab .hl-caption strong { color: var(--tx-text); }
 #hands-tab .hl-keeprows { display: grid; gap: 12px; }
 #hands-tab .hl-keeprow { display: grid; grid-template-columns: 9.5em minmax(0, 1fr) 3.2em; gap: 12px; align-items: center; font-size: var(--t-sm); }
 #hands-tab .hl-keeprow-label { color: var(--tx-text); }

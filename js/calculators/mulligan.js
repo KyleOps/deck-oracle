@@ -603,12 +603,12 @@ function renderKeep(config, result) {
 
     el.innerHTML = `
         <div class="mull-keep-body">
-            <p class="mull-keep-caption">${caption}</p>
+            <p class="tx-caption is-inset">${caption}</p>
             ${rules ? `<ul class="mull-rules">${rules.map(r => `
                 <li class="is-${r.call}"><span class="mull-rule-call">${r.call === 'keep' ? 'Keep' : r.call === 'mull' ? 'Mulligan' : 'Depends'}</span>
                 <span><span class="mull-rule-label">${escapeHtml(r.label)}</span>${r.call === 'some' ? ` — ${escapeHtml(r.detail)}` : ''}</span></li>`).join('')}</ul>` : ''}
             ${renderKeepGrid(result, step, names)}
-            ${result.types.length <= 2 ? `<div class="mull-legend"><span class="lg-keep">Keep</span><span>Mulligan</span><span class="lg-over">Over a limit</span><span>Number: chance that hand gets there · bar: how often you see it</span></div>` : ''}
+            ${result.types.length <= 2 ? `<div class="tx-legend mull-legend"><span class="lg-keep">Keep</span><span>Mulligan</span><span class="lg-over">Over a limit</span><span>Number: chance that hand gets there · bar: how often you see it</span></div>` : ''}
         </div>`;
 }
 

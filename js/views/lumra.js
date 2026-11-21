@@ -146,7 +146,6 @@ export const styles = `
     color: var(--tx-text);
 }
 #lumra-tab .lm-game-back { margin-right: 10px; font-weight: 500; color: var(--tx-dim); }
-#lumra-tab .lm-games + .tx-caption { padding-top: 10px; }
 
 #lumra-tab .lm-details .tx-collapse:first-child { border-top: 0; }
 #lumra-tab .lm-flush { padding: 0; }

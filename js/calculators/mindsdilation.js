@@ -108,7 +108,7 @@ function bandsHtml(rows, sixthDoctor) {
     return `
         ${sectionHeadHTML('What the top card turns out to be', sixthDoctor ? 'mana value counts historic spells double' : 'by mana value')}
         <div class="mnds-bands">${lines}</div>
-        <div class="mnds-legend">${legend}</div>`;
+        <div class="tx-legend is-panel">${legend}</div>`;
 }
 
 function effectiveMv(card, sixthDoctor) {

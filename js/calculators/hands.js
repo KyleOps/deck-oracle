@@ -551,7 +551,7 @@ function renderStats(stats) {
             <figure>
                 <figcaption class="hl-stat-title">Lands in your opening seven</figcaption>
                 <div class="vbars vbars-sm" role="img" aria-label="Chance of each land count in seven cards: ${stats.dist.map((p, k) => `${k} lands ${pct(p)}`).join(', ')}">${bars}</div>
-                <p class="hl-caption">${term('exact', 'Exact')}. Green bars are inside your keep range: <strong>${pct(stats.exactKeepable)}</strong> of sevens have ${range} lands. ${stats.exact ? '' : `With the early-play requirement, <strong>${pct(stats.keepable)}</strong> pass the whole rule (simulated).`}</p>
+                <p class="tx-caption is-inset is-below">${term('exact', 'Exact')}. Green bars are inside your keep range: <strong>${pct(stats.exactKeepable)}</strong> of sevens have ${range} lands. ${stats.exact ? '' : `With the early-play requirement, <strong>${pct(stats.keepable)}</strong> pass the whole rule (simulated).`}</p>
             </figure>
             <div>
                 <div class="hl-stat-title">Where you end up after mulligans</div>
@@ -563,7 +563,7 @@ function renderStats(stats) {
                             <span class="hl-keeprow-num">${pct(r.p)}</span>
                         </div>`).join('')}
                 </div>
-                <p class="hl-caption">${term('simulation', `${GAMES.toLocaleString('en-US')} simulated games`)}: ${term('mulligan', 'mulligan')} until the hand meets your rule${format.freeMulligan ? ', first mulligan free' : ''}, bottoming extra lands or the priciest spells. The simulated player keeps any four-card hand. On average <strong>${s.averageMulligans.toFixed(1)}</strong> mulligans a game.</p>
+                <p class="tx-caption is-inset is-below">${term('simulation', `${GAMES.toLocaleString('en-US')} simulated games`)}: ${term('mulligan', 'mulligan')} until the hand meets your rule${format.freeMulligan ? ', first mulligan free' : ''}, bottoming extra lands or the priciest spells. The simulated player keeps any four-card hand. On average <strong>${s.averageMulligans.toFixed(1)}</strong> mulligans a game.</p>
             </div>
         </div>`;
 }

@@ -96,7 +96,6 @@ export const styles = `
 #lands-tab .ld-col.is-keep .ld-col-fill { background: var(--type-land); }
 #lands-tab .ld-col-label { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-dim); }
 #lands-tab .ld-col.is-keep .ld-col-label { color: var(--tx-text); font-weight: 600; }
-#lands-tab .ld-caption { padding: 0 var(--pad-x) 14px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.5; }
 
 /* Land-count comparison */
 #lands-tab .ld-table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }

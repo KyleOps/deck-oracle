@@ -43,7 +43,7 @@ export const template = `
                         <canvas id="odds-chart" role="img" aria-label="Chance by turn"></canvas>
                     </div>
                 </div>
-                <p class="odds-caption" id="odds-caption"></p>
+                <p class="tx-caption is-below" id="odds-caption"></p>
             </section>
 
             <div class="odds-pair">
@@ -630,13 +630,6 @@ export const styles = `
 
 #odds-tab .odds-chart-wrap { padding: 14px 12px 4px 6px; }
 #odds-tab .odds-chart { height: clamp(220px, 26cqi, 300px); }
-
-#odds-tab .odds-caption {
-    padding: 4px 16px 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-}
 
 /* ---------- Table + members ---------- */
 #odds-tab .odds-pair {

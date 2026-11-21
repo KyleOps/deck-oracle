@@ -594,8 +594,8 @@ export function sharedStyles(scope = '.bs-page') {
     const s = scope;
     return `
 ${s} .bs-h { margin: 0; font-size: var(--t-body); font-weight: 650; letter-spacing: 0; color: var(--tx-bright); }
-${s} .bs-caption { margin: 0; padding: 10px 18px 14px; font-size: var(--t-xs); line-height: 1.5; color: var(--tx-dim); }
-${s} .bs-caption strong { color: var(--tx-mid); font-weight: 600; }
+/* The family's panels are inset 18px; captions line up with them. */
+${s} .tx-caption { padding-inline: 18px; }
 
 /* Rail */
 ${s} .bs-field { display: grid; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--tx-rule); }
@@ -702,7 +702,7 @@ ${s} .bs-details .tx-collapse[open] > .tx-collapse-head::before { content: ''; t
 ${s} .bs-details .tx-collapse-head:hover::before { border-color: var(--tx-accent); }
 ${s} .bs-details .tx-collapse-head .bs-sub { margin-left: 6px; font-weight: 400; color: var(--tx-dim); }
 ${s} .bs-details .tx-collapse-body { max-height: none; overflow: visible; padding: 0 0 8px; }
-${s} .bs-details .tx-collapse-body > .bs-caption { padding-top: 0; }
+${s} .bs-details .tx-collapse-body > .tx-caption { padding-top: 0; }
 ${s} .bs-table-wrap { overflow-x: auto; }
 ${s} .bs-table-wrap .tx-sweep-table td,
 ${s} .bs-table-wrap .tx-sweep-table th { white-space: nowrap; }

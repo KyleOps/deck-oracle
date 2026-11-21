@@ -40,7 +40,7 @@ export const template = `
             </div>
         </div>
         <div id="surge-dots"></div>
-        <p class="bs-caption" id="surge-dots-caption"></p>
+        <p class="tx-caption is-below" id="surge-dots-caption"></p>
     </section>
 
     <section class="panel" aria-labelledby="surge-chart-title">
@@ -54,7 +54,7 @@ export const template = `
         <div class="bs-chart">
             <canvas id="surge-chart" role="img" aria-label="Permanents and payback chance for different numbers of instants and sorceries"></canvas>
         </div>
-        <p class="bs-caption">Each bar keeps your permanents exactly as they are and changes only how many instants and sorceries share the library. Your deck is highlighted.</p>
+        <p class="tx-caption is-below">Each bar keeps your permanents exactly as they are and changes only how many instants and sorceries share the library. Your deck is highlighted.</p>
     </section>
 
     <section class="panel" aria-labelledby="surge-samples-title">
@@ -67,7 +67,7 @@ export const template = `
         </div>
         <div class="bs-cast-stage" id="surge-cast" hidden></div>
         <div class="bs-samples" id="surge-samples"></div>
-        <p class="bs-caption">Real shuffles of your list, without the Primal Surge being cast. Each run ends at the dimmed card that stops it.</p>
+        <p class="tx-caption is-below">Real shuffles of your list, without the Primal Surge being cast. Each run ends at the dimmed card that stops it.</p>
     </section>
 
     <section class="panel" aria-labelledby="surge-compare-title">

@@ -119,7 +119,7 @@ function multiplesHtml(rows) {
             ${miniBars({ title: 'Damage', probs: damageDists[i], label: damageBinLabel, scaleMax: damageMax, color: r.opp.color })}
         </div>`).join('');
     return `<div class="opp-multiples">${cells}</div>
-        <p class="opp-caption">How often each outcome happens. Every opponent is drawn on the same scale, so a longer bar means more likely — compare across columns.</p>`;
+        <p class="tx-caption is-below">How often each outcome happens. Every opponent is drawn on the same scale, so a longer bar means more likely — compare across columns.</p>`;
 }
 
 function gameRow(opp, cast) {

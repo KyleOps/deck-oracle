@@ -219,7 +219,7 @@ function renderDetails(config, results, a) {
             value: p,
             tone: k === typical ? 'accent' : 'flat'
         }));
-        distEl.innerHTML = '<p class="bs-caption">Exact odds of each result from your card counts; a hit is a land or a legendary permanent the Vow can put into play. The highlighted bar is the typical cast.</p>'
+        distEl.innerHTML = '<p class="tx-caption is-below">Exact odds of each result from your card counts; a hit is a land or a legendary permanent the Vow can put into play. The highlighted bar is the typical cast.</p>'
             + barsHTML(bars, { scale: peak });
     }
 }

@@ -19,14 +19,14 @@ export const template = `
         <div class="chart-container md-chart">
             <canvas id="manadev-chart" role="img" aria-label="Mana available each turn: the typical game, the middle half and eight games in ten, with your lands alone for comparison"></canvas>
         </div>
-        <div class="md-legend" aria-hidden="true">
+        <div class="tx-legend md-legend" aria-hidden="true">
             <span class="md-key md-key-line">Typical game</span>
             <span class="md-key md-key-mid">Half of games</span>
             <span class="md-key md-key-wide">8 games in 10</span>
             <span class="md-key md-key-lands">Lands alone, typical</span>
             <span class="md-key md-key-target" id="md-key-target" hidden></span>
         </div>
-        <p class="md-caption">The solid line is the typical game. The dark band holds the middle half of games and the light band eight in ten, so the bottom of the light band is a bad game and the top a good one. The dashed line is the same games with every ramp card left in hand.</p>
+        <p class="tx-caption is-below">The solid line is the typical game. The dark band holds the middle half of games and the light band eight in ten, so the bottom of the light band is a bad game and the top a good one. The dashed line is the same games with every ramp card left in hand.</p>
     </section>
 
     <section class="panel panel-config md-rail" aria-label="Settings and deck">
@@ -53,13 +53,13 @@ export const template = `
     <section class="panel" aria-labelledby="md-grid-title">
         <div class="tx-h"><span id="md-grid-title">Chance to have this much mana by each turn</span><span class="tx-h-r" id="md-grid-meta"></span></div>
         <div class="md-scroll" id="md-grid" tabindex="0" role="region" aria-labelledby="md-grid-title"></div>
-        <p class="md-caption" id="md-grid-caption">Each cell is the share of games that had at least that much mana on some turn up to that one.</p>
+        <p class="tx-caption is-below" id="md-grid-caption">Each cell is the share of games that had at least that much mana on some turn up to that one.</p>
     </section>
 
     <section class="panel" aria-labelledby="md-ramp-title">
         <div class="tx-h"><span id="md-ramp-title">What your ramp does</span><span class="tx-h-r" id="md-ramp-meta"></span></div>
         <div class="md-scroll" id="md-ramp"></div>
-        <p class="md-caption">Read from each card’s rules text. If a line looks wrong, the numbers above are wrong for that card too. “In hand” counts the cards you draw; “cast” needs the mana as well.</p>
+        <p class="tx-caption is-below">Read from each card’s rules text. If a line looks wrong, the numbers above are wrong for that card too. “In hand” counts the cards you draw; “cast” needs the mana as well.</p>
     </section>
 
     <section class="panel" aria-labelledby="md-samples-title">
@@ -122,14 +122,7 @@ export const styles = `
 
 /* ── Chart ────────────────────────────────────────────────────────── */
 #manadev-tab .md-chart { height: 300px; }
-#manadev-tab .md-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 16px;
-    padding: 4px 16px 0;
-    font-size: var(--t-label);
-    color: var(--tx-mid);
-}
+#manadev-tab .md-legend { padding: 4px var(--pad-x) 0; }
 #manadev-tab .md-key { display: inline-flex; align-items: center; gap: 6px; }
 #manadev-tab .md-key::before { content: ''; display: inline-block; width: 16px; height: 10px; border-radius: 2px; }
 #manadev-tab .md-key-line::before { height: 2px; background: var(--tx-good); }
@@ -137,13 +130,6 @@ export const styles = `
 #manadev-tab .md-key-wide::before { background: color-mix(in srgb, var(--tx-good) 14%, transparent); }
 #manadev-tab .md-key-lands::before { height: 0; border-top: 2px dashed var(--tx-mid); }
 #manadev-tab .md-key-target::before { height: 0; border-top: 1px dashed var(--tx-accent); }
-#manadev-tab .md-caption {
-    margin: 0;
-    padding: 10px var(--pad-x) 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-}
 
 /* ── Chance grid ──────────────────────────────────────────────────── */
 #manadev-tab .md-scroll { overflow-x: auto; overscroll-behavior-x: contain; }

@@ -266,7 +266,7 @@ function renderOpening(config, r) {
                 }).join('')}
             </div>
         </div>
-        <p class="ld-caption">${range
+        <p class="tx-caption">${range
             ? `Lands in a random seven. Shaded: the hands you keep (${range[0]}–${range[1]} lands) — ${pct(r.keepRate)} of sevens.`
             : 'Lands in a random seven. You are keeping every seven.'}</p>`;
 }
@@ -297,7 +297,7 @@ function renderCompare(config, r) {
                 }).join('')}</tbody>
             </table>
         </div>
-        <p class="ld-caption">Chance of making every land drop through each turn, with your settings above. Small numbers are the change in points from your deck.</p>`;
+        <p class="tx-caption">Chance of making every land drop through each turn, with your settings above. Small numbers are the change in points from your deck.</p>`;
 }
 
 // ── Sample games ─────────────────────────────────────────────────────────────

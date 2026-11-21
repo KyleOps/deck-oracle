@@ -51,7 +51,7 @@ export const template = `
             <summary class="tx-collapse-head">Your spells by mana value</summary>
             <div class="tx-collapse-body rs-flush">
                 <div class="table-wrapper" id="rashmi-comparisonTable"></div>
-                <p class="tx-caption rs-caption-pad" id="rashmi-curve-note"></p>
+                <p class="tx-caption is-below" id="rashmi-curve-note"></p>
             </div>
         </details>
     </section>
@@ -92,7 +92,6 @@ export const styles = `
 #rashmi-tab .rs-swatch { width: 10px; height: 10px; border-radius: 3px; }
 
 #rashmi-tab .rs-chart { height: 280px; }
-#rashmi-tab .rs-caption-pad { padding-top: 12px; }
 
 #rashmi-tab .rs-reveals {
     display: grid;
@@ -144,7 +143,6 @@ export const styles = `
 }
 #rashmi-tab .rs-reveal-verdict { grid-area: verdict; font-size: var(--t-xs); color: var(--tx-dim); }
 #rashmi-tab .rs-reveal.is-free .rs-reveal-verdict { color: var(--tx-good); font-weight: 600; }
-#rashmi-tab .rs-reveals + .tx-caption { padding-top: 0; }
 
 #rashmi-tab .rs-details .tx-collapse { border-top: 0; }
 #rashmi-tab .rs-flush { padding: 0; }

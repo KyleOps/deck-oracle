@@ -117,7 +117,6 @@ export const styles = `
 #chimil-tab .ch-h { margin: 0; font: inherit; color: inherit; letter-spacing: inherit; }
 #chimil-tab .ch-chart { height: 300px; }
 #chimil-tab .tx-collapse-body .tx-caption { padding: 0 0 10px; }
-#chimil-tab .ch-caption-foot { padding-top: 10px; }
 #chimil-tab .ch-key-small { color: var(--tx-warn); font-weight: 600; }
 
 #chimil-tab #chimil-reveals-display { padding-top: 14px; }

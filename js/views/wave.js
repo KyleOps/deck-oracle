@@ -39,7 +39,7 @@ export const template = `
             </div>
         </div>
         <div id="wave-dots"></div>
-        <p class="bs-caption" id="wave-dots-caption"></p>
+        <p class="tx-caption is-below" id="wave-dots-caption"></p>
     </section>
 
     <section class="panel" aria-labelledby="wave-chart-title">
@@ -53,7 +53,7 @@ export const template = `
         <div class="bs-chart">
             <canvas id="wave-chart" role="img" aria-label="Permanents and payback chance for each value of X"></canvas>
         </div>
-        <p class="bs-caption">Bars: average permanents put onto the battlefield (left axis). Line: the chance that cast pays for itself (right axis). Your X is highlighted — click a bar to try another.</p>
+        <p class="tx-caption is-below">Bars: average permanents put onto the battlefield (left axis). Line: the chance that cast pays for itself (right axis). Your X is highlighted — click a bar to try another.</p>
     </section>
 
     <section class="panel" aria-labelledby="wave-samples-title">
@@ -66,7 +66,7 @@ export const template = `
         </div>
         <div class="bs-cast-stage" id="wave-cast" hidden></div>
         <div class="bs-samples" id="wave-samples"></div>
-        <p class="bs-caption">Real shuffles of your list. Bright cards go onto the battlefield; dimmed ones cost more than X or aren’t permanents, and go to the graveyard.</p>
+        <p class="tx-caption is-below">Real shuffles of your list. Bright cards go onto the battlefield; dimmed ones cost more than X or aren’t permanents, and go to the graveyard.</p>
     </section>
 
     <section class="panel" aria-labelledby="wave-compare-title">
@@ -81,7 +81,7 @@ export const template = `
         <details class="tx-collapse">
             <summary class="tx-collapse-head">Every X, side by side</summary>
             <div class="tx-collapse-body">
-                <p class="bs-caption">Hit rate is the share of revealed cards that are hits. The marked row is the cheapest X that pays for itself 3 times in 4.</p>
+                <p class="tx-caption is-below">Hit rate is the share of revealed cards that are hits. The marked row is the cheapest X that pays for itself 3 times in 4.</p>
                 <div class="bs-table-wrap" id="wave-comparisonTable"></div>
             </div>
         </details>

@@ -153,7 +153,6 @@ export const styles = `
 /* What to keep */
 #mulligan-tab .mull-keep-head { flex-wrap: wrap; }
 #mulligan-tab .mull-keep-body { padding: 14px var(--pad-x) 16px; display: grid; gap: 14px; }
-#mulligan-tab .mull-keep-caption { font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.5; }
 #mulligan-tab .mull-rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 #mulligan-tab .mull-rules li { display: flex; align-items: baseline; gap: 10px; font-size: var(--t-sm); color: var(--tx-text); }
 #mulligan-tab .mull-rule-call {
@@ -178,7 +177,6 @@ export const styles = `
 #mulligan-tab .mull-kgrid td.is-over { color: var(--tx-bad); background: var(--bad-soft); border-color: transparent; }
 #mulligan-tab .mull-kgrid td.is-none { background: transparent; border-color: transparent; }
 #mulligan-tab .mull-freq { position: absolute; left: 3px; bottom: 2px; height: 2px; border-radius: 2px; background: currentColor; opacity: 0.45; }
-#mulligan-tab .mull-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--t-xs); color: var(--tx-dim); }
 #mulligan-tab .mull-legend span::before {
     content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px;
     border-radius: var(--radius-xs); border: 1px solid var(--tx-rule); background: var(--tx-panel-alt);

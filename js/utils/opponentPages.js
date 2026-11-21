@@ -577,7 +577,7 @@ ${s} .opp-bar-val { color: var(--tx-text); text-align: right; }
 ${s} .opp-bar-row.is-dim .opp-bar-fill { background: var(--tx-rule-hi); }
 ${s} .opp-disclosure > .tx-collapse-head { padding: var(--pad-y) var(--pad-x); }
 ${s} .opp-disclosure > .opp-multiples { border-top: 0; }
-${s} .opp-caption { padding: 10px var(--pad-x) 14px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.55; max-width: 90ch; }
+${s} .tx-caption { max-width: 90ch; }
 
 ${s} .opp-chip {
     display: inline-flex; align-items: center; gap: 6px; max-width: 100%;

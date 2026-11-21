@@ -245,7 +245,7 @@ function renderDetails(config, results, a) {
             value: p,
             tone: k >= PORTENT.FREE_SPELL_THRESHOLD ? 'good' : 'bad'
         }));
-        distEl.innerHTML = `<p class="bs-caption">How often each cast exiles that many cards, over ${PORTENT.ITERATIONS.toLocaleString('en-US')} simulated casts. Four or more is a free spell.</p>`
+        distEl.innerHTML = `<p class="tx-caption is-below">How often each cast exiles that many cards, over ${PORTENT.ITERATIONS.toLocaleString('en-US')} simulated casts. Four or more is a free spell.</p>`
             + barsHTML(bars, { scale: peak });
     }
 }

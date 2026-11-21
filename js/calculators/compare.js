@@ -160,7 +160,7 @@ function renderCurve(result) {
                 <span class="cmp-card-meta">share of nonland cards at each mana value</span>
             </div>
             <div class="cmp-curve" role="img" aria-label="Mana curve comparison">${cols}</div>
-            <div class="cmp-legend">
+            <div class="tx-legend is-panel cmp-legend">
                 <span><span class="cmp-dot cmp-dot-a"></span>A · average ${result.a.stats.curve.average.toFixed(2)}</span>
                 <span><span class="cmp-dot cmp-dot-b"></span>B · average ${result.b.stats.curve.average.toFixed(2)}</span>
             </div>
