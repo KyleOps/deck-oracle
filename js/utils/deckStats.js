@@ -7,18 +7,28 @@
  */
 
 import { choose, drawType, drawTypeMin } from './hypergeometric.js';
-import { COLORS, parseManaCost, isLand, landColors, deckColorIdentity } from './mana.js';
+import { COLORS, parseManaCost, landColors, deckColorIdentity } from './mana.js';
+import { asLibrary, commandersOf, isLand, isLibrary, unlistedCopies } from './library.js';
 import { tagDeck } from './cardTags.js';
 import { FORMATS, cardsSeenByTurn } from './format.js';
 
 const TYPE_ORDER = ['creatures', 'planeswalkers', 'battles', 'artifacts', 'enchantments', 'instants', 'sorceries', 'lands'];
 
 /**
- * Flatten cardsByName into counted records, skipping empty rows.
- * @param {Record<string, Object>} cardsByName
+ * The library's counted records, skipping empty rows. Commanders are never in
+ * the library (see library.js): pass a DeckConfig snapshot for that, a bare
+ * cardsByName map has no command zone.
+ * @param {Object} deck - a DeckConfig snapshot, a Library, or a cardsByName map
+ * @param {Object} [opts] - libraryOf() options
+ * @returns {ReadonlyArray<Object>}
  */
-export function deckCards(cardsByName = {}) {
-    return Object.values(cardsByName).filter(c => c?.name && Number(c.count) > 0);
+export function deckCards(deck = {}, opts) {
+    return asLibrary(deck, opts).cards;
+}
+
+/** The command zone's records of a snapshot (none for a Library or a bare map). */
+function commanderCardsOf(deck) {
+    return isLibrary(deck) ? [] : commandersOf(deck).map(c => c.card).filter(Boolean);
 }
 
 /**
@@ -77,11 +87,14 @@ export function typeComposition(cardsByName = {}) {
 
 /**
  * Colour demand (pips on nonland cards) and supply (lands that make each colour).
+ * The identity includes the commanders' even though they are not in the library.
+ * @param {Object} deck - a DeckConfig snapshot, a Library, or a cardsByName map
+ * @param {{commanderCards?:Array<Object|null>}} [opts] - default: the snapshot's command zone
  * @returns {{identity:string[], colors: Array<{color:string, pips:number, cards:number, sources:number, heaviest:{name:string, pips:number, mv:number}|null}>, colorlessLands:number}}
  */
-export function colorProfile(cardsByName = {}) {
-    const cards = deckCards(cardsByName);
-    const identity = deckColorIdentity(cardsByName);
+export function colorProfile(deck = {}, { commanderCards = commanderCardsOf(deck) } = {}) {
+    const cards = deckCards(deck);
+    const identity = deckColorIdentity(cards, commanderCards);
     const out = Object.fromEntries(COLORS.map(c => [c, { color: c, pips: 0, cards: 0, sources: 0, heaviest: null }]));
     let colorlessLands = 0;
 
@@ -223,23 +236,26 @@ export const COMMANDER_GUIDELINES = Object.freeze({
 });
 
 /**
- * Full deck analysis for the overview.
- * @param {Object} deck - DeckConfig snapshot (needs cardsByName, actualCardCount, lands, commanderName)
+ * Full deck analysis for the overview: the library (commanders are never in
+ * it — see library.js), with the commanders' colours in the identity.
+ * @param {Object} deck - DeckConfig snapshot (needs cardsByName, actualCardCount, lands, commanderName / commanders)
  * @param {{format:object, onPlay?:boolean}} opts
  */
 export function analyzeDeckStats(deck = {}, { format = FORMATS.commander, onPlay = true } = {}) {
-    const cardsByName = deck.cardsByName ?? {};
-    const cards = deckCards(cardsByName);
+    const library = asLibrary(deck, { format });
+    const cards = library.cards;
     const hasCards = cards.length > 0;
-    const deckSize = Number(deck.actualCardCount) || cards.reduce((s, c) => s + Number(c.count), 0) || 0;
+    const deckSize = hasCards
+        ? library.size + unlistedCopies(library, deck.actualCardCount)
+        : (Number(deck.actualCardCount) || 0);
     const lands = hasCards
         ? cards.filter(isLand).reduce((s, c) => s + Number(c.count), 0)
         : (Number(deck.lands) || 0);
 
-    const curve = manaCurve(cardsByName);
-    const composition = typeComposition(cardsByName);
-    const tags = tagDeck(cardsByName);
-    const color = colorProfile(cardsByName);
+    const curve = manaCurve(library);
+    const composition = typeComposition(library);
+    const tags = tagDeck(cards);
+    const color = colorProfile(library, { commanderCards: commanderCardsOf(deck) });
 
     const cheapAccel = cards.reduce((s, c) => {
         const t = tags.byCard[c.name] ?? [];

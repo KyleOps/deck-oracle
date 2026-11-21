@@ -15,12 +15,14 @@ import { createCache } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell, toneColor, toneFor } from '../utils/components.js';
 import { calculateFixedDrawPayback, scoreBattlefieldValue } from '../utils/payback.js';
+import { quantile } from '../utils/stats.js';
+import { commanderNamesOf, frontTypeLine, isLand as isLandCard, isPermanent } from '../utils/library.js';
+import { avg, pct, plural } from '../utils/text.js';
 import {
-    avg, barsHTML, bindXPresets, cardListKey, chanceTone, createSampler, deckCardList, expandCards, fade,
-    hypergeometricPmf, isPermanentTypeLine, listSize, noticeHTML, pct, plural, quantileOf, readX,
-    renderHowItCompares, sampleCardHTML, syncXControl, toneColor
+    barsHTML, bindXPresets, cardListKey, createSampler, deckCardList, expandCards, fade,
+    hypergeometricPmf, listSize, noticeHTML, readX, renderHowItCompares, sampleCardHTML, syncXControl
 } from '../utils/bigSpells.js';
 
 const CONFIG = Object.freeze({
@@ -44,11 +46,10 @@ let chart = null;
 let lastCommander;          // undefined until the first render
 let copyChosenByUser = false;
 
-/** Land, or legendary permanent — the cards the Vow can put into play. */
+/** Land, or legendary permanent — the cards the Vow can put into play (front face). */
 function classify(typeLine) {
-    const lower = String(typeLine ?? '').toLowerCase();
-    const isLand = lower.includes('land');
-    const isLegendary = !isLand && lower.includes('legendary') && isPermanentTypeLine(lower);
+    const isLand = isLandCard(String(typeLine ?? ''));
+    const isLegendary = !isLand && /\blegendary\b/.test(frontTypeLine(typeLine)) && isPermanent(String(typeLine ?? ''));
     return { isLand, isLegendary, isValid: isLand || isLegendary };
 }
 
@@ -164,8 +165,8 @@ export function vowOutcome(library, x, { copies = 1, landValue = CONFIG.DEFAULT_
         expectedLands: share(lands),
         expectedLegends: share(legends),
         pmf,
-        low: quantileOf(pmf, 0.1),
-        high: quantileOf(pmf, 0.9),
+        low: quantile(pmf, 0.1),
+        high: quantile(pmf, 0.9),
         payback,
         legendsKnown: library.hasList
     };
@@ -211,7 +212,7 @@ export function summarize(a) {
     } else if (a.reliableX == null) {
         follow = `With these value settings it never pays back 3 times in 4, even at X=${a.maxX}.`;
     }
-    return { html: follow ? `${lead} ${follow}` : lead, tone: chanceTone(p) };
+    return { html: follow ? `${lead} ${follow}` : lead, tone: toneFor(p) };
 }
 
 // ── Deck and page state ──────────────────────────────────────────────────────
@@ -222,16 +223,27 @@ function readNumber(id, fallback) {
 }
 
 /**
- * Whether the Vow is copied. Follows the commander (checked automatically for
- * one that copies it) until the player — or a share link — sets it by hand.
+ * Does any card in the command zone copy the Vow? (Either partner counts.)
+ * @param {string[]} commanders - command-zone names
  */
-function resolveCopy(commanderName) {
+export function commanderCopiesVow(commanders) {
+    return (commanders ?? []).some(name => COPYING_COMMANDERS.has(String(name ?? '').trim()));
+}
+
+/**
+ * Whether the Vow is copied. Follows the commanders (checked automatically
+ * when one copies it) until the player — or a share link — sets it by hand.
+ * @param {string[]} commanders
+ */
+function resolveCopy(commanders) {
+    const auto = commanderCopiesVow(commanders);
     const box = typeof document !== 'undefined' ? document.getElementById('vow-doubleCast') : null;
-    if (!box) return COPYING_COMMANDERS.has(commanderName);
-    if (commanderName !== lastCommander) {
+    if (!box) return auto;
+    const zone = commanders.join('\u0001');
+    if (zone !== lastCommander) {
         if (lastCommander !== undefined) copyChosenByUser = false;
-        lastCommander = commanderName;
-        if (!copyChosenByUser) box.checked = COPYING_COMMANDERS.has(commanderName);
+        lastCommander = zone;
+        if (!copyChosenByUser) box.checked = auto;
     }
     return box.checked;
 }
@@ -243,7 +255,7 @@ export function getDeckConfig() {
     const library = buildVowLibrary(cards, deck);
     const maxX = Math.max(1, Math.min(library.deckSize, CONFIG.MAX_X));
     const x = Math.min(maxX, readX('vow', CONFIG.DEFAULT_X));
-    const doubleCast = resolveCopy(deck.commanderName ?? null);
+    const doubleCast = resolveCopy(commanderNamesOf(deck));
     const settings = {
         copies: doubleCast ? 2 : 1,
         landValue: readNumber('vow-land-value', CONFIG.DEFAULT_LAND_VALUE),
@@ -288,7 +300,7 @@ function renderAnswer(config, a) {
     const p = a.payback?.paybackProbability ?? 0;
     const hero = renderHeroStats([
         {
-            label: 'Pays for itself', value: pct(p), size: 'big', color: toneColor(chanceTone(p)),
+            label: 'Pays for itself', value: pct(p), size: 'big', color: toneColor(toneFor(p)),
             sub: `reaches ${a.mana} value${a.legendsKnown ? '' : ' · lands only'}`,
             term: 'payback'
         },
@@ -404,7 +416,7 @@ function renderSamples(config) {
                 manaValue += card.cmc;
                 if (isLand) lands++;
             }
-            const permanent = isPermanentTypeLine(card.type_line);
+            const permanent = isPermanent(card.type_line);
             return {
                 name: card.name,
                 type: isLand ? 'land' : card.types[0] ?? 'artifact',
@@ -445,7 +457,7 @@ function renderDetails(config, results, a) {
             { label: 'Legends', render: row => avg(row.r.expectedLegends) },
             { label: 'Change', render: row => row.delta == null ? '—' : `+${avg(row.delta, 2)}` },
             { label: 'Hit rate', align: 'left', render: row => pBarCell(row.r.seen ? row.r.expectedHits / row.r.seen : 0, 'var(--tx-flat)') },
-            { label: 'Pays for itself', render: row => `<span style="color:${toneColor(chanceTone(row.r.payback.paybackProbability))}">${pct(row.r.payback.paybackProbability)}</span>` }
+            { label: 'Pays for itself', render: row => `<span style="color:${toneColor(toneFor(row.r.payback.paybackProbability))}">${pct(row.r.payback.paybackProbability)}</span>` }
         ]
     });
 
@@ -455,7 +467,7 @@ function renderDetails(config, results, a) {
     if (distEl) {
         const pmf = a.pmf ?? [];
         const peak = Math.max(...pmf, 0.0001);
-        const typical = quantileOf(pmf, 0.5);
+        const typical = quantile(pmf, 0.5);
         const bars = pmf.map((p, k) => ({ k, p })).filter(({ p }) => p >= 0.0005).map(({ k, p }) => ({
             label: plural(k, 'hit'),
             value: p,

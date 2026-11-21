@@ -121,7 +121,7 @@ describe('analyzeDeckStats on the bundled example deck', () => {
     const stats = analyzeDeckStats(DEFAULT_DECK_DATA, { format: FORMATS.commander });
 
     it('reads the deck shape', () => {
-        assert.equal(stats.deckSize, 99);
+        assert.equal(stats.deckSize, 98, '100 cards less two commanders');
         assert.equal(stats.lands, 37);
         assert.deepEqual(stats.identity, ['U', 'G']);
         assert.ok(stats.curve.average > 4);

@@ -16,6 +16,8 @@ import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.
 import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { renderManaCost } from '../utils/mana.js';
 import { escapeHtml, cardRef, term } from '../data/glossary.js';
+import { libraryOf } from '../utils/library.js';
+import { pct } from '../utils/text.js';
 import * as Lab from '../utils/handLab.js';
 import { cardImageUrl, findCard } from '../data/images.js';
 
@@ -43,7 +45,6 @@ const cardEls = new Map();
 let hoverPreview = false;
 let debouncedUpdate = null;
 
-const pct = p => `${Math.round(p * 100)}%`;
 const $ = id => document.getElementById(id);
 
 // ── Library & numbers ────────────────────────────────────────────────────────
@@ -52,9 +53,10 @@ function readLibrary() {
     const config = DeckConfig.getDeckConfig();
     format = DeckConfig.getFormat();
     if (DeckConfig.hasCardList()) {
-        const commander = format.key === 'commander' ? config.commanderName : null;
-        const built = Lab.buildLibrary(config.cardsByName, { commanderName: commander });
-        return { ...built, key: Lab.libraryKey(built.cards) };
+        const library = libraryOf(config, { format });
+        const commanderCards = library.commanders.length ? DeckConfig.getCommanders().map(c => c.card) : [];
+        const built = Lab.buildLibrary(library, { commanderCards });
+        return { ...built, key: `${Lab.libraryKey(built.cards)}|${built.identity.join('')}` };
     }
     const built = Lab.buildPlaceholderLibrary(config);
     return { ...built, key: `counts:${Lab.libraryKey(built.cards)}` };
@@ -509,7 +511,7 @@ function renderRail() {
         const parts = [format.freeMulligan
             ? `${format.label}: the first mulligan is free and everyone draws on turn one.`
             : `${format.label}: no free mulligan.`];
-        if (lib?.removedCommander) parts.push('Your commander starts in the command zone, so it’s never dealt.');
+        if (lib?.commanders?.length) parts.push(lib.commanders.length > 1 ? 'Your commanders start in the command zone, so they’re never dealt.' : 'Your commander starts in the command zone, so it’s never dealt.');
         if (lib?.placeholder) parts.push('Your deck is bare type counts, so the cards are stand-ins labelled by type.');
         note.textContent = parts.join(' ');
     }

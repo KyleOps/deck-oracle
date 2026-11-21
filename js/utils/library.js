@@ -124,7 +124,21 @@ export function isPermanent(card) {
  */
 
 const cache = new WeakMap();
+const built = new WeakSet();
 const EMPTY_MAP = Object.freeze({});
+
+/** Is this a Library made by libraryOf()? */
+export function isLibrary(value) {
+    return typeof value === 'object' && value !== null && built.has(value);
+}
+
+/**
+ * A Library as-is, or libraryOf(deck, opts) — for helpers that accept either.
+ * @returns {Library}
+ */
+export function asLibrary(deck, opts) {
+    return isLibrary(deck) ? deck : libraryOf(deck, opts);
+}
 
 /** The cardsByName map of a snapshot (or the map itself). */
 function cardsByNameOf(deck) {
@@ -173,6 +187,24 @@ export function commanderNamesOf(deck) {
 }
 
 /**
+ * The command zone of a deck snapshot with each card's record: from
+ * `commanders[].card`, else `commanderCard`, else the list itself (some lists
+ * hold their commander). The record is null when none of those has it.
+ * @param {Object} deck
+ * @returns {Array<{name:string, card:Object|null}>}
+ */
+export function commandersOf(deck) {
+    const listed = Array.isArray(deck?.commanders) ? deck.commanders : [];
+    const records = Object.values(cardsByNameOf(deck));
+    return commanderNamesOf(deck).map(name => {
+        const own = listed.find(c => c && typeof c === 'object' && sameCard(c.name, name))?.card
+            ?? (sameCard(deck?.commanderCard?.name, name) ? deck.commanderCard : null);
+        const card = own && sameCard(own.name, name) ? own : records.find(c => c && sameCard(c.name, name)) ?? null;
+        return { name, card };
+    });
+}
+
+/**
  * Does this format have a command zone? Accepts a format object ({key}), a
  * key, or a DeckConfig preference ('auto' / null), where a deck with
  * commanders is Commander (exactly how format.js detects it).
@@ -197,7 +229,9 @@ function commandZone(format, commanders) {
  * @param {string[]} [opts.exclude] - more cards that are elsewhere (the spell
  *   on the stack): one listed copy is removed per entry, if the list has one
  * @returns {Library} frozen; the same object for the same `cardsByName`
- *   object and options, so pages can cache on its identity
+ *   object and options, so pages can cache on its identity. A list is
+ *   treated as immutable — DeckConfig replaces cardsByName for every new
+ *   deck, never edits it in place — so an edited list must be a new object.
  */
 export function libraryOf(deck, { format, commanders, exclude } = {}) {
     const cardsByName = cardsByNameOf(deck);
@@ -252,13 +286,15 @@ function buildLibrary(cardsByName, commanders, exclude) {
     }
 
     const signature = cards.map(c => `${c.name}\u0001${c.count}`).sort().join('\u0002');
-    return Object.freeze({
+    const library = Object.freeze({
         cards: Object.freeze(cards),
         size,
         commanders: Object.freeze(commanders.slice()),
         removed: Object.freeze([...removedCommanders, ...removedOther]),
         key: `${size}:${hashString(signature).toString(36)}`
     });
+    built.add(library);
+    return library;
 }
 
 /**
@@ -277,6 +313,46 @@ export function expandLibrary(library, map = record => record) {
         for (let i = 0; i < count; i++) out.push(map(record, i));
     }
     return out;
+}
+
+/**
+ * Per-copy entries built from the same list (an import's `cardDetails`) with
+ * the copies the library left out taken away: one entry per name in
+ * `library.removed` (front-face match).
+ * @template T
+ * @param {T[]} entries - objects with a `name`
+ * @param {Library} library
+ * @returns {T[]} the same array when nothing was removed
+ */
+export function withoutRemoved(entries, library) {
+    const list = Array.isArray(entries) ? entries : [];
+    if (!library?.removed?.length || !list.length) return list;
+    const owed = new Map();
+    for (const name of library.removed) owed.set(nameKey(name), (owed.get(nameKey(name)) ?? 0) + 1);
+    return list.filter(entry => {
+        const k = nameKey(entry?.name);
+        const n = owed.get(k) ?? 0;
+        if (n <= 0) return true;
+        owed.set(k, n - 1);
+        return false;
+    });
+}
+
+/**
+ * Copies an import counted but could not identify (`actualCardCount` above
+ * the listed copies, commanders the list held included). They stay in the
+ * library as unnamed cards, so a library's true size is `size + unlisted`.
+ * @param {Library} library
+ * @param {number|null|undefined} deckSize - the import's card count
+ */
+export function unlistedCopies(library, deckSize) {
+    const listed = (library?.size ?? 0) + (library?.removed?.length ?? 0);
+    return Math.max(0, Math.floor(Number(deckSize) || 0) - listed);
+}
+
+/** Copies of lands in a library. */
+export function landCount(library) {
+    return (library?.cards ?? []).reduce((n, c) => n + (isLand(c) ? c.count : 0), 0);
 }
 
 /**

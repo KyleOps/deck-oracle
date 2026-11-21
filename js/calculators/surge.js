@@ -15,17 +15,22 @@ import { createCache, formatNumber } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, toneColor, toneFor } from '../utils/components.js';
 import { buildDeckFromCardData } from '../utils/sampleSimulator.js';
 import { describeDots, dotPlot, pmfQuantiles, splitDots } from '../utils/viz.js';
 import { escapeHtml } from '../data/glossary.js';
 import { cardImageUrl, findCard } from '../data/images.js';
 import { closeCast, playCast, syncCast } from '../utils/castAnimation.js';
-import { shuffle } from '../utils/simulation.js';
+import { shuffle } from '../utils/random.js';
+import { choose } from '../utils/hypergeometric.js';
+import { isLand, isPermanent, libraryOf, sameCard } from '../utils/library.js';
+import { avg, pct, plural } from '../utils/text.js';
 import {
-    avg, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList, expandCards, fade,
-    isPermanentTypeLine, noticeHTML, pct, plural, renderHowItCompares, sampleCardHTML, toneColor
+    cardListKey, createSampler, deckCardList, expandCards, fade,
+    noticeHTML, renderHowItCompares, sampleCardHTML
 } from '../utils/bigSpells.js';
+
+const PRIMAL_SURGE = 'Primal Surge';
 
 const CONFIG = Object.freeze({
     DEFAULT_PAYBACK_THRESHOLD: 10,
@@ -77,14 +82,6 @@ export function calculateSurgeRunValue(run, settings = {}) {
     return { effectiveValue, paidBack: effectiveValue >= threshold };
 }
 
-function combination(n, k) {
-    if (k < 0 || k > n) return 0;
-    const smallerK = Math.min(k, n - k);
-    let result = 1;
-    for (let i = 1; i <= smallerK; i++) result *= (n - smallerK + i) / i;
-    return result;
-}
-
 /**
  * For every subset size, how many subsets of the permanents fall short of the
  * threshold (capped subset-sum). Independent of how many instants and
@@ -122,7 +119,7 @@ function buildSurgeSubsets(permanentCards, settings = {}) {
     }
     // Share of size-k subsets that fall short.
     const shortBySize = subsetCounts.map((row, size) => {
-        const total = combination(permanents, size);
+        const total = choose(permanents, size);
         let short = 0;
         for (const ways of row) short += ways;
         return total > 0 ? short / total : 1;
@@ -273,7 +270,7 @@ export function surgeValuePmf(permanentCards, nonPermanents, settings = {}) {
     const pmf = new Float64Array(totalUnits + 1);
     for (let k = 0; k <= P; k++) {
         if (!runPmf[k]) continue;
-        const weight = runPmf[k] / combination(P, k);
+        const weight = runPmf[k] / choose(P, k);
         const row = ways[k];
         for (let sum = 0; sum <= totalUnits; sum++) if (row[sum]) pmf[sum] += row[sum] * weight;
     }
@@ -310,22 +307,19 @@ export function surgeDots({ permanents, stops, table = null, valuePmf = null, th
 
 // ── The library ──────────────────────────────────────────────────────────────
 
-function isPrimalSurge(name) {
-    return String(name ?? '').trim().toLowerCase() === 'primal surge';
-}
+/** The library options for Primal Surge: the cast copy is on the stack. */
+const ON_STACK = Object.freeze({ exclude: [PRIMAL_SURGE] });
 
 /**
  * Build the sampled library with the cast copy of Primal Surge on the stack.
  * A list without a named copy already represents a library without Surge;
  * removing an unrelated instant or sorcery would change the stop odds.
- * @param {Object} cardData - Card data from deck import
+ * Commanders are never in it (see library.js).
+ * @param {Object} deck - a DeckConfig snapshot (or {cardsByName})
  * @returns {Array} - Deck array without one named Primal Surge, if present
  */
-export function buildDeckExcludingSurge(cardData) {
-    const deck = buildDeckFromCardData(cardData);
-    const surgeIndex = deck.findIndex(card => isPrimalSurge(card?.name));
-    if (surgeIndex !== -1) deck.splice(surgeIndex, 1);
-    return deck;
+export function buildDeckExcludingSurge(deck) {
+    return buildDeckFromCardData(deck, ON_STACK);
 }
 
 /**
@@ -337,11 +331,11 @@ export function buildDeckExcludingSurge(cardData) {
  */
 export function getDeckConfig() {
     const deck = DeckConfig.getDeckConfig();
-    const cards = deckCardList(deck);
+    const cards = deckCardList(deck, ON_STACK);
     const settings = getPaybackSettings();
 
     if (cards.length > 0) {
-        const surgeOnStack = cards.some(card => isPrimalSurge(card.name));
+        const surgeOnStack = libraryOf(deck, ON_STACK).removed.some(name => sameCard(name, PRIMAL_SURGE));
         let deckSize = 0;
         let nonPermanents = 0;
         let lands = 0;
@@ -349,22 +343,18 @@ export function getDeckConfig() {
         const permanentCards = [];
         for (const card of cards) {
             deckSize += card.count;
-            if (!isPermanentTypeLine(card.type_line)) {
+            if (!isPermanent(card.type_line)) {
                 nonPermanents += card.count;
                 continue;
             }
-            const isLand = cardTypesOf(card.type_line).includes('land');
-            permanentCards.push({ name: card.name, cmc: card.cmc, isLand, count: card.count });
-            if (isLand) lands += card.count;
+            const land = isLand(card.type_line);
+            permanentCards.push({ name: card.name, cmc: card.cmc, isLand: land, count: card.count });
+            if (land) lands += card.count;
             totalPermCMC += card.cmc * card.count;
-        }
-        if (surgeOnStack) {
-            deckSize -= 1;
-            nonPermanents -= 1;
         }
         return {
             deckSize, nonPermanents, permanents: deckSize - nonPermanents,
-            cardData: { cardsByName: deck.cardsByName }, cards, lands, totalPermCMC, permanentCards,
+            cards, lands, totalPermCMC, permanentCards,
             surgeOnStack, mvKnown: true, settings, deckKey: cardListKey(cards)
         };
     }
@@ -377,7 +367,7 @@ export function getDeckConfig() {
     const permanents = Math.max(0, deckSize - nonPermanents);
     const lands = Math.min(deck.lands ?? 0, permanents);
     return {
-        deckSize, nonPermanents, permanents, cardData: null, cards: [], lands, totalPermCMC: 0,
+        deckSize, nonPermanents, permanents, cards: [], lands, totalPermCMC: 0,
         permanentCards: [], surgeOnStack, mvKnown: false, settings,
         deckKey: `counts:${deckSize}:${nonPermanents}:${lands}`
     };
@@ -435,7 +425,7 @@ export function summarize(a) {
         const which = a.cutTo.count === 1 ? 'that one' : `${a.cutTo.count} of them`;
         html += ` Cutting ${which} would lift that to <strong>${pct(a.cutTo.payback)}</strong>.`;
     }
-    return { html, tone: chanceTone(a.payback) };
+    return { html, tone: toneFor(a.payback) };
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────────
@@ -460,7 +450,7 @@ function renderAnswer(config, result) {
     const hero = renderHeroStats([
         {
             label: 'Pays for itself', value: p == null ? '—' : pct(p), size: 'big',
-            color: p == null ? 'var(--tx-dim)' : toneColor(chanceTone(p)),
+            color: p == null ? 'var(--tx-dim)' : toneColor(toneFor(p)),
             sub: p == null ? 'needs a decklist' : `reaches ${formatNumber(config.settings.threshold, config.settings.threshold % 1 ? 2 : 0)} value`,
             term: 'payback'
         },
@@ -667,7 +657,7 @@ function renderSamples(config) {
         let stopper = null;
         const rows = [];
         for (const card of library) {
-            if (!isPermanentTypeLine(card.type_line)) {
+            if (!isPermanent(card.type_line)) {
                 stopper = card;
                 break;
             }
@@ -726,7 +716,7 @@ export function surgeCastPlan(library, settings) {
         };
     };
     for (const card of library ?? []) {
-        if (!isPermanentTypeLine(card.type_line)) {
+        if (!isPermanent(card.type_line)) {
             stopper = card;
             const kind = (card.types ?? []).includes('instant') ? 'an instant' : 'a sorcery';
             steps.push({ name: card.name, fate: 'stop', note: `${kind}, not a permanent — Primal Surge stops here.`, totals: totalsAt().totals });
@@ -750,12 +740,9 @@ export function surgeCastPlan(library, settings) {
     ] };
 }
 
-/** The library with the cast Surge removed, one object per card. */
+/** The library (the cast Surge already out of `cards`), one object per card. */
 function libraryCards(cards) {
-    const library = expandCards(cards);
-    const at = library.findIndex(card => isPrimalSurge(card.name));
-    if (at !== -1) library.splice(at, 1);
-    return library;
+    return expandCards(cards);
 }
 
 function imageFor(name) {

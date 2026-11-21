@@ -49,10 +49,10 @@ describe('Mulligan Planner — compatibility', () => {
 });
 
 describe('Mulligan Planner — formats', () => {
-    it('Commander: 99-card library, free first mulligan, everyone draws', () => {
+    it('Commander: 98-card library (100 less two commanders), free first mulligan, everyone draws', () => {
         const config = getDeckConfig();
         assert.strictEqual(config.format.key, 'commander');
-        assert.strictEqual(config.deckSize, 99);
+        assert.strictEqual(config.deckSize, 98);
         assert.strictEqual(config.freeMulligan, true);
         assert.strictEqual(config.onPlay, true);
     });

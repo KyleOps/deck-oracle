@@ -6,7 +6,7 @@ import {
     openingLands, landDropOdds, firstLikelyMiss, landCountComparison,
     chanceWords, chanceTone, summarizeLandDrops
 } from '../../js/utils/landDrops.js';
-import { formatChance } from '../../js/utils/percent.js';
+import { pct as formatChance } from '../../js/utils/text.js';
 
 const close = (a, b, tol = 1e-9, msg = '') => assert.ok(Math.abs(a - b) <= tol, `${msg} expected ${b}, got ${a}`);
 const chances = r => r.byTurn.map(t => t.chance);

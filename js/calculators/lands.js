@@ -9,17 +9,18 @@
 
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, toneColor } from '../utils/components.js';
 import { escapeHtml } from '../data/glossary.js';
 import { tagDeck } from '../utils/cardTags.js';
-import { isLand } from '../utils/mana.js';
+import { isLand, libraryOf, unlistedCopies } from '../utils/library.js';
+import { shuffle } from '../utils/random.js';
 import { createCache } from '../utils/simulation.js';
 import {
     DEFAULT_KEEP, DEFAULT_TURNS, landDropOdds, openingLands, firstLikelyMiss,
     landCountComparison, chanceWords, chanceTone, summarizeLandDrops
 } from '../utils/landDrops.js';
 import { drawSchedule, bottomCount } from '../utils/mulliganModel.js';
-import { formatChance } from '../utils/percent.js';
+import { pct } from '../utils/text.js';
 
 const NAME = 'lands';
 const HAND = 7;
@@ -37,29 +38,32 @@ let samples = { key: null, games: [], shown: GAMES_STEP };
 let sampleSeed = 0;
 
 const $ = id => (typeof document !== 'undefined' ? document.getElementById(id) : null);
-const pct = formatChance;
 
 // ── Deck ─────────────────────────────────────────────────────────────────────
 
-/** Lands and cheap ramp from the list (cached per imported list). */
-function deckCounts() {
-    const { cardsByName } = DeckConfig.getImportedCardData();
+/**
+ * Lands and cheap ramp in the library (cached per library). Commanders are
+ * never in the library (see library.js), so a commander that ramps is not
+ * counted as a card you might draw.
+ */
+function deckCounts(config, format) {
     const hasList = DeckConfig.hasCardList();
-    if (rampCache.ref !== cardsByName) {
-        const cards = hasList ? Object.values(cardsByName).filter(c => c?.name && Number(c.count) > 0) : [];
-        const tags = hasList ? tagDeck(cardsByName).byCard : {};
+    const library = hasList ? libraryOf(config, { format }) : null;
+    if (rampCache.ref !== library) {
+        const cards = library ? library.cards.slice() : [];
+        const tags = library ? tagDeck(library.cards).byCard : {};
         let lands = 0;
         let ramp = 0;
         const rampNames = new Set();
         cards.forEach(c => {
-            const n = Number(c.count) || 0;
+            const n = c.count;
             if (isLand(c)) lands += n;
             else if ((tags[c.name] ?? []).includes('ramp') && (Number(c.cmc) || 0) <= CHEAP_RAMP_MV) {
                 ramp += n;
                 rampNames.add(c.name);
             }
         });
-        rampCache = { ref: cardsByName, lands, ramp, cards, rampNames };
+        rampCache = { ref: library, size: library?.size ?? 0, lands, ramp, cards, rampNames };
     }
     return { hasList, ...rampCache };
 }
@@ -69,10 +73,12 @@ function deckCounts() {
  * @returns {{deckSize:number, landCount:number, ramp:number, format:Object, onPlay:boolean, countRamp:boolean, keepRange:[number,number]|null, hasList:boolean}}
  */
 export function getDeckConfig() {
-    const deck = deckCounts();
     const format = DeckConfig.getFormat();
     const config = DeckConfig.getDeckConfig();
-    const deckSize = DeckConfig.getDeckSize(true);
+    const deck = deckCounts(config, format);
+    const deckSize = deck.hasList
+        ? deck.size + unlistedCopies(deck.ref, config.actualCardCount)
+        : DeckConfig.getDeckSize(true);
     const landCount = deck.hasList ? deck.lands : (Number(config.lands) || 0);
     return {
         deckSize,
@@ -181,8 +187,6 @@ export function calculate() {
 }
 
 // ── Rendering ────────────────────────────────────────────────────────────────
-
-const toneColor = tone => ({ good: 'var(--tx-good)', warn: 'var(--tx-warn)', bad: 'var(--tx-bad)' }[tone] ?? 'var(--tx-bright)');
 
 function syncControls(config, rampMatters = false) {
     const order = $('lands-turn-order');
@@ -305,16 +309,6 @@ function renderCompare(config, r) {
 
 // ── Sample games ─────────────────────────────────────────────────────────────
 
-function shuffleInPlace(arr, rng = Math.random) {
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        const t = arr[i];
-        arr[i] = arr[j];
-        arr[j] = t;
-    }
-    return arr;
-}
-
 /**
  * Deal sample games from a card pool and track land drops turn by turn.
  *
@@ -336,7 +330,7 @@ export function dealLandGames({ pool, drawsBy, keepRange, freeMulligan, countRam
         let mulls = 0;
         let seven;
         for (;;) {
-            shuffleInPlace(order, rng);
+            shuffle(order, rng);
             seven = order.slice(0, HAND);
             const lands = seven.filter(i => pool[i].kind === 'land').length;
             if (!keepRange || (lands >= keepRange[0] && lands <= keepRange[1]) || mulls >= 6) break;

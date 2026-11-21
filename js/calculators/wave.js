@@ -15,17 +15,19 @@ import { createCache } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell, toneColor, toneFor } from '../utils/components.js';
 import { calculateFixedDrawPayback, fixedDrawValuePmf, paybackShareByHits, scoreBattlefieldValue } from '../utils/payback.js';
 import { describeDots, dotPlot, pmfQuantiles, splitDots } from '../utils/viz.js';
 import { escapeHtml } from '../data/glossary.js';
 import { cardImageUrl, findCard } from '../data/images.js';
 import { closeCast, playCast, syncCast } from '../utils/castAnimation.js';
-import { shuffle } from '../utils/simulation.js';
+import { shuffle } from '../utils/random.js';
+import { quantile } from '../utils/stats.js';
+import { isLand, isPermanent } from '../utils/library.js';
+import { avg, pct, plural } from '../utils/text.js';
 import {
-    avg, bindXPresets, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList,
-    expandCards, fade, hypergeometricPmf, isPermanentTypeLine, listSize, noticeHTML, pct, plural,
-    quantileOf, readX, renderHowItCompares, sampleCardHTML, syncXControl, toneColor
+    bindXPresets, cardListKey, createSampler, deckCardList, expandCards, fade, hypergeometricPmf,
+    listSize, noticeHTML, readX, renderHowItCompares, sampleCardHTML, syncXControl
 } from '../utils/bigSpells.js';
 
 const CONFIG = Object.freeze({
@@ -81,8 +83,8 @@ export function buildWaveLibrary(cards = [], counts = {}) {
             entries: cards.map(card => ({
                 count: card.count,
                 cmc: card.cmc,
-                isPermanent: isPermanentTypeLine(card.type_line),
-                isLand: cardTypesOf(card.type_line).includes('land')
+                isPermanent: isPermanent(card.type_line),
+                isLand: isLand(card.type_line)
             }))
         };
     }
@@ -154,8 +156,8 @@ export function waveOutcome(library, x, settings = {}, deckKey = 'deck') {
         deckSize: library.deckSize,
         expectedPermanents: simulateGenesisWave(library.deckSize, distributionOf(library), x).expectedPermanents,
         pmf,
-        low: quantileOf(pmf, 0.1),
-        high: quantileOf(pmf, 0.9),
+        low: quantile(pmf, 0.1),
+        high: quantile(pmf, 0.9),
         payback,
         mvKnown: library.hasList
     };
@@ -209,7 +211,7 @@ export function summarize(a) {
     } else if (a.reliableX == null) {
         follow = `With these value settings it never pays back 3 times in 4, even at X=${a.maxX}.`;
     }
-    return { html: follow ? `${lead} ${follow}` : lead, tone: chanceTone(p) };
+    return { html: follow ? `${lead} ${follow}` : lead, tone: toneFor(p) };
 }
 
 // ── Deck and page state ──────────────────────────────────────────────────────
@@ -255,7 +257,7 @@ function renderAnswer(config, a) {
     const hero = renderHeroStats([
         {
             label: 'Pays for itself', value: a.payback ? pct(p) : '—', size: 'big',
-            color: a.payback ? toneColor(chanceTone(p)) : 'var(--tx-dim)',
+            color: a.payback ? toneColor(toneFor(p)) : 'var(--tx-dim)',
             sub: a.payback ? `reaches ${a.mana} value` : 'needs a decklist',
             term: 'payback'
         },
@@ -614,7 +616,7 @@ function renderDetails(config, results, a) {
             { label: 'Permanents', render: row => avg(row.r.expectedPermanents) },
             { label: 'Change', render: row => row.delta == null ? '—' : `+${avg(row.delta, 2)}` },
             { label: 'Hit rate', align: 'left', render: row => pBarCell(row.r.revealed ? row.r.expectedPermanents / row.r.revealed : 0, 'var(--tx-flat)') },
-            { label: 'Pays for itself', render: row => hasPayback ? `<span style="color:${toneColor(chanceTone(row.r.payback.paybackProbability))}">${pct(row.r.payback.paybackProbability)}</span>` : '—' }
+            { label: 'Pays for itself', render: row => hasPayback ? `<span style="color:${toneColor(toneFor(row.r.payback.paybackProbability))}">${pct(row.r.payback.paybackProbability)}</span>` : '—' }
         ]
     });
 }

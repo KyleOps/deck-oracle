@@ -34,13 +34,16 @@
  * triggers Wild Pair.
  */
 
-import { formatNumber, formatPercentage } from '../utils/simulation.js';
+import { formatNumber } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderSweepTable } from '../utils/components.js';
 import { buildDeckFromCardData, renderDistributionChart } from '../utils/sampleSimulator.js';
-import { discoverForCreature, isPower5Plus, percentileFromDist, mergeDists, foldTail } from '../utils/discover.js';
+import { discoverForCreature, isPower5Plus, mergeDists, foldTail } from '../utils/discover.js';
+import { asLibrary, libraryOf, withoutRemoved } from '../utils/library.js';
+import { quantile as percentileFromDist } from '../utils/stats.js';
+import { pct } from '../utils/text.js';
 import { cardTotalPT, bucketByTotalPT, isCreatureEntry } from './wildpair.js';
 import { cardRef, term, escapeHtml } from '../data/glossary.js';
 
@@ -163,13 +166,16 @@ function creatureKey(c) {
 /**
  * Build the shared context both engines are evaluated against.
  *
- * @param {Object} deck - DeckConfig shape
- * @param {Object} cardData - getImportedCardData() shape
+ * @param {Object} deck - DeckConfig shape (its `cardDetails`)
+ * @param {Object} source - the library: a Library from libraryOf(), or anything
+ *   libraryOf() accepts (getImportedCardData() shape, a snapshot). Commanders
+ *   are never in it, so they are taken out of `cardDetails` too.
  * @param {boolean} treatStarAs5Plus
  * @returns {Object|null} null when there is nothing to compare
  */
-export function buildContext(deck, cardData, treatStarAs5Plus = false) {
-    const details = Array.isArray(deck?.cardDetails) ? deck.cardDetails : [];
+export function buildContext(deck, source, treatStarAs5Plus = false) {
+    const lib = asLibrary(source ?? deck);
+    const details = withoutRemoved(Array.isArray(deck?.cardDetails) ? deck.cardDetails : [], lib);
     const creatures = details.filter(isCreatureEntry);
 
     if (creatures.length === 0) return null;
@@ -196,7 +202,7 @@ export function buildContext(deck, cardData, treatStarAs5Plus = false) {
         groupCardOf.set(c, entry);
     }
 
-    const library = cardData?.cardsByName ? buildDeckFromCardData(cardData) : [];
+    const library = buildDeckFromCardData(lib);
 
     return {
         creatures,
@@ -444,13 +450,13 @@ export function verdict(cmp) {
 
     let advice = `${lead.engine.name} averages ${formatNumber(Math.abs(gap), 2)} more mana per creature cast across the whole creature base`;
     advice += lead.coverage > trail.coverage
-        ? `, and fires on ${formatPercentage(lead.coverage, 0)} of casts against ${formatPercentage(trail.coverage, 0)}.`
-        : `, despite firing on only ${formatPercentage(lead.coverage, 0)} of casts against ${formatPercentage(trail.coverage, 0)}.`;
+        ? `, and fires on ${pct(lead.coverage)} of casts against ${pct(trail.coverage)}.`
+        : `, despite firing on only ${pct(lead.coverage)} of casts against ${pct(trail.coverage)}.`;
     if (ceilingGap > 2 && leader === 'a') {
         advice += ` ${b.engine.name} still has the bigger good turn — its top 5% of casts reach ${b.p95} mana against ${a.p95}.`;
     }
     if (cmp.contested?.casts > 0) {
-        advice += ` On the ${cmp.contested.casts} casts both fire on, ${b.engine.name} out-rolls ${a.engine.name} ${formatPercentage(cmp.contested.bWins, 0)} of the time.`;
+        advice += ` On the ${cmp.contested.casts} casts both fire on, ${b.engine.name} out-rolls ${a.engine.name} ${pct(cmp.contested.bWins)} of the time.`;
     }
 
     return { leader, label: `${lead.engine.name} leads`, tone: 'good', color: 'var(--tx-good)', advice };
@@ -499,7 +505,7 @@ export function summarize(cmp) {
         if (certainIsA || certainIsB) {
             const sure = certainIsA ? nameA : nameB;
             const sureWins = certainIsA ? c.aWins : c.bWins;
-            html += ` Where both fire (${c.casts} creature${c.casts === 1 ? '' : 's'}), ${sure}’s pick beats the roll ${formatPercentage(sureWins, 0)} of the time.`;
+            html += ` Where both fire (${c.casts} creature${c.casts === 1 ? '' : 's'}), ${sure}’s pick beats the roll ${pct(sureWins)} of the time.`;
         }
     }
 
@@ -547,16 +553,16 @@ let cache = { key: null, deck: null, cards: null, result: null };
 export function calculate() {
     const config = getConfig();
     const deck = DeckConfig.getDeckConfig();
-    const cardData = DeckConfig.getImportedCardData();
+    const library = libraryOf(deck);
     const key = `${config.a}|${config.b}|${config.treatStarAs5Plus}`;
 
-    if (cache.result && cache.key === key && cache.deck === deck.cardDetails && cache.cards === cardData.cardsByName) {
+    if (cache.result && cache.key === key && cache.deck === deck.cardDetails && cache.cards === library) {
         return cache.result;
     }
-    const ctx = buildContext(deck, cardData, config.treatStarAs5Plus);
+    const ctx = buildContext(deck, library, config.treatStarAs5Plus);
     const cmp = ctx ? compareEngines(ctx, config.a, config.b) : null;
     const result = { config, ctx, cmp, verdict: verdict(cmp) };
-    cache = { key, deck: deck.cardDetails, cards: cardData.cardsByName, result };
+    cache = { key, deck: deck.cardDetails, cards: library, result };
     return result;
 }
 
@@ -743,14 +749,14 @@ function renderPeaks(cmp) {
         <div class="vs-peaks">
             ${tutorSide && contested.casts > 0 ? stat(
                 `Beats ${escapeHtml(tutorSide.engine.name)}`,
-                formatPercentage(discoverWins, 0),
-                `on the ${contested.casts} creature${contested.casts === 1 ? '' : 's'} both fire on · loses ${formatPercentage(tutorWins, 0)}`,
+                pct(discoverWins),
+                `on the ${contested.casts} creature${contested.casts === 1 ? '' : 's'} both fire on · loses ${pct(tutorWins)}`,
                 'How often the random roll comes out ahead of the tutor’s certain pick, on the casts where both trigger.'
             ) : ''}
-            ${stat('Chains', formatPercentage(chained / runs, 0), 'of triggers cast 2+ spells', 'How often the free spell is itself a power-5+ creature, which triggers Vortex again.')}
+            ${stat('Chains', pct(chained / runs), 'of triggers cast 2+ spells', 'How often the free spell is itself a power-5+ creature, which triggers Vortex again.')}
             ${stat('Good turn', percentileFromDist(manaDist, 0.95), 'mana, 1 trigger in 20', 'term:p95')}
             ${stat('Great turn', percentileFromDist(manaDist, 0.99), 'mana, 1 trigger in 100', 'term:p99')}
-            ${stat('Finds nothing', formatPercentage((chainDist[0] || 0) / runs, 0), 'of triggers', 'Triggers where nothing in the library costs little enough.')}
+            ${stat('Finds nothing', pct((chainDist[0] || 0) / runs), 'of triggers', 'Triggers where nothing in the library costs little enough.')}
         </div>
         <div class="vs-dists">
             <div>
@@ -816,7 +822,7 @@ function updateTable(cmp) {
                     const named = (s) => `<span class="vs-win" style="--vs-engine:${seriesVar(s.engine)}">${escapeHtml(s.engine.name)}</span>`;
                     if (r.contested) {
                         const aAhead = r.odds.aWins >= r.odds.bWins;
-                        return `${named(aAhead ? sideA : sideB)} <span class="vs-detail">${formatPercentage(aAhead ? r.odds.aWins : r.odds.bWins, 0)} of the time</span>`;
+                        return `${named(aAhead ? sideA : sideB)} <span class="vs-detail">${pct(aAhead ? r.odds.aWins : r.odds.bWins)} of the time</span>`;
                     }
                     if (r.a.triggers) return `${named(sideA)} <span class="vs-detail">only one that fires</span>`;
                     if (r.b.triggers) return `${named(sideB)} <span class="vs-detail">only one that fires</span>`;

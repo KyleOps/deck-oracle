@@ -133,6 +133,22 @@ describe('Abstract Performance - buildLibrary', () => {
         assert.strictEqual(deck.find(c => c.name === 'Titan').cmc, 6);
     });
 
+    it('never deals a commander into a pile, even when the list holds both partners', () => {
+        const deck = {
+            cardsByName: {
+                ...cardsByName,
+                A: { name: 'Partner A', count: 1, cmc: 4, type_line: 'Legendary Creature — Human' },
+                B: { name: 'Partner B', count: 1, cmc: 3, type_line: 'Legendary Creature — Elf' }
+            },
+            commanderName: 'Partner A',
+            commanders: [{ name: 'Partner A' }, { name: 'Partner B' }],
+            format: 'auto'
+        };
+        const { deck: library } = buildLibrary(deck);
+        assert.strictEqual(library.length, 99);
+        assert.ok(!library.some(c => c.name.startsWith('Partner')));
+    });
+
     it('falls back to a typical deck without a decklist', () => {
         const { deck, isDefault } = buildLibrary({});
         assert.strictEqual(isDefault, true);

@@ -81,7 +81,7 @@ describe('curveCards', () => {
 
     it('lists the nonland cards behind each curve bar, adding up to the bar', () => {
         for (let bucket = 0; bucket <= 7; bucket++) {
-            const { total, groups } = curveCards(DEFAULT_DECK_DATA.cardsByName, bucket);
+            const { total, groups } = curveCards(DEFAULT_DECK_DATA, bucket);
             assert.strictEqual(total, stats.curve.buckets[bucket].total, `bucket ${bucket}`);
             assert.strictEqual(groups.reduce((s, g) => s + g.count, 0), total);
         }

@@ -17,8 +17,11 @@ import { registerCalculator, updateCalculatorIfActive } from '../utils/calculato
 import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 import * as OpponentState from '../utils/opponentState.js';
+import { choose } from '../utils/hypergeometric.js';
+import { isLand } from '../utils/library.js';
+import { one, pct } from '../utils/text.js';
 import {
-    libraryOf, isLandCard, createRevealer, typicalRange, formatRange, formatPct, fmt1, tailAtLeast,
+    opponentLibrary, createRevealer, typicalRange, formatRange, tailAtLeast,
     capDistribution, countWord, objectId, readOpponents, frameScheduler, opponentLabel, cardChip, miniBars,
     renderOpponentPlaceholder, renderLoadingNote, bindOpponentActions, renderDisclosure, hasRoom
 } from '../utils/opponentPages.js';
@@ -43,7 +46,7 @@ const SAMPLE_MAX = 24;
  */
 export function simulateChoice1(deck) {
     for (let i = 0; i < deck.length; i++) {
-        if (!isLandCard(deck[i])) {
+        if (!isLand(deck[i])) {
             return {
                 cardsExiled: i + 1,
                 spellCMC: deck[i].cmc || 0,
@@ -67,14 +70,6 @@ export function simulateChoice2(deck) {
         damage: top.reduce((sum, card) => sum + (card.cmc || 0), 0),
         cards: top.map(c => ({ name: c.name, cmc: c.cmc || 0, types: c.types }))
     };
-}
-
-function choose(n, k) {
-    if (k < 0 || k > n) return 0;
-    const m = Math.min(k, n - k);
-    let r = 1;
-    for (let i = 1; i <= m; i++) r = (r * (n - m + i)) / i;
-    return r;
 }
 
 /**
@@ -128,7 +123,7 @@ export function topCardsTotalDistribution(library, draw = DAMAGE_CARDS) {
  */
 export function calculateMaraStats(opponentData) {
     if (!opponentData?.cardsByName || Object.keys(opponentData.cardsByName).length === 0) return null;
-    const library = libraryOf(opponentData);
+    const library = opponentLibrary(opponentData);
     const n = library.length;
     if (n === 0) return null;
 
@@ -183,8 +178,8 @@ function spread(values, unit) {
     const lo = Math.min(...values);
     const hi = Math.max(...values);
     return values.length > 1 && hi - lo >= 0.5
-        ? `${fmt1(lo)}–${fmt1(hi)} ${unit}`
-        : `about ${fmt1(mean)} ${unit}`;
+        ? `${one(lo)}–${one(hi)} ${unit}`
+        : `about ${one(mean)} ${unit}`;
 }
 
 function versusCost(total) {
@@ -215,7 +210,7 @@ export function summarizeMara(rows) {
     }
     return {
         tone,
-        html: `Each of the ${countWord(valid.length)} opponents either hands you a free spell worth <strong>${spread(spells, 'mana')}</strong> or takes <strong>${spread(damage, 'damage')}</strong> — their choice. Across the table that’s <strong>${fmt1(totalSpell)} mana</strong> of free spells (${versusCost(totalSpell)}), <strong>${fmt1(totalDamage)} damage</strong>, or a mix.`
+        html: `Each of the ${countWord(valid.length)} opponents either hands you a free spell worth <strong>${spread(spells, 'mana')}</strong> or takes <strong>${spread(damage, 'damage')}</strong> — their choice. Across the table that’s <strong>${one(totalSpell)} mana</strong> of free spells (${versusCost(totalSpell)}), <strong>${one(totalDamage)} damage</strong>, or a mix.`
     };
 }
 
@@ -248,19 +243,19 @@ function heroStats(rows) {
     const each = n > 1 ? ', average opponent' : '';
     return renderHeroStats([
         {
-            label: 'Free spell', size: 'big', value: fmt1(avg(s => s.choice1.avgCMC)), sub: `mana value${each}`,
+            label: 'Free spell', size: 'big', value: one(avg(s => s.choice1.avgCMC)), sub: `mana value${each}`,
             tip: 'If an opponent picks the spell: the average mana value of the first nonland card in their library — the one you cast for free.'
         },
         {
-            label: 'Or damage', value: fmt1(avg(s => s.choice2.avgDamage)), sub: n > 1 ? 'average opponent' : 'average',
+            label: 'Or damage', value: one(avg(s => s.choice2.avgDamage)), sub: n > 1 ? 'average opponent' : 'average',
             tip: 'If an opponent picks damage: the average total mana value of their top four cards. Lands count as 0.'
         },
         {
-            label: 'Big spell', value: formatPct(avg(s => s.choice1.pct5Plus) / 100), sub: `free spell costs ${BIG_SPELL_MV} or more`,
+            label: 'Big spell', value: pct(avg(s => s.choice1.pct5Plus) / 100), sub: `free spell costs ${BIG_SPELL_MV} or more`,
             tip: `Chance the free spell has mana value ${BIG_SPELL_MV} or more.`
         },
         {
-            label: 'Big hit', value: formatPct(avg(s => s.choice2.pct10Plus) / 100), sub: `${BIG_DAMAGE} or more damage`,
+            label: 'Big hit', value: pct(avg(s => s.choice2.pct10Plus) / 100), sub: `${BIG_DAMAGE} or more damage`,
             tip: `Chance the top four cards add up to ${BIG_DAMAGE} or more damage — enough to threaten a low-life opponent.`
         }
     ]);
@@ -272,17 +267,17 @@ function tableHtml(rows) {
         const c2 = r.stats.choice2;
         return `<tr>
             <td>${opponentLabel(r.opp, `${r.stats.landCount} lands`)}</td>
-            <td data-label="Free spell">${fmt1(c1.avgCMC)}<span class="opp-cell-sub">usually ${formatRange(c1.typical)} mana</span></td>
-            <td data-label="Costs ${BIG_SPELL_MV}+">${formatPct(c1.pct5Plus / 100)}</td>
-            <td data-label="Damage">${fmt1(c2.avgDamage)}<span class="opp-cell-sub">usually ${formatRange(c2.typical)}</span></td>
-            <td data-label="${BIG_DAMAGE}+ damage">${formatPct(c2.pct10Plus / 100)}</td>
+            <td data-label="Free spell">${one(c1.avgCMC)}<span class="opp-cell-sub">usually ${formatRange(c1.typical)} mana</span></td>
+            <td data-label="Costs ${BIG_SPELL_MV}+">${pct(c1.pct5Plus / 100)}</td>
+            <td data-label="Damage">${one(c2.avgDamage)}<span class="opp-cell-sub">usually ${formatRange(c2.typical)}</span></td>
+            <td data-label="${BIG_DAMAGE}+ damage">${pct(c2.pct10Plus / 100)}</td>
         </tr>`;
     }).join('');
     const foot = rows.length > 1 ? `<tfoot><tr>
             <td>All ${countWord(rows.length)} opponents</td>
-            <td data-label="Free spells">${fmt1(rows.reduce((a, r) => a + r.stats.choice1.avgCMC, 0))}<span class="opp-cell-sub">mana if all pick the spell</span></td>
+            <td data-label="Free spells">${one(rows.reduce((a, r) => a + r.stats.choice1.avgCMC, 0))}<span class="opp-cell-sub">mana if all pick the spell</span></td>
             <td data-label=""></td>
-            <td data-label="Damage">${fmt1(rows.reduce((a, r) => a + r.stats.choice2.avgDamage, 0))}<span class="opp-cell-sub">if all pick damage</span></td>
+            <td data-label="Damage">${one(rows.reduce((a, r) => a + r.stats.choice2.avgDamage, 0))}<span class="opp-cell-sub">if all pick damage</span></td>
             <td data-label=""></td>
         </tr></tfoot>` : '';
     return `<div class="opp-table-wrap"><table class="opp-table">
@@ -353,7 +348,7 @@ function sampleCast(library) {
 function samplesFor(opp) {
     const key = `${objectId(opp.data)}:${sampleRound}`;
     if (!sampleCache.has(key)) {
-        const library = libraryOf(opp.data);
+        const library = opponentLibrary(opp.data);
         sampleCache.set(key, Array.from({ length: SAMPLE_MAX }, () => sampleCast(library)));
     }
     return sampleCache.get(key);

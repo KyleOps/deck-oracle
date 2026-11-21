@@ -13,7 +13,9 @@ import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.
 import { analyzeCastability } from '../utils/castability.js';
 import { heatStrip } from '../utils/viz.js';
 import { COLOR_NAMES, renderManaCost } from '../utils/mana.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, toneColor } from '../utils/components.js';
+import { commanderNamesOf, libraryOf, unlistedCopies } from '../utils/library.js';
+import { inflect as plural } from '../utils/text.js';
 import { debounce } from '../utils/simulation.js';
 import { escapeHtml, cardRef, term } from '../data/glossary.js';
 
@@ -49,8 +51,6 @@ export function chanceTone(p, target = TARGET) {
     return p >= target - 0.1 ? 'warn' : 'bad';
 }
 
-const TONE_VAR = { good: 'var(--tx-good)', warn: 'var(--tx-warn)', bad: 'var(--tx-bad)', flat: 'var(--tx-bright)' };
-
 function pip(color) {
     return `<span class="ms ms-${color.toLowerCase()}" aria-hidden="true">${color}</span>`;
 }
@@ -59,8 +59,6 @@ function pip(color) {
 function pips(color, count) {
     return `<span class="mana-cost" role="img" aria-label="${count} ${COLOR_NAMES[color].toLowerCase()}">${pip(color).repeat(count)}</span>`;
 }
-
-const plural = (n, one, many = `${one}s`) => (n === 1 ? one : many);
 
 // ── Findings (pure) ──────────────────────────────────────────────────────────
 
@@ -121,7 +119,7 @@ export function heroStats(result) {
             label: `At ${goal}% or better`,
             value: `${Math.round(share * 100)}%`,
             sub: `${ok} of ${result.total} coloured spells`,
-            color: TONE_VAR[result.under === 0 ? 'good' : share >= 0.75 ? 'warn' : 'bad'],
+            color: toneColor(result.under === 0 ? 'good' : share >= 0.75 ? 'warn' : 'bad'),
             size: 'big',
             tip: `Coloured spells with at least a ${goal}% chance that your lands are the right colours on the turn matching their mana value, when you have hit your land drops.`
         },
@@ -129,14 +127,14 @@ export function heroStats(result) {
             label: 'Average chance',
             value: pct(result.average),
             sub: 'right colours on curve',
-            color: TONE_VAR[chanceTone(result.average, result.target)],
+            color: toneColor(chanceTone(result.average, result.target)),
             tip: 'The average of every coloured spell’s on-curve chance, assuming you made your land drops.'
         },
         {
             label: 'Hardest to cast',
             value: pct(worst.chance),
             sub: `<span class="mb-hero-card">${cardRef(worst.name)} · turn ${worst.turn}</span>`,
-            color: TONE_VAR[chanceTone(worst.chance, result.target)],
+            color: toneColor(chanceTone(worst.chance, result.target)),
             tip: 'The coloured spell least likely to have its colours on curve.'
         },
         b
@@ -144,14 +142,14 @@ export function heroStats(result) {
                 label: 'Bottleneck',
                 value: COLOR_NAMES[b.color],
                 sub: b.want == null ? `${b.sources} sources · not enough lands` : `${b.sources} sources · wants about ${b.want}`,
-                color: TONE_VAR[b.gap >= 4 ? 'bad' : 'warn'],
+                color: toneColor(b.gap >= 4 ? 'bad' : 'warn'),
                 tip: 'The colour furthest short of the sources its hardest card wants for a 90% chance on curve.'
             }
             : {
                 label: 'Bottleneck',
                 value: 'None',
                 sub: 'every colour has what its cards want',
-                color: TONE_VAR.good,
+                color: toneColor('good'),
                 tip: 'No colour is short of the sources its hardest card wants for a 90% chance on curve.'
             }
     ];
@@ -171,12 +169,11 @@ export function filterCards(cards = [], { filter: f = 'all', query: q = '' } = {
     });
 }
 
-/** Cache key: everything that changes the answer. */
+/** Cache key: everything that changes the answer (the library's contents, not the list object). */
 export function deckKey(config, format, play) {
-    const cards = Object.values(config?.cardsByName ?? {})
-        .map(c => `${c?.name}:${c?.count}`)
-        .join('|');
-    return `${format?.key}|${play ? 1 : 0}|${config?.actualCardCount ?? ''}|${cards}`;
+    const library = libraryOf(config ?? {}, { format });
+    const zone = commanderNamesOf(config ?? {}).join('|');
+    return `${format?.key}|${play ? 1 : 0}|${config?.actualCardCount ?? ''}|${library.key}|${zone}`;
 }
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
@@ -194,8 +191,10 @@ export function calculate() {
     if (!hasList) return { config, format, onPlay: play, hasList, result: null };
     const key = deckKey(config, format, play);
     if (cache.key !== key) {
-        const deckSize = Number(config.actualCardCount) || null;
-        cache = { key, result: analyzeCastability(config.cardsByName, { deckSize, format, onPlay: play, target: TARGET, byTurn: STRIP_TURNS }) };
+        const library = libraryOf(config, { format });
+        const deckSize = library.size + unlistedCopies(library, config.actualCardCount);
+        const commanderCards = library.commanders.length ? DeckConfig.getCommanders().map(c => c.card) : [];
+        cache = { key, result: analyzeCastability(library, { deckSize, format, onPlay: play, target: TARGET, byTurn: STRIP_TURNS, commanderCards }) };
     }
     return { config, format, onPlay: play, hasList, result: cache.result };
 }

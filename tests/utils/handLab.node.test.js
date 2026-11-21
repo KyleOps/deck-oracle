@@ -144,12 +144,26 @@ describe('buildLibrary', () => {
     });
 
     it('removes one copy of the commander — it starts in the command zone', () => {
-        const lib = buildLibrary(deck({ Forest: 3, 'Craterhoof Behemoth': 1 }), { commanderName: 'craterhoof behemoth' });
+        const lib = buildLibrary(deck({ Forest: 3, 'Craterhoof Behemoth': 1 }), { format: 'commander', commanders: ['craterhoof behemoth'] });
         assert.strictEqual(lib.cards.length, 3);
-        assert.strictEqual(lib.removedCommander, true);
-        const kept = buildLibrary(deck({ Forest: 3 }), { commanderName: 'Someone Else' });
-        assert.strictEqual(kept.cards.length, 3);
-        assert.strictEqual(kept.removedCommander, false);
+        assert.deepStrictEqual([...lib.commanders], ['craterhoof behemoth']);
+        const kept = buildLibrary(deck({ Forest: 3 }), { format: 'commander', commanders: ['Someone Else'] });
+        assert.strictEqual(kept.cards.length, 3, 'a commander the list does not hold changes nothing');
+        const sixty = buildLibrary(deck({ Forest: 3, 'Craterhoof Behemoth': 1 }), { format: 'constructed', commanders: ['Craterhoof Behemoth'] });
+        assert.strictEqual(sixty.cards.length, 4);
+        assert.strictEqual(sixty.commanders.length, 0);
+    });
+
+    it('leaves both partners out and takes colour identity from them too', () => {
+        const list = deck({ Forest: 3, 'Craterhoof Behemoth': 1, 'Llanowar Elves': 1 });
+        const partner = { name: 'Island Partner', type_line: 'Legendary Creature — Merfolk', mana_cost: '{U}', cmc: 1, color_identity: ['U'] };
+        const lib = buildLibrary(
+            { cardsByName: list, commanders: [{ name: 'Craterhoof Behemoth' }, { name: 'Llanowar Elves' }], format: 'auto' },
+            { commanderCards: [list['Craterhoof Behemoth'], partner] }
+        );
+        assert.strictEqual(lib.cards.length, 3);
+        assert.ok(lib.identity.includes('U'), 'a commander the list does not hold still sets the identity');
+        assert.ok(lib.identity.includes('G'));
     });
 
     it('skips empty rows', () => {

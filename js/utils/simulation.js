@@ -21,31 +21,7 @@ export function debounce(func, wait) {
     };
 }
 
-/**
- * Fisher-Yates shuffle (in-place)
- * @param {Array} array - Array to shuffle
- */
-export function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-}
-
-/**
- * Partial Fisher-Yates shuffle for drawing cards
- * @param {TypedArray} deck - Deck array
- * @param {number} count - Number of cards to draw
- * @param {number} deckSize - Size of deck
- */
-export function partialShuffle(deck, count, deckSize) {
-    for (let i = 0; i < count; i++) {
-        const j = i + Math.floor(Math.random() * (deckSize - i));
-        const temp = deck[i];
-        deck[i] = deck[j];
-        deck[j] = temp;
-    }
-}
+// Fisher–Yates (shuffle, shuffled, partialShuffle) lives in random.js.
 
 /**
  * Create a simple LRU cache

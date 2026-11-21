@@ -11,8 +11,15 @@
  */
 
 import { drawType } from './hypergeometric.js';
-import { COLORS, isLand, landColors, parseManaCost, deckColorIdentity } from './mana.js';
+import { COLORS, landColors, parseManaCost, deckColorIdentity } from './mana.js';
+import { asLibrary, isLand } from './library.js';
+import { hashString, mulberry32, partialShuffle, shuffled } from './random.js';
+import { inflect as plural } from './text.js';
 import { tagCard } from './cardTags.js';
+
+// Seeded randomness lives in random.js; re-exported for the pages and tests
+// that import it from here.
+export { mulberry32, shuffled };
 
 // ── Colour masks ─────────────────────────────────────────────────────────────
 
@@ -128,38 +135,38 @@ export function toLabCard(card, uid, identity) {
     };
 }
 
-function sameName(a, b) {
-    return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+/**
+ * The deck's colour identity: the library's cards plus every commander's.
+ * @param {ReadonlyArray<Object>} libraryCards
+ * @param {Array<Object|null>} [commanderCards]
+ * @returns {string[]} WUBRG-ordered
+ */
+export function identityOf(libraryCards, commanderCards = []) {
+    return deckColorIdentity(libraryCards, commanderCards);
 }
 
 /**
  * Expand a decklist into one lab card per copy.
  *
- * The commander starts in the command zone, never the library, so one copy of
- * it is removed when the list includes it (some imports do).
+ * Commanders start in the command zone, never the library (see library.js),
+ * whether or not the list holds them. They still set the deck's colour
+ * identity, so pass their records as `commanderCards`.
  *
- * @param {Record<string, Object>} cardsByName
- * @param {{commanderName?:string|null}} [opts]
- * @returns {{cards:Object[], identity:string[], hasCosts:boolean, placeholder:boolean, removedCommander:boolean}}
+ * @param {Object} deck - a DeckConfig snapshot, a Library, or a cardsByName map
+ * @param {{format?:Object|string, commanders?:string[], commanderCards?:Array<Object|null>}} [opts]
+ * @returns {{cards:Object[], identity:string[], hasCosts:boolean, placeholder:boolean, commanders:ReadonlyArray<string>}}
  */
-export function buildLibrary(cardsByName = {}, { commanderName = null } = {}) {
-    const identity = deckColorIdentity(cardsByName);
+export function buildLibrary(deck = {}, { format, commanders, commanderCards = [] } = {}) {
+    const library = asLibrary(deck, { format, commanders });
+    const identity = identityOf(library.cards, commanderCards);
     const cards = [];
-    let removedCommander = false;
     let uid = 0;
-    for (const card of Object.values(cardsByName)) {
-        let copies = Math.floor(Number(card?.count) || 0);
-        if (!card?.name || copies <= 0) continue;
-        if (commanderName && !removedCommander && sameName(card.name, commanderName)) {
-            copies -= 1;
-            removedCommander = true;
-        }
-        if (copies <= 0) continue;
+    for (const card of library.cards) {
         // Read the card once; copies differ only by uid.
         const proto = toLabCard(card, 0, identity);
-        for (let i = 0; i < copies; i++) cards.push({ ...proto, uid: uid++ });
+        for (let i = 0; i < card.count; i++) cards.push({ ...proto, uid: uid++ });
     }
-    return { cards, identity, hasCosts: cards.length > 0, placeholder: false, removedCommander };
+    return { cards, identity, hasCosts: cards.length > 0, placeholder: false, commanders: library.commanders };
 }
 
 /**
@@ -191,18 +198,12 @@ export function buildPlaceholderLibrary(counts = {}) {
             });
         }
     }
-    return { cards, identity: [], hasCosts: false, placeholder: true, removedCommander: false };
+    return { cards, identity: [], hasCosts: false, placeholder: true, commanders: [] };
 }
 
 /** Short stable signature of a library (cache key). FNV-1a over names. */
 export function libraryKey(cards = []) {
-    let h = 0x811c9dc5;
-    const s = cards.map(c => c.name).join('|');
-    for (let i = 0; i < s.length; i++) {
-        h ^= s.charCodeAt(i);
-        h = Math.imul(h, 0x01000193);
-    }
-    return `${cards.length}:${(h >>> 0).toString(36)}`;
+    return `${cards.length}:${hashString(cards.map(c => c.name).join('|')).toString(36)}`;
 }
 
 // ── Mana ─────────────────────────────────────────────────────────────────────
@@ -348,10 +349,6 @@ const SMALL = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eig
 /** "two", "three" … for small counts, digits beyond ten. */
 export function numberWord(n) {
     return SMALL[n] ?? String(n);
-}
-
-function plural(n, one, many = `${one}s`) {
-    return n === 1 ? one : many;
 }
 
 /**
@@ -506,18 +503,6 @@ export function landsInRangeChance(deckSize, lands, rule = DEFAULT_RULE) {
 
 // ── Simulation ───────────────────────────────────────────────────────────────
 
-/** Deterministic PRNG for tests and reproducible runs. */
-export function mulberry32(seed) {
-    let a = seed >>> 0;
-    return function rng() {
-        a = (a + 0x6D2B79F5) >>> 0;
-        let t = a;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
-
 /**
  * Play out the London mulligan many times.
  *
@@ -547,11 +532,8 @@ export function simulateMulligans(cards, rule = DEFAULT_RULE, { freeMulligan = f
     for (let g = 0; g < games; g++) {
         for (let m = 0; ; m++) {
             // Partial Fisher–Yates: the first seven are a uniform random sample.
-            for (let i = 0; i < OPENING_HAND; i++) {
-                const j = i + Math.floor(rng() * (N - i));
-                const t = order[i]; order[i] = order[j]; order[j] = t;
-                hand[i] = cards[order[i]];
-            }
+            partialShuffle(order, OPENING_HAND, N, rng);
+            for (let i = 0; i < OPENING_HAND; i++) hand[i] = cards[order[i]];
             const owed = Math.max(0, m - free);
             const size = OPENING_HAND - owed;
             if (size <= MIN_HAND) {
@@ -592,16 +574,6 @@ export function simulateMulligans(cards, rule = DEFAULT_RULE, { freeMulligan = f
 
 /** Goldfish turns stop here — the lab is about the opening, not the whole game. */
 export const MAX_TURNS = 12;
-
-/** Fisher–Yates into a new array. */
-export function shuffled(cards, rng = Math.random) {
-    const a = cards.slice();
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        const t = a[i]; a[i] = a[j]; a[j] = t;
-    }
-    return a;
-}
 
 /**
  * @param {Object[]} cards - lab library

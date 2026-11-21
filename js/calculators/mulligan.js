@@ -14,13 +14,14 @@
 
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, toneColor } from '../utils/components.js';
 import { escapeHtml } from '../data/glossary.js';
 import { tagDeck } from '../utils/cardTags.js';
-import { isLand } from '../utils/mana.js';
+import { cardTypes as typesOf, isLand, landCount, libraryOf, unlistedCopies } from '../utils/library.js';
+import { shuffle } from '../utils/random.js';
 import { TX_CHART } from '../utils/chartHelpers.js';
 import { createCache, debounce } from '../utils/simulation.js';
-import { formatChance } from '../utils/percent.js';
+import { pct } from '../utils/text.js';
 import {
     HAND_SIZE, mulliganPlan, marginalGains, drawSchedule, handSuccess, keepRules,
     chooseBottom, bottomCount, keepBar
@@ -43,7 +44,7 @@ export const SOURCES = Object.freeze({
     cheap: { label: 'Cards costing 2 or less', name: 'Early plays', unit: 'early plays', needsList: true, test: c => !isLand(c) && (Number(c.cmc) || 0) <= 2 },
     draw: { label: 'Card draw', name: 'Card draw', unit: 'card draw', needsList: true, test: (c, tags) => !isLand(c) && tags.includes('draw') },
     interaction: { label: 'Removal and interaction', name: 'Interaction', unit: 'interaction', needsList: true, test: (c, tags) => tags.some(t => t === 'removal' || t === 'counter' || t === 'wipe') },
-    creature: { label: 'Creatures', name: 'Creatures', unit: 'creatures', needsList: true, test: c => !isLand(c) && /\bcreature\b/i.test(String(c.type_line ?? '').split('//')[0]) }
+    creature: { label: 'Creatures', name: 'Creatures', unit: 'creatures', needsList: true, test: c => !isLand(c) && typesOf(c.type_line).includes('creature') }
 });
 
 const LAND_ROW = Object.freeze({ source: 'land', required: 3, byTurn: 3, max: 5 });
@@ -79,20 +80,25 @@ const sum = arr => arr.reduce((s, n) => s + n, 0);
 const groupColor = i => `var(--series-${(i % 6) + 1})`;
 const isHex = v => typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v.trim());
 
-const pct = formatChance;
-
 // ── Deck groups ──────────────────────────────────────────────────────────────
 
+/** The library (commanders are never in it — see library.js) and its tags. */
 function deckData() {
-    const { cardsByName } = DeckConfig.getImportedCardData();
+    const config = DeckConfig.getDeckConfig();
     const hasList = DeckConfig.hasCardList();
-    if (tagCache.ref !== cardsByName) {
-        tagCache = { ref: cardsByName, byCard: hasList ? tagDeck(cardsByName).byCard : {} };
+    const library = hasList ? libraryOf(config) : null;
+    if (tagCache.ref !== library) {
+        tagCache = { ref: library, byCard: library ? tagDeck(library.cards).byCard : {} };
         deckVersion++;
     }
-    const cards = hasList ? Object.values(cardsByName).filter(c => c?.name && Number(c.count) > 0) : [];
-    const config = DeckConfig.getDeckConfig();
-    return { hasList, cards, tags: tagCache.byCard, lands: Number(config.lands) || 0, deckSize: DeckConfig.getDeckSize(true) };
+    const cards = library ? library.cards.slice() : [];
+    return {
+        hasList,
+        cards,
+        tags: tagCache.byCard,
+        lands: library ? landCount(library) : (Number(config.lands) || 0),
+        deckSize: library ? library.size + unlistedCopies(library, config.actualCardCount) : DeckConfig.getDeckSize(true)
+    };
 }
 
 /**
@@ -282,10 +288,6 @@ export function summarizeMulligan(plan, { names = [], freeMulligan = false } = {
         html += ` The hard part is <strong>${escapeHtml(names[worst] ?? `group ${worst + 1}`)}</strong>: on its own, a random seven gets it only ${pct(plan.alone[worst])} of the time.`;
     }
     return { html, tone };
-}
-
-function toneColor(tone) {
-    return { good: 'var(--tx-good)', warn: 'var(--tx-warn)', bad: 'var(--tx-bad)' }[tone] ?? 'var(--tx-bright)';
 }
 
 function stepLabel(step, free) {
@@ -685,16 +687,6 @@ function renderTuning(config, result) {
 
 // ── Sample games ─────────────────────────────────────────────────────────────
 
-function shuffleInPlace(arr, rng) {
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        const t = arr[i];
-        arr[i] = arr[j];
-        arr[j] = t;
-    }
-    return arr;
-}
-
 /**
  * Build the card pool for sample games: the real list when every group is
  * linked to it, otherwise stand-in cards named after each group.
@@ -753,7 +745,7 @@ export function simulateGames({ pool, plan, drawsBy, freeMulligan, games = SAMPL
     for (let g = 0; g < games; g++) {
         const mulled = [];
         for (let step = 0; step <= lastStep; step++) {
-            shuffleInPlace(order, rng);
+            shuffle(order, rng);
             const seven = order.slice(0, HAND_SIZE);
             const counts = new Array(n).fill(0);
             seven.forEach(ci => { const grp = pool[ci].group; if (grp >= 0) counts[grp]++; });

@@ -12,10 +12,10 @@ import { FORMATS } from '../../js/utils/format.js';
 const card = (name, count, type_line, cmc = 0, oracle_text = '') => ({ name, count, type_line, cmc, oracle_text, mana_cost: '' });
 
 describe('Land Drops — Commander example deck', () => {
-    it('uses the 99-card library and everyone-draws rule', () => {
+    it('uses the 98-card library (100 less two commanders) and everyone-draws rule', () => {
         const config = getDeckConfig();
         assert.strictEqual(config.format.key, 'commander');
-        assert.strictEqual(config.deckSize, 99);
+        assert.strictEqual(config.deckSize, 98);
         assert.strictEqual(config.onPlay, true);
         const { odds } = calculate();
         assert.strictEqual(odds.length, 8);

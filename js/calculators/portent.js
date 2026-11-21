@@ -18,11 +18,13 @@ import { createCache } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell, toneColor, toneFor } from '../utils/components.js';
 import { cardRef } from '../data/glossary.js';
+import { CARD_TYPES, cardTypes } from '../utils/library.js';
+import { avg, pct, plural, points, pointsShort } from '../utils/text.js';
 import {
-    CARD_TYPES, avg, barsHTML, cardListKey, chanceTone, createSampler, deckCardList, expandCards,
-    noticeHTML, pct, plural, points, pointsShort, renderHowItCompares, sampleCardHTML, toneColor, typeLabel,
+    barsHTML, cardListKey, createSampler, deckCardList, expandCards,
+    noticeHTML, renderHowItCompares, sampleCardHTML, typeLabel,
     syncXControl, bindXPresets, readX, fade
 } from '../utils/bigSpells.js';
 
@@ -50,10 +52,10 @@ let chart = null;
 
 /** Bitmask of a type line's card types (bit order = CARD_TYPES). */
 export function typeMask(typeLine) {
-    const lower = String(typeLine ?? '').toLowerCase();
+    const types = cardTypes(typeLine);
     let mask = 0;
     CARD_TYPES.forEach((type, bit) => {
-        if (lower.includes(type)) mask |= 1 << bit;
+        if (types.includes(type)) mask |= 1 << bit;
     });
     return mask;
 }
@@ -328,7 +330,7 @@ export function summarize(a) {
     } else {
         follow = 'This is the cheapest X that makes it 9 in 10.';
     }
-    return { html: `${lead} ${follow}`, tone: chanceTone(a.prob) };
+    return { html: `${lead} ${follow}`, tone: toneFor(a.prob) };
 }
 
 // ── Deck and page state ──────────────────────────────────────────────────────
@@ -374,7 +376,7 @@ function renderAnswer(config, a) {
     const next = a.next;
     const hero = renderHeroStats([
         {
-            label: 'Free-spell chance', value: pct(a.prob), size: 'big', color: toneColor(chanceTone(a.prob)),
+            label: 'Free-spell chance', value: pct(a.prob), size: 'big', color: toneColor(toneFor(a.prob)),
             sub: `at X=${a.x} · ${a.mana} mana`,
             tip: 'The chance Portent exiles four or more cards — one per card type — so you may cast one of them without paying its mana cost.'
         },
@@ -404,7 +406,7 @@ function renderChart(config, results) {
     const probs = xs.map(x => +((results[x]?.prob4Plus ?? 0) * 100).toFixed(1));
     const colors = xs.map((x, i) => x === config.x
         ? TX_CHART.amber
-        : fade({ good: TX_CHART.green, warn: TX_CHART.amber, bad: TX_CHART.red }[chanceTone(probs[i] / 100)] ?? TX_CHART.blue, 0.38));
+        : fade({ good: TX_CHART.green, warn: TX_CHART.amber, bad: TX_CHART.red }[toneFor(probs[i] / 100)] ?? TX_CHART.blue, 0.38));
 
     chart = createOrUpdateChart(chart, 'portent-combinedChart', {
         type: 'bar',
@@ -534,8 +536,8 @@ function renderDetails(config, results, a) {
         columns: [
             { label: 'X', align: 'left', render: r => `${r.x}` },
             { label: 'Mana', render: r => `${r.x + 1}` },
-            { label: 'Free-spell chance', align: 'left', render: r => pBarCell(r.prob, toneColor(chanceTone(r.prob))) },
-            { label: '', render: r => `<span style="color:${toneColor(chanceTone(r.prob))}">${pct(r.prob)}</span>` },
+            { label: 'Free-spell chance', align: 'left', render: r => pBarCell(r.prob, toneColor(toneFor(r.prob))) },
+            { label: '', render: r => `<span style="color:${toneColor(toneFor(r.prob))}">${pct(r.prob)}</span>` },
             { label: 'Cards kept', render: r => avg(r.cards) },
             { label: 'Change', render: r => r.delta == null ? '—' : pointsShort(r.delta) }
         ]

@@ -309,7 +309,7 @@ describe('scripted goldfish games', () => {
         const blue = { name: 'Blue Tester', mana_cost: '{U}{U}', cmc: 2, type_line: 'Legendary Creature — Test', oracle_text: '', color_identity: ['U'] };
         const green = { ...blue, name: 'Green Tester', mana_cost: '{G}{G}', color_identity: ['G'] };
         for (const [commander, expected] of [[blue, 0], [green, 2]]) {
-            const lib = MD.buildManaLibrary(deckOf({ Forest: 40, 'Colossal Dreadmaw': 20 }), { commanderName: commander.name, commanderCard: commander });
+            const lib = MD.buildManaLibrary(deckOf({ Forest: 40, 'Colossal Dreadmaw': 20 }), { format: 'commander', commanders: [commander.name], commanderCards: [commander] });
             assert.equal(lib.target.kind, 'commander');
             const take = picker(lib);
             const g = MD.playScriptedGame(lib, { hand: take(rep('Forest', 7)), library: take(rep('Forest', 20)), format: EDH });
@@ -332,14 +332,31 @@ describe('scripted goldfish games', () => {
 
 describe('library and target', () => {
     it('removes the commander from the bundled example and targets it', () => {
-        const lib = MD.buildManaLibrary(DEFAULT_DECK_DATA.cardsByName, { commanderName: DEFAULT_DECK_DATA.commanderName });
-        assert.equal(lib.removedCommander, true);
-        assert.equal(lib.cards.length, DEFAULT_DECK_DATA.actualCardCount - 1);
+        const lib = MD.buildManaLibrary(DEFAULT_DECK_DATA);
+        assert.ok(lib.commanders.includes('The Sixth Doctor'));
+        assert.equal(lib.cards.length, 98, '100 cards less two commanders');
+        assert.ok(!lib.cards.some(c => c.name === 'The Sixth Doctor' || c.name === 'Susan Foreman'));
         assert.equal(lib.target.kind, 'commander');
         assert.equal(lib.target.name, 'The Sixth Doctor');
         assert.equal(lib.target.mv, 6);
         assert.ok(lib.ramp.some(r => r.name === 'Explosive Vegetation' && r.info.modelled));
         assert.ok(lib.ramp.some(r => r.name === "Aminatou's Augury" && r.info.unmodelled === 'unread'), 'tagged ramp the model can’t read is listed, not counted');
+    });
+
+    it('with partners, races towards the more expensive commander and takes both identities', () => {
+        const cheap = { name: 'Cheap Partner', mana_cost: '{G}', cmc: 1, type_line: 'Legendary Creature — Elf', oracle_text: '', color_identity: ['G'] };
+        const dear = { name: 'Dear Partner', mana_cost: '{4}{U}{U}', cmc: 6, type_line: 'Legendary Creature — Sphinx', oracle_text: '', color_identity: ['U'] };
+        const deck = { cardsByName: deckOf({ Forest: 40, 'Colossal Dreadmaw': 20 }), commanders: [{ name: cheap.name, card: cheap }, { name: dear.name, card: dear }], format: 'auto' };
+        const lib = MD.buildManaLibrary(deck);
+        assert.deepEqual([...lib.commanders], ['Cheap Partner', 'Dear Partner']);
+        assert.equal(lib.target.kind, 'commander');
+        assert.equal(lib.target.name, 'Dear Partner');
+        assert.equal(lib.target.mv, 6);
+        assert.deepEqual(lib.target.names, ['Cheap Partner', 'Dear Partner']);
+        assert.deepEqual(lib.identity, ['U', 'G']);
+        assert.equal(lib.cards.length, 60);
+        // Outside Commander there is no command zone, so no commander target.
+        assert.equal(MD.buildManaLibrary(deck, { format: 'constructed' }).target.kind, 'top-end');
     });
 
     it('falls back to the top end: the middle of the three most expensive spells', () => {
@@ -361,7 +378,7 @@ describe('library and target', () => {
 });
 
 describe('simulation', () => {
-    const lib = MD.buildManaLibrary(DEFAULT_DECK_DATA.cardsByName, { commanderName: DEFAULT_DECK_DATA.commanderName });
+    const lib = MD.buildManaLibrary(DEFAULT_DECK_DATA);
     const r = MD.simulateManaDevelopment(lib, { format: EDH, games: 2000 });
 
     it('is deterministic for a seed', () => {

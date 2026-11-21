@@ -5,7 +5,9 @@ import './../node-test-helper.js'; // installs global.document mock
 import {
     renderHeroStats,
     pBarCell,
-    renderSweepTable
+    renderSweepTable,
+    toneColor,
+    toneFor
 } from '../../js/utils/components.js';
 
 describe('renderHeroStats', () => {
@@ -38,6 +40,31 @@ describe('pBarCell', () => {
         assert.match(pBarCell(2), /width:100\.0%/);
         assert.match(pBarCell(-1), /width:0\.0%/);
         assert.match(pBarCell(NaN), /width:0\.0%/);
+    });
+
+    it('is neutral unless the caller says what the number means', () => {
+        assert.match(pBarCell(0.9), /background:var\(--tx-flat\)/);
+        assert.doesNotMatch(pBarCell(0.1), /tx-green|tx-good/);
+        assert.match(pBarCell(0.1, toneColor(toneFor(0.1))), /background:var\(--tx-bad\)/);
+    });
+});
+
+describe('toneFor / toneColor', () => {
+    it('maps a chance to what it means, with adjustable cut-offs', () => {
+        assert.strictEqual(toneFor(0.8), 'good');
+        assert.strictEqual(toneFor(0.5), 'warn');
+        assert.strictEqual(toneFor(0.1), 'bad');
+        assert.strictEqual(toneFor(NaN), 'flat');
+        assert.strictEqual(toneFor('0.9'), 'flat');
+        assert.strictEqual(toneFor(0.75, { good: 0.8, warn: 0.5 }), 'warn');
+    });
+
+    it('gives each tone one colour token, plain text otherwise', () => {
+        assert.strictEqual(toneColor('good'), 'var(--tx-good)');
+        assert.strictEqual(toneColor('warn'), 'var(--tx-warn)');
+        assert.strictEqual(toneColor('bad'), 'var(--tx-bad)');
+        assert.strictEqual(toneColor('flat'), 'var(--tx-bright)');
+        assert.strictEqual(toneColor(undefined), 'var(--tx-bright)');
     });
 });
 

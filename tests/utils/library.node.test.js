@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import {
     nameKey, sameCard, CARD_TYPES, PERMANENT_TYPES, frontTypeLine, cardTypes, isLand, isPermanent,
-    libraryOf, commanderNamesOf, expandLibrary, findInLibrary
+    libraryOf, commanderNamesOf, commandersOf, expandLibrary, findInLibrary, isLibrary, asLibrary,
+    withoutRemoved, unlistedCopies, landCount
 } from '../../js/utils/library.js';
 import { DEFAULT_DECK_DATA } from '../../js/utils/defaultDeckData.js';
 import { FORMATS } from '../../js/utils/format.js';
@@ -221,6 +222,69 @@ describe('libraryOf — commanders are never in the library', () => {
         for (const name of commanderNamesOf(DEFAULT_DECK_DATA)) {
             assert.equal(findInLibrary(lib, name), null, name);
         }
+    });
+});
+
+describe('commandersOf', () => {
+    it('finds each commander’s record: own card, then commanderCard, then the list', () => {
+        const doctor = { name: 'The Sixth Doctor', type_line: 'Legendary Creature', cmc: 6 };
+        const susan = rec('Susan Foreman', 1, 'Legendary Creature — Time Lord', 2);
+        const deck = {
+            cardsByName: { Susan: susan },
+            commanders: [{ name: 'The Sixth Doctor', card: doctor }, { name: 'Susan Foreman', card: null }, { name: 'Nobody' }]
+        };
+        const zone = commandersOf(deck);
+        assert.deepEqual(zone.map(c => c.name), ['The Sixth Doctor', 'Susan Foreman', 'Nobody']);
+        assert.equal(zone[0].card, doctor);
+        assert.equal(zone[1].card, susan);
+        assert.equal(zone[2].card, null);
+        const legacy = commandersOf({ commanderName: 'The Sixth Doctor', commanderCard: doctor, cardsByName: {} });
+        assert.equal(legacy[0].card, doctor);
+        assert.deepEqual(commandersOf({}), []);
+    });
+
+    it('ignores a record that belongs to a different card', () => {
+        const zone = commandersOf({ commanderName: 'A', commanderCard: { name: 'B' }, cardsByName: {} });
+        assert.equal(zone[0].card, null);
+    });
+});
+
+describe('isLibrary / asLibrary', () => {
+    it('passes a Library through and builds one from anything else', () => {
+        const lib = libraryOf(partnerDeck());
+        assert.ok(isLibrary(lib));
+        assert.ok(!isLibrary({ ...lib }));
+        assert.ok(!isLibrary(null));
+        assert.equal(asLibrary(lib), lib);
+        assert.equal(asLibrary(partnerDeck().cardsByName, { format: 'commander', commanders: ['Opt'] }).size, 96);
+    });
+});
+
+describe('withoutRemoved / unlistedCopies / landCount', () => {
+    const deck = partnerDeck({ listed: true });
+    const lib = libraryOf(deck);
+    const details = [
+        { name: 'The Sixth Doctor', cmc: 6 }, { name: 'Opt', cmc: 1 }, { name: 'Susan Foreman', cmc: 2 }, { name: 'Opt', cmc: 1 }
+    ];
+
+    it('takes the copies the library left out out of per-copy entries', () => {
+        assert.deepEqual(withoutRemoved(details, lib).map(d => d.name), ['Opt', 'Opt']);
+        assert.equal(withoutRemoved(details, libraryOf(partnerDeck())), details, 'nothing removed: same array');
+        assert.deepEqual(withoutRemoved(null, lib), []);
+        const surge = libraryOf(deck, { exclude: ['Opt'] });
+        assert.equal(withoutRemoved(details, surge).filter(d => d.name === 'Opt').length, 1, 'one copy per exclude');
+    });
+
+    it('counts copies an import could not identify, commanders it held included', () => {
+        assert.equal(unlistedCopies(lib, 99), 0, '97 in the library + 2 commanders = 99 listed');
+        assert.equal(unlistedCopies(lib, 101), 2);
+        assert.equal(unlistedCopies(lib, null), 0);
+        assert.equal(unlistedCopies(null, 5), 5);
+    });
+
+    it('counts lands', () => {
+        assert.equal(landCount(lib), 30);
+        assert.equal(landCount(null), 0);
     });
 });
 

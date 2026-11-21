@@ -10,14 +10,15 @@
 
 import * as DeckConfig from './deckConfig.js';
 import { simulateGenesisWave } from '../calculators/wave.js';
-import { simulateVow } from '../calculators/vow.js';
+import { simulateVow, commanderCopiesVow } from '../calculators/vow.js';
 import { simulatePrimalSurge } from '../calculators/surge.js';
 import { portentOutcomes } from '../calculators/portent.js';
-import { avg, deckCardList, isPermanentTypeLine, listSize, pct } from './bigSpells.js';
+import { deckCardList, listSize } from './bigSpells.js';
+import { commanderNamesOf, frontTypeLine, isLand, isPermanent, sameCard } from './library.js';
+import { avg, pct } from './text.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 
 const SURGE_COST = 10;
-const COPYING_COMMANDERS = new Set(['The Sixth Doctor']);
 
 /** Total mana a source page's X stands for. */
 export function totalManaFor(sourceSpell, x) {
@@ -46,8 +47,10 @@ export function compareBigSpells(inputX, sourceSpell = 'generic', options = {}) 
     const cards = options.cards ?? deckCardList(deck);
     if (!cards.length) return null;
 
-    const commanderName = options.commanderName !== undefined ? options.commanderName : (deck.commanderName ?? null);
-    const vowCopied = options.vowDoubleCast ?? COPYING_COMMANDERS.has(commanderName);
+    const commanders = options.commanderName !== undefined
+        ? (options.commanderName ? [options.commanderName] : [])
+        : commanderNamesOf(deck);
+    const vowCopied = options.vowDoubleCast ?? commanderCopiesVow(commanders);
     const totalMana = totalManaFor(sourceSpell, inputX);
     const waveX = Math.max(0, totalMana - 3);
     const vowX = Math.max(0, totalMana - 2);
@@ -64,18 +67,18 @@ export function compareBigSpells(inputX, sourceSpell = 'generic', options = {}) 
     let waveManaValue = 0;
 
     for (const card of cards) {
-        const typeLine = card.type_line.toLowerCase();
+        const typeLine = card.type_line;
         const mv = Math.floor(card.cmc);
-        if (isPermanentTypeLine(typeLine)) {
-            const isLand = typeLine.includes('land');
-            const isLegendary = typeLine.includes('legendary');
+        if (isPermanent(typeLine)) {
+            const land = isLand(typeLine);
+            const isLegendary = /\blegendary\b/.test(frontTypeLine(typeLine));
             permanentCount += card.count;
             permanentManaValue += card.cmc * card.count;
             waveDistribution[mv] = (waveDistribution[mv] ?? 0) + card.count;
             if (mv <= waveX) waveManaValue += card.cmc * card.count;
-            if (isLand || isLegendary) vowDistribution[mv] = (vowDistribution[mv] ?? 0) + card.count;
+            if (land || isLegendary) vowDistribution[mv] = (vowDistribution[mv] ?? 0) + card.count;
             if (isLegendary) legendaryPermanentCount += card.count;
-            if (isLand) landCount += card.count;
+            if (land) landCount += card.count;
         } else {
             nonPermanentCount += card.count;
             waveDistribution.nonperm = (waveDistribution.nonperm ?? 0) + card.count;
@@ -91,7 +94,7 @@ export function compareBigSpells(inputX, sourceSpell = 'generic', options = {}) 
     const vow = simulateVow(deckSize, vowDistribution, vowX, vowCopied, { cardsByName });
 
     // Primal Surge — the cast copy is on the stack, not in the library.
-    const surgeOnStack = cards.some(card => card.name.trim().toLowerCase() === 'primal surge');
+    const surgeOnStack = cards.some(card => sameCard(card.name, 'Primal Surge'));
     const surgeLibrarySize = surgeOnStack ? deckSize - 1 : deckSize;
     const surgeNonPerms = surgeOnStack ? nonPermanentCount - 1 : nonPermanentCount;
     const surgePerms = surgeLibrarySize - surgeNonPerms;

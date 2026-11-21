@@ -6,12 +6,14 @@ import { FORMATS, cardsSeenByTurn } from '../../js/utils/format.js';
 import { budget, medianMs } from '../helpers/timing.js';
 import {
     MAX_NEED, MAX_TURN, SEARCH_TURN,
-    normalizeName, formatPct, turnLabel,
+    normalizeName, turnLabel,
     buildLibrary, buildManualLibrary, presetMembers, presetCounts, findCard, searchCards,
     emptyGroup, presetGroup, cardsGroup, resolveGroup, autoName, groupName,
     regionSizes, allOfWeights, allOfChance, atLeastChance, firstTurnReaching, analyzeOdds,
     describeGroup, summarize, suggestExamples, encodeGroup, decodeGroup
 } from '../../js/utils/drawOdds.js';
+// Draw Odds formats chances with the shared pct() (js/utils/text.js).
+import { pct as formatPct } from '../../js/utils/text.js';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -182,15 +184,30 @@ describe('atLeastChance / firstTurnReaching', () => {
 describe('buildLibrary', () => {
     it('leaves the commander in the command zone and keeps unidentified copies', () => {
         const list = commanderList();
-        const lib = buildLibrary(list, { commanderName: 'The Commander', excludeCommander: true, deckSize: 102 });
+        const lib = buildLibrary(list, { format: 'commander', commanders: ['The Commander'], deckSize: 102 });
         assert.strictEqual(lib.byName.has('The Commander'), false);
         assert.strictEqual(lib.commanderExcluded, true);
         assert.strictEqual(lib.unlisted, 2);
         assert.strictEqual(lib.size, 99 + 2);
     });
 
+    it('leaves both partners out, whether or not the list holds them', () => {
+        const zone = ['The Commander', 'The Partner'];
+        const without = buildLibrary(commanderList(), { format: 'commander', commanders: zone, deckSize: 99 });
+        assert.strictEqual(without.size, 99);
+        assert.deepStrictEqual([...without.commanders], zone);
+        const listed = { ...commanderList(), 'The Partner': card('The Partner', 1, { type: 'Legendary Creature — Human', cmc: 3 }) };
+        const lib = buildLibrary(listed, { format: 'commander', commanders: zone, deckSize: 101 });
+        assert.strictEqual(lib.size, 99);
+        assert.strictEqual(lib.unlisted, 0, 'listed commanders are accounted for, not unlisted');
+        assert.ok(!lib.byName.has('The Partner') && !lib.byName.has('The Commander'));
+        // A DeckConfig snapshot carries its own command zone.
+        const snap = buildLibrary({ cardsByName: listed, commanders: zone.map(name => ({ name })), format: 'auto' });
+        assert.strictEqual(snap.size, 99);
+    });
+
     it('keeps the commander when not playing Commander', () => {
-        const lib = buildLibrary(commanderList(), { commanderName: 'The Commander', excludeCommander: false });
+        const lib = buildLibrary(commanderList(), { format: 'constructed', commanders: ['The Commander'] });
         assert.strictEqual(lib.byName.has('The Commander'), true);
         assert.strictEqual(lib.size, 100);
     });
@@ -210,7 +227,7 @@ describe('buildLibrary', () => {
 });
 
 describe('presets', () => {
-    const lib = buildLibrary(commanderList(), { commanderName: 'The Commander', excludeCommander: true });
+    const lib = buildLibrary(commanderList(), { format: 'commander', commanders: ['The Commander'] });
 
     it('picks cards by type, role and mana value', () => {
         assert.deepStrictEqual(presetMembers(lib, 'type', 'lands'), ['Forest']);
@@ -266,7 +283,7 @@ describe('findCard / searchCards', () => {
 });
 
 describe('groups', () => {
-    const lib = buildLibrary(commanderList(), { commanderName: 'The Commander', excludeCommander: true });
+    const lib = buildLibrary(commanderList(), { format: 'commander', commanders: ['The Commander'] });
 
     it('resolves cards, presets and manual counts', () => {
         assert.deepStrictEqual(resolveGroup(cardsGroup(['Sol Ring', 'Black Lotus']), lib), { names: ['Sol Ring'], copies: 1 });
@@ -306,7 +323,7 @@ describe('groups', () => {
 // ── analyzeOdds ──────────────────────────────────────────────────────────────
 
 describe('analyzeOdds', () => {
-    const lib = buildLibrary(commanderList(), { commanderName: 'The Commander', excludeCommander: true });
+    const lib = buildLibrary(commanderList(), { format: 'commander', commanders: ['The Commander'] });
 
     it('returns nothing for empty groups', () => {
         const r = analyzeOdds({ library: lib, groups: [emptyGroup()] });
@@ -382,7 +399,7 @@ describe('analyzeOdds', () => {
 // ── Words ────────────────────────────────────────────────────────────────────
 
 describe('describeGroup / summarize', () => {
-    const lib = buildLibrary(commanderList(), { commanderName: 'The Commander', excludeCommander: true });
+    const lib = buildLibrary(commanderList(), { format: 'commander', commanders: ['The Commander'] });
 
     it('describes groups the way players say them', () => {
         const one = g => describeGroup(analyzeOdds({ library: lib, groups: [g] }).groups[0]);
@@ -437,7 +454,7 @@ describe('describeGroup / summarize', () => {
 
 describe('suggestExamples', () => {
     it('offers Commander staples first', () => {
-        const lib = buildLibrary(commanderList(), { commanderName: 'The Commander', excludeCommander: true });
+        const lib = buildLibrary(commanderList(), { format: 'commander', commanders: ['The Commander'] });
         const s = suggestExamples(lib, FORMATS.commander);
         assert.deepStrictEqual(s.map(x => x.label), ['Your ramp by turn 2', 'A board wipe by turn 6', 'Any of your 2-drops by turn 2']);
         s.forEach(x => assert.ok(resolveGroup(x.group, lib).copies > 0));

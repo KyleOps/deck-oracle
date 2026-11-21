@@ -22,10 +22,11 @@ import {
     MAX_TURNS,
     simulateGames,
     truncateGames,
-    quantile,
     turnBands,
     summarize
 } from '../../js/calculators/chimil.js';
+// Chimil's sorted-sample quantile is the shared one (js/utils/stats.js).
+import { quantileSorted as quantile } from '../../js/utils/stats.js';
 
 /** Build a per-copy cardDetails array from [cmc, count] pairs. */
 function nonlands(pairs) {

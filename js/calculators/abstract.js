@@ -16,13 +16,15 @@
  *     than an average four cards; otherwise bins the unseen face-down pile
  */
 
-import { partialShuffle } from '../utils/simulation.js';
+import { partialShuffle } from '../utils/random.js';
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderHeroStats, renderBottomLine } from '../utils/components.js';
-import { buildDeckFromCardData, renderDistributionChart } from '../utils/sampleSimulator.js';
-import { percentileFromDist } from '../utils/discover.js';
+import { renderDistributionChart } from '../utils/sampleSimulator.js';
+import { asLibrary, expandLibrary, isLand, libraryOf } from '../utils/library.js';
+import { quantile } from '../utils/stats.js';
+import { one, pct } from '../utils/text.js';
 import { cardRef } from '../data/glossary.js';
 
 export const ITERATIONS = 25000;
@@ -49,30 +51,31 @@ let chart = null;
 // ==================== PURE LOGIC ====================
 
 /**
- * The library as {name, cmc, isLand}, one entry per copy, lands included.
+ * The library as {name, cmc, isLand}, one entry per copy, lands included and
+ * commanders left out (see library.js).
  *
- * Built from cardsByName (every card, with names). The previous version read
- * `cardDetails`, which the importer fills with NONLAND cards only — so every
- * simulated pile was dealt from a deck with no lands, inflating the free spell
- * and making "all lands, nothing to cast" impossible.
+ * Built from the card records (every card, with names). An earlier version
+ * read `cardDetails`, which the importer fills with NONLAND cards only — so
+ * every simulated pile was dealt from a deck with no lands, inflating the free
+ * spell and making "all lands, nothing to cast" impossible.
  *
- * @param {Object} cardsByName
+ * @param {Object} source - a Library from libraryOf(), or a DeckConfig snapshot
  * @returns {{deck:Array<{name:string, cmc:number, isLand:boolean}>, isDefault:boolean}}
  */
-export function buildLibrary(cardsByName) {
-    const names = Object.keys(cardsByName ?? {});
-    if (names.length > 0) {
-        const deck = buildDeckFromCardData({ cardsByName }).map(card => ({
+export function buildLibrary(source) {
+    const library = asLibrary(source);
+    if (library.size >= PILE_SIZE * 2) {
+        const deck = expandLibrary(library, card => ({
             name: card.name,
             cmc: Math.max(0, Math.floor(Number(card.cmc) || 0)),
-            isLand: card.types.includes('land'),
+            isLand: isLand(card),
             isX: /\{X\}/i.test(card.mana_cost ?? '')
         }));
-        if (deck.length >= PILE_SIZE * 2) return { deck, isDefault: false };
+        return { deck, isDefault: false };
     }
     const deck = [];
-    for (const { cmc, count, isLand } of DEFAULT_DIST) {
-        for (let i = 0; i < count; i++) deck.push({ name: isLand ? 'Land' : 'Spell', cmc, isLand });
+    for (const { cmc, count, isLand: land } of DEFAULT_DIST) {
+        for (let i = 0; i < count; i++) deck.push({ name: land ? 'Land' : 'Spell', cmc, isLand: land });
     }
     return { deck, isDefault: true };
 }
@@ -119,9 +122,9 @@ function histogramStats(hist, sum, n) {
     return {
         mean: n ? sum / n : 0,
         dist: hist.map(c => (n ? c / n : 0)),
-        p25: percentileFromDist(hist, 0.25),
-        p50: percentileFromDist(hist, 0.5),
-        p75: percentileFromDist(hist, 0.75)
+        p25: quantile(hist, 0.25),
+        p50: quantile(hist, 0.5),
+        p75: quantile(hist, 0.75)
     };
 }
 
@@ -198,8 +201,6 @@ export function dealSampleCasts(deck, count = SAMPLE_CASTS) {
     return out;
 }
 
-const one = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
-const pct = v => `${Math.round((Number.isFinite(v) ? v : 0) * 100)}%`;
 const mvLabel = v => (v >= BUCKETS - 1 ? `${BUCKETS - 1}+` : String(v));
 
 /** Tone of the realistic outcome: a free spell of 4+ is a strong return on six mana. */
@@ -234,10 +235,10 @@ const state = { ref: null, deck: null, isDefault: true, results: null, samples: 
 
 /** Simulate once per deck (the deck object is replaced on every import). */
 export function calculate() {
-    const cardsByName = DeckConfig.getImportedCardData()?.cardsByName ?? null;
-    if (state.ref !== cardsByName || !state.deck) {
-        const { deck, isDefault } = buildLibrary(cardsByName);
-        state.ref = cardsByName;
+    const library = libraryOf(DeckConfig.getDeckConfig());
+    if (state.ref !== library || !state.deck) {
+        const { deck, isDefault } = buildLibrary(library);
+        state.ref = library;
         state.deck = deck;
         state.isDefault = isDefault;
         state.results = simulateAbstractPerformance(deck, ITERATIONS);

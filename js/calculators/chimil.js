@@ -33,6 +33,10 @@ import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
 import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
 import { buildDeckFromCardData, shuffleDeck, renderDistributionChart } from '../utils/sampleSimulator.js';
+import { isLand, landCount, libraryOf, withoutRemoved } from '../utils/library.js';
+import { shuffle } from '../utils/random.js';
+import { quantileSorted as quantile } from '../utils/stats.js';
+import { one, pct, plural } from '../utils/text.js';
 import { cardRef } from '../data/glossary.js';
 import { tailRows } from '../utils/discover.js';
 import { describeDots, dotPlot, sampleQuantiles } from '../utils/viz.js';
@@ -233,7 +237,7 @@ export function fitVerdict(trigger, payback) {
 
 // ==================== SIMULATION: WHOLE GAMES ====================
 
-const isLandCard = card => Array.isArray(card?.types) && card.types.includes('land');
+const isLandCard = card => isLand(card);
 const isXSpell = card => /\{X\}/i.test(card?.mana_cost ?? '');
 
 /**
@@ -258,11 +262,7 @@ function playGame(lib, turns, discoverN) {
         }
 
         // Passed-over cards go to the bottom in a random order, as printed.
-        for (let i = passed.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [passed[i], passed[j]] = [passed[j], passed[i]];
-        }
-        for (const card of passed) lib.push(card);
+        for (const card of shuffle(passed)) lib.push(card);
 
         if (hit) cumulative += Number.isFinite(hit.cmc) ? hit.cmc : 0;
         events.push({ turn, dug: passed.length, hit, cumulative });
@@ -314,12 +314,6 @@ export function truncateGames(games, turns) {
     return list.map(g => (g.length <= n ? g : g.slice(0, n)));
 }
 
-/** Nearest-rank quantile of an ascending-sorted array (0 when empty). */
-export function quantile(sorted, q) {
-    if (!Array.isArray(sorted) || sorted.length === 0) return 0;
-    const rank = Math.ceil(Math.min(1, Math.max(0, q)) * sorted.length) - 1;
-    return sorted[Math.min(sorted.length - 1, Math.max(0, rank))];
-}
 
 const finalOf = g => (g.length ? (g[g.length - 1].cumulative ?? 0) : 0);
 
@@ -436,10 +430,6 @@ export function turnBands(games, turns, cost = CHIMIL_COST) {
     return rows;
 }
 
-const pct = v => `${Math.round((Number.isFinite(v) ? v : 0) * 100)}%`;
-const one = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-
 /**
  * The plain-English answer to "what does Chimil discover each end step, and how
  * soon does it pay off?" for this deck.
@@ -484,35 +474,37 @@ export function summarize(result) {
 const simState = { deckRef: null, games: null };
 
 /**
- * Read the horizon and the shared deck state.
- * @returns {{turns:number, lands:number, cardDetails:Array, deckSize:number}}
+ * Read the horizon and the shared deck state. With a decklist the library is
+ * the list less the commanders (see library.js).
+ * @returns {{turns:number, lands:number, cardDetails:Array, deckSize:number, library:Object|null}}
  */
 export function getConfig() {
     const deck = DeckConfig.getDeckConfig();
     const slider = document.getElementById('chimil-turnsSlider');
     const raw = parseInt(slider?.value, 10);
     const turns = Math.max(1, Math.min(MAX_TURNS, Number.isFinite(raw) ? raw : PROJECTION_TURNS));
+    const library = DeckConfig.hasCardList() ? libraryOf(deck) : null;
+    const details = Array.isArray(deck.cardDetails) ? deck.cardDetails : [];
 
     return {
         turns,
-        lands: deck.lands ?? 0,
-        cardDetails: Array.isArray(deck.cardDetails) ? deck.cardDetails : [],
-        deckSize: DeckConfig.getDeckSize(true)
+        lands: library ? landCount(library) : (deck.lands ?? 0),
+        cardDetails: library ? withoutRemoved(details, library) : details,
+        deckSize: library ? library.size : DeckConfig.getDeckSize(true),
+        library
     };
 }
 
 /** Simulate (once per deck) and return the full-length games, or null without a decklist. */
-function ensureGames({ force = false } = {}) {
-    const cardsByName = DeckConfig.getImportedCardData()?.cardsByName;
-    if (!cardsByName || Object.keys(cardsByName).length === 0) {
+function ensureGames(library, { force = false } = {}) {
+    if (!library?.size) {
         simState.deckRef = null;
         simState.games = null;
         return null;
     }
-    if (force || simState.deckRef !== cardsByName || !simState.games) {
-        const deck = buildDeckFromCardData({ cardsByName });
-        simState.games = simulateGames(deck, AUTO_SIM_GAMES, MAX_TURNS);
-        simState.deckRef = cardsByName;
+    if (force || simState.deckRef !== library || !simState.games) {
+        simState.games = simulateGames(buildDeckFromCardData(library), AUTO_SIM_GAMES, MAX_TURNS);
+        simState.deckRef = library;
     }
     return simState.games;
 }
@@ -528,7 +520,7 @@ export function calculate() {
     const payback = paybackTurn(projectTurns(trigger, 30));
     const rows = projectTurns(trigger, config.turns);
 
-    const all = ensureGames();
+    const all = ensureGames(config.library);
     const games = all ? truncateGames(all, config.turns) : null;
     const sim = games ? summariseGames(games) : null;
     const bands = games ? turnBands(games, config.turns) : [];
@@ -791,7 +783,7 @@ export function updateUI() {
 
 /** Reshuffle: simulate a fresh set of games for the same deck. */
 export function runSampleReveals() {
-    ensureGames({ force: true });
+    ensureGames(getConfig().library, { force: true });
     updateUI();
 }
 
