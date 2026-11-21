@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
     simulateChoice1, simulateChoice2, calculateMaraStats, topCardsTotalDistribution, summarizeMara, MARA_COST
-} from '../../js/calculators/mara.js';
+} from '../../js/utils/models/mara.js';
 
 describe('Mara Calculator', () => {
     describe('simulateChoice1', () => {

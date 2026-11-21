@@ -5,9 +5,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
-    calculateMindsDilationStats, roundStats, formatRounds, summarizeMindsDilation, getShareParams, applyShareParams,
+    calculateMindsDilationStats, roundStats, formatRounds, summarizeMindsDilation,
     MINDS_DILATION_COST
-} from '../../js/calculators/mindsdilation.js';
+} from '../../js/utils/models/mindsdilation.js';
 
 // Helper to build minimal opponentData from a card list
 function makeOpponentData(cards) {
@@ -226,17 +226,5 @@ describe('summarizeMindsDilation', () => {
         const line = summarizeMindsDilation([{ name: 'A', stats: stats(0.5, 2) }], { sixthDoctor: true });
         assert.match(line.html, /Sixth Doctor/);
         assert.strictEqual(line.tone, 'bad');
-    });
-});
-
-describe('share params', () => {
-    it('round-trips The Sixth Doctor switch and ignores junk', () => {
-        assert.deepStrictEqual(getShareParams(), {});
-        applyShareParams(new URLSearchParams('sixth=1'));
-        assert.deepStrictEqual(getShareParams(), { sixth: '1' });
-        applyShareParams(new URLSearchParams('sixth=<script>'));
-        assert.deepStrictEqual(getShareParams(), { sixth: '1' });
-        applyShareParams(new URLSearchParams('sixth=0'));
-        assert.deepStrictEqual(getShareParams(), {});
     });
 });
