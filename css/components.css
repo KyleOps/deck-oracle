@@ -414,7 +414,8 @@ input.x-number {
 }
 
 /* ==================== ADAPTIVE LAYOUT ====================
-   Container queries, not viewport media queries.
+   Container queries, not viewport media queries. The container is
+   .calculator-content (container-name: shell, set in shell.css).
 
    The shell is capped, so viewport width is the wrong signal: at a 2560px
    viewport the calculator has less than that to work with. Querying the content
@@ -428,11 +429,6 @@ input.x-number {
    single column is predictable, never leaves dead space to the right, and gives
    every chart the full width, which is the one thing charts always benefit
    from. The rail keeps inputs beside the results. */
-
-.calculator-content {
-    container-type: inline-size;
-    container-name: shell;
-}
 
 @container shell (min-width: 1040px) {
     .main-grid.single-column:has(> .panel-config) {

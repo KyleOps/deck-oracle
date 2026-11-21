@@ -33,7 +33,10 @@
     flex-direction: column;
 }
 
+/* The calculator column is the "shell" size container: calculator layout
+   responds to the space it has (components.css), not the viewport. */
 .calculator-content {
+    container: shell / inline-size;
     flex: 1;
     width: 100%;
     max-width: var(--shell-max);
@@ -570,8 +573,8 @@
     background-size: cover;
     background-position: center 28%;
     opacity: 0.5;
-    -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.55) 40%, #000 100%);
-    mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.55) 40%, #000 100%);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, color-mix(in srgb, black 55%, transparent) 40%, black 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, color-mix(in srgb, black 55%, transparent) 40%, black 100%);
     pointer-events: none;
 }
 
@@ -1310,8 +1313,8 @@
     background-size: cover;
     background-position: center 22%;
     opacity: 0.62;
-    -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.6) 35%, #000 100%);
-    mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.6) 35%, #000 100%);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, color-mix(in srgb, black 60%, transparent) 35%, black 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, color-mix(in srgb, black 60%, transparent) 35%, black 100%);
     pointer-events: none;
 }
 
@@ -1784,8 +1787,8 @@
     .search-btn-kbd { display: none; }
     .crumb-group,
     .crumb-sep { display: none; }
-    .page-head-art { width: 100%; opacity: 0.18; -webkit-mask-image: linear-gradient(180deg, #000, transparent); mask-image: linear-gradient(180deg, #000, transparent); }
-    .ov-hero-art { width: 100%; opacity: 0.25; -webkit-mask-image: linear-gradient(180deg, #000 10%, transparent 90%); mask-image: linear-gradient(180deg, #000 10%, transparent 90%); }
+    .page-head-art { width: 100%; opacity: 0.18; -webkit-mask-image: linear-gradient(180deg, black, transparent); mask-image: linear-gradient(180deg, black, transparent); }
+    .ov-hero-art { width: 100%; opacity: 0.25; -webkit-mask-image: linear-gradient(180deg, black 10%, transparent 90%); mask-image: linear-gradient(180deg, black 10%, transparent 90%); }
     .deck-dialog .type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .field-row-end { flex-direction: column; align-items: stretch; }
     .dialog-head { padding: 18px 16px 12px 18px; }
