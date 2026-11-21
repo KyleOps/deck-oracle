@@ -51,7 +51,7 @@ export function renderBottomLine({ html, tone = 'flat', label = 'Bottom line' } 
     return `
         <div class="bottom-line tone-${tone}" role="status">
             <span class="bottom-line-icon" aria-hidden="true">${icon}</span>
-            <p class="bottom-line-text"><span class="bottom-line-label">${label}</span>${html}</p>
+            <p class="bottom-line-text" elementtiming="bottom-line"><span class="bottom-line-label">${label}</span>${html}</p>
         </div>`;
 }
 
