@@ -19,7 +19,10 @@ export default [
         ignores: [
             'node_modules/**',
             'playwright-report/**',
-            'test-results/**'
+            'playwright-report-visual/**',
+            'test-results/**',
+            'coverage/**',
+            '_site/**'
         ]
     },
     {
@@ -56,9 +59,11 @@ export default [
         files: [
             'eslint.config.js',
             'playwright.config.js',
+            'playwright.visual.config.js',
             'scripts/**/*.mjs',
             'tests/**/*.node.test.js',
-            'tests/e2e/**/*.js'
+            'tests/e2e/**/*.js',
+            'tests/visual/**/*.js'
         ],
         languageOptions: {
             ecmaVersion: 'latest',
@@ -74,7 +79,9 @@ export default [
         files: [
             'eslint.config.js',
             'playwright.config.js',
+            'playwright.visual.config.js',
             'tests/e2e/**/*.js',
+            'tests/visual/**/*.js',
             'scripts/**/*.mjs',
             'js/main.js',
             'js/shell/**/*.js',

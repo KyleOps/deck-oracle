@@ -1,0 +1,41 @@
+# Weekly dependency updates: one grouped PR per ecosystem for minor and
+# patch releases, separate PRs for majors. CI must pass before any merges.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: deps
+      prefix-development: deps-dev
+    ignore:
+      # Local copies of the CDN scripts the app pins in js/shell/vendor.js and
+      # index.html (tests/utils/cdnPins.node.test.js keeps them equal). Bump
+      # the CDN URL, this devDependency and `npm run sw:manifest` together.
+      - dependency-name: chart.js
+      - dependency-name: lz-string
+    groups:
+      # A new Playwright ships a new Chromium, which can move pixels in the
+      # visual baselines; keep it out of the routine group.
+      playwright:
+        patterns: ['@playwright/*']
+      npm:
+        patterns: ['*']
+        exclude-patterns: ['@playwright/*']
+        update-types: [minor, patch]

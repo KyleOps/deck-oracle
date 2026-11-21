@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { choose, drawType, drawTypeMin } from '../../js/utils/hypergeometric.js';
 import { FORMATS } from '../../js/utils/format.js';
+import { budget } from '../helpers/timing.js';
 import {
     drawSchedule, bottomCount, multiTypeProb, drawChance, openingHands, handSuccess,
     keepBar, mulliganPlan, marginalGains, keepRules, chooseBottom
@@ -155,7 +156,7 @@ describe('mulliganModel — the plan', () => {
     it('stays fast with four groups', () => {
         const start = performance.now();
         mulliganPlan({ ...base, types: [{ ...LANDS, required: 4, byTurn: 5 }, RAMP, { count: 10, required: 1, byTurn: 6 }, { count: 8, required: 1, byTurn: 6 }] });
-        assert.ok(performance.now() - start < 1500);
+        assert.ok(performance.now() - start < budget(1500));
     });
 });
 

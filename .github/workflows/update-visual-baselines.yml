@@ -1,0 +1,79 @@
+name: Update visual baselines
+
+# Run from the Actions tab on any branch ("Use workflow from"). It regenerates
+# the Linux screenshots, checks they reproduce, and uploads them as an
+# artifact. It never commits or pushes: review the images, then commit them
+# to tests/visual/__screenshots__/linux/ in a pull request.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: visual-baselines-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    name: Regenerate screenshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # Start clean so screenshots of removed pages don't linger.
+      - name: Regenerate baselines
+        run: |
+          rm -rf tests/visual/__screenshots__/linux
+          npm run test:visual:update
+
+      # Baselines only help if they reproduce. Compare against them twice
+      # more on this runner, without retries, so a non-deterministic page
+      # fails here instead of in every later CI run.
+      - name: Check they reproduce
+        run: |
+          npm run test:visual -- --retries=0
+          npm run test:visual -- --retries=0
+
+      - name: Upload baselines
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-baselines
+          path: tests/visual/__screenshots__/linux/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: How to use them
+        run: |
+          {
+            echo '### Visual baselines'
+            echo
+            echo 'Download the **visual-baselines** artifact, unzip it into'
+            echo '`tests/visual/__screenshots__/linux/` (it holds `desktop/` and `phone/`),'
+            echo 'look at the images, and commit them in a pull request.'
+            echo 'CI compares every later change against them.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload comparison report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-report
+          path: |
+            playwright-report-visual/
+            test-results/visual/
+          retention-days: 7

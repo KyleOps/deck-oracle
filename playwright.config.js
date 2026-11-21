@@ -19,6 +19,18 @@ export default defineConfig({
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure'
     },
+    projects: [
+        { name: 'e2e', testIgnore: '**/performance.spec.js' },
+        // Budgets measure time, so they run alone: after the functional tests
+        // (never alongside them), one test at a time. To run only these:
+        // npx playwright test --project=performance --no-deps
+        {
+            name: 'performance',
+            testMatch: '**/performance.spec.js',
+            dependencies: ['e2e'],
+            fullyParallel: false
+        }
+    ],
     webServer: {
         command: `npx http-server . -p ${port} -c-1 -s`,
         url: baseURL,

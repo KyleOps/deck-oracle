@@ -96,11 +96,13 @@ test('command palette finds calculators and actions', async ({ page }) => {
     await expect(page.locator('#palette')).toBeVisible();
     await page.locator('#palette-input').fill('primal');
     await page.keyboard.press('Enter');
+    // Straight away, while the page is still loading: focus is still on the
+    // closed palette's input, and shortcuts must not mistake that for typing.
+    await page.keyboard.press('/');
 
     await expect(page).toHaveURL(/\?tab=surge$/);
     await expect(page.locator('#surge-tab')).toHaveClass(/active/);
 
-    await page.keyboard.press('/');
     await page.locator('#palette-input').fill('paste');
     await page.keyboard.press('Enter');
     await expect(page.locator('#deck-dialog')).toBeVisible();

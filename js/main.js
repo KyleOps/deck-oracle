@@ -117,6 +117,9 @@ async function copyShareLink() {
 // ── Keyboard ─────────────────────────────────────────────────────────────────
 
 function isTyping(target) {
+    // Closing a dialog leaves focus on its (now hidden) input until the next
+    // page has loaded; that is not typing, so shortcuts must still work.
+    if (target?.closest?.('dialog:not([open])')) return false;
     const tag = target?.tagName;
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable;
 }

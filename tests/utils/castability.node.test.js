@@ -16,6 +16,7 @@ import {
 } from '../../js/utils/castability.js';
 import { colorCastProbability, sourcesNeeded } from '../../js/utils/deckStats.js';
 import { FORMATS, cardsSeenByTurn } from '../../js/utils/format.js';
+import { budget } from '../helpers/timing.js';
 
 const { W, U, B, R, G } = COLOR_BIT;
 // ── Brute force ──────────────────────────────────────────────────────────────
@@ -311,7 +312,7 @@ describe('castability - castProbability properties', () => {
             landsNeeded: 10, seen: 17
         });
         assert.ok(p.conditional > 0.9 && p.conditional <= 1);
-        assert.ok(performance.now() - start < 1500, 'Progenitus-sized costs must not stall the page');
+        assert.ok(performance.now() - start < budget(1500), 'Progenitus-sized costs must not stall the page');
     });
 });
 

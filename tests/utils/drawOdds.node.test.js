@@ -3,6 +3,7 @@ import assert from 'node:assert';
 
 import { drawTypeMin, choose } from '../../js/utils/hypergeometric.js';
 import { FORMATS, cardsSeenByTurn } from '../../js/utils/format.js';
+import { budget, medianMs } from '../helpers/timing.js';
 import {
     MAX_NEED, MAX_TURN, SEARCH_TURN,
     normalizeName, formatPct, turnLabel,
@@ -153,11 +154,9 @@ describe('allOfWeights / allOfChance', () => {
     it('stays under 20 ms at the worst case (3 groups, max need, 20 turns)', () => {
         const regions = [1, 2, 3, 4, 5, 6, 7].map(mask => ({ mask, size: 8 }));
         const needs = [MAX_NEED, MAX_NEED, MAX_NEED];
-        allOfWeights(regions, needs, 27); // warm up
-        const start = performance.now();
-        const W = allOfWeights(regions, needs, 27);
-        const ms = performance.now() - start;
-        assert.ok(ms < 20, `took ${ms.toFixed(1)} ms`);
+        let W;
+        const ms = medianMs(() => { W = allOfWeights(regions, needs, 27); });
+        assert.ok(ms < budget(20), `took ${ms.toFixed(1)} ms`);
         assert.ok(W.every(Number.isFinite));
     });
 });
