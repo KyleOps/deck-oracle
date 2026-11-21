@@ -42,6 +42,24 @@ describe('nameKey / sameCard', () => {
         assert.ok(!sameCard('', ''));
         assert.ok(!sameCard('Opt', 'Optimus'));
     });
+
+    it('treats typographic variants as the plain characters they stand for', () => {
+        // Apostrophes: curly (Moxfield exports, phones), modifier letter, prime, acute, full-width.
+        for (const apostrophe of ['’', '‘', 'ʼ', '′', '´', '＇']) {
+            assert.equal(nameKey(`Kamahl${apostrophe}s Druidic Vow`), 'kamahl\'s druidic vow', `U+${apostrophe.charCodeAt(0).toString(16)}`);
+        }
+        assert.ok(sameCard('Kamahl’s Druidic Vow', 'Kamahl\'s Druidic Vow'));
+        assert.ok(sameCard('Mind’s Dilation', 'Mind\'s Dilation'));
+        // Dashes, accents, the Æ ligature, quotes and stray spacing.
+        assert.ok(sameCard('Lim‑Dûl’s Vault', 'Lim-Dul\'s Vault'));
+        assert.ok(sameCard('Æther Vial', 'Aether Vial'));
+        assert.ok(sameCard('Jötun Grunt', 'Jotun Grunt'));
+        assert.ok(sameCard('“Ach! Hans, Run!”', '"Ach! Hans, Run!"'));
+        assert.ok(sameCard('Sol Ring', 'Sol  Ring'));
+        assert.equal(nameKey('Sea Gate Restoration’s // Back'), 'sea gate restoration\'s');
+        // Different cards stay different.
+        assert.ok(!sameCard('Kamahl’s Druidic Vow', 'Kamahl, Fist of Krosa'));
+    });
 });
 
 describe('card typing', () => {
