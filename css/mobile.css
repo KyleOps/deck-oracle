@@ -58,6 +58,8 @@
         display: none !important;
     }
     .app { display: block; }
+    .ov-section,
+    .ov-card { content-visibility: visible; }
     .main-col { margin: 0; }
     .tab-content { display: none !important; }
     .tab-content.active { display: block !important; animation: none; }

@@ -48,6 +48,10 @@ for (const theme of ['dark', 'light']) {
             await expect(page.locator(`#${tab}-tab`)).not.toHaveClass(/is-loading/);
             await setup?.(page);
             await expect(page.locator(ready).first()).toBeVisible();
+            // A full-page capture paints only what is near the viewport, so
+            // sections that skip rendering off-screen (content-visibility:
+            // auto on the overview) would come out blank: render them all.
+            await page.addStyleTag({ content: '* { content-visibility: visible !important; }' });
             await page.evaluate(() => document.fonts.ready);
             expect(await page.evaluate(() => document.fonts.check('16px Geist')),
                 'Geist did not load from Google Fonts; screenshots would use a fallback font').toBe(true);

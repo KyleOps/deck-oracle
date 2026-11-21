@@ -1382,6 +1382,17 @@
 .ov-control { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-xs); color: var(--tx-mid); }
 .ov-control select { background: var(--tx-bg); }
 
+/* On a phone most of the overview starts below the fold: lay those sections
+   out only as they near the viewport (about 170 ms sooner on slow 4G). The
+   size is a placeholder until a section has rendered once. Deck health is
+   left out: it sits near the top, and its swipeable row of findings bleeds
+   to the screen edges, which the paint containment this implies would clip. */
+.ov-section:not([aria-labelledby="ov-health-title"]),
+.ov-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 420px;
+}
+
 .ov-section-head {
     display: flex;
     flex-wrap: wrap;
