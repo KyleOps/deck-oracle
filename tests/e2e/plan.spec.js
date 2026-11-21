@@ -145,7 +145,7 @@ test('a preset loads its deck and plan, and a matching deck is offered its plan'
     await expect(tab.locator('#gp-plan-meta')).toHaveText('a tuned plan');
     await expect(tab.locator('.bottom-line')).toContainText('Wild Splendor pulls off its plan');
     await expect(tab.locator('#gp-steps .gp-step')).toHaveCount(4);
-    await expect(tab.locator('#gp-steps .gp-step-read').nth(2)).toContainText('spend 8+ mana');
+    await expect(tab.locator('#gp-steps .gp-step-read').nth(2)).toContainText('spend 7+ mana');
     await expect(tab.locator('#gp-funnel .gp-funnel-row')).toHaveCount(3);
     // The notes, the measured distributions and the literal "two 4-drops or one 7–9-drop", measured beside the plan.
     await expect(tab.locator('#gp-about-panel')).toBeVisible();

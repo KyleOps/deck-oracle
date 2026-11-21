@@ -1,8 +1,9 @@
 /**
  * Game Plan preset: Wild Splendor (Selvala, Eager Trailblazer). A mana
- * 2-drop on turn 2, Selvala on turn 3, then 8+ mana of threats on turn 4
+ * 2-drop on turn 2, Selvala on turn 3, then 7+ mana of threats on turn 4
  * (the user's rule: spells from hand with mana value 4 or more, X spells at
- * the X paid). Also measured: the literal "two 4-drops or one 7/8/9-drop".
+ * the X paid — two 4-drops, any 7–10-drop, Genesis Wave at X 4+). Also
+ * measured: the literal "two 4-drops or one 7/8/9-drop".
  *
  * The deck is a Scryfall snapshot (Oracle text fetched 2026-11-21) in the
  * shape the importers save (decklistImport.js toCardRecord); the card rules
@@ -20,18 +21,18 @@ export const plan = {
     steps: [
         { turn: 2, require: { kind: 'cast', group: { is: 'mana', mv: [0, 2] } } },
         { turn: 3, require: { kind: 'cast', group: { is: 'commander', names: ['Selvala, Eager Trailblazer'] } } },
-        { turn: 4, require: { kind: 'spend', atLeast: 8, group: { is: 'any', mv: [4, 20] } } },
+        { turn: 4, require: { kind: 'spend', atLeast: 7, group: { is: 'any', mv: [4, 20] } } },
         { turn: 4, info: true, require: { kind: 'package', options: [{ count: 2, group: { is: 'any', mv: [4, 4] } }, { count: 1, group: { is: 'any', mv: [7, 9] } }] } }
     ]
 };
 
 /** What the plan does, what carries it and what holds it back — every number from the simulator (5,000 games at the page’s defaults; swaps 20,000). */
 export const notes = [
-    'A chain of three: a mana 2-drop on turn 2 (84% of games), Selvala on turn 3 (69% — 82% of the games that made the 2-drop), then 8+ mana spent on spells with mana value 4+ on turn 4 (32% — 46% of the games that had Selvala out). All on time: 32%; each at most a turn late: 72%. Turn 4 is the weak link, and mana is the bottleneck, not payoffs: the usual miss is too little mana to spend 8 (21% of games), and median turn-4 mana is 7 (half of games 5–8; 43% make 8+).',
-    'Which 2-drop you start with decides turn 4. Fanatic of Rhonas wins 68% of the games it starts (median turn-4 mana 10), Badgermole Cub 60% (9). The eight-mana group — Jadzia 44%, Raucous Audience 42%, Whisperer 41%, Bloom Tender 37%, Ilysian Caryatid and Priest of Titania 35% — lands right on the line. Tangled Florahedron, Bramble Familiar and Trailtracker Scout top out at 7 (6–11%), The Mind Stone at 6 (4%): with them, turn 4 needs two 4-drops cast before Selvala taps.',
-    'Your rule is 8+, but 15 of the 29 big payoffs cost exactly 7, and a lone 7-drop doesn’t count: 9% of games have 8+ mana but nothing in hand that adds up to 8 — three times in four, a lone 7-drop. Counted at 7+, the plan lands on time in 57% of games (9+: 15%). The literal “two 4-drops or one 7–9-drop” happens in 48%.',
-    'Swaps, measured over 20,000 games each (base 32.5% on time): Restoration Seminar is almost never castable on turn 4 (it needs a nonland permanent in your graveyard) — a Forest instead: 34.4%. The Mind Stone for a Forest: 34.6%. Evendo, Emeria and Adagia (always tapped) as basic Plains: 35.1%. Urza’s Cave, Talon Gates and Lazotep Quarry as Forests: 33.3% — they can’t pay a 2-drop’s {G} or Selvala’s {G}{W}, and only 2 basic Forests back them up.',
-    'Cards that look like ramp but come too late: Karametra, Silverback Elder, Kodama, Lumra, Growing Rites, Zendikar Resurgent, Through the Forest Gate and Reshape the Earth only add mana after they resolve — on turn 4 they are the payoff. The Great Henge is the exception: 5 mana with Selvala out, {G}{G} at once, so Henge plus a 7-drop spends 12. The keep rule digs for a 2-drop: 36% of games go to six cards; keeping any 2–4-land hand instead drops the plan to 26%.'
+    'A chain of three: a mana 2-drop on turn 2 (84% of games), Selvala on turn 3 (69% — 82% of the games that made the 2-drop), then 7+ mana spent on spells with mana value 4+ on turn 4 (58% — 83% of the games that had Selvala out). All on time: 57%; each at most a turn late: 81%. The weak link is the start: the usual miss is no mana 2-drop by turn 2 (11.5% of games), then too little mana for Selvala on turn 3 (5.7%) and a missed third land drop (4.9%). Median turn-4 mana is 7 (half of games 5–8; 66% make 7+).',
+    'Once Selvala is out, almost any dork carries turn 4: games started by Badgermole Cub or Fanatic of Rhonas finish on time 80% and 79% (median turn-4 mana 8 and 10), Ilysian Caryatid 78%, Whisperer, Raucous Audience, Priest of Titania, Bloom Tender and Jadzia 72–76%. Tangled Florahedron, Bramble Familiar and Trailtracker Scout top out at 7 mana on turn 4 (47–49%), and The Mind Stone at 6 (6%): it enables a turn-3 Selvala but almost never the turn-4 spend.',
+    'What turn 4 looks like when it works: a lone 7-drop 44% of the time, one 8–10-drop 33%, two or more spells 23% (two 4-drops only 4.5%). Across all games, 32% spend 8+ on turn 4, 15% spend 9+ and 7% 10+; the literal “two 4-drops or one 7–9-drop” happens in 48%. When the turn misses with 7+ mana (5.5% of games), the hand holds only 4–6-drops that don’t add up to 7.',
+    'Swaps, measured over 20,000 games each (base 56.7% on time; any spell traded for a land adds about 1.3 points): The Mind Stone for a Forest: 60.2% (a plain {G} dork in its place: 58.9%). Restoration Seminar — almost never castable on turn 4, it needs a nonland permanent in your graveyard — for a Forest: 59.5%. Evendo, Emeria and Adagia (always tapped) as basic Plains: 60.9%. Urza’s Cave, Talon Gates and Lazotep Quarry as Forests: 59.0% — they can’t pay a 2-drop’s {G} or Selvala’s {G}{W}, and only two basic Forests back them up.',
+    'Cards that look like ramp but come too late: Karametra, Silverback Elder, Kodama, Lumra, Growing Rites, Zendikar Resurgent, Through the Forest Gate and Reshape the Earth only add mana after they resolve — on turn 4 they are the payoff. The Great Henge is the exception: 5 mana with Selvala out, {G}{G} at once, so Henge plus a 7-drop spends 12. The keep rule digs for a 2-drop, and it pays: 36% of games go to six cards, but keeping any 2–4-land hand instead drops the plan to 45%.'
 ];
 
 export const snapshot = {

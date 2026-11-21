@@ -28,7 +28,7 @@ const WS_FILL = ['Season of Gathering', 'Lurking Predators', 'Selvala\'s Stamped
     'Ezuri\'s Predation', 'Last March of the Ents', 'Overwhelming Splendor', 'Return to the Light Realms'];
 const DW_FILL = ['Expropriate', 'Blatant Thievery', 'Mind\'s Dilation', 'Omniscience', 'Aminatou\'s Augury', 'Extract Power',
     'Abstract Performance', 'One with the Multiverse', 'Portent of Calamity', 'Genesis Storm'];
-const SPEND = 2;     // Wild Splendor's step 3: spend 8+ on spells with MV 4+
+const SPEND = 2;     // Wild Splendor's step 3: spend 7+ on spells with MV 4+
 const LITERAL = 3;   // its information step: two 4-drops or one 7–9-drop
 const RAMP = 1;      // Doctor Whostoric's step 2: ramp to 6+ for turn 4
 const DOCTOR = 2;
@@ -91,14 +91,14 @@ describe('Wild Splendor checkpoints (hand-computed)', () => {
         assert.equal(r.stepValues[SPEND], 10);
     });
 
-    it('WS-3 Badgermole Cub: earthbends the Plains, 9 on turn 4 — a 7-drop is short of 8', () => {
+    it('WS-3 Badgermole Cub: earthbends the Plains, 9 on turn 4 — Elesh Norn, a lone 7-drop, is the turn', () => {
         const r = ws(['Plains', 'Forest', 'Plains', 'Badgermole Cub', 'Elesh Norn, Grand Cenobite', 'Karametra, God of Harvests', 'Lurking Predators'],
             ['Kodama of the East Tree', 'Season of Gathering', 'Plains']);
         assert.deepEqual(r.avail.slice(1), [1, 2, 4, 9]);
         const land = r.board.find(p => p.animated);
         assert.deepEqual([land.name, land.counters], ['Plains', 1], 'a 1/1 (3/3 once Elesh Norn is out)');
         assert.deepEqual(casts(r, 4), ['Elesh Norn, Grand Cenobite']);
-        assert.equal(r.stepTurns[SPEND], 0, '7 mana of threats: under the 8+ rule');
+        assert.deepEqual([r.stepTurns[SPEND], r.stepValues[SPEND]], [4, 7], 'a 7-drop meets the 7+ rule');
         assert.equal(r.stepTurns[LITERAL], 4, 'the literal "one 7–9-drop" happens');
     });
 
@@ -472,8 +472,8 @@ describe('the presets', () => {
         const ws = Engine.simulatePlan(WS, Splendor.plan, { format: { freeMulligan: true, firstPlayerDraws: true }, games: 600 });
         assert.equal(ws.steps.length, 3);
         assert.equal(ws.info.length, 1);
-        assert.ok(ws.steps[0].onTime > 0.7 && ws.steps[1].onTime > 0.55 && ws.onTime > 0.2 && ws.onTime < 0.5, `${ws.onTime}`);
-        assert.ok(ws.info[0].onTime > ws.onTime, 'the literal "one 7–9-drop" counts 7-drops the 8+ rule doesn’t');
+        assert.ok(ws.steps[0].onTime > 0.7 && ws.steps[1].onTime > 0.55 && ws.onTime > 0.45 && ws.onTime < 0.7, `${ws.onTime}`);
+        assert.ok(ws.steps[2].onTime > ws.info[0].onTime, 'the 7+ rule counts every literal turn and more: 4+5, a 10-drop, Genesis Wave');
         assert.ok(ws.steps[2].values.games === 600);
         const dw = Engine.simulatePlan(DW, Doctor.plan, { format: { freeMulligan: true, firstPlayerDraws: true }, games: 600 });
         assert.equal(dw.steps.length, 4);

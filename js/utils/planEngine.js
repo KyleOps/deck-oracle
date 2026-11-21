@@ -1706,7 +1706,9 @@ class Game {
         // Steps still on time first, in plan order; then the late ones.
         for (let pass = 0; pass < 2; pass++) {
             for (const s of steps) {
-                if (s.info || this.stepTurn[s.index] || s.kind === MANA || s.kind === RAMP) continue;
+                // A spend step met this turn keeps going: the rest of the turn's threats are the natural play.
+                const met = this.stepTurn[s.index] && !(s.kind === SPEND && this.stepTurn[s.index] === this.turn);
+                if (s.info || met || s.kind === MANA || s.kind === RAMP) continue;
                 const late = s.turn < this.turn;
                 if (late !== (pass === 1)) continue;
                 if (s.after && !this.onBattlefield(s.after)) continue;
