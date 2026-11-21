@@ -884,8 +884,9 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 /* Generic action buttons: outlined, not filled. Solid amber is reserved for the
-   single primary action in the sub-bar. */
-.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn) {
+   single primary action in the sub-bar. tx-* and viz-* components style their
+   own buttons. */
+.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn) {
     background: transparent;
     border: 1px solid var(--tx-rule-hi);
     color: var(--tx-text);
@@ -898,13 +899,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):hover {
+.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):hover {
     background: var(--tx-panel-alt);
     color: var(--tx-bright);
     border-color: var(--tx-amber);
 }
 
-.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):disabled {
+.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):disabled {
     opacity: 0.4;
     cursor: not-allowed;
     border-color: var(--tx-rule);
