@@ -52,7 +52,49 @@ a debounced, visibility-aware `updateUI` to deck changes for you).
   `js/data/glossary.js` (add new glossary entries in the guide's `terms` list
   only if they already exist in GLOSSARY).
 - Percentages: whole numbers unless the difference matters (`64%`, not
-  `64.03%`). Averages: one decimal.
+  `64.03%`). Averages: one decimal. Format chances with `pct()` from
+  `js/utils/text.js` — never `Math.round(p * 100) + '%'`: it has honest ends
+  (`>99%`, `<1%`; only a certainty prints as `100%` / `0%`). `one()` / `avg()`
+  for averages, `plural(n, 'card')` → "3 cards", `inflect(n, 'card')` → "cards".
+
+## The deck and the shared helpers
+
+Pages never walk `cardsByName` themselves. The library comes from
+`js/utils/library.js`, which owns the one rule every page shares:
+**commanders are never in the library** — any number of them (partners, a
+Doctor and their companion, a commander and a background), whether or not the
+list holds them. Outside Commander there is no command zone.
+
+```js
+import { libraryOf, expandLibrary, isLand } from '../utils/library.js';
+
+const library = libraryOf(DeckConfig.getDeckConfig());   // or libraryOf(snapshot, { format, commanders, exclude })
+library.cards     // counted card records (map them to the page's own shape)
+library.size      // copies in the library
+library.commanders// names kept in the command zone ([] outside Commander)
+const deck = expandLibrary(library, card => ({ name: card.name, cmc: card.cmc, land: isLand(card) }));
+```
+
+- `libraryOf()` returns the same frozen object for the same list and options,
+  so cache on its identity (`if (cache.lib !== library) …`). Lists are
+  immutable: a changed deck is a new `cardsByName` object.
+- `exclude: ['Primal Surge']` takes the spell on the stack out (one copy).
+- Commanders still set the colour identity: pass their records
+  (`DeckConfig.getCommanders().map(c => c.card)`) as `commanderCards` to
+  `deckColorIdentity`, `analyzeCastability`, `buildLibrary` (Opening Hands)
+  and `buildManaLibrary`.
+- Card typing: `cardTypes(typeLine)`, `isLand(card)`, `isPermanent(card)`
+  (front face, whole words); names match with `nameKey()` / `sameCard()`.
+- Randomness: `mulberry32(seed)`, `hashString(text)`, `shuffle(arr, rng)`,
+  `shuffled(arr, rng)`, `partialShuffle(arr, n, size, rng)` in
+  `js/utils/random.js`. Seed from the deck (`hashString(library.key)`) so a
+  page's numbers don't move on revisit.
+- Percentiles: `quantile(weights, q)` / `quantileSorted(samples, q)` in
+  `js/utils/stats.js` — nearest rank, the smallest value with at least `q` of
+  outcomes at or below it. Quote p10–p99, never the sampled maximum.
+- Tones: `toneFor(p, { good, warn })` and `toneColor(tone)` in
+  `js/utils/components.js`. `pBarCell(p)` is neutral unless given a colour.
+- `choose(n, k)` comes from `js/utils/hypergeometric.js` (cached).
 
 ## Styling
 

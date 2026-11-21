@@ -56,12 +56,40 @@ export function renderBottomLine({ html, tone = 'flat', label = 'Bottom line' } 
 }
 
 /**
- * Build an inline probability bar cell (for sweep tables).
+ * What a chance the player wants to be high means: 'good' at or above
+ * `good`, 'warn' at or above `warn`, else 'bad' ('flat' for no number).
+ * @param {number} p - 0..1
+ * @param {{good?:number, warn?:number}} [cuts]
+ * @returns {'good'|'warn'|'bad'|'flat'}
+ */
+export function toneFor(p, { good = 0.7, warn = 0.4 } = {}) {
+    if (typeof p !== 'number' || !Number.isFinite(p)) return 'flat';
+    if (p >= good) return 'good';
+    if (p >= warn) return 'warn';
+    return 'bad';
+}
+
+const TONE_COLORS = Object.freeze({ good: 'var(--tx-good)', warn: 'var(--tx-warn)', bad: 'var(--tx-bad)' });
+
+/**
+ * The colour token for a tone: good / warn / bad carry meaning; anything else
+ * (flat, unknown) is the plain bright text colour.
+ * @param {string} tone
+ * @returns {string} a CSS var()
+ */
+export function toneColor(tone) {
+    return TONE_COLORS[tone] ?? 'var(--tx-bright)';
+}
+
+/**
+ * Build an inline probability bar cell (for sweep tables). The default colour
+ * is neutral: a bar only turns good / warn / bad when the caller says what the
+ * number means (`toneColor(toneFor(p))`).
  * @param {number} fraction - 0..1
- * @param {string} [color='var(--tx-green)']
+ * @param {string} [color='var(--tx-flat)']
  * @returns {string}
  */
-export function pBarCell(fraction, color = 'var(--tx-green)') {
+export function pBarCell(fraction, color = 'var(--tx-flat)') {
     const pct = Math.max(0, Math.min(100, (Number.isFinite(fraction) ? fraction : 0) * 100));
     return `<span class="tx-p-bar"><span class="tx-p-fill" style="width:${pct.toFixed(1)}%; background:${color};"></span></span>`;
 }

@@ -23,11 +23,15 @@
  * twice, with ramp and lands-only, so "turns saved" is measured game by game.
  */
 
-import { COLORS, COLOR_NAMES, isLand, deckColorIdentity } from './mana.js';
+import { COLORS, COLOR_NAMES } from './mana.js';
+import { asLibrary, commandersOf, isLand, isLibrary } from './library.js';
+import { mulberry32, shuffle } from './random.js';
+import { quantile } from './stats.js';
+import { inflect as plural } from './text.js';
 import { tagCard } from './cardTags.js';
 import {
-    toLabCard, buildPlaceholderLibrary, libraryKey, meetsRule, chooseBottom,
-    DEFAULT_RULE, MIN_HAND, OPENING_HAND, mulberry32, maskOf, COLOR_BIT
+    toLabCard, buildPlaceholderLibrary, identityOf, libraryKey, meetsRule, chooseBottom,
+    DEFAULT_RULE, MIN_HAND, OPENING_HAND, maskOf, COLOR_BIT
 } from './handLab.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
 
@@ -70,8 +74,6 @@ function popcount(m) {
     while (m) { n += m & 1; m >>= 1; }
     return n;
 }
-
-const frontName = name => String(name ?? '').split('//')[0].trim().toLowerCase();
 
 function stripReminder(text) {
     return String(text ?? '').replace(/\([^)]*\)/g, '').replace(/[ \t]+/g, ' ');
@@ -455,14 +457,18 @@ function annotate(lab, card, identity, multiplayer) {
 
 /**
  * The card your mana is racing towards: the commander when there is one (its
- * mana value and colours), otherwise your top end — the middle of your three
- * most expensive spells.
+ * mana value and colours) — with partners, the more expensive of them —
+ * otherwise your top end: the middle of your three most expensive spells.
+ * @param {{commanderCards?:Array<Object|null>, commanderCard?:Object|null, cards?:Object[], identity?:string[]}} [opts]
  * @returns {{kind:'commander'|'top-end', name:string, mv:number, cost:string, card:Object, names:string[]}|null}
  */
-export function chooseTarget({ commanderCard = null, cards = [], identity = COLORS } = {}) {
-    if (commanderCard && commanderCard.name && !isLand(commanderCard) && Number.isFinite(Number(commanderCard.cmc))) {
-        const lab = annotate(toLabCard(commanderCard, -1, identity), commanderCard, identity, true);
-        return { kind: 'commander', name: commanderCard.name, mv: lab.playMv, cost: lab.cost, card: lab, names: [commanderCard.name] };
+export function chooseTarget({ commanderCards = [], commanderCard = null, cards = [], identity = COLORS } = {}) {
+    const castable = [...(commanderCards ?? []), commanderCard]
+        .filter(c => c && c.name && !isLand(c) && Number.isFinite(Number(c.cmc)))
+        .map(c => ({ card: c, lab: annotate(toLabCard(c, -1, identity), c, identity, true) }));
+    if (castable.length) {
+        const { card, lab } = castable.reduce((best, c) => (c.lab.playMv > best.lab.playMv ? c : best));
+        return { kind: 'commander', name: card.name, mv: lab.playMv, cost: lab.cost, card: lab, names: castable.map(c => c.card.name) };
     }
     const seen = new Set();
     const spells = [];
@@ -480,28 +486,24 @@ export function chooseTarget({ commanderCard = null, cards = [], identity = COLO
 
 /**
  * Expand a decklist into simulator cards (one per copy) with land and ramp
- * behaviour attached. The commander starts in the command zone, so one copy
- * of it is removed when the list includes it.
+ * behaviour attached. Commanders start in the command zone, never the library
+ * (see library.js); their records set the colour identity and the target.
  *
- * @param {Record<string, Object>} cardsByName
- * @param {{commanderName?:string|null, commanderCard?:Object|null, multiplayer?:boolean}} [opts]
+ * @param {Object} deck - a DeckConfig snapshot, a Library, or a cardsByName map
+ * @param {{format?:Object|string, commanders?:string[], commanderCards?:Array<Object|null>, multiplayer?:boolean}} [opts]
+ *   commanderCards: the command zone's records (default: looked up on the
+ *   snapshot — see commandersOf()); used only when the library has commanders
  */
-export function buildManaLibrary(cardsByName = {}, { commanderName = null, commanderCard = null, multiplayer = true } = {}) {
-    const ids = new Set([...deckColorIdentity(cardsByName), ...(commanderCard?.color_identity ?? [])]);
-    const identity = COLORS.filter(c => ids.has(c));
+export function buildManaLibrary(deck = {}, { format, commanders, commanderCards, multiplayer = true } = {}) {
+    const library = asLibrary(deck, { format, commanders });
+    const zone = !library.commanders.length ? []
+        : (commanderCards ?? (isLibrary(deck) ? [] : commandersOf(deck).map(c => c.card))).filter(Boolean);
+    const identity = identityOf(library.cards, zone);
     const cards = [];
     const rampByName = new Map();
-    let removedCommander = false;
     let uid = 0;
-    const target = frontName(commanderName);
-    for (const card of Object.values(cardsByName)) {
-        let copies = Math.floor(Number(card?.count) || 0);
-        if (!card?.name || copies <= 0) continue;
-        if (target && !removedCommander && frontName(card.name) === target) {
-            copies -= 1;
-            removedCommander = true;
-        }
-        if (copies <= 0) continue;
+    for (const card of library.cards) {
+        const copies = card.count;
         const proto = annotate(toLabCard(card, 0, identity), card, identity, multiplayer);
         if (proto.rampInfo) {
             if (!rampByName.has(proto.name)) rampByName.set(proto.name, { name: proto.name, count: 0, info: proto.rampInfo, mv: proto.playMv, index: rampByName.size });
@@ -510,9 +512,6 @@ export function buildManaLibrary(cardsByName = {}, { commanderName = null, comma
         }
         for (let i = 0; i < copies; i++) cards.push({ ...proto, uid: uid++ });
     }
-    const commander = commanderName
-        ? (commanderCard ?? Object.values(cardsByName).find(c => frontName(c?.name) === target) ?? null)
-        : null;
     const ramp = [...rampByName.values()];
     return {
         cards,
@@ -520,9 +519,9 @@ export function buildManaLibrary(cardsByName = {}, { commanderName = null, comma
         idMask: maskOf(identity),
         ramp,
         landCount: cards.filter(c => c.land).length,
-        target: chooseTarget({ commanderCard: commander, cards, identity }),
+        target: chooseTarget({ commanderCards: zone, cards, identity }),
         placeholder: false,
-        removedCommander,
+        commanders: library.commanders,
         key: libraryKey(cards)
     };
 }
@@ -536,7 +535,7 @@ export function buildCountsLibrary(counts = {}) {
     }));
     return {
         cards, identity: [], idMask: 0, ramp: [], landCount: cards.filter(c => c.land).length,
-        target: null, placeholder: true, removedCommander: false, key: `counts:${libraryKey(cards)}`
+        target: null, placeholder: true, commanders: [], key: `counts:${libraryKey(cards)}`
     };
 }
 
@@ -655,14 +654,6 @@ function pay(card, extra = 0, commit = false) {
 
 // ── One game ────────────────────────────────────────────────────────────────
 
-/** Full Fisher–Yates over an index array. */
-function shuffleOrder(idx, n, rng) {
-    for (let i = n - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        const t = idx[i]; idx[i] = idx[j]; idx[j] = t;
-    }
-}
-
 /**
  * Deal and mulligan (London, the Opening Hands keep rule). At four cards the
  * player keeps whatever they have.
@@ -674,7 +665,7 @@ export function dealOpeningHand(cards, rng, { freeMulligan = false, idx = null }
     for (let i = 0; i < N; i++) ord[i] = i;
     const free = freeMulligan ? 1 : 0;
     for (let m = 0; ; m++) {
-        shuffleOrder(ord, N, rng);
+        shuffle(ord.length === N ? ord : ord.subarray(0, N), rng);
         const seven = [];
         for (let i = 0; i < OPENING_HAND && i < N; i++) seven.push(cards[ord[i]]);
         const owed = Math.max(0, m - free);
@@ -1086,18 +1077,12 @@ export function runBatch(run, count = run.games) {
 }
 
 /**
- * Nearest-rank percentile of an integer histogram: the smallest value with at
- * least p of the games at or below it. Never the sampled maximum.
+ * Percentile of a histogram of `total` games (the shared nearest-rank rule in
+ * stats.js — never the sampled maximum), or null when there are no games.
  */
 export function percentile(hist, total, p) {
     if (!(total > 0)) return null;
-    const need = Math.max(1, Math.ceil(p * total));
-    let cum = 0;
-    for (let v = 0; v < hist.length; v++) {
-        cum += hist[v];
-        if (cum >= need) return v;
-    }
-    return hist.length - 1;
+    return quantile(hist, p);
 }
 
 function bands(acc, games) {
@@ -1239,10 +1224,6 @@ export function turnsWord(x) {
     if (x < 0.75) return 'about half a turn';
     const r = Math.round(x * 2) / 2;
     return `about ${r % 1 === 0 ? r.toFixed(0) : r.toFixed(1)} turn${r === 1 ? '' : 's'}`;
-}
-
-function plural(n, one, many = `${one}s`) {
-    return n === 1 ? one : many;
 }
 
 /**

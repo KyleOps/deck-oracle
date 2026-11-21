@@ -10,10 +10,12 @@
 
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, toneColor, toneFor } from '../utils/components.js';
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import { renderManaCost } from '../utils/mana.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
+import { libraryOf } from '../utils/library.js';
+import { pct, inflect as plural } from '../utils/text.js';
 import * as MD from '../utils/manaDevelopment.js';
 
 const NAME = 'manadev';
@@ -32,9 +34,7 @@ let libMemo = null;
 
 const cache = new Map();
 
-const pct = p => `${Math.round((Number.isFinite(p) ? p : 0) * 100)}%`;
 const $ = id => document.getElementById(id);
-const plural = (n, one, many = `${one}s`) => (n === 1 ? one : many);
 
 // ── Deck → simulator input ──────────────────────────────────────────────────
 
@@ -42,13 +42,13 @@ const plural = (n, one, many = `${one}s`) => (n === 1 ? one : many);
 function readDeck() {
     const config = DeckConfig.getDeckConfig();
     const format = DeckConfig.getFormat();
-    const commanderName = format.key === 'commander' ? config.commanderName : null;
-    const commanderCard = commanderName ? DeckConfig.getCommanderCard() : null;
     const cardList = DeckConfig.hasCardList();
-    const memoKey = [config.cardsByName, commanderName, commanderCard, format.multiplayer, cardList ? '' : config.lands, config.actualCardCount];
-    if (!libMemo || libMemo.key.some((v, i) => v !== memoKey[i])) {
+    const library = cardList ? libraryOf(config, { format }) : null;
+    const commanderCards = library?.commanders.length ? DeckConfig.getCommanders().map(c => c.card) : [];
+    const memoKey = [library, ...commanderCards, format.multiplayer, cardList ? '' : config.lands, config.actualCardCount];
+    if (!libMemo || libMemo.key.length !== memoKey.length || libMemo.key.some((v, i) => v !== memoKey[i])) {
         const lib = cardList
-            ? MD.buildManaLibrary(config.cardsByName, { commanderName, commanderCard, multiplayer: format.multiplayer })
+            ? MD.buildManaLibrary(library, { commanderCards, multiplayer: format.multiplayer })
             : MD.buildCountsLibrary(config);
         libMemo = { key: memoKey, lib };
     }
@@ -154,7 +154,7 @@ function renderSummary(r) {
             label: t.kind === 'commander' ? 'Commander on curve' : 'Top end on curve',
             tip: `Chance you can cast ${t.name} (mana value ${t.mv}, colours included) by turn ${t.ramp.onCurveTurn}.`,
             value: pct(p),
-            color: p >= 0.6 ? 'var(--tx-good)' : p >= 0.35 ? 'var(--tx-warn)' : 'var(--tx-bad)',
+            color: toneColor(toneFor(p, { good: 0.6, warn: 0.35 })),
             sub: `by turn ${t.ramp.onCurveTurn} · lands alone ${pct(t.lands.onCurve)}`
         });
         stats.push({
@@ -204,7 +204,7 @@ function renderRail(lib, format, s) {
         const parts = [format.freeMulligan
             ? `${escapeHtml(format.label)}: everyone draws on turn one and the first mulligan is free.`
             : `${escapeHtml(format.label)}: no free mulligan.`];
-        if (lib.removedCommander) parts.push('Your commander starts in the command zone, so it’s never drawn.');
+        if (lib.commanders?.length) parts.push(lib.commanders.length > 1 ? 'Your commanders start in the command zone, so they’re never drawn.' : 'Your commander starts in the command zone, so it’s never drawn.');
         if (lib.placeholder) parts.push('This deck is bare type counts, so only lands are simulated. Import a decklist to count ramp.');
         note.innerHTML = parts.join(' ');
     }
@@ -307,8 +307,9 @@ function renderGrid(r) {
         const cells = turns.map(t => {
             const p = r.reach[t]?.[k] ?? 0;
             const cls = [p < 0.005 ? 'is-none' : '', p < 0.05 ? 'is-low' : '', p >= 0.75 ? 'is-high' : '', isTarget && t === r.target?.ramp?.onCurveTurn ? 'is-curve' : ''].filter(Boolean).join(' ');
-            const label = p < 0.005 ? '·' : p > 0.995 ? '100' : String(Math.round(p * 100));
-            return `<td${cls ? ` class="${cls}"` : ''} style="--p:${Math.round(p * 38)}%" title="${Math.round(p * 100)}% of games had ${k}+ mana by turn ${t}">${label}</td>`;
+            // The number without its % sign: "<1" / ">99" keep the honest ends.
+            const label = p < 0.005 ? '·' : pct(p).replace('%', '');
+            return `<td${cls ? ` class="${cls}"` : ''} style="--p:${Math.round(p * 38)}%" title="${pct(p)} of games had ${k}+ mana by turn ${t}">${label}</td>`;
         }).join('');
         return `<tr${isTarget ? ' class="is-target"' : ''}><th scope="row">${k}+</th>${cells}</tr>`;
     }).join('');

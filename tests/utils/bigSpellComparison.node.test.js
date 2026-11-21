@@ -151,8 +151,8 @@ describe('Big Spell Comparison Integration', () => {
             const withSurge = compareBigSpells(10, 'surge').spells.find(spell => spell.name === 'Primal Surge');
             assert.strictEqual(withSurge.expected, 1, 'one remaining stop among two permanents');
 
-            cardsByName.Surge = { name: 'Impulse', type_line: 'Instant', cmc: 2, count: 1 };
-            DeckConfig.updateDeck({ cardsByName });
+            // A new deck is a new object (DeckConfig never edits a list in place).
+            DeckConfig.updateDeck({ cardsByName: { ...cardsByName, Surge: { name: 'Impulse', type_line: 'Instant', cmc: 2, count: 1 } } });
             const withoutSurge = compareBigSpells(10, 'surge').spells.find(spell => spell.name === 'Primal Surge');
             assert.strictEqual(withoutSurge.expected, 2 / 3, 'both nonpermanents remain when Surge is absent');
         } finally {

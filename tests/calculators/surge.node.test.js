@@ -128,8 +128,8 @@ describe('Primal Surge Calculator', () => {
             assert.equal(getDeckConfig().deckSize, buildDeckExcludingSurge({ cardsByName }).length);
             assert.equal(getDeckConfig().nonPermanents, 1);
 
-            cardsByName.Surge = { name: 'Impulsive Research', type_line: 'Sorcery', cmc: 4, count: 1 };
-            DeckConfig.updateDeck({ cardsByName });
+            // A new deck is a new object (DeckConfig never edits a list in place).
+            DeckConfig.updateDeck({ cardsByName: { ...cardsByName, Surge: { name: 'Impulsive Research', type_line: 'Sorcery', cmc: 4, count: 1 } } });
             assert.equal(getDeckConfig().deckSize, 4);
             assert.equal(getDeckConfig().nonPermanents, 2);
         } finally {

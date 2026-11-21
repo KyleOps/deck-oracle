@@ -15,7 +15,7 @@
 import { drawType, drawTypeMin } from './hypergeometric.js';
 import { FORMATS, cardsSeenByTurn } from './format.js';
 import { multiTypeProb, bottomCount } from './mulliganModel.js';
-import { formatChance } from './percent.js';
+import { pct } from './text.js';
 
 export const HAND = 7;
 export const DEFAULT_KEEP = Object.freeze([2, 5]);
@@ -149,8 +149,6 @@ export function chanceTone(p) {
     if (p >= 0.5) return 'warn';
     return 'flat';
 }
-
-const pct = formatChance;
 
 /**
  * The plain-language answer for the Land Drops page.

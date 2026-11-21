@@ -15,8 +15,11 @@ import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 import { describeDots, dotPlot, pmfQuantiles } from '../utils/viz.js';
 import * as OpponentState from '../utils/opponentState.js';
+import { isLand } from '../utils/library.js';
+import { mulberry32 } from '../utils/random.js';
+import { one, pct } from '../utils/text.js';
 import {
-    libraryOf, isLandCard, createRevealer, seededRandom, deckSeed, typicalRange, formatRange, formatPct, fmt1,
+    opponentLibrary, createRevealer, deckSeed, typicalRange, formatRange,
     countWord, objectId, readOpponents, frameScheduler, opponentLabel, cardChip, miniBars,
     renderOpponentPlaceholder, renderLoadingNote, bindOpponentActions, renderDisclosure, hasRoom
 } from '../utils/opponentPages.js';
@@ -48,7 +51,7 @@ export function resolveDreamHarvest(nextCard) {
         exiledCards.push(card);
         totalMV += card.cmc || 0;
     }
-    const castableSpells = exiledCards.filter(c => !isLandCard(c));
+    const castableSpells = exiledCards.filter(c => !isLand(c));
     return {
         cardsExiled: exiledCards.length,
         totalMV,
@@ -85,11 +88,11 @@ function normalise(counts, runs) {
  */
 export function calculateDreamHarvestStats(opponentData, numSims = SIM_RUNS, seed = undefined) {
     if (!opponentData?.cardsByName || Object.keys(opponentData.cardsByName).length === 0) return null;
-    const library = libraryOf(opponentData);
+    const library = opponentLibrary(opponentData);
     if (library.length === 0) return null;
     const runs = Math.max(1, Math.floor(numSims) || 1);
 
-    const revealer = createRevealer(library, seededRandom(seed ?? deckSeed(library)));
+    const revealer = createRevealer(library, mulberry32(seed ?? deckSeed(library)));
     let totalCardsExiled = 0;
     let totalMV = 0;
     let totalCastable = 0;
@@ -144,8 +147,8 @@ function spread(values, unit) {
     const lo = Math.min(...values);
     const hi = Math.max(...values);
     return values.length > 1 && hi - lo >= 0.5
-        ? `${fmt1(lo)}–${fmt1(hi)} ${unit}`
-        : `about ${fmt1(mean)} ${unit}`;
+        ? `${one(lo)}–${one(hi)} ${unit}`
+        : `about ${one(mean)} ${unit}`;
 }
 
 function versusCost(total) {
@@ -184,7 +187,7 @@ export function summarizeDreamHarvest(rows) {
     }
     return {
         tone,
-        html: `Against these ${countWord(valid.length)} decks, Dream Harvest usually steals <strong>${spells}</strong> worth <strong>${mana}</strong> from each opponent — <strong>${fmt1(totalMana)} mana</strong> of free spells in all, ${versusCost(totalMana)}.`
+        html: `Against these ${countWord(valid.length)} decks, Dream Harvest usually steals <strong>${spells}</strong> worth <strong>${mana}</strong> from each opponent — <strong>${one(totalMana)} mana</strong> of free spells in all, ${versusCost(totalMana)}.`
     };
 }
 
@@ -217,20 +220,20 @@ function heroStats(rows) {
     const anyBig = 1 - rows.reduce((a, r) => a * (1 - r.stats.pBigSpell), 1);
     return renderHeroStats([
         {
-            label: 'Mana stolen', size: 'big', value: fmt1(sum(s => s.avgCastableMV)),
+            label: 'Mana stolen', size: 'big', value: one(sum(s => s.avgCastableMV)),
             sub: n > 1 ? `in free spells from all ${countWord(n)}` : 'in free spells',
             tip: 'The total mana value of the spells you can cast for free, added up across opponents. Lands are exiled too but are worth nothing.'
         },
         {
-            label: 'Spells stolen', value: fmt1(sum(s => s.avgCastable)), sub: 'you can cast this turn',
+            label: 'Spells stolen', value: one(sum(s => s.avgCastable)), sub: 'you can cast this turn',
             tip: 'Average number of nonland cards exiled — each one is a spell you may cast without paying its mana cost.'
         },
         {
-            label: 'Cards exiled', value: fmt1(sum(s => s.avgCardsExiled) / n), sub: n > 1 ? 'per opponent, lands included' : 'lands included',
+            label: 'Cards exiled', value: one(sum(s => s.avgCardsExiled) / n), sub: n > 1 ? 'per opponent, lands included' : 'lands included',
             tip: 'How deep the exile digs into each library before the pile reaches mana value 5.'
         },
         {
-            label: `A ${BIG_SPELL_MV}+ spell`, value: formatPct(anyBig), sub: n > 1 ? 'from at least one opponent' : 'in the pile',
+            label: `A ${BIG_SPELL_MV}+ spell`, value: pct(anyBig), sub: n > 1 ? 'from at least one opponent' : 'in the pile',
             tip: `Chance that at least one stolen spell has mana value ${BIG_SPELL_MV} or more.`
         }
     ]);
@@ -241,20 +244,20 @@ function tableHtml(rows) {
         const s = r.stats;
         return `<tr>
             <td>${opponentLabel(r.opp, `${s.landCount} lands`)}</td>
-            <td data-label="Cards exiled">${fmt1(s.avgCardsExiled)}</td>
-            <td data-label="Spells">${fmt1(s.avgCastable)}<span class="opp-cell-sub">usually ${formatRange(s.typicalSpells)}</span></td>
-            <td data-label="Mana stolen">${fmt1(s.avgCastableMV)}<span class="opp-cell-sub">usually ${formatRange(s.typicalMana)}</span></td>
-            <td data-label="A ${BIG_SPELL_MV}+ spell">${formatPct(s.pBigSpell)}</td>
+            <td data-label="Cards exiled">${one(s.avgCardsExiled)}</td>
+            <td data-label="Spells">${one(s.avgCastable)}<span class="opp-cell-sub">usually ${formatRange(s.typicalSpells)}</span></td>
+            <td data-label="Mana stolen">${one(s.avgCastableMV)}<span class="opp-cell-sub">usually ${formatRange(s.typicalMana)}</span></td>
+            <td data-label="A ${BIG_SPELL_MV}+ spell">${pct(s.pBigSpell)}</td>
         </tr>`;
     }).join('');
     const sum = f => rows.reduce((a, r) => a + f(r.stats), 0);
     const anyBig = 1 - rows.reduce((a, r) => a * (1 - r.stats.pBigSpell), 1);
     const foot = rows.length > 1 ? `<tfoot><tr>
             <td>All ${countWord(rows.length)} opponents</td>
-            <td data-label="Cards exiled">${fmt1(sum(s => s.avgCardsExiled))}</td>
-            <td data-label="Spells">${fmt1(sum(s => s.avgCastable))}</td>
-            <td data-label="Mana stolen">${fmt1(sum(s => s.avgCastableMV))}</td>
-            <td data-label="A ${BIG_SPELL_MV}+ spell">${formatPct(anyBig)}<span class="opp-cell-sub">from at least one</span></td>
+            <td data-label="Cards exiled">${one(sum(s => s.avgCardsExiled))}</td>
+            <td data-label="Spells">${one(sum(s => s.avgCastable))}</td>
+            <td data-label="Mana stolen">${one(sum(s => s.avgCastableMV))}</td>
+            <td data-label="A ${BIG_SPELL_MV}+ spell">${pct(anyBig)}<span class="opp-cell-sub">from at least one</span></td>
         </tr></tfoot>` : '';
     return `<div class="opp-table-wrap"><table class="opp-table">
         <thead><tr>
@@ -328,7 +331,7 @@ function dotsHtml(rows) {
     const tableRows = [];
     let atLeast = 1;
     total.forEach((p, mana) => {
-        if (p >= 0.0005) tableRows.push([`${mana} mana`, formatPct(p), formatPct(atLeast)]);
+        if (p >= 0.0005) tableRows.push([`${mana} mana`, pct(p), pct(atLeast)]);
         atLeast -= p;
     });
     return `
@@ -364,7 +367,7 @@ const sampleCache = new Map();
 function samplesFor(opp) {
     const key = `${objectId(opp.data)}:${sampleRound}`;
     if (!sampleCache.has(key)) {
-        const revealer = createRevealer(libraryOf(opp.data));
+        const revealer = createRevealer(opponentLibrary(opp.data));
         sampleCache.set(key, Array.from({ length: SAMPLE_MAX }, () => {
             revealer.reset();
             return resolveDreamHarvest(revealer.reveal);

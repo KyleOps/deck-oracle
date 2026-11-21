@@ -16,9 +16,11 @@
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderHeroStats, renderBottomLine, renderSweepTable, pBarCell } from '../utils/components.js';
+import { renderHeroStats, renderBottomLine, renderSweepTable, pBarCell, toneColor, toneFor } from '../utils/components.js';
 import { recommendThresholdX } from '../utils/analysis.js';
-import { buildDeckFromCardData, extractCardTypes } from '../utils/sampleSimulator.js';
+import { buildDeckFromCardData } from '../utils/sampleSimulator.js';
+import { asLibrary, isLand, libraryOf } from '../utils/library.js';
+import { one, pct } from '../utils/text.js';
 import { cardRef } from '../data/glossary.js';
 
 /** Highest mana value tracked; anything above is folded into it. */
@@ -52,12 +54,14 @@ export function isXSpell(manaCost) {
  * cdf[m] counts eligible nonland cards with mana value <= m and prefixMv[m]
  * sums their mana value, so any cast value is answered in O(1).
  *
- * @param {Object<string, {name:string, count:number, cmc:number, type_line:string, mana_cost?:string}>} cardsByName
+ * @param {Object} deck - a Library from libraryOf(), a DeckConfig snapshot, or a
+ *   cardsByName map ({name, count, cmc, type_line, mana_cost?} records);
+ *   commanders are never in the library (see library.js)
  * @param {{excludeX?:boolean}} [opts] - excludeX: X spells (which resolve with X = 0) never count as free spells
  * @returns {{deckSize:number, lands:number, spells:number, cmcDistribution:Object<number,number>, cdf:number[], prefixMv:number[], xSpells:Array, xCount:number, excludeX:boolean, hasImportedData:boolean}}
  */
-export function buildRashmiState(cardsByName, { excludeX = false } = {}) {
-    const cards = Object.values(cardsByName ?? {});
+export function buildRashmiState(deck, { excludeX = false } = {}) {
+    const cards = asLibrary(deck).cards;
     const cmcDistribution = {};
     const xSpells = [];
     const cdf = new Array(MAX_TRACKED_MV + 1).fill(0);
@@ -67,11 +71,9 @@ export function buildRashmiState(cardsByName, { excludeX = false } = {}) {
     let spells = 0;
 
     for (const card of cards) {
-        const count = Math.max(0, Number(card?.count) || 0);
-        if (!count) continue;
+        const count = card.count;
         deckSize += count;
-        const isLand = extractCardTypes({ type_line: card.type_line ?? '' }).includes('land');
-        if (isLand) { lands += count; continue; }
+        if (isLand(String(card.type_line ?? ''))) { lands += count; continue; }
         spells += count;
 
         const mv = Math.min(MAX_TRACKED_MV, Math.max(0, Math.floor(Number(card.cmc) || 0)));
@@ -186,15 +188,9 @@ export function curveRows(state) {
     return { rows, average };
 }
 
-const pct = v => `${Math.round((Number.isFinite(v) ? v : 0) * 100)}%`;
-const one = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
-
 /** Tone for a free-spell chance: what the number means for the deck. */
 export function chanceTone(p) {
-    if (!(p > 0)) return 'bad';
-    if (p >= 0.5) return 'good';
-    if (p >= 0.3) return 'warn';
-    return 'bad';
+    return toneFor(p > 0 ? p : 0, { good: 0.5, warn: 0.3 });
 }
 
 /**
@@ -239,12 +235,12 @@ function readCastMv() {
  * X-spell setting changes (the deck object is replaced on every import).
  */
 function currentState() {
-    const cardsByName = DeckConfig.getImportedCardData()?.cardsByName ?? {};
+    const library = libraryOf(DeckConfig.getDeckConfig());
     const excludeX = Boolean(document.getElementById('rashmi-exclude-x')?.checked);
-    if (cache.ref !== cardsByName || cache.excludeX !== excludeX || !cache.state) {
-        cache.state = buildRashmiState(cardsByName, { excludeX });
-        if (cache.ref !== cardsByName) cache.deck = null;
-        cache.ref = cardsByName;
+    if (cache.ref !== library || cache.excludeX !== excludeX || !cache.state) {
+        cache.state = buildRashmiState(library, { excludeX });
+        if (cache.ref !== library) cache.deck = null;
+        cache.ref = library;
         cache.excludeX = excludeX;
     }
     return cache.state;
@@ -346,7 +342,7 @@ function renderHero(state, castMv, odds, reliable) {
             value: pct(odds.probFreeSpell),
             sub: `casting a ${castMv}-mana spell`,
             size: 'big',
-            color: `var(--tx-${chanceTone(odds.probFreeSpell)})`,
+            color: toneColor(chanceTone(odds.probFreeSpell)),
             tip: 'The chance the top card of your library is a nonland card with lower mana value than the spell you cast. Exact, from your decklist.'
         },
         {
@@ -379,7 +375,7 @@ function renderCurveTable(state, castMv) {
         columns: [
             { label: 'Mana value', align: 'left', render: r => String(r.x) },
             { label: 'Your spells', render: r => String(r.count) },
-            { label: 'Free-spell chance if cast first', render: r => `${pct(r.prob)} ${pBarCell(r.prob, `var(--tx-${chanceTone(r.prob)})`)}` },
+            { label: 'Free-spell chance if cast first', render: r => `${pct(r.prob)} ${pBarCell(r.prob, toneColor(chanceTone(r.prob)))}` },
             { label: 'Average free spell', render: r => (r.prob > 0 ? one(r.expectedCmc) : '—') }
         ],
         emptyText: 'Import a decklist to see your spells by mana value.'
@@ -403,13 +399,13 @@ function renderXNote(state) {
     }
 }
 
-function ensureSamples(deck, cardsByName, force = false) {
-    if (!force && samples.deckRef === cardsByName && samples.picks.length) return samples.picks;
+function ensureSamples(deck, ref, force = false) {
+    if (!force && samples.deckRef === ref && samples.picks.length) return samples.picks;
     samples.picks = [];
     for (let i = 0; i < SAMPLE_REVEALS && deck.length; i++) {
         samples.picks.push(deck[Math.floor(Math.random() * deck.length)]);
     }
-    samples.deckRef = cardsByName;
+    samples.deckRef = ref;
     return samples.picks;
 }
 
@@ -418,8 +414,7 @@ function ensureSamples(deck, cardsByName, force = false) {
  * @returns {'free'|'land'|'big'|'x'}
  */
 export function classifyReveal(card, castMv, excludeX = false) {
-    const isLand = Array.isArray(card?.types) && card.types.includes('land');
-    if (isLand) return 'land';
+    if (isLand(card)) return 'land';
     const mv = Math.floor(Number(card?.cmc) || 0);
     if (excludeX && isXSpell(card?.mana_cost)) return 'x';
     return mv < castMv ? 'free' : 'big';
@@ -432,14 +427,13 @@ export function classifyReveal(card, castMv, excludeX = false) {
 export function runSampleReveals(force = false) {
     const display = document.getElementById('rashmi-reveals-display');
     if (!display) return;
-    const cardsByName = DeckConfig.getImportedCardData()?.cardsByName ?? {};
     const state = currentState();
     if (!state.hasImportedData) {
         display.innerHTML = '<div class="tx-empty">Import a decklist to see sample reveals.</div>';
         return;
     }
-    if (!cache.deck) cache.deck = buildDeckFromCardData({ cardsByName });
-    const picks = ensureSamples(cache.deck, cardsByName, force);
+    if (!cache.deck) cache.deck = buildDeckFromCardData(cache.ref);
+    const picks = ensureSamples(cache.deck, cache.ref, force);
     const castMv = readCastMv();
 
     const verdict = {

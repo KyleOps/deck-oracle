@@ -22,15 +22,18 @@
  * mana value. Both are gone with the move to the shared simulation.
  */
 
-import { formatNumber, formatPercentage } from '../utils/simulation.js';
+import { formatNumber } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
 import { buildDeckFromCardData } from '../utils/sampleSimulator.js';
+import { isLand, libraryOf } from '../utils/library.js';
+import { hashString, mulberry32, shuffled } from '../utils/random.js';
+import { pct } from '../utils/text.js';
 import {
     DISCOVER_RUNS, isBigCreature, discoverForCreature, sampleDiscoverFrom,
-    simulateDiscoverChain, seededShuffle, mulberry32, hashSeed, withoutOne, tailRows
+    simulateDiscoverChain, withoutOne, tailRows
 } from '../utils/discover.js';
 import { cardRef, term, escapeHtml } from '../data/glossary.js';
 import { describeDots, dotPlot, pmfQuantiles } from '../utils/viz.js';
@@ -87,8 +90,7 @@ export function discoverPool(library, mv, castName = null, treatStarAs5Plus = fa
     let total = 0;
     let chainers = 0;
     for (const card of withoutOne(library, castName)) {
-        const types = Array.isArray(card?.types) ? card.types : [];
-        if (types.includes('land')) continue;
+        if (isLand(card)) continue;
         const cmc = Number.isFinite(card?.cmc) ? card.cmc : 0;
         if (cmc > mv) continue;
         total += 1;
@@ -146,7 +148,7 @@ export function analyzeVortex(library, opts = {}) {
         const cast = here[0] ?? null;
         const stats = cast
             ? cast.stats
-            : sampleDiscoverFrom(lib, mv, { runs, treatStarAs5Plus, seed: hashSeed(`mv|${mv}`) });
+            : sampleDiscoverFrom(lib, mv, { runs, treatStarAs5Plus, seed: hashString(`mv|${mv}`) });
         byMV.push({
             x: mv,
             mv,
@@ -208,7 +210,7 @@ export function chainPhrase(rate) {
     if (!(rate > 0)) return 'Nothing it can find is big enough to chain into another trigger.';
     if (rate < 0.01) return 'Chains into a second free spell are rare — under 1 trigger in 100.';
     if (rate < 0.5) return `About <strong>1 trigger in ${Math.round(1 / rate)}</strong> chains into a second free spell.`;
-    return `<strong>${formatPercentage(rate, 0)}</strong> of triggers chain into a second free spell.`;
+    return `<strong>${pct(rate)}</strong> of triggers chain into a second free spell.`;
 }
 
 /**
@@ -261,17 +263,17 @@ export function summarize(analysis) {
  */
 export function drawSamples(library, mv, { castName = null, count = SAMPLE_BATCH, round = 0, treatStarAs5Plus = false } = {}) {
     const lib = withoutOne(library, castName);
-    const rng = mulberry32(hashSeed(`sample|${mv}|${castName ?? ''}|${round}`));
+    const rng = mulberry32(hashString(`sample|${mv}|${castName ?? ''}|${round}`));
     const out = [];
     for (let i = 0; i < count; i++) {
-        const shuffled = seededShuffle(lib, rng);
-        const r = simulateDiscoverChain(shuffled, mv, { treatStarAs5Plus });
+        const order = shuffled(lib, rng);
+        const r = simulateDiscoverChain(order, mv, { treatStarAs5Plus });
         out.push({
             chainCount: r.chainCount,
             chainMana: r.chainMana,
             steps: r.steps.map(s => ({
                 discoverCMC: s.discoverCMC,
-                passed: shuffled.slice(s.start, s.start + s.dug),
+                passed: order.slice(s.start, s.start + s.dug),
                 hit: s.hit,
                 chains: s.chains
             }))
@@ -283,21 +285,20 @@ export function drawSamples(library, mv, { castName = null, count = SAMPLE_BATCH
 // ==================== STATE ====================
 
 let chart = null;
-let cache = { cardsByName: null, star: null, library: [], analysis: null, version: 0 };
+let cache = { source: null, star: null, library: [], analysis: null, version: 0 };
 /** Mana value being inspected; null until the player (or a share link) moves the slider. */
 let selectedMV = null;
 let sampleRound = 0;
 let samplesShown = SAMPLE_BATCH;
 let lastSampleKey = '';
 
-/** Read the inputs and the deck. */
+/** Read the inputs and the deck (its library: commanders are never in it). */
 export function getConfig() {
     const raw = selectedMV ?? parseInt(document.getElementById('vortex-cmcSlider')?.value, 10);
-    const data = DeckConfig.getImportedCardData();
     return {
         mv: Number.isFinite(raw) ? raw : DEFAULT_MV,
         treatStarAs5Plus: document.getElementById('vortex-star-power')?.checked ?? true,
-        cardsByName: data?.cardsByName ?? {}
+        library: libraryOf(DeckConfig.getDeckConfig())
     };
 }
 
@@ -307,10 +308,10 @@ export function getConfig() {
  */
 export function calculate() {
     const config = getConfig();
-    if (cache.cardsByName !== config.cardsByName || cache.star !== config.treatStarAs5Plus || !cache.analysis) {
-        const library = buildDeckFromCardData({ cardsByName: config.cardsByName });
+    if (cache.source !== config.library || cache.star !== config.treatStarAs5Plus || !cache.analysis) {
+        const library = buildDeckFromCardData(config.library);
         cache = {
-            cardsByName: config.cardsByName,
+            source: config.library,
             star: config.treatStarAs5Plus,
             library,
             analysis: analyzeVortex(library, { treatStarAs5Plus: config.treatStarAs5Plus }),
@@ -323,7 +324,6 @@ export function calculate() {
 
 // ==================== RENDERING ====================
 
-const pct = (v) => formatPercentage(v, 0);
 /** "a 6-mana", "an 8-mana", "an 11-mana". */
 const aMana = (n) => `${/^(8|11|18)/.test(String(n)) ? 'an' : 'a'} ${n}-mana`;
 

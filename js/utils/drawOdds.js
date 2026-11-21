@@ -18,7 +18,8 @@
 
 import { choose, drawTypeMin } from './hypergeometric.js';
 import { FORMATS, cardsSeenByTurn } from './format.js';
-import { isLand } from './mana.js';
+import { asLibrary, isLand, unlistedCopies } from './library.js';
+import { pct } from './text.js';
 import { tagCard } from './cardTags.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
 
@@ -98,19 +99,6 @@ export function normalizeName(name) {
         .trim();
 }
 
-/**
- * A chance as people say it: whole percent, with "<1%" / ">99%" so a near
- * miss is never rounded into a certainty.
- */
-export function formatPct(p) {
-    const v = Number(p);
-    if (!Number.isFinite(v) || v <= 0) return '0%';
-    if (v >= 1) return '100%';
-    if (v < 0.01) return '<1%';
-    if (v > 0.99) return '>99%';
-    return `${Math.round(v * 100)}%`;
-}
-
 /** "Opening hand" / "Turn 3". */
 export function turnLabel(turn) {
     return turn === 0 ? 'Opening hand' : `Turn ${turn}`;
@@ -126,27 +114,22 @@ export function turnPhrase(turn) {
 /**
  * The drawable library from an imported list.
  *
- * In Commander the commander starts in the command zone, so it is left out of
- * the library. Copies the import counted but could not identify (`deckSize`
- * above the listed copies) stay in the library as unnamed cards, so the deck
- * size — and every probability — matches the real list.
+ * Commanders start in the command zone, so they are never in the library
+ * (see library.js). Copies the import counted but could not identify
+ * (`deckSize` above the listed copies) stay in the library as unnamed cards,
+ * so the deck size — and every probability — matches the real list.
  *
- * @param {Record<string, Object>} cardsByName - Scryfall-shaped records with `count`
- * @param {{commanderName?:string|null, excludeCommander?:boolean, deckSize?:number|null}} [opts]
- * @returns {{manual:false, cards:Array<Object>, byName:Map<string,Object>, size:number, unlisted:number, commanderExcluded:boolean}}
+ * @param {Object} deck - a DeckConfig snapshot, a Library from libraryOf(), or
+ *   a bare cardsByName map (Scryfall-shaped records with `count`)
+ * @param {{format?:Object|string, commanders?:string[], deckSize?:number|null}} [opts]
+ *   format / commanders: libraryOf() options; deckSize: the import's card count
+ * @returns {{manual:false, cards:Array<Object>, byName:Map<string,Object>, size:number, unlisted:number, commanders:ReadonlyArray<string>, commanderExcluded:boolean}}
  */
-export function buildLibrary(cardsByName = {}, { commanderName = null, excludeCommander = false, deckSize = null } = {}) {
+export function buildLibrary(deck = {}, { format, commanders, deckSize = null } = {}) {
+    const source = asLibrary(deck, { format, commanders });
     const cards = [];
-    let listed = 0;
-    let commanderExcluded = false;
-    for (const card of Object.values(cardsByName ?? {})) {
-        const count = Math.max(0, Math.floor(Number(card?.count) || 0));
-        if (!card?.name || count <= 0) continue;
-        listed += count;
-        if (excludeCommander && commanderName && card.name === commanderName) {
-            commanderExcluded = true;
-            continue;
-        }
+    for (const card of source.cards) {
+        const count = card.count;
         const land = isLand(card);
         const categories = Array.isArray(card.allCategories) && card.allCategories.length
             ? card.allCategories.slice()
@@ -162,10 +145,11 @@ export function buildLibrary(cardsByName = {}, { commanderName = null, excludeCo
         });
     }
     cards.sort((a, b) => a.name.localeCompare(b.name));
-    const unlisted = Math.max(0, Math.floor(Number(deckSize) || 0) - listed);
+    const unlisted = unlistedCopies(source, deckSize);
     const size = cards.reduce((s, c) => s + c.count, 0) + unlisted;
     const byName = new Map(cards.map(c => [c.name, c]));
-    return { manual: false, cards, byName, size, unlisted, commanderExcluded };
+    const zone = source.commanders;
+    return { manual: false, cards, byName, size, unlisted, commanders: zone, commanderExcluded: zone.length > 0 };
 }
 
 /**
@@ -177,7 +161,7 @@ export function buildLibrary(cardsByName = {}, { commanderName = null, excludeCo
 export function buildManualLibrary(typeCounts = {}, deckSize = 0) {
     const counts = {};
     TYPE_PRESETS.forEach(p => { counts[p.key] = Math.max(0, Math.floor(Number(typeCounts?.[p.key]) || 0)); });
-    return { manual: true, cards: [], byName: new Map(), size: Math.max(0, Math.floor(Number(deckSize) || 0)), unlisted: 0, typeCounts: counts, commanderExcluded: false };
+    return { manual: true, cards: [], byName: new Map(), size: Math.max(0, Math.floor(Number(deckSize) || 0)), unlisted: 0, typeCounts: counts, commanders: [], commanderExcluded: false };
 }
 
 /** Does a library card belong to a preset? */
@@ -586,7 +570,7 @@ export function summarize(result, turn) {
 
     const p = row.all;
     const subject = joinWords(groups.map(describeGroup), 'and');
-    const shown = formatPct(p);
+    const shown = pct(p);
     // "an 8%", "an 11%", "an 18%", "an 80–89%"
     const article = /^(8|11%|18%)/.test(shown) ? 'an' : 'a';
     let html = `You have ${article} <strong>${escapeHtml(shown)}</strong> chance to have ${subject} ${turnPhrase(turn)}.`;
@@ -595,7 +579,7 @@ export function summarize(result, turn) {
         // Name the bottleneck: the requirement that fails most often alone.
         const weakest = groups.map((g, i) => ({ g, p: row.each[i] })).sort((a, b) => a.p - b.p)[0];
         if (weakest.p < 0.995) {
-            html += ` The hard part is ${describeGroup(weakest.g)}: <strong>${escapeHtml(formatPct(weakest.p))}</strong> on its own.`;
+            html += ` The hard part is ${describeGroup(weakest.g)}: <strong>${escapeHtml(pct(weakest.p))}</strong> on its own.`;
         }
     } else if (p < 0.9) {
         html += result.reach90 === null

@@ -23,6 +23,9 @@ import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
 import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
 import { buildDeckFromCardData, shuffleDeck, renderDistributionChart } from '../utils/sampleSimulator.js';
+import { isLand, libraryOf } from '../utils/library.js';
+import { quantileSorted as quantile } from '../utils/stats.js';
+import { one, pct } from '../utils/text.js';
 import { cardRef } from '../data/glossary.js';
 
 /** Cards milled per Lumra trigger. */
@@ -63,25 +66,23 @@ const KNOWN_FETCH_LANDS = new Set([
  */
 export function isFetchLand(card = {}) {
     const name = String(card?.name ?? '').toLowerCase();
-    const typeLine = String(card?.type_line ?? '').toLowerCase();
-    const types = Array.isArray(card?.types) ? card.types.map(type => String(type).toLowerCase()) : [];
     const facesText = Array.isArray(card?.card_faces)
         ? card.card_faces.map(face => face?.oracle_text ?? '').join(' ')
         : '';
     const oracleText = `${card?.oracle_text ?? ''} ${facesText}`.toLowerCase();
-    const isLand = typeLine.includes('land') || types.includes('land');
+    const land = isLand(card);
 
     const searchesForLand = oracleText.includes('land card') ||
         /(?:plains|island|swamp|mountain|forest)(?:\s+or\s+(?:plains|island|swamp|mountain|forest))*\s+card/.test(oracleText);
 
-    return isLand && (KNOWN_FETCH_LANDS.has(name) || (
+    return land && (KNOWN_FETCH_LANDS.has(name) || (
         oracleText.includes('sacrifice') && oracleText.includes('search your library') && searchesForLand
     ));
 }
 
 /** Fetch-land copies in a decklist. */
-export function countFetchLands(cardsByName) {
-    return Object.values(cardsByName ?? {}).reduce((sum, card) =>
+export function countFetchLands(cards) {
+    return Object.values(cards ?? {}).reduce((sum, card) =>
         sum + (isFetchLand(card) ? Math.max(0, Number(card?.count) || 0) : 0), 0);
 }
 
@@ -205,13 +206,6 @@ export function playToLumra(library, { turn, multiplier = 1, openingHand = OPENI
     return { drops, cracked, landsMilled, milled };
 }
 
-/** Nearest-rank quantile of an ascending-sorted array (0 when empty). */
-function quantile(sorted, q) {
-    if (!sorted.length) return 0;
-    const rank = Math.ceil(Math.min(1, Math.max(0, q)) * sorted.length) - 1;
-    return sorted[Math.min(sorted.length - 1, Math.max(0, rank))];
-}
-
 /**
  * Lumra's size across simulated games: percentiles (never the sampled
  * extremes), the size distribution, and how often the mill hits nothing.
@@ -237,8 +231,6 @@ export function summariseSizes(games, gyLands = 0) {
     };
 }
 
-const one = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
-const pct = v => `${Math.round((Number.isFinite(v) ? v : 0) * 100)}%`;
 const pt = s => `${s}/${s}`;
 
 /** Tone for the lands Lumra brings back. */
@@ -284,35 +276,38 @@ function intInput(id, fallback, min, max) {
 }
 
 /** Re-detect fetch lands when the deck changes (keeps a manual override until then). */
-function syncFetchDetection() {
-    const cardsByName = DeckConfig.getImportedCardData()?.cardsByName;
-    if (!cardsByName || cardsByName === lastFetchDeckRef) return;
+function syncFetchDetection(library) {
+    if (!library || library === lastFetchDeckRef) return;
     const input = document.getElementById('lumra-fetchLands');
-    const detected = countFetchLands(cardsByName);
+    const detected = countFetchLands(library.cards);
     if (input) input.value = String(detected);
     const hint = document.getElementById('lumra-fetch-hint');
     if (hint) hint.textContent = detected ? `Found ${detected} in your deck. Change it to see what more or fewer would do.` : 'None found in your deck.';
-    lastFetchDeckRef = cardsByName;
+    lastFetchDeckRef = library;
 }
 
 /**
- * Current deck and inputs.
- * @returns {{deckSize:number, landCount:number, gyLands:number, multiplier:number, cardData:Object, fetchCount:number, turn:number, fetchSetup:Object}}
+ * Current deck and inputs. With a decklist the library is the list less the
+ * commanders (see library.js); with bare counts it is the counts.
+ * @returns {{deckSize:number, landCount:number, gyLands:number, multiplier:number, library:Object|null, fetchCount:number, turn:number, fetchSetup:Object}}
  */
 export function getDeckConfig() {
     const config = DeckConfig.getDeckConfig();
-    const cardData = DeckConfig.getImportedCardData();
-    const deckSize = DeckConfig.getDeckSize(true);
-    syncFetchDetection();
+    const library = DeckConfig.hasCardList() ? libraryOf(config) : null;
+    const deckSize = library ? library.size : DeckConfig.getDeckSize(true);
+    const landCount = library
+        ? library.cards.reduce((n, c) => n + (isLand(c) ? c.count : 0), 0)
+        : (config.lands ?? 0);
+    syncFetchDetection(library);
 
     const fetchCount = intInput('lumra-fetchLands', 0, 0, deckSize);
     const turn = intInput('lumra-turn', DEFAULTS.turn, 1, 30);
     return {
         deckSize,
-        landCount: config.lands ?? 0,
+        landCount,
         gyLands: intInput('lumra-gyLands', DEFAULTS.gyLands, 0, 100),
         multiplier: intInput('lumra-multiplier', DEFAULTS.multiplier, 1, 10),
-        cardData,
+        library,
         fetchCount,
         turn,
         fetchSetup: calculateFetchLandSetup(deckSize, fetchCount, turn)
@@ -321,24 +316,21 @@ export function getDeckConfig() {
 
 /** The library as cards with roles; a stand-in built from counts when there is no list. */
 function buildLibrary(config) {
-    const cardsByName = config.cardData?.cardsByName;
-    if (cardsByName && Object.keys(cardsByName).length) {
-        const fetchNames = new Set(Object.values(cardsByName).filter(isFetchLand).map(c => c.name));
-        return buildDeckFromCardData({ cardsByName }).map(c => ({ ...c, isFetchCard: fetchNames.has(c.name) }));
+    if (config.library?.size) {
+        const fetchNames = new Set(config.library.cards.filter(isFetchLand).map(c => c.name));
+        return buildDeckFromCardData(config.library).map(c => ({ ...c, isFetchCard: fetchNames.has(c.name) }));
     }
     const deck = [];
     for (let i = 0; i < config.deckSize; i++) {
-        const isLand = i < config.landCount;
-        deck.push({ name: isLand ? 'Land' : 'Spell', types: isLand ? ['land'] : [], isFetchCard: false, generic: true });
+        const land = i < config.landCount;
+        deck.push({ name: land ? 'Land' : 'Spell', types: land ? ['land'] : [], isFetchCard: false, generic: true });
     }
     return deck;
 }
 
 /** Shuffled libraries for the current deck, made once per deck (or on demand). */
 function ensureLibraries(config, force = false) {
-    const ref = config.cardData?.cardsByName && Object.keys(config.cardData.cardsByName).length
-        ? config.cardData.cardsByName
-        : `${config.deckSize}:${config.landCount}`;
+    const ref = config.library?.size ? config.library : `${config.deckSize}:${config.landCount}`;
     if (force || sim.deckRef !== ref || !sim.libraries) {
         sim.deck = buildLibrary(config);
         sim.libraries = Array.from({ length: SIM_GAMES }, () => shuffleDeck([...sim.deck]));

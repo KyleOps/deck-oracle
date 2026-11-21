@@ -16,6 +16,9 @@
  * same creature in the same deck gets the same numbers on both pages.
  */
 
+import { hashString, mulberry32 } from './random.js';
+import { quantile } from './stats.js';
+
 /** Runs per sampled discover. Sized for a steady p99, not just the mean. */
 export const DISCOVER_RUNS = 2000;
 
@@ -125,34 +128,10 @@ export function simulateDiscoverChain(library, startCMC, opts = {}) {
     return { steps, chainCount, chainMana };
 }
 
-/**
- * Percentile of a distribution held as counts indexed by value.
- *
- * Used instead of the maximum wherever an outcome is random. A sampled maximum
- * is not a property of the deck — it is a property of how many samples you took,
- * and it keeps climbing as you take more. A percentile is stable, and it is the
- * number that answers "how good is a good turn".
- *
- * @param {number[]} dist - counts[value]
- * @param {number} q - 0..1
- * @returns {number} the value at that percentile, or 0 for an empty distribution
- */
-export function percentileFromDist(dist, q) {
-    const counts = Array.isArray(dist) ? dist : [];
-    const total = counts.reduce((a, b) => a + (b || 0), 0);
-    if (total === 0) return 0;
-    // No ceil(): merged distributions carry FRACTIONAL weights (each sampled
-    // spread is normalised to count as one cast), and with a total of 1 a
-    // ceil'd target of 1 is only ever reached at the last non-empty bucket —
-    // which silently turned every percentile into the maximum.
-    const target = Math.min(1, Math.max(0, q)) * total;
-    let seen = 0;
-    for (let v = 0; v < counts.length; v++) {
-        seen += counts[v] || 0;
-        if (seen > 0 && seen >= target) return v;
-    }
-    return counts.length ? counts.length - 1 : 0;
-}
+// Percentiles of these distributions (counts, or fractional counts once
+// merged) use the shared rule in stats.js: quantile(dist, q). A percentile is
+// used instead of the maximum wherever an outcome is random — a sampled
+// maximum is a property of how many samples you took, not of the deck.
 
 /**
  * Merge count-indexed distributions, optionally weighted.
@@ -187,7 +166,7 @@ export function mergeDists(parts) {
 export function foldTail(dist, q = 0.99) {
     const counts = Array.isArray(dist) ? dist.map(v => v || 0) : [];
     if (counts.length === 0) return { counts, cut: 0, folded: false };
-    const cut = percentileFromDist(counts, q);
+    const cut = quantile(counts, q);
     const tail = counts.slice(cut + 1).reduce((a, b) => a + b, 0);
     const out = counts.slice(0, cut + 1);
     out[cut] = (out[cut] || 0) + tail;
@@ -249,9 +228,9 @@ function summariser() {
                 runs: n,
                 avgMana: totalMana / runs,
                 avgSpells: totalSpells / runs,
-                medianMana: percentileFromDist(manaDist, 0.5),
-                p95Mana: percentileFromDist(manaDist, 0.95),
-                p99Mana: percentileFromDist(manaDist, 0.99),
+                medianMana: quantile(manaDist, 0.5),
+                p95Mana: quantile(manaDist, 0.95),
+                p99Mana: quantile(manaDist, 0.99),
                 whiffRate: whiffs / runs,
                 chainRate: chained / runs,
                 chainDist,
@@ -295,49 +274,8 @@ export function sampleDiscover(shuffledLibrary, startCMC, opts = {}) {
 }
 
 // ==================== Seeded sampling ====================
-
-/**
- * Small, fast seeded PRNG (mulberry32). Seeding makes a page's numbers a
- * property of the deck rather than of the moment: revisit the page and nothing
- * shuffles under you.
- * @param {number} seed
- * @returns {() => number} uniform in [0, 1)
- */
-export function mulberry32(seed) {
-    let a = seed >>> 0;
-    return function rng() {
-        a = (a + 0x6D2B79F5) >>> 0;
-        let t = a;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
-
-/** 32-bit FNV-1a hash of a string, for deriving seeds from stable keys. */
-export function hashSeed(str) {
-    let h = 0x811c9dc5;
-    const s = String(str ?? '');
-    for (let i = 0; i < s.length; i++) {
-        h ^= s.charCodeAt(i);
-        h = Math.imul(h, 0x01000193);
-    }
-    return h >>> 0;
-}
-
-/**
- * Seeded Fisher–Yates shuffle into a new array (the input is not touched).
- * @param {Array} library
- * @param {() => number} rng
- */
-export function seededShuffle(library, rng) {
-    const out = Array.isArray(library) ? library.slice() : [];
-    for (let i = out.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        const t = out[i]; out[i] = out[j]; out[j] = t;
-    }
-    return out;
-}
+// Seeds come from hashString() and draws from mulberry32() (random.js), so a
+// page's numbers are a property of the deck rather than of the moment.
 
 /**
  * The library minus one copy of a card — the creature being cast is on the
@@ -422,6 +360,6 @@ export function discoverForCreature(library, creature, opts = {}) {
     return sampleDiscoverFrom(withoutOne(library, creature?.name), cmc, {
         runs,
         treatStarAs5Plus,
-        seed: hashSeed(`${creature?.name ?? ''}|${cmc}`)
+        seed: hashString(`${creature?.name ?? ''}|${cmc}`)
     });
 }

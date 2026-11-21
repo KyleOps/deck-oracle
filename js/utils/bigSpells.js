@@ -15,16 +15,12 @@
  */
 
 import * as DeckConfig from './deckConfig.js';
-import { shuffle } from './simulation.js';
+import { shuffle, hashString } from './random.js';
+import { asLibrary, cardTypes, CARD_TYPES } from './library.js';
+import { pct } from './text.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 
 // ── Card types ───────────────────────────────────────────────────────────────
-
-/** Every card type a library card can have (kindred aside), in display order. */
-export const CARD_TYPES = Object.freeze(['creature', 'artifact', 'enchantment', 'planeswalker', 'battle', 'land', 'instant', 'sorcery']);
-
-/** Card types that make a card a permanent card. */
-export const PERMANENT_TYPES = Object.freeze(['creature', 'artifact', 'enchantment', 'planeswalker', 'battle', 'land']);
 
 const TYPE_LABELS = Object.freeze({
     creature: 'Creature', artifact: 'Artifact', enchantment: 'Enchantment', planeswalker: 'Planeswalker',
@@ -36,45 +32,39 @@ export function typeLabel(type) {
     return TYPE_LABELS[type] ?? String(type ?? '');
 }
 
-/**
- * Card types on a type line. Imports store the front face of double-faced
- * cards, which is what a card has while it is in the library.
- * @param {string} typeLine
- * @returns {string[]} keys from CARD_TYPES
- */
-export function cardTypesOf(typeLine) {
-    const lower = String(typeLine ?? '').toLowerCase();
-    return CARD_TYPES.filter(type => lower.includes(type));
-}
-
-/** Is this type line a permanent card (any permanent type)? */
-export function isPermanentTypeLine(typeLine) {
-    const lower = String(typeLine ?? '').toLowerCase();
-    return PERMANENT_TYPES.some(type => lower.includes(type));
-}
-
 // ── The deck ─────────────────────────────────────────────────────────────────
 
+const cardLists = new WeakMap();
+
 /**
- * The deck's card records, or [] when only type counts are known.
+ * The library's card records, or [] when only type counts are known.
+ * Commanders are never in it (see library.js); `opts.exclude` takes out the
+ * spell being cast when the list names it.
  *
  * Hand-edited type counts no longer describe an imported list (DeckConfig
  * marks the deck 'manual'), so the counts win and the list is ignored —
  * otherwise a page would mix card odds from one deck with the size of another.
  *
- * @param {Object} [config] - a DeckConfig snapshot (defaults to the live deck)
- * @returns {Array<{name:string, type_line:string, cmc:number, count:number}>}
+ * @param {Object} [config] - a DeckConfig snapshot (defaults to the live deck),
+ *   or a Library from libraryOf()
+ * @param {Object} [opts] - libraryOf() options
+ * @returns {ReadonlyArray<{name:string, type_line:string, cmc:number, count:number}>}
+ *   the same (frozen) array for the same library
  */
-export function deckCardList(config = DeckConfig.getDeckConfig()) {
+export function deckCardList(config = DeckConfig.getDeckConfig(), opts) {
     if (config?.importSource === 'manual') return [];
-    return Object.values(config?.cardsByName ?? {})
-        .filter(card => card && (Number(card.count) || 0) > 0)
-        .map(card => ({
+    const library = asLibrary(config, opts);
+    let list = cardLists.get(library);
+    if (!list) {
+        list = Object.freeze(library.cards.map(card => Object.freeze({
             name: String(card.name ?? ''),
             type_line: String(card.type_line ?? ''),
             cmc: Number.isFinite(Number(card.cmc)) ? Math.max(0, Number(card.cmc)) : 0,
-            count: Math.max(0, Math.floor(Number(card.count) || 0))
-        }));
+            count: card.count
+        })));
+        cardLists.set(library, list);
+    }
+    return list;
 }
 
 /** Number of cards in a card list. */
@@ -91,12 +81,7 @@ export function cardListKey(cards) {
         .map(card => `${card.name}|${card.count}|${card.cmc}|${card.type_line}`)
         .sort()
         .join('\n');
-    let hash = 0x811c9dc5;
-    for (let i = 0; i < text.length; i++) {
-        hash ^= text.charCodeAt(i);
-        hash = Math.imul(hash, 0x01000193);
-    }
-    return `${(cards ?? []).length}:${(hash >>> 0).toString(36)}`;
+    return `${(cards ?? []).length}:${hashString(text).toString(36)}`;
 }
 
 /**
@@ -110,7 +95,7 @@ export function expandCards(cards) {
             name: card.name,
             type_line: card.type_line,
             cmc: card.cmc ?? 0,
-            types: Object.freeze(cardTypesOf(card.type_line))
+            types: cardTypes(card.type_line)
         });
         for (let i = 0; i < (card.count ?? 0); i++) out.push(record);
     }
@@ -134,11 +119,7 @@ export function createSampler(size = 4) {
         get(deckKey, build) {
             if (deckKey !== key) {
                 const base = build() ?? [];
-                decks = Array.from({ length: size }, () => {
-                    const copy = base.slice();
-                    shuffle(copy);
-                    return copy;
-                });
+                decks = Array.from({ length: size }, () => shuffle(base.slice()));
                 key = deckKey;
             }
             return decks;
@@ -183,76 +164,6 @@ export function hypergeometricPmf(population, successes, draws) {
         pmf[k] = Math.exp(logChoose(K, k) + logChoose(N - K, n - k) - denominator);
     }
     return pmf;
-}
-
-/**
- * Smallest value whose cumulative probability reaches q.
- * @param {number[]} pmf - index = value
- * @param {number} q - 0..1
- */
-export function quantileOf(pmf, q) {
-    let cumulative = 0;
-    for (let k = 0; k < pmf.length; k++) {
-        cumulative += pmf[k];
-        if (cumulative >= q - 1e-9) return k;
-    }
-    return Math.max(0, pmf.length - 1);
-}
-
-// ── Formatting ───────────────────────────────────────────────────────────────
-
-/**
- * A probability as a whole percentage. Never rounds a possible result to 0%
- * or an uncertain one to 100%.
- */
-export function pct(p) {
-    if (!Number.isFinite(p)) return '—';
-    if (p <= 0) return '0%';
-    if (p >= 1) return '100%';
-    if (p < 0.005) return '<1%';
-    if (p >= 0.995) return '>99%';
-    return `${Math.round(p * 100)}%`;
-}
-
-/** An average to one decimal place. */
-export function avg(value, digits = 1) {
-    if (!Number.isFinite(value)) return '—';
-    const text = value.toFixed(digits);
-    return /^-0\.?0*$/.test(text) ? text.slice(1) : text;
-}
-
-/** Change in a probability, in percentage points: "+9 points". */
-export function points(delta) {
-    if (!Number.isFinite(delta)) return '—';
-    const rounded = Math.round(delta * 100);
-    if (rounded === 0) return 'no change';
-    return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded)} point${Math.abs(rounded) === 1 ? '' : 's'}`;
-}
-
-/** Compact change in a probability for tables: "+9 pts". */
-export function pointsShort(delta) {
-    if (!Number.isFinite(delta)) return '—';
-    const rounded = Math.round(delta * 100);
-    if (rounded === 0) return '0';
-    return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded)} pts`;
-}
-
-/** "1 card" / "3 cards". */
-export function plural(n, one, many = `${one}s`) {
-    return `${n} ${n === 1 ? one : many}`;
-}
-
-/** Tone for a chance the player wants to be high. */
-export function chanceTone(p, { good = 0.7, warn = 0.4 } = {}) {
-    if (!Number.isFinite(p)) return 'flat';
-    if (p >= good) return 'good';
-    if (p >= warn) return 'warn';
-    return 'bad';
-}
-
-/** CSS colour token for a tone. */
-export function toneColor(tone) {
-    return { good: 'var(--tx-good)', warn: 'var(--tx-warn)', bad: 'var(--tx-bad)' }[tone] ?? 'var(--tx-bright)';
 }
 
 // ── Markup (strings only) ────────────────────────────────────────────────────

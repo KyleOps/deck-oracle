@@ -10,11 +10,13 @@
 
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, toneFor } from '../utils/components.js';
 import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
 import { debounce } from '../utils/simulation.js';
 import { cardsSeenByTurn } from '../utils/format.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
+import { libraryOf, sameCard } from '../utils/library.js';
+import { pct, plural } from '../utils/text.js';
 import * as O from '../utils/drawOdds.js';
 import { heatLevel } from '../utils/viz.js';
 
@@ -58,13 +60,10 @@ function getLibrary(config, format) {
     if (!DeckConfig.hasCardList()) {
         return O.buildManualLibrary(config, DeckConfig.getDeckSize(true));
     }
-    const key = [config.cardsByName, format.key, config.commanderName, config.actualCardCount];
+    const source = libraryOf(config, { format });
+    const key = [source, config.actualCardCount];
     if (libCache.lib && libCache.key.every((v, i) => v === key[i])) return libCache.lib;
-    const lib = O.buildLibrary(config.cardsByName, {
-        commanderName: config.commanderName,
-        excludeCommander: format.key === 'commander',
-        deckSize: config.actualCardCount ?? null
-    });
+    const lib = O.buildLibrary(source, { deckSize: config.actualCardCount ?? null });
     libCache = { key, lib };
     return lib;
 }
@@ -98,9 +97,8 @@ export function calculate() {
 
 // ── Small helpers ────────────────────────────────────────────────────────────
 
-const toneOf = p => (p >= 0.8 ? 'good' : p >= 0.5 ? 'warn' : 'bad');
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-const pctHtml = p => escapeHtml(O.formatPct(p));
+const toneOf = p => toneFor(p, { good: 0.8, warn: 0.5 });
+const pctHtml = p => escapeHtml(pct(p));
 
 function groupColor(index) {
     return TX_CHART.series[SERIES_SLOT[index]] ?? TX_CHART.blue;
@@ -157,7 +155,10 @@ function renderTurnBox(ctx) {
     const key = `${format.key}|${format.firstPlayerDraws}`;
     const meta = document.getElementById('odds-format');
     if (meta) {
-        const tip = library.commanderExcluded ? ' data-tip="Your commander starts in the command zone, so it is not in the library." tabindex="0"' : '';
+        const several = library.commanders?.length > 1;
+        const tip = library.commanderExcluded
+            ? ` data-tip="Your ${several ? 'commanders start' : 'commander starts'} in the command zone, so ${several ? 'they are' : 'it is'} not in the library." tabindex="0"`
+            : '';
         meta.innerHTML = `<span${tip}>${escapeHtml(format.label)} · ${library.size}-card library</span>`;
     }
     if (turnBoxKey !== key || !document.getElementById('odds-turn')) {
@@ -222,14 +223,14 @@ function syncTurn(ctx = last) {
 function chipHtml(gi, name, copies, missing, idx) {
     const label = escapeHtml(name);
     const body = missing
-        ? `<span class="og-chip-name" data-tip="${missing === 'commander' ? 'Your commander starts in the command zone, so it is never drawn.' : 'Not in this deck’s library'}" tabindex="0">${label}</span>`
+        ? `<span class="og-chip-name" data-tip="${missing === 'commander' ? 'A commander starts in the command zone, so it is never drawn.' : 'Not in this deck’s library'}" tabindex="0">${label}</span>`
         : `${cardRef(name)}${copies > 1 ? `<span class="og-chip-n">×${copies}</span>` : ''}`;
     return `<span class="og-chip${missing ? ' is-missing' : ''}">${body}<button type="button" class="og-chip-x" id="odds-g${gi}-x${idx}" data-act="drop" data-name="${label}" aria-label="Remove ${label} from group ${O.GROUP_IDS[gi]}">×</button></span>`;
 }
 
 function membersHtml(gi, group, resolved, library) {
     if (library.manual) return '';
-    const commander = DeckConfig.getDeckConfig().commanderName;
+    const isCommander = n => (library.commanders ?? []).some(c => sameCard(c, n));
     const names = group.kind === 'cards' ? group.cards : resolved.names;
     if (names.length === 0) return '';
     const sorted = group.kind === 'cards' ? names : names.slice().sort((a, b) =>
@@ -238,7 +239,7 @@ function membersHtml(gi, group, resolved, library) {
     const shown = open ? sorted : sorted.slice(0, MEMBER_PREVIEW);
     const chips = shown.map((n, i) => {
         const card = library.byName.get(n);
-        const missing = card ? null : (n === commander && library.commanderExcluded ? 'commander' : 'missing');
+        const missing = card ? null : (isCommander(n) ? 'commander' : 'missing');
         return chipHtml(gi, n, card?.count ?? 0, missing, i);
     }).join('');
     const rest = sorted.length - shown.length;
@@ -642,12 +643,12 @@ function renderChart(result) {
     const multi = result.groups.length > 1;
     const labels = result.turns.map(t => (t.turn === 0 ? 'Hand' : `T${t.turn}`));
     const radius = result.turns.map(t => (t.turn === state.turn ? 5 : 0));
-    const pct = v => Math.round(v * 10000) / 100;
+    const toPercent = v => Math.round(v * 10000) / 100;
     const datasets = result.groups.map((g, i) => {
         const color = groupColor(g.index);
         return {
             label: `${g.id} · ${g.name}`,
-            data: result.turns.map(t => pct(t.each[i])),
+            data: result.turns.map(t => toPercent(t.each[i])),
             borderColor: color,
             backgroundColor: multi ? color : fade(color, 0.14),
             fill: multi ? false : 'origin',
@@ -664,7 +665,7 @@ function renderChart(result) {
     if (multi) {
         datasets.push({
             label: 'All together',
-            data: result.turns.map(t => pct(t.all)),
+            data: result.turns.map(t => toPercent(t.all)),
             borderColor: TX_CHART.bright,
             backgroundColor: fade(TX_CHART.bright, 0.07),
             fill: 'origin',
@@ -681,7 +682,7 @@ function renderChart(result) {
 
     const canvas = document.getElementById('odds-chart');
     if (canvas) {
-        const series = result.turns.map(t => `${t.turn === 0 ? 'opening hand' : `turn ${t.turn}`} ${O.formatPct(t.all)}`).join(', ');
+        const series = result.turns.map(t => `${t.turn === 0 ? 'opening hand' : `turn ${t.turn}`} ${pct(t.all)}`).join(', ');
         canvas.setAttribute('aria-label', `Chance by turn${multi ? ' of having every group' : ''}: ${series}.`);
     }
 
@@ -705,7 +706,7 @@ function renderChart(result) {
                             const t = last?.result?.turns?.[items[0]?.dataIndex];
                             return t ? `${O.turnLabel(t.turn)} · ${t.seen} cards seen` : '';
                         },
-                        label: item => ` ${item.dataset.label}: ${O.formatPct(item.parsed.y / 100)}`
+                        label: item => ` ${item.dataset.label}: ${pct(item.parsed.y / 100)}`
                     }
                 }
             },
@@ -760,7 +761,7 @@ function heatmapHtml(result) {
             const p = O.atLeastChance(result.N, g.copies, t.seen, k);
             const on = sel && k === g.need;
             const cls = `viz-heat-cell${p >= 0.5 ? ' is-hot' : ''}${p < 0.005 ? ' is-zero' : ''}`;
-            const label = `${O.turnLabel(t.turn)}, at least ${k} from ${g.name}: ${O.formatPct(p)}`;
+            const label = `${O.turnLabel(t.turn)}, at least ${k} from ${g.name}: ${pct(p)}`;
             return `<td><button type="button" class="${cls}" style="--heat:${heatLevel(p)}" data-heat-turn="${t.turn}" data-heat-need="${k}" aria-pressed="${on}" aria-label="${escapeHtml(label)}">${pctHtml(p)}</button></td>`;
         }).join('');
         return `

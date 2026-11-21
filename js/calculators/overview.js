@@ -20,6 +20,8 @@ import { escapeHtml, cardRef, term } from '../data/glossary.js';
 import { cardImageUrl, findCard } from '../data/images.js';
 import { curveCards, deckProfile } from '../utils/deckProfile.js';
 import { bulletList } from '../utils/viz.js';
+import { libraryOf } from '../utils/library.js';
+import { pct } from '../utils/text.js';
 
 const NAME = 'overview';
 const TYPE_LABEL = {
@@ -39,8 +41,6 @@ let debouncedUpdate = null;
 let curvePick = null;
 /** Deck stats from the last render; picking a curve bar re-renders only the curve. */
 let lastStats = null;
-
-const pct = (p, digits = 0) => `${(p * 100).toFixed(digits)}%`;
 
 function manaPip(color) {
     return `<span class="ms ms-${color.toLowerCase()}" aria-hidden="true">${color}</span>`;
@@ -173,8 +173,8 @@ function renderCurve(stats) {
 /** The cards behind the picked mana-curve bar, grouped by type, with previews. */
 function curveCardsHtml() {
     if (curvePick == null) return '<p class="ov-curve-hint">Pick a bar to list its cards.</p>';
-    const { cardsByName } = DeckConfig.getDeckConfig();
-    const { total, groups } = curveCards(cardsByName, curvePick);
+    // The library (commanders are never in it), as analyzeDeckStats counts it.
+    const { total, groups } = curveCards(libraryOf(DeckConfig.getDeckConfig(), { format: DeckConfig.getFormat() }), curvePick);
     const mv = curvePick === 7 ? '7 or more' : String(curvePick);
     return `
         <div class="ov-curve-list">

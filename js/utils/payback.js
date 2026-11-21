@@ -2,6 +2,8 @@
  * Shared value/payback helpers for spells that put cards onto the battlefield.
  */
 
+import { choose } from './hypergeometric.js';
+
 export const PAYBACK_VALUE_STEP = 0.25;
 
 function finiteNonNegative(value, fallback = 0) {
@@ -11,16 +13,6 @@ function finiteNonNegative(value, fallback = 0) {
 
 function toUnits(value) {
     return Math.round(finiteNonNegative(value) / PAYBACK_VALUE_STEP);
-}
-
-function choose(n, k) {
-    if (!Number.isInteger(n) || !Number.isInteger(k) || k < 0 || n < 0 || k > n) return 0;
-    const smaller = Math.min(k, n - k);
-    let result = 1;
-    for (let i = 1; i <= smaller; i++) {
-        result *= (n - smaller + i) / i;
-    }
-    return result;
 }
 
 /**

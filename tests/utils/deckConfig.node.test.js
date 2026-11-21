@@ -51,9 +51,9 @@ describe('deckConfig commander record', () => {
         assert.equal(DeckConfig.getCommanderCard().name, 'Esika, God of the Tree // The Prismatic Bridge');
     });
 
-    it('lists the command zone: the example’s one commander, with its card', () => {
-        assert.deepEqual(DeckConfig.getCommanderNames(), ['The Sixth Doctor']);
-        assert.equal(DeckConfig.getCommanders()[0].card?.cmc, 6);
+    it('lists the command zone: the example’s Doctor and companion, with their cards', () => {
+        assert.deepEqual(DeckConfig.getCommanderNames(), ['The Sixth Doctor', 'Susan Foreman']);
+        assert.deepEqual(DeckConfig.getCommanders().map(c => c.card?.cmc), [6, 2]);
     });
 
     it('lists a single saved commander with its record, or none at all', () => {

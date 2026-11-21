@@ -16,8 +16,10 @@ import * as OpponentState from '../utils/opponentState.js';
 import { registerCalculator, updateCalculatorIfActive } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
+import { isLand, libraryOf } from '../utils/library.js';
+import { one, pct } from '../utils/text.js';
 import {
-    libraryOf, isLandType, isHistoricType, createRevealer, formatPct, fmt1, countWord, objectId, readOpponents,
+    opponentLibrary, isHistoricType, createRevealer, countWord, objectId, readOpponents,
     frameScheduler, opponentLabel, cardChip, renderOpponentPlaceholder, renderLoadingNote, bindOpponentActions
 } from '../utils/opponentPages.js';
 
@@ -43,9 +45,10 @@ export function calculateMindsDilationStats(opponentData, sixthDoctor = false) {
     const mvBuckets = {};
     const bandCounts = { cheap: 0, mid: 0, big: 0 };
 
-    for (const card of Object.values(opponentData.cardsByName)) {
-        const count = Math.max(0, Math.floor(card?.count ?? 1));
-        if (isLandType(card?.type_line)) {
+    // Their library: an opponent's commanders are never in it (see library.js).
+    for (const card of libraryOf(opponentData, { format: 'commander' }).cards) {
+        const count = card.count;
+        if (isLand(String(card.type_line ?? ''))) {
             landCount += count;
             continue;
         }
@@ -108,7 +111,7 @@ export function roundStats(statsList) {
 export function formatRounds(rounds) {
     if (!Number.isFinite(rounds)) return 'never';
     if (rounds < 1) return 'under a round';
-    const text = fmt1(rounds);
+    const text = one(rounds);
     return `${text === '1.0' ? '1' : text} ${text === '1.0' ? 'round' : 'rounds'}`;
 }
 
@@ -132,12 +135,12 @@ export function summarizeMindsDilation(rows, { sixthDoctor = false } = {}) {
         const s = valid[0].stats;
         return {
             tone,
-            html: `If ${escapeHtml(valid[0].name)} casts a spell every turn, Mind’s Dilation hands you a free spell on <strong>${formatPct(s.pNonland)}</strong> of their turns, worth about <strong>${fmt1(s.avgEffectiveMV)} mana</strong> each — ${payback}.${doctor}`
+            html: `If ${escapeHtml(valid[0].name)} casts a spell every turn, Mind’s Dilation hands you a free spell on <strong>${pct(s.pNonland)}</strong> of their turns, worth about <strong>${one(s.avgEffectiveMV)} mana</strong> each — ${payback}.${doctor}`
         };
     }
     return {
         tone,
-        html: `With ${countWord(valid.length)} opponents each casting a spell a turn, Mind’s Dilation flips about <strong>${fmt1(r.spellsPerRound)} free spells a round</strong> (at least one <strong>${formatPct(r.chanceAny)}</strong> of the time) worth <strong>${fmt1(r.manaPerRound)} mana</strong> — ${payback}.${doctor}`
+        html: `With ${countWord(valid.length)} opponents each casting a spell a turn, Mind’s Dilation flips about <strong>${one(r.spellsPerRound)} free spells a round</strong> (at least one <strong>${pct(r.chanceAny)}</strong> of the time) worth <strong>${one(r.manaPerRound)} mana</strong> — ${payback}.${doctor}`
     };
 }
 
@@ -178,16 +181,16 @@ function heroStats(rows) {
     const avgHit = rows.reduce((a, x) => a + x.stats.pNonland, 0) / n;
     return renderHeroStats([
         {
-            label: 'Free spells a round', size: 'big', value: fmt1(r.spellsPerRound),
+            label: 'Free spells a round', size: 'big', value: one(r.spellsPerRound),
             sub: n > 1 ? `one trigger from each of ${countWord(n)}` : 'one trigger a round',
             tip: 'Assumes each opponent casts at least one spell on their own turn, so Mind’s Dilation triggers once per opponent each round. Instants on other turns add more.'
         },
         {
-            label: 'Mana a round', value: fmt1(r.manaPerRound), sub: 'in free spells',
+            label: 'Mana a round', value: one(r.manaPerRound), sub: 'in free spells',
             tip: `Average mana value of the free spells you get each round, added up across opponents. Lands flip for nothing.${sixthDoctorEnabled ? ' Historic spells count double.' : ''}`
         },
         {
-            label: 'Hit chance', value: formatPct(avgHit), sub: n > 1 ? 'per trigger, average opponent' : 'per trigger',
+            label: 'Hit chance', value: pct(avgHit), sub: n > 1 ? 'per trigger, average opponent' : 'per trigger',
             tip: 'Chance the exiled top card is not a land — the share of nonland cards in their library.'
         },
         {
@@ -200,18 +203,18 @@ function heroStats(rows) {
 function tableHtml(rows) {
     const body = rows.map(({ opp, stats: s }) => `<tr>
             <td>${opponentLabel(opp, `${s.landCount} lands`)}</td>
-            <td data-label="Hit chance">${formatPct(s.pNonland)}</td>
-            <td data-label="Free spell">${fmt1(s.avgEffectiveMV)}<span class="opp-cell-sub">average mana value</span></td>
-            <td data-label="Historic">${formatPct(s.historicShare)}<span class="opp-cell-sub">of their spells</span></td>
-            <td data-label="Mana per trigger">${fmt1(s.evPerTrigger)}</td>
+            <td data-label="Hit chance">${pct(s.pNonland)}</td>
+            <td data-label="Free spell">${one(s.avgEffectiveMV)}<span class="opp-cell-sub">average mana value</span></td>
+            <td data-label="Historic">${pct(s.historicShare)}<span class="opp-cell-sub">of their spells</span></td>
+            <td data-label="Mana per trigger">${one(s.evPerTrigger)}</td>
         </tr>`).join('');
     const r = roundStats(rows.map(x => x.stats));
     const foot = rows.length > 1 ? `<tfoot><tr>
             <td>Each round, all ${countWord(rows.length)}</td>
-            <td data-label="At least one hit">${formatPct(r.chanceAny)}<span class="opp-cell-sub">at least one hit</span></td>
+            <td data-label="At least one hit">${pct(r.chanceAny)}<span class="opp-cell-sub">at least one hit</span></td>
             <td data-label=""></td>
             <td data-label=""></td>
-            <td data-label="Mana a round">${fmt1(r.manaPerRound)}</td>
+            <td data-label="Mana a round">${one(r.manaPerRound)}</td>
         </tr></tfoot>` : '';
     return `<div class="opp-table-wrap"><table class="opp-table">
         <thead><tr>
@@ -236,11 +239,11 @@ function bandsHtml(rows) {
     const lines = rows.map(({ opp, stats }) => {
         const segs = BANDS.map(b => {
             const p = stats.bands[b.key];
-            return p > 0 ? `<span class="mnds-seg is-${b.key}" style="width:${(p * 100).toFixed(2)}%" title="${b.label}: ${formatPct(p)}">${p >= 0.08 ? formatPct(p) : ''}</span>` : '';
+            return p > 0 ? `<span class="mnds-seg is-${b.key}" style="width:${(p * 100).toFixed(2)}%" title="${b.label}: ${pct(p)}">${p >= 0.08 ? pct(p) : ''}</span>` : '';
         }).join('');
         return `<div class="mnds-band-row">
             <div class="mnds-band-who">${opponentLabel(opp)}</div>
-            <div class="mnds-band" role="img" aria-label="${escapeHtml(opp.name)}: ${BANDS.map(b => `${b.label} ${formatPct(stats.bands[b.key])}`).join(', ')}">${segs}</div>
+            <div class="mnds-band" role="img" aria-label="${escapeHtml(opp.name)}: ${BANDS.map(b => `${b.label} ${pct(stats.bands[b.key])}`).join(', ')}">${segs}</div>
         </div>`;
     }).join('');
     const legend = BANDS.map(b => `<span class="mnds-key"><span class="mnds-swatch is-${b.key}"></span>${b.label}</span>`).join('');
@@ -260,7 +263,7 @@ const sampleCache = new Map();
 function samplesFor(opp) {
     const key = `${objectId(opp.data)}:${sampleRound}`;
     if (!sampleCache.has(key)) {
-        const revealer = createRevealer(libraryOf(opp.data));
+        const revealer = createRevealer(opponentLibrary(opp.data));
         sampleCache.set(key, Array.from({ length: SAMPLE_ROUNDS }, () => revealer.reveal()).filter(Boolean));
     }
     return sampleCache.get(key);

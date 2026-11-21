@@ -11,101 +11,62 @@
 
 import * as OpponentState from './opponentState.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
+import { cardTypes, expandLibrary, frontTypeLine, isLand, libraryOf } from './library.js';
+import { hashString } from './random.js';
+import { quantile } from './stats.js';
+import { pct } from './text.js';
 
 // ── Library model ───────────────────────────────────────────────────────────
 
 const TYPE_ORDER = ['creature', 'planeswalker', 'battle', 'instant', 'sorcery', 'artifact', 'enchantment', 'land'];
 
-/**
- * The front face of a type line, lower-cased. A modal double-faced card in a
- * library has only its front face's characteristics, so "Sorcery // Land" is a
- * nonland card there.
- */
-export function frontFace(typeLine) {
-    return String(typeLine ?? '').split('//')[0].toLowerCase();
-}
-
-/** @returns {boolean} whether a card (by type line) is a land in the library */
-export function isLandType(typeLine) {
-    return /\bland\b/.test(frontFace(typeLine));
-}
-
 /** @returns {boolean} historic = artifact, legendary or Saga (front face) */
 export function isHistoricType(typeLine) {
-    return /\b(artifact|legendary|saga)\b/.test(frontFace(typeLine));
+    return /\b(artifact|legendary|saga)\b/.test(frontTypeLine(typeLine));
 }
 
-/**
- * Land test that accepts both library records ({land}) and the legacy deck
- * shape used by tests and buildDeckFromCardData ({types: [...]}).
- */
-export function isLandCard(card) {
-    if (typeof card?.land === 'boolean') return card.land;
-    if (Array.isArray(card?.types)) return card.types.includes('land');
-    return isLandType(card?.type_line);
-}
-
-function primaryType(front) {
-    return TYPE_ORDER.find(t => front.includes(t)) ?? 'artifact';
+function primaryType(typeLine) {
+    const types = cardTypes(typeLine);
+    return TYPE_ORDER.find(t => types.includes(t)) ?? 'artifact';
 }
 
 const libraries = new WeakMap();
 
 /**
  * An opponent's library as an array of compact, frozen card records — one per
- * physical card — built once per imported deck object.
+ * physical card — built once per imported deck. Commanders are never in it
+ * (see library.js): an opponent's list may name them through `commanders` /
+ * `commanderName`.
  * @param {Object} data - opponent deck data with cardsByName
  * @returns {Array<{name:string, cmc:number, land:boolean, historic:boolean, type:string, types:string[]}>}
  */
-export function libraryOf(data) {
+export function opponentLibrary(data) {
     if (!data?.cardsByName) return [];
-    const cached = libraries.get(data);
+    const source = libraryOf(data, { format: 'commander' });
+    const cached = libraries.get(source);
     if (cached) return cached;
-    const library = [];
-    for (const card of Object.values(data.cardsByName)) {
-        const count = Math.max(0, Math.floor(card?.count ?? 1));
-        if (!count) continue;
-        const front = frontFace(card?.type_line);
-        const land = isLandType(card?.type_line);
-        const type = land ? 'land' : primaryType(front);
-        const record = Object.freeze({
-            name: String(card?.name ?? 'Unknown card'),
-            cmc: Math.max(0, Number(card?.cmc) || 0),
-            land,
-            historic: !land && isHistoricType(card?.type_line),
-            type,
-            types: Object.freeze([type])
-        });
-        for (let i = 0; i < count; i++) library.push(record);
-    }
-    libraries.set(data, library);
+    const library = expandLibrary(source.cards.map(card => {
+        const typeLine = String(card.type_line ?? '');
+        const land = isLand(typeLine);
+        const type = land ? 'land' : primaryType(typeLine);
+        return {
+            count: card.count,
+            record: Object.freeze({
+                name: String(card.name ?? 'Unknown card'),
+                cmc: Math.max(0, Number(card.cmc) || 0),
+                land,
+                historic: !land && isHistoricType(typeLine),
+                type,
+                types: Object.freeze([type])
+            })
+        };
+    }), entry => entry.record);
+    libraries.set(source, library);
     return library;
 }
 
 // ── Randomness ──────────────────────────────────────────────────────────────
-
-/** 32-bit FNV-1a hash. */
-export function hashString(text) {
-    let h = 0x811c9dc5;
-    const s = String(text);
-    for (let i = 0; i < s.length; i++) {
-        h ^= s.charCodeAt(i);
-        h = Math.imul(h, 0x01000193);
-    }
-    return h >>> 0;
-}
-
-/** Small, fast seeded PRNG (mulberry32) → () => [0, 1). */
-export function seededRandom(seed) {
-    let a = seed >>> 0;
-    return () => {
-        a = (a + 0x6d2b79f5) >>> 0;
-        let t = a;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
+// Seeds: hashString(); draws: mulberry32() — both in random.js.
 
 /** A seed that depends only on the list's contents: same deck, same answer. */
 export function deckSeed(library) {
@@ -141,24 +102,7 @@ export function createRevealer(cards, rng = Math.random) {
 
 // ── Distributions & formatting ──────────────────────────────────────────────
 
-/**
- * Smallest value v with P(X ≤ v) ≥ q, for a distribution given as an array of
- * weights indexed by value (counts or probabilities).
- */
-export function quantile(dist, q) {
-    let total = 0;
-    for (const w of dist) total += w || 0;
-    if (!(total > 0)) return 0;
-    const target = q * total - 1e-9;
-    let cum = 0;
-    for (let v = 0; v < dist.length; v++) {
-        cum += dist[v] || 0;
-        if (cum >= target) return v;
-    }
-    return dist.length - 1;
-}
-
-/** The middle half of outcomes, [25th, 75th percentile]. */
+/** The middle half of outcomes, [25th, 75th percentile] (stats.js quantile). */
 export function typicalRange(dist) {
     return [quantile(dist, 0.25), quantile(dist, 0.75)];
 }
@@ -166,19 +110,6 @@ export function typicalRange(dist) {
 /** "3" or "2–4". */
 export function formatRange([lo, hi]) {
     return lo === hi ? `${lo}` : `${lo}–${hi}`;
-}
-
-/** Whole-number percentage, with honest ends: "<1%" and ">99%" instead of 0/100 for rare outcomes. */
-export function formatPct(p) {
-    const x = Number.isFinite(p) ? p : 0;
-    if (x > 0 && x < 0.005) return '<1%';
-    if (x < 1 && x > 0.995) return '>99%';
-    return `${Math.round(x * 100)}%`;
-}
-
-/** One decimal. */
-export function fmt1(x) {
-    return (Number.isFinite(x) ? x : 0).toFixed(1);
 }
 
 /** P(X ≥ k) from a weight array. */
@@ -300,7 +231,7 @@ export function miniBars({ title, probs, label, scaleMax = null, color = 'var(--
         return `<div class="opp-bar-row${dimFn?.(i) ? ' is-dim' : ''}">
             <span class="opp-bar-label">${label(i)}</span>
             <span class="opp-bar-track"><span class="opp-bar-fill" style="width:${width.toFixed(1)}%"></span></span>
-            <span class="opp-bar-val">${formatPct(p)}</span>
+            <span class="opp-bar-val">${pct(p)}</span>
         </div>`;
     }).join('');
     return `<div class="opp-bars" style="--bar:${color}">

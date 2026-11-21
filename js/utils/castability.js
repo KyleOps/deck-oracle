@@ -20,7 +20,8 @@
  */
 
 import { choose } from './hypergeometric.js';
-import { COLORS, parseManaCost, isLand, landColors, deckColorIdentity } from './mana.js';
+import { COLORS, parseManaCost, landColors, deckColorIdentity } from './mana.js';
+import { asLibrary, isLand } from './library.js';
 import { colorCastProbability, sourcesNeeded } from './deckStats.js';
 import { FORMATS, cardsSeenByTurn } from './format.js';
 
@@ -429,16 +430,19 @@ export function sourcesTable({ deckSize, lands, format = FORMATS.commander, onPl
 }
 
 /**
- * Full castability analysis of a deck.
+ * Full castability analysis of a deck's library (commanders are never in it —
+ * see library.js — but they still set the colour identity).
  *
- * @param {Record<string, Object>} cardsByName
- * @param {{deckSize?:number, format?:object, onPlay?:boolean, target?:number, byTurn?:number}} [opts]
- *   byTurn: also give every card and colour its chance on turns 1…byTurn (the
- *   "when does it become reliable" strips); 0 skips the extra work.
+ * @param {Object} deck - a Library from libraryOf(), a DeckConfig snapshot, or a cardsByName map
+ * @param {{deckSize?:number, format?:object, onPlay?:boolean, target?:number, byTurn?:number, commanderCards?:Array<Object|null>}} [opts]
+ *   deckSize: library size (default: the copies listed); byTurn: also give
+ *   every card and colour its chance on turns 1…byTurn (the "when does it
+ *   become reliable" strips), 0 skips the extra work; commanderCards: the
+ *   command zone's records, for the colour identity.
  */
-export function analyzeCastability(cardsByName = {}, { deckSize, format = FORMATS.commander, onPlay = true, target = 0.9, byTurn = 0 } = {}) {
-    const cards = Object.values(cardsByName).filter(c => c?.name && Number(c.count) > 0);
-    const identity = deckColorIdentity(cardsByName);
+export function analyzeCastability(deck = {}, { deckSize, format = FORMATS.commander, onPlay = true, target = 0.9, byTurn = 0, commanderCards = [] } = {}) {
+    const cards = asLibrary(deck, { format }).cards;
+    const identity = deckColorIdentity(cards, commanderCards);
     const landInfo = describeLands(cards, identity);
     const lands = landInfo.reduce((s, l) => s + l.count, 0);
     const counted = cards.reduce((s, c) => s + Number(c.count), 0);

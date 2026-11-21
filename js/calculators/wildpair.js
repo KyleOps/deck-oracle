@@ -29,12 +29,14 @@
  * mana values an activation there can put onto the battlefield.
  */
 
-import { formatNumber, formatPercentage } from '../utils/simulation.js';
+import { formatNumber } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
+import { libraryOf, withoutRemoved } from '../utils/library.js';
+import { pct, plural } from '../utils/text.js';
 
 /** Wild Pair's own mana cost — the bar a single activation is measured against. */
 export const WILD_PAIR_COST = 6;
@@ -409,9 +411,12 @@ function deckKeyOf(analysis) {
  */
 export function getConfig() {
     const deck = DeckConfig.getDeckConfig();
+    const details = Array.isArray(deck.cardDetails) ? deck.cardDetails : [];
+    // Wild Pair searches the library, and commanders are never in it.
+    const library = DeckConfig.hasCardList() ? libraryOf(deck) : null;
     return {
-        cardDetails: Array.isArray(deck.cardDetails) ? deck.cardDetails : [],
-        deckSize: DeckConfig.getDeckSize(true)
+        cardDetails: library ? withoutRemoved(details, library) : details,
+        deckSize: library ? library.size : DeckConfig.getDeckSize(true)
     };
 }
 
@@ -454,8 +459,6 @@ export function setSelectedTotal(total) {
 
 // ==================== UI ====================
 
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
 /** "6–8 mana", or "6 mana" when every card in the group costs the same. */
 function cheatRangeText(row) {
     if (!row || !row.live) return '—';
@@ -486,7 +489,7 @@ function renderAnswer(analysis, fit) {
         ${renderHeroStats([
             {
                 label: 'Matched creatures',
-                value: formatPercentage(analysis.liveRate, 0),
+                value: pct(analysis.liveRate),
                 sub: `${analysis.liveCreatures} of ${analysis.creatures} find something`,
                 color: analysis.liveRate >= 0.5 ? 'var(--tx-good)' : 'var(--tx-warn)',
                 tip: 'Creatures that share their total power + toughness with at least one other creature in the deck. Casting any of them gives Wild Pair something to search for.'
