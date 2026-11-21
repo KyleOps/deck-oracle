@@ -117,6 +117,26 @@ describe('landOdds', () => {
     });
 });
 
+describe('analyzeDeckStats: what counts as cheap acceleration', () => {
+    const land = { name: 'Forest', count: 30, cmc: 0, type_line: 'Basic Land — Forest', oracle_text: '({T}: Add {G}.)' };
+    const deck = extra => ({ cardsByName: { Forest: land, ...extra }, actualCardCount: 30 + Object.keys(extra).length });
+    const elves = { name: 'Llanowar Elves', count: 1, cmc: 1, mana_cost: '{G}', type_line: 'Creature — Elf Druid', oracle_text: '{T}: Add {G}.' };
+    const vow = {
+        name: "Kamahl's Druidic Vow", count: 1, cmc: 2, mana_cost: '{X}{G}{G}', type_line: 'Legendary Sorcery',
+        oracle_text: '(You may cast a legendary sorcery only if you control a legendary creature or planeswalker.)\nLook at the top X cards of your library. You may put any number of land and/or legendary permanent cards with mana value X or less from among them onto the battlefield. Put the rest into your graveyard.'
+    };
+
+    it('counts a 1-mana dork as cheap ramp', () => {
+        const stats = analyzeDeckStats(deck({ 'Llanowar Elves': elves }), { format: FORMATS.commander });
+        assert.equal(stats.cheapAccel, 1);
+    });
+
+    it('never counts an X spell as cheap: it only ramps once X is paid', () => {
+        const stats = analyzeDeckStats(deck({ "Kamahl's Druidic Vow": vow }), { format: FORMATS.commander });
+        assert.equal(stats.cheapAccel, 0);
+    });
+});
+
 describe('analyzeDeckStats on the bundled example deck', () => {
     const stats = analyzeDeckStats(DEFAULT_DECK_DATA, { format: FORMATS.commander });
 
