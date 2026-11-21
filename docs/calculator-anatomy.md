@@ -77,7 +77,7 @@ a debounced, visibility-aware `updateUI` to deck changes for you).
    that says what it changes and a one-line hint. Only add inputs that change
    the answer for the deck as built.
 4. **Charts / tables** — the evidence. Every chart has a one-line caption
-   saying how to read it.
+   saying how to read it (`<p class="tx-caption">`, see Styling).
 5. **Samples** — real shuffled examples where the mechanic is random. Card
    names go through `cardRef(name)` so hovering shows the card image.
 6. **Details** — secondary breakdowns, collapsible.
@@ -144,6 +144,32 @@ const deck = expandLibrary(library, card => ({ name: card.name, cmc: card.cmc, l
 - Tones: `toneFor(p, { good, warn })` and `toneColor(tone)` in
   `js/utils/components.js`. `pBarCell(p)` is neutral unless given a colour.
 - `choose(n, k)` comes from `js/utils/hypergeometric.js` (cached).
+- Turn order: pages whose answer depends on who goes first use
+  `js/utils/turnOrder.js` — `turnOrderHTML()` for the control,
+  `syncTurnOrder(root, onPlay, format)` after a render,
+  `turnOrderClicked(event)` in the page's click handler and
+  `effectiveOnPlay(onPlay, format)` for the maths (in multiplayer Commander
+  everyone draws, so the control hides and the maths is on the play). The
+  page keeps its own `onPlay` and share parameter.
+
+### Page families
+
+Pages that are the same page around a different model share the page, not
+just helpers:
+
+- **Multiplayer** (Mara, Dream Harvest, Mind's Dilation):
+  `createOpponentPage({ key, stats, summarize, hero, sections, placeholder,
+  sample, layout?, settings?, bind? })` in `js/utils/opponentPages.js`
+  returns the page's `readInputs` / `calculate` / `updateUI` / `init`: stats
+  cached per opponent deck, a render only when the opponents or settings
+  change, the empty and loading states, and sample casts with Reshuffle and
+  Show more (`sampleCastsHTML()`). The page module is its markup:
+  `export const { readInputs, calculate, updateUI, init } = page;`
+- **X spells** (Genesis Wave, Kamahl's Druidic Vow; Portent and Primal Surge
+  use the parts that fit): the kit in `js/utils/bigSpells.js` —
+  `readXSpell()` (deck → library → X), `readValueInput()`, `setXInputs()`,
+  `paybackChart()`, `paybackSampleHTML()`, `renderXSweep()`,
+  `valueBandsTable()`, `renderEmptyAnswer()` and `bindBigSpellControls()`.
 
 ## Styling
 
@@ -154,6 +180,14 @@ const deck = expandLibrary(library, card => ({ name: card.name, cmc: card.cmc, l
   values (a bar's width, a type's colour).
 - `--tx-good` / `--tx-warn` / `--tx-bad` mean something about the result;
   `--tx-accent` marks the selected/recommended/interactive thing. Nothing else.
+- Captions and legends have one style each: `<p class="tx-caption">` under a
+  chart, table or sample (`is-below` directly under a figure, `is-inset`
+  inside an already padded block) and `.tx-legend` for a key (`is-panel` on
+  its own row, `is-below` under its band). Pages draw their own swatches,
+  never their own caption or legend rule.
+- Hero stats (`renderHeroStats`) share one grid — 150px-or-wider columns,
+  two across on a phone. Style the stats if you must, never
+  `grid-template-columns`, or phones and tablets reflow differently.
 - Charts: build with `createOrUpdateChart` and colours from `TX_CHART`
   (`js/utils/chartHelpers.js`) — never literal colours — so they re-theme.
 
@@ -172,8 +206,22 @@ export const guide = {
 
 ## Share links
 
-Settings that change the answer belong in share links. Prefer exporting
-`getShareParams()` → `{ param: value }` and `applyShareParams(URLSearchParams)`
-from the calculator module (validate and clamp every value). The legacy
-`SLIDERS` table in `js/utils/share.js` keeps old links working — never rename
-the input ids it lists.
+Settings that change the answer belong in share links, and the page module
+owns them (`js/utils/share.js` knows only the deck, opponents and tab):
+
+```js
+/** Inputs share links carry as they are. Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'waveX', id: 'wave-xSlider', min: 0, max: 30 },
+    { param: 'waveLand', id: 'wave-land-value', min: 0, max: 20, float: true }
+]);
+export function getShareParams() { return onPlay ? {} : { draw: 1 }; }   // everything else
+export function applyShareParams(params) { /* validate and clamp every value */ }
+```
+
+`shareInputs` values are bounded and set on the input with input/change
+events, as if typed; `applyShareParams()` runs after them. A parameter packed
+with LZ-String (loaded on demand) goes in `PACKED_PARAMS` in share.js so the
+app loads it before applying the link (Mulligan's `mullTypes`, packed by
+`packRequirements()` in `mulliganModel.js`). `tests/utils/shareUrl.node.test.js`
+lists every parameter a link has ever carried: add yours there.
