@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { CHART_URL, isolateNetwork } from './helpers/network.js';
 
 /**
- * Performance budgets: the overview's cold load and the three heaviest
+ * Performance budgets: the overview's cold load and the four heaviest
  * calculator pages.
  *
  * Every number comes from the browser's own Performance APIs (Navigation,
@@ -31,7 +31,13 @@ import { CHART_URL, isolateNetwork } from './helpers/network.js';
  *   ?tab=mulligan: answer painted   260 ms     936 ms          1,250 ms
  *   ?tab=chimil: answer painted     256 ms     960 ms          1,250 ms
  *   ?tab=manadev: answer painted    272 ms     1,160 ms        1,500 ms
+ *   ?tab=plan: answer painted*      444 ms     1,416 ms        1,850 ms
  *   any of them: longest task        59 ms     329 ms          450 ms
+ *
+ * * Game Plan answers after the first 500 of its 5,000 games (in 10 ms
+ *   slices) and refines to all 5,000 in the background (about 2.4 s at 4×).
+ *   Measured 2026-11-21 on a slower machine: Mana Development read 1,320 ms
+ *   there with the CPU throttled 4×, and Game Plan's longest task 239 ms.
  *
  * "JS before DCL" includes the landing page's own modules, which index.html
  * preloads so they arrive alongside the shell instead of after it.
@@ -54,7 +60,7 @@ import { CHART_URL, isolateNetwork } from './helpers/network.js';
  */
 
 const OVERVIEW = { scriptKB: 500, domNodes: 1150, fcpMs: 450, answerMs: 1450 };
-const PAGES = { mulligan: { answerMs: 1250 }, chimil: { answerMs: 1250 }, manadev: { answerMs: 1500 } };
+const PAGES = { mulligan: { answerMs: 1250 }, chimil: { answerMs: 1250 }, manadev: { answerMs: 1500 }, plan: { answerMs: 1850 } };
 const LONGEST_TASK_MS = 450;
 
 /** Attach a measurement to the report (and print it with PERF_LOG=1). */

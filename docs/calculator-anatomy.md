@@ -18,7 +18,10 @@ Pages whose maths predates `models/` keep it in a named module instead:
 Land Drops (`landDrops.js`), Mulligan Planner (`mulliganModel.js`, sample
 games included), Draw Odds (`drawOdds.js`), Opening Hands (`handLab.js`),
 Mana Development (`manaDevelopment.js`), Mana Base (`castability.js`) and
-the Discover pages' shared simulation (`discover.js`). Shared by several
+the Discover pages' shared simulation (`discover.js`). Game Plan's words
+are in `models/plan.js`, over three modules of its own: the plan schema
+(`planSchema.js`), the card rules (`planRules.js`) and the engine
+(`planEngine.js`). Shared by several
 models: `models/cardList.js` (the big spells' card list, `withoutCopy`) and
 `models/opponentLibrary.js` (the multiplayer pages' opponent library, seeded
 revealer and distribution helpers).
@@ -170,6 +173,57 @@ just helpers:
   `readXSpell()` (deck → library → X), `readValueInput()`, `setXInputs()`,
   `paybackChart()`, `paybackSampleHTML()`, `renderXSweep()`,
   `valueBandsTable()`, `renderEmptyAnswer()` and `bindBigSpellControls()`.
+
+### Cards that need a rule of their own (Game Plan)
+
+Game Plan's goldfish (`js/utils/planEngine.js`) reads lands through
+`classifyLand` and ramp through `ramp.js`, like Mana Development. A card
+whose mana depends on the board, or that triggers on what you cast, gets a
+**card rule** in `js/utils/planRules.js` instead, keyed by its front-face
+`nameKey()`:
+
+```js
+defineCardRule('Fanatic of Rhonas', rule(ferocious('{G}', '{G}{G}{G}{G}')));
+defineCardRule('Selvala, Eager Trailblazer', rule(
+    distinctPowers(),
+    creatureCastToken({ name: 'Mercenary', power: 1, toughness: 1, colors: R, subtypes: 'mercenary' })
+));
+```
+
+A rule is data plus small hooks (`mana`, `tapBoost`, `landBoost`,
+`onMainPhase`, `onEnter`, `onResolve`, `onCast`, `onOtherEnter`,
+`onLandEnter`, `onCombat`, `onEndStep`, `creature`, `power`, `anthem`,
+`castable`, `discount`, `rampValue`) that act on the game only through its
+rules API (`powerOf`, `distinctPowers`, `controlsPower`, `countSubtype`,
+`addMana`, `createToken`, `fetchLand`, `revealTop`, `revealUntil`, `mill`,
+`explore`, `copySpell`, …), so a new card never touches the engine loop.
+Lands take a `landRule()` (shocks, battle lands, verges, hideaway,
+Yavimaya) and modal double-faced cards a `faceLand()` (`use: 'land'` plays
+only the land; `'either'` keeps the spell and plays the land only to save
+a land drop). A named rule that sets `ramp` (`rampSpec()`, or `null`)
+replaces `ramp.js`'s reading for that card, so a plan doesn't move when
+the shared ramp rule does. When a whole wording family shares a rule
+(every "Ferocious — {T}: Add …", every battle land), add a detector to
+`DETECTORS` / `detectLand` instead; named rules win over detected ones.
+Test each rule with an exact scripted game (`playScriptedPlanGame`: hand,
+library top first, a starting battlefield; it reports `avail` — mana before
+casting — `mana`, `life`, the board, hand and graveyard) in
+`tests/models/plan.node.test.js` or, for a preset's cards,
+`tests/models/planPresets.node.test.js`.
+
+Plans are plain data (`js/utils/planSchema.js`): steps of `cast` (with
+`after`, `paid: n`, `copied`), `mana`, `package`, `spend` (n mana in one
+turn on spells from hand matching a group, X at the X paid) and `ramp` (end
+a turn able to make n mana next turn — the outcome, whatever card did
+it). A step with `info: true` is measured but neither pursued nor scored.
+Every addition keeps old share links (`gp=`) reading as they did.
+
+Presets — a plan that comes with its deck — are modules in
+`js/data/plans/<id>.js` (`id`, `title`, `deckUrl`, `commanders`, `plan`,
+`notes` — paragraphs, every number from the simulator — and `snapshot`, the
+deck in the importers' card-record shape) listed in
+`js/data/plans/index.js`, imported the first time they are used, so a
+preset's plan is exactly what a share link carries.
 
 ## Styling
 

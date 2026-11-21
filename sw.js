@@ -13,7 +13,7 @@
  * Bump CACHE_VERSION whenever shipped assets change.
  */
 
-const CACHE_VERSION = 'v33';
+const CACHE_VERSION = 'v34';
 const CACHE_NAME = `deck-oracle-${CACHE_VERSION}`;
 const IMAGE_CACHE = 'deck-oracle-images-v1';
 const IMAGE_CACHE_LIMIT = 160;
@@ -47,6 +47,7 @@ const STATIC_ASSETS = [
     'js/calculators/mulligan.js',
     'js/calculators/odds.js',
     'js/calculators/overview.js',
+    'js/calculators/plan.js',
     'js/calculators/portent.js',
     'js/calculators/rashmi.js',
     'js/calculators/surge.js',
@@ -58,6 +59,9 @@ const STATIC_ASSETS = [
     'js/data/cards.js',
     'js/data/glossary.js',
     'js/data/images.js',
+    'js/data/plans/doctor-whostoric.js',
+    'js/data/plans/index.js',
+    'js/data/plans/wild-splendor.js',
     'js/main.js',
     'js/shell/deckDialog.js',
     'js/shell/opponentBar.js',
@@ -108,6 +112,7 @@ const STATIC_ASSETS = [
     'js/utils/models/mara.js',
     'js/utils/models/mindsdilation.js',
     'js/utils/models/opponentLibrary.js',
+    'js/utils/models/plan.js',
     'js/utils/models/portent.js',
     'js/utils/models/rashmi.js',
     'js/utils/models/surge.js',
@@ -120,6 +125,9 @@ const STATIC_ASSETS = [
     'js/utils/opponentPages.js',
     'js/utils/opponentState.js',
     'js/utils/payback.js',
+    'js/utils/planEngine.js',
+    'js/utils/planRules.js',
+    'js/utils/planSchema.js',
     'js/utils/ramp.js',
     'js/utils/random.js',
     'js/utils/sampleSimulator.js',
@@ -145,6 +153,7 @@ const STATIC_ASSETS = [
     'js/views/mulligan.js',
     'js/views/odds.js',
     'js/views/overview.js',
+    'js/views/plan.js',
     'js/views/portent.js',
     'js/views/rashmi.js',
     'js/views/surge.js',

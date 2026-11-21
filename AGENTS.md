@@ -38,7 +38,8 @@ mtgcalcs/
 │   ├── views/<key>.js        # Page markup (template), scoped CSS (styles), guide
 │   ├── data/
 │   │   ├── cards.js        # Static card metadata for page headers (Scryfall snapshot)
-│   │   └── glossary.js     # Plain-language terms; term(), cardRef(), escapeHtml()
+│   │   ├── glossary.js     # Plain-language terms; term(), cardRef(), escapeHtml()
+│   │   └── plans/          # Game Plan presets: a plan, notes and the bundled deck (lazy)
 │   └── utils/
 │       ├── models/<key>.js     # Each page's pure maths (no DOM, no deck state); cardList.js, opponentLibrary.js
 │       ├── calculatorRegistry.js  # THE catalog: every page's name, group, question, loaders
@@ -62,6 +63,7 @@ mtgcalcs/
 │       ├── viz.js              # HTML charts: dot plots, heat strips, bullets, dumbbells
 │       ├── chartHelpers.js     # createOrUpdateChart (built after the answer paints), withAlpha, chart palette
 │       ├── turnOrder.js        # The shared play/draw control
+│       ├── planSchema.js / planEngine.js / planRules.js  # Game Plan: plan steps, the goldfish engine, per-card rules
 │       ├── bigSpells.js        # Big-spell page kit (X input, samples, sweep, shared CSS)
 │       ├── opponentPages.js    # createOpponentPage() for the multiplayer pages
 │       ├── opponentState.js    # Opponent decks: state and imports
@@ -84,7 +86,7 @@ mtgcalcs/
     ├── calculators/        # Page glue
     ├── utils/ performance/ # *.node.test.js (node:test)
     ├── fixtures/           # API-shaped deck-site responses, reference engines
-    ├── e2e/                # Playwright: app, cast, import, manadev, router, serviceWorker, share, performance (budgets)
+    ├── e2e/                # Playwright: app, cast, import, manadev, plan, router, serviceWorker, share, performance (budgets)
     └── visual/             # Playwright screenshot comparisons (Linux baselines made by CI)
 ```
 
@@ -296,6 +298,7 @@ import assert from 'node:assert';
 | `library.js` | The library, card typing, name keys | Every page that deals, reveals or counts cards |
 | `models/<key>.js` | A page's pure maths | Cross-page answers (e.g. "How it compares") |
 | `ramp.js` | The one ramp rule | Anything that counts or labels ramp |
+| `planRules.js` | Card rules for the Game Plan engine | A card whose mana or triggers depend on the board: one `defineCardRule` line |
 | `random.js` / `stats.js` / `text.js` | Seeded RNG and shuffle, percentiles, `pct()` / `plural()` | Monte Carlo, distributions, every percentage shown |
 | `hypergeometric.js` | Math functions | Probability calculations |
 | `share.js` | Share links | Pages declare `shareInputs` or share hooks |

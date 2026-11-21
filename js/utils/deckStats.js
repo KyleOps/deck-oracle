@@ -272,15 +272,18 @@ export function analyzeDeckStats(deck = {}, { format = FORMATS.commander, onPlay
     const tags = tagDeck(cards);
     const color = colorProfile(library, { commanderCards: commanderCardsOf(deck) });
 
+    // An X spell's mana value counts X as 0, but it only ramps once you pay
+    // for X (Kamahl's Druidic Vow at X=0 finds nothing), so it is never cheap.
+    const cheapCost = c => !/\{X\}/i.test(c.mana_cost ?? '') && (Number(c.cmc) || 0);
     const cheapAccel = cards.reduce((s, c) => {
         const t = tags.byCard[c.name] ?? [];
         // Karsten's coefficient is for CHEAP acceleration: rocks, dorks and
         // early ramp spells, plus card draw costing two or less.
-        const mv = Number(c.cmc) || 0;
-        return s + (((t.includes('ramp') && mv <= 3) || (t.includes('draw') && mv <= 2)) ? Number(c.count) : 0);
+        const mv = cheapCost(c);
+        return s + (mv !== false && ((t.includes('ramp') && mv <= 3) || (t.includes('draw') && mv <= 2)) ? Number(c.count) : 0);
     }, 0);
     const heavyRamp = cards.reduce((s, c) =>
-        s + ((tags.byCard[c.name] ?? []).includes('ramp') && (Number(c.cmc) || 0) > 3 ? Number(c.count) : 0), 0);
+        s + ((tags.byCard[c.name] ?? []).includes('ramp') && (cheapCost(c) === false || cheapCost(c) > 3) ? Number(c.count) : 0), 0);
     const landRec = recommendedLands({ format, averageMV: curve.average, cheapAccel });
     const odds = landOdds({ deckSize, lands, format, onPlay });
 

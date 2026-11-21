@@ -85,6 +85,14 @@ export const CALCULATORS = Object.freeze({
         method: 'simulation', keywords: ['ramp', 'mana rocks', 'dorks', 'acceleration', 'goldfish', 'commander', 'turn', 'fast mana', 'signets'],
         load: () => import('../calculators/manadev.js'), view: () => import('../views/manadev.js')
     },
+    plan: {
+        name: 'Game Plan', short: 'GP', group: 'deck', card: 'Long-Term Plans',
+        question: 'How often does this deck do what it’s built to do, on time?',
+        summary: 'Write the deck’s turn-by-turn plan — early mana, the commander, the payoff — and see how often goldfish games pull it off on time, where they fall off and why.',
+        method: 'simulation', keywords: ['plan', 'game plan', 'goldfish', 'curve', 'combo', 'on time', 'turn by turn', 'preset', 'selvala', 'doctor'],
+        charts: false,
+        load: () => import('../calculators/plan.js'), view: () => import('../views/plan.js')
+    },
     compare: {
         name: 'Compare Decks', short: 'CMP', group: 'deck', card: 'Clone',
         question: 'How do two decks — or two versions of one deck — differ?',

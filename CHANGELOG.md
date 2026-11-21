@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-11-21
+
+A Game Plan page that checks whether a deck does what it's built to do, on time, with two fully analysed presets, and a ramp rule that no longer overstates board-dependent mana.
+
+### Added
+- **Game Plan** (`?tab=plan`, Your deck) asks "How often does this deck do what it's built to do, on time?"
+  - **Writing a plan:** describe the deck's turn-by-turn plan as steps, for example a mana 2-drop on turn 2, the commander on turn 3, then 7+ mana of threats on turn 4.
+  - **The simulation:** 5,000 seeded goldfish games show how often the plan lands on time and one turn late. The page also shows:
+    - a step-by-step funnel
+    - why games miss (each counted once, at the first step it missed)
+    - an "out of 100" dot plot of mana on the key turn
+    - sample games
+  - **Steps can:** cast a card from a group (mana sources, ramp, the commander, named cards, historic spells, any type or mana value, "after X is out", "paying at least N", "and copied"), have N mana, cast a package, spend N mana on spells, or ramp for next turn. Any step can be measure-only.
+  - **Defaults and sharing:** a deck with no preset starts from a plan built from the deck. Plans round-trip through share links (`gp`, `gpdraw`, `gpkeep`).
+  - **Speed:** the answer appears after the first 500 games and refines to 5,000 without blocking the page (about 1.4 s at 4× slower CPU).
+- **Card rules for board-dependent cards.** The engine plays these exactly:
+  - **Mana from the board:**
+    - Selvala, Eager Trailblazer: one mana per different power, her Mercenary tokens counted, tapped last.
+    - The power-4 dorks: Fanatic of Rhonas, Whisperer of the Wilds, Raucous Audience, Ilysian Caryatid.
+    - Bloom Tender (per colour), Priest of Titania (per Elf).
+    - Badgermole Cub (an extra {G} per creature tapped for mana, plus its earthbent land).
+    - Jadzia Dax's growing main-phase mana.
+  - **Triggers:** Karametra's land on creature cast, and The Sixth Doctor's copy of the first historic spell each turn.
+  - **Lands and ramp:** shocks, battle lands, verges, hideaway, Yavimaya, MDFC land faces, X spells, convoke, cost reductions, extra land drops, and reveal-until-lands ramp.
+
+  The same wordings are detected on any other card; a card that needs its own rule is one `defineCardRule` line in `js/utils/planRules.js`.
+- **Two presets with their decks**, each with an "About this plan" analysis where every number comes from the simulator:
+  - **Wild Splendor — Selvala** (a mana 2-drop on turn 2, Selvala on turn 3, 7+ mana on spells with mana value 4+ on turn 4): 57% on time, 81% within a turn.
+  - **Doctor Whostoric — The Sixth Doctor + Susan** (Susan on turn 2, ramp on turn 3, the Doctor on turn 4, a copied historic threat on turn 5): 71% on time, 90% within a turn.
+  - The analysis covers which cards carry each step, the real bottlenecks, and single-card swaps measured over 20,000 games each.
+  - A matching deck is offered its plan, and "Try it on this deck" loads the preset's deck.
+
+### Fixed
+- **Ramp no longer overstates mana that depends on the board** (`js/utils/ramp.js`):
+  - Fanatic of Rhonas, Whisperer of the Wilds, Raucous Audience and Ilysian Caryatid count 1, not 4 or 2. Their labels say they make more beside a power-4 creature.
+  - Priest of Titania, Bloom Tender and Selvala count what they make on their own.
+  - Badgermole Cub is a creature-tap boost, not a land doubler.
+  - Arixmethes makes {G} and {U}, not two of either.
+- **Ramp the classifier missed is recognised:**
+  - Jadzia Dax's growing mana and Lt. Arex's lands from hand.
+  - U.S.S. Voyager and Open the Way (reveal until lands), and Reach the Horizon's "different names".
+  - Reshape the Earth, Omenpath Journey, Through the Forest Gate and Kamahl's Druidic Vow.
+  - Lumra, Silverback Elder, The Earth King and Kodama of the East Tree.
+- **An X spell is never cheap acceleration** in the overview's land estimate: its mana value counts X as 0, but Kamahl's Druidic Vow or Portent of Calamity only does something once X is paid.
+
+### Changed
+- **Mana Development plays the new readings exactly:**
+  - Jadzia's growing mana and one-of-each-colour sources.
+  - Different-name searches, reveal-until-lands and multi-land drops.
+  - Board-dependent dorks count their base, labelled "counted as 1".
+
+  On the example deck the Doctor now reads "turn 5 or 6".
+- **Ramp counts move** with the corrected rule: the example deck goes from 17 to 21 ramp pieces, and Draw Odds' ramp group from 17 to 21 cards.
+- **Performance budgets** add Game Plan (answer painted, 1,850 ms at 4× slower CPU).
+
 ## [3.2.0] - 2026-11-21
 
 Commanders handled properly (two commanders included), answers that arrive about a third sooner, and a codebase reorganised around pure, tested models.

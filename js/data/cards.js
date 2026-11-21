@@ -194,6 +194,15 @@ export const CARD_META = Object.freeze({
         "image": "https://cards.scryfall.io/normal/front/8/8/881f6340-865f-437c-983e-df39aad032ab.jpg",
         "artist": "Kev Walker"
     },
+    "Long-Term Plans": {
+        "name": "Long-Term Plans",
+        "cost": "{2}{U}",
+        "type": "Instant",
+        "text": "Search your library for a card, then shuffle and put that card third from the top.",
+        "art": "https://cards.scryfall.io/art_crop/front/7/e/7e0422d9-9694-45b6-9c2b-2ca31198cebf.jpg",
+        "image": "https://cards.scryfall.io/normal/front/7/e/7e0422d9-9694-45b6-9c2b-2ca31198cebf.jpg",
+        "artist": "Ben Thompson"
+    },
     "Cultivate": {
         "name": "Cultivate",
         "cost": "{2}{G}",
