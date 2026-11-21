@@ -259,14 +259,18 @@ function schedule(handle) {
  * has no size (its page was left before the build ran) stays waiting, and its
  * page re-renders — and so builds it — on its next visit.
  */
-export function flushPendingCharts() {
+function flushPendingCharts() {
     flushScheduled = false;
     if (!engine()) return; // chartEngineReady() flushes once Chart.js arrives
     for (const handle of [...pending]) {
         pending.delete(handle);
         if (handle.cancelled) continue;
         const canvas = document.getElementById(handle.canvasId);
-        if (!canvas) continue; // the page re-rendered without this chart
+        if (!canvas) { // the page re-rendered without this chart
+            destroyQuietly(handle.replaces);
+            handle.replaces = null;
+            continue;
+        }
         // Layout is clean here (a frame has just been drawn), so this is cheap.
         if (canvas.getBoundingClientRect().width === 0) {
             owesRender(pageOf(canvas));

@@ -177,6 +177,20 @@ describe('createOrUpdateChart', () => {
         assert.equal(createOrUpdateChart(rebuild, 'c7', config()), FakeChart.built[1], 'current again: updated in place');
     });
 
+    it('drops a rebuild whose canvas is gone, with the chart it was to replace', async () => {
+        canvas('c12');
+        const first = createOrUpdateChart(null, 'c12', config());
+        await paint();
+        const old = first.chart;
+        tokens = { ...tokens, '--tx-dim': '#4a5550' };
+        docListeners.themechange();
+        createOrUpdateChart(old, 'c12', config());
+        elements.delete('c12'); // the page re-rendered without its chart
+        await paint();
+        assert.equal(old.destroyed, true);
+        assert.equal(FakeChart.built.length, 1, 'nothing new built');
+    });
+
     it('does not rebuild charts when the palette did not change', async () => {
         canvas('c8');
         const handle = createOrUpdateChart(null, 'c8', config());
