@@ -19,6 +19,7 @@ import { GLOSSARY } from '../../js/data/glossary.js';
 import { FORMATS } from '../../js/utils/format.js';
 import { COLOR_BIT, mulberry32 } from '../../js/utils/handLab.js';
 import { DEFAULT_DECK_DATA } from '../../js/utils/defaultDeckData.js';
+import { budget } from '../helpers/timing.js';
 
 const CARDS = JSON.parse(readFileSync(new URL('../fixtures/ramp-cards.json', import.meta.url), 'utf8'));
 const GU = COLOR_BIT.G | COLOR_BIT.U;
@@ -420,7 +421,7 @@ describe('simulation', () => {
     it('plays 5,000 paired games quickly enough to slice', () => {
         const t0 = performance.now();
         MD.simulateManaDevelopment(lib, { format: EDH });
-        assert.ok(performance.now() - t0 < 3000);
+        assert.ok(performance.now() - t0 < budget(3000));
     });
 });
 
