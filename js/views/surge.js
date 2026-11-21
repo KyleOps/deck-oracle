@@ -35,8 +35,8 @@ export const template = `
         <div class="tx-h">
             <h2 class="bs-h" id="surge-dots-title">Out of 100 casts</h2>
             <div class="seg seg-sm" role="group" aria-label="Stack the casts by" id="surge-dots-view">
-                <button class="seg-btn active" type="button" data-surge-view="permanents" aria-pressed="true">Permanents</button>
-                <button class="seg-btn" type="button" data-surge-view="value" aria-pressed="false">Value</button>
+                <button class="seg-btn active" type="button" data-dots-view="permanents" aria-pressed="true">Permanents</button>
+                <button class="seg-btn" type="button" data-dots-view="value" aria-pressed="false">Value</button>
             </div>
         </div>
         <div id="surge-dots"></div>

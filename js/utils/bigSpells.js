@@ -1,26 +1,36 @@
 /**
- * Shared building blocks for the four "big spell" pages — Portent of Calamity,
- * Genesis Wave, Kamahl's Druidic Vow and Primal Surge.
+ * The big-spell kit — what the four "big spell" pages share: Portent of
+ * Calamity, Genesis Wave, Kamahl's Druidic Vow and Primal Surge.
  *
- * Two kinds of thing live here, none of which touches the DOM:
- *   - the sample shuffles and card-type labels the four pages share
+ *   - the sample shuffles and card-type labels
  *   - markup and CSS strings the four views render, so the pages look and
  *     behave as one family
+ *   - the X-spell page kit: the X control, the value-model inputs, the
+ *     deck → library read, the payback chart, sample casts that pay for
+ *     themselves or fall short, the every-X table, the dots switch and the
+ *     page wiring. Genesis Wave and the Vow are the same page around a
+ *     different model; Portent and Primal Surge use the parts that fit.
  *
  * The deck helpers (the card list, its size and cache key) live in
  * models/cardList.js and the exact maths in the models and hypergeometric.js,
  * so the models and the comparison never import this module.
  *
- * The exceptions are the "page helpers" (X control sync, preset chips) and
- * renderHowItCompares(); each is only ever called by the page that owns the
- * elements it touches. renderHowItCompares() lazy-loads the comparison so a
+ * Functions that touch the DOM ("page helpers", the kit and
+ * renderHowItCompares()) are only ever called by the page that owns the
+ * elements they touch. renderHowItCompares() lazy-loads the comparison so a
  * page's first paint never waits on the other three calculators.
  */
 
 import { shuffle } from './random.js';
 import { CARD_TYPES } from './library.js';
-import { pct } from './text.js';
+import { avg, pct, plural } from './text.js';
+import { createOrUpdateChart, TX_CHART, withAlpha } from './chartHelpers.js';
+import { renderBottomLine, renderSweepTable, pBarCell, toneColor, toneFor } from './components.js';
+import { scoreBattlefieldValue } from './payback.js';
+import * as DeckConfig from './deckConfig.js';
+import { cardListKey, deckCardList } from './models/cardList.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
+import { cardImageUrl, findCard } from '../data/images.js';
 
 // ── Card types ───────────────────────────────────────────────────────────────
 
@@ -209,6 +219,317 @@ export function bindXPresets(key, onPick) {
         const chip = event.target.closest?.('.bs-chip');
         if (chip) onPick(Number(chip.dataset.x));
     });
+}
+
+// ── X-spell page kit (only ever called by the page that owns the inputs) ────
+
+/** Set the X control (slider and box) to `x`; the page renders next. */
+export function setXInputs(key, x) {
+    const slider = byId(`${key}-xSlider`);
+    const input = byId(`${key}-xValue`);
+    if (slider) slider.value = x;
+    if (input) input.value = x;
+}
+
+/**
+ * A value-model input (credit per land, per permanent), clamped to 0–20, or
+ * the fallback when its page has not been mounted.
+ * @param {string} id
+ * @param {number} fallback
+ */
+export function readValueInput(id, fallback) {
+    const value = parseFloat(byId(id)?.value);
+    return Number.isFinite(value) ? Math.min(20, Math.max(0, value)) : fallback;
+}
+
+/**
+ * The deck as an X spell sees it: the card list without the copy being cast,
+ * the page's library model over it, how high X can go, the X chosen and a key
+ * that changes whenever the library does.
+ *
+ * @param {string} key - calculator key (its X control is `<key>-xValue`)
+ * @param {Object} deck - DeckConfig.getDeckConfig()
+ * @param {Object} opts
+ * @param {Object} opts.onStack - the model's ON_STACK (the card being cast)
+ * @param {(cards:Array, deck:Object) => Object} opts.build - the model's library builder
+ * @param {number} opts.maxX - the X control's own limit
+ * @param {number} opts.defaultX - X before the page is mounted
+ * @param {(library:Object) => number} [opts.size] - cards in the library (default `library.deckSize`)
+ * @param {(library:Object) => string} [opts.countsKey] - the key for a counts-only deck
+ * @returns {{cards:Array, library:Object, deckSize:number, maxX:number, x:number, deckKey:string}}
+ */
+export function readXSpell(key, deck, {
+    onStack, build, maxX: limit, defaultX,
+    size = library => library.deckSize,
+    countsKey = library => `counts:${library.entries.map(e => e.count).join(',')}`
+}) {
+    const cards = deckCardList(deck, onStack);
+    const library = build(cards, deck);
+    const deckSize = size(library);
+    const maxX = Math.max(1, Math.min(deckSize, limit));
+    const x = Math.min(maxX, readX(key, defaultX));
+    return { cards, library, deckSize, maxX, x, deckKey: cards.length ? cardListKey(cards) : countsKey(library) };
+}
+
+/**
+ * The page with nothing to show (an empty deck): a one-line answer and no dots.
+ * The page drops its own chart and cast.
+ * @param {string} key
+ * @param {string} html
+ */
+export function renderEmptyAnswer(key, html) {
+    const el = byId(`${key}-stats`);
+    if (el) el.innerHTML = renderBottomLine({ html, tone: 'flat' });
+    const dots = byId(`${key}-dots`);
+    if (dots) dots.innerHTML = '';
+}
+
+/**
+ * The big-spell chart: bars for what each X (or card count) puts into play,
+ * a line for the chance it pays for itself on the right axis (hidden for a
+ * counts-only deck, with the legend's `[data-payback-key]`), the current
+ * choice highlighted. With `onPick`, clicking a bar picks it.
+ *
+ * @param {Object|null} chart - the page's chart so far
+ * @param {string} key - calculator key (canvas `<key>-chart`)
+ * @param {Object} spec
+ * @param {number[]} spec.points - the x values (X, or a card count)
+ * @param {number} spec.current - the highlighted point
+ * @param {{label:string, data:number[]}} spec.bars
+ * @param {Array<number|null>|null} spec.payback - chance per point, in % (null: no line)
+ * @param {string} spec.xTitle
+ * @param {string} spec.yTitle
+ * @param {(point:number) => string} spec.title - tooltip title
+ * @param {(item:Object) => string} [spec.barLabel] - tooltip line for a bar
+ * @param {(point:number) => void} [spec.onPick]
+ * @returns {Object|null} the chart
+ */
+export function paybackChart(chart, key, { points, current, bars, payback, xTitle, yTitle, title, barLabel, onPick }) {
+    const hasPayback = Boolean(payback);
+    if (chart && chart.$hasPayback !== hasPayback) {
+        // Axis options are fixed at creation; rebuild when the right axis comes or goes.
+        chart.destroy();
+        chart = null;
+    }
+    const at = point => point === current;
+    const picking = onPick ? {
+        onClick: (event, elements) => {
+            const index = elements?.[0]?.index;
+            if (index != null) onPick(points[index]);
+        },
+        onHover: (event, elements) => {
+            const target = event?.native?.target;
+            if (target) target.style.cursor = elements?.length ? 'pointer' : 'default';
+        }
+    } : {};
+    chart = createOrUpdateChart(chart, `${key}-chart`, {
+        type: 'bar',
+        data: {
+            labels: points.map(String),
+            datasets: [
+                {
+                    label: bars.label,
+                    data: bars.data,
+                    backgroundColor: points.map(p => at(p) ? TX_CHART.amber : withAlpha(TX_CHART.blue, 0.45)),
+                    hoverBackgroundColor: points.map(p => at(p) ? TX_CHART.amber : withAlpha(TX_CHART.blue, 0.7)),
+                    borderRadius: 3,
+                    maxBarThickness: 34,
+                    yAxisID: 'y',
+                    order: 2
+                },
+                {
+                    label: 'Pays for itself',
+                    type: 'line',
+                    data: hasPayback ? payback : points.map(() => null),
+                    borderColor: TX_CHART.green,
+                    backgroundColor: TX_CHART.green,
+                    borderWidth: 2,
+                    tension: 0.3,
+                    pointRadius: points.map(p => at(p) ? 5 : 2),
+                    pointBackgroundColor: points.map(p => at(p) ? TX_CHART.green : TX_CHART.bg),
+                    pointBorderColor: TX_CHART.green,
+                    hidden: !hasPayback,
+                    yAxisID: 'y2',
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            ...picking,
+            scales: {
+                x: { title: { display: true, text: xTitle, color: TX_CHART.dim }, grid: { display: false } },
+                y: { beginAtZero: true, title: { display: true, text: yTitle, color: TX_CHART.dim } },
+                y2: {
+                    position: 'right', min: 0, max: 100,
+                    grid: { drawOnChartArea: false },
+                    ticks: { stepSize: 25, callback: v => `${v}%` },
+                    display: hasPayback
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        title: items => title(Number(items[0].label)),
+                        label: item => item.datasetIndex === 0
+                            ? (barLabel ? barLabel(item) : `${bars.label}: ${avg(item.parsed.y)}`)
+                            : `Pays for itself: ${pct(item.parsed.y / 100)}`
+                    }
+                }
+            }
+        }
+    });
+    if (chart) chart.$hasPayback = hasPayback;
+    if (typeof document !== 'undefined') {
+        document.querySelectorAll(`#${key}-tab [data-payback-key]`).forEach(el => { el.hidden = !hasPayback; });
+    }
+    return chart;
+}
+
+/**
+ * One sample cast of a spell that puts cards onto the battlefield: the first
+ * `maxRows` cards it looked at, "+ N more", and whether what it put into play
+ * paid for the mana spent.
+ *
+ * @param {Object} opts
+ * @param {number} opts.index - which shuffle (0-based)
+ * @param {Array} opts.rows - every card looked at (sampleCardHTML rows; `state: 'miss'` for the ones it skips)
+ * @param {number} opts.maxRows
+ * @param {string} opts.hitUnit - a hit, in "+ 4 more cards (2 permanents)"
+ * @param {{manaValue:number, lands:number, cards:number}} opts.put - what went onto the battlefield
+ * @param {Object} opts.settings - the value model (landValue, cardValue)
+ * @param {number} opts.threshold - the mana spent
+ * @param {string} opts.lead - the footer's start, e.g. "<strong>5 permanents</strong>"
+ */
+export function paybackSampleHTML({ index, rows, maxRows, hitUnit, put, settings, threshold, lead }) {
+    const scored = scoreBattlefieldValue(put, { ...settings, threshold });
+    const hidden = rows.slice(maxRows);
+    return sampleCardHTML({
+        title: `Shuffle ${index + 1}`,
+        tag: scored.paidForItself ? 'Pays for itself' : 'Falls short',
+        tone: scored.paidForItself ? 'good' : 'bad',
+        rows: rows.slice(0, maxRows),
+        more: hidden.length ? `+ ${plural(hidden.length, 'more card')} (${plural(hidden.filter(r => r.state !== 'miss').length, hitUnit)})` : '',
+        footer: `${lead} · value <strong>${avg(scored.effectiveValue)}</strong> of ${threshold} needed`
+    });
+}
+
+/**
+ * The "every X" table of an X spell that pays for itself: X, mana, the page's
+ * own columns, the change from one X less, the hit rate and the payback chance.
+ *
+ * @param {string} tableId
+ * @param {Object} opts
+ * @param {number} opts.x - the current X
+ * @param {number|null} opts.recommended - the X to mark as recommended
+ * @param {Object<number, Object>} opts.results - the sweep, by X (each with `mana` and `payback`)
+ * @param {number} opts.maxX
+ * @param {number} opts.tableMax - the table stops here
+ * @param {(r:Object) => number} opts.hits - average hits at one X
+ * @param {(r:Object) => number} opts.seen - cards looked at, at one X
+ * @param {Array} opts.columns - the page's own columns, after Mana
+ * @param {boolean} [opts.hasPayback=true]
+ */
+export function renderXSweep(tableId, { x, recommended, results, maxX, tableMax, hits, seen, columns, hasPayback = true }) {
+    const rows = [];
+    for (let i = 1; i <= Math.min(maxX, tableMax); i++) {
+        const r = results[i];
+        if (!r) continue;
+        rows.push({ x: i, r, delta: results[i - 1] ? hits(r) - hits(results[i - 1]) : null });
+    }
+    renderSweepTable(tableId, {
+        current: x,
+        recommended,
+        rows,
+        columns: [
+            { label: 'X', align: 'left', render: row => `${row.x}` },
+            { label: 'Mana', render: row => `${row.r.mana}` },
+            ...columns,
+            { label: 'Change', render: row => row.delta == null ? '—' : `+${avg(row.delta, 2)}` },
+            { label: 'Hit rate', align: 'left', render: row => pBarCell(seen(row.r) ? hits(row.r) / seen(row.r) : 0, 'var(--tx-flat)') },
+            {
+                label: 'Pays for itself',
+                render: row => hasPayback
+                    ? `<span style="color:${toneColor(toneFor(row.r.payback.paybackProbability))}">${pct(row.r.payback.paybackProbability)}</span>`
+                    : '—'
+            }
+        ]
+    });
+}
+
+/**
+ * The table behind a "value put into play" dot plot: the exact chance of
+ * falling short, of each of `bands` steps above the threshold, and of more.
+ * @param {Array<{value:number, p:number}>} pmf - exact value distribution
+ * @param {{threshold:number, step:number, bands:number, format?:(v:number) => string}} opts
+ */
+export function valueBandsTable(pmf, { threshold, step, bands, format = String }) {
+    const list = [{ lo: 0, hi: threshold, label: `Under ${format(threshold)} (falls short)` }];
+    for (let i = 0; i < bands; i++) {
+        const lo = threshold + i * step;
+        list.push({ lo, hi: lo + step, label: `${format(lo)} to under ${format(lo + step)}` });
+    }
+    const top = threshold + bands * step;
+    list.push({ lo: top, hi: Infinity, label: `${format(top)} or more` });
+    const chance = band => pmf.reduce((s, e) => s + (e.value >= band.lo - 1e-9 && e.value < band.hi - 1e-9 ? e.p : 0), 0);
+    return {
+        summary: 'Exact chances',
+        caption: 'Exact chance of each value range',
+        head: ['Value put into play', 'Chance'],
+        rows: list.filter(b => b.hi > b.lo).map(b => [escapeHtml(b.label), pct(chance(b))])
+    };
+}
+
+/** The dot plots' legend: casts that paid for themselves, and casts that fell short. */
+export const PAYBACK_LEGEND = Object.freeze([
+    { tone: 'good', label: 'paid for itself' },
+    { tone: 'bad', label: 'fell short' }
+]);
+
+/**
+ * The "Value / Permanents" switch over the dots (`#<key>-dots-view`, buttons
+ * `[data-dots-view]`): press the view shown, hide the switch without values.
+ */
+export function syncDotsView(key, view, hasValue) {
+    byId(`${key}-dots-view`)?.querySelectorAll?.('[data-dots-view]').forEach(btn => {
+        const on = btn.dataset.dotsView === view;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+    });
+    const toggle = byId(`${key}-dots-view`);
+    if (toggle) toggle.hidden = !hasValue;
+}
+
+/** A card's small image for the "Cast it" stage: the deck's own printing when it was imported. */
+export function castImage(name) {
+    const record = findCard(DeckConfig.getImportedCardData()?.cardsByName ?? {}, name);
+    return cardImageUrl(record ?? name, 'small');
+}
+
+/**
+ * Wire a big-spell page's controls; call from registerCalculator's init.
+ * @param {string} key
+ * @param {Object} handlers
+ * @param {Function} handlers.update - the debounced render
+ * @param {(x:number) => void} [handlers.setX] - preset chips
+ * @param {string[]} [handlers.values] - value-model input ids
+ * @param {Function} [handlers.reshuffle] - `<key>-reshuffle-btn`
+ * @param {Function} [handlers.cast] - `<key>-cast-btn` (focus returns to it when the cast closes)
+ * @param {(view:string) => void} [handlers.dotsView] - `<key>-dots-view` switch
+ */
+export function bindBigSpellControls(key, { update, setX, values = [], reshuffle, cast, dotsView }) {
+    if (setX) bindXPresets(key, setX);
+    values.forEach(id => byId(id)?.addEventListener('input', update));
+    if (reshuffle) byId(`${key}-reshuffle-btn`)?.addEventListener('click', reshuffle);
+    if (cast) {
+        byId(`${key}-cast-btn`)?.addEventListener('click', cast);
+        byId(`${key}-cast`)?.addEventListener('cast-closed', () => byId(`${key}-cast-btn`)?.focus({ preventScroll: true }));
+    }
+    if (dotsView) {
+        byId(`${key}-dots-view`)?.addEventListener('click', e => {
+            const view = e.target.closest?.('[data-dots-view]')?.dataset.dotsView;
+            if (view) dotsView(view);
+        });
+    }
 }
 
 // ── How it compares (lazy) ───────────────────────────────────────────────────

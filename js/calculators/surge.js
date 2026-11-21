@@ -5,18 +5,18 @@
  */
 
 import { formatNumber } from '../utils/simulation.js';
-import { createOrUpdateChart, TX_CHART, withAlpha } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats, toneColor, toneFor } from '../utils/components.js';
 import { describeDots, dotPlot } from '../utils/viz.js';
-import { escapeHtml } from '../data/glossary.js';
-import { cardImageUrl, findCard } from '../data/images.js';
 import { closeCast, playCast, syncCast } from '../utils/castAnimation.js';
 import { shuffle } from '../utils/random.js';
 import { isPermanent, libraryOf, sameCard } from '../utils/library.js';
 import { avg, pct, plural } from '../utils/text.js';
-import { createSampler, noticeHTML, renderHowItCompares, sampleCardHTML } from '../utils/bigSpells.js';
+import {
+    PAYBACK_LEGEND, bindBigSpellControls, castImage, createSampler, noticeHTML, paybackChart, renderEmptyAnswer,
+    renderHowItCompares, sampleCardHTML, syncDotsView, valueBandsTable
+} from '../utils/bigSpells.js';
 import { deckCardList, expandCards } from '../utils/models/cardList.js';
 import {
     ON_STACK, PRIMAL_SURGE, SURGE, cachedValuePmf, calculateSurgeRunValue, summarize, surgeCastPlan, surgeDots,
@@ -33,11 +33,6 @@ let chart = null;
 
 /** Which quantity the "out of 100 casts" dots are stacked by. */
 let dotView = 'permanents';
-
-const DOT_LEGEND = Object.freeze([
-    { tone: 'good', label: 'paid for itself' },
-    { tone: 'bad', label: 'fell short' }
-]);
 
 // ── Inputs ───────────────────────────────────────────────────────────────────
 
@@ -132,16 +127,9 @@ function renderDots(config, result) {
     if (!hasValue) dotView = 'permanents';
     const valuePmf = hasValue ? cachedValuePmf(config) : null;
     const dots = surgeDots({ permanents: config.permanents, stops: config.nonPermanents, table: result.table, valuePmf, threshold });
-    const legend = hasValue ? DOT_LEGEND : [];
+    const legend = hasValue ? PAYBACK_LEGEND : [];
     const byValue = dotView === 'value' && dots.value;
-
-    document.querySelectorAll('#surge-tab [data-surge-view]').forEach(btn => {
-        const on = btn.dataset.surgeView === dotView;
-        btn.classList.toggle('active', on);
-        btn.setAttribute('aria-pressed', String(on));
-    });
-    const toggle = document.getElementById('surge-dots-view');
-    if (toggle) toggle.hidden = !hasValue;
+    syncDotsView('surge', dotView, hasValue);
 
     const shown = byValue ? dots.value : dots.permanents;
     const format = byValue ? valueText : v => String(v);
@@ -150,19 +138,7 @@ function renderDots(config, result) {
 
     let table;
     if (byValue) {
-        const step = Math.max(SURGE.VALUE_STEP, threshold);
-        const bands = [{ lo: 0, hi: threshold, label: `Under ${valueText(threshold)} (falls short)` }];
-        for (let lo = threshold; lo < threshold + step * 4; lo += step) {
-            bands.push({ lo, hi: lo + step, label: `${valueText(lo)} to under ${valueText(lo + step)}` });
-        }
-        bands.push({ lo: threshold + step * 4, hi: Infinity, label: `${valueText(threshold + step * 4)} or more` });
-        const chance = band => valuePmf.reduce((s, e) => s + (e.value >= band.lo - 1e-9 && e.value < band.hi - 1e-9 ? e.p : 0), 0);
-        table = {
-            summary: 'Exact chances',
-            caption: 'Exact chance of each value range',
-            head: ['Value put into play', 'Chance'],
-            rows: bands.filter(b => b.hi > b.lo).map(b => [escapeHtml(b.label), pct(chance(b))])
-        };
+        table = valueBandsTable(valuePmf, { threshold, step: Math.max(SURGE.VALUE_STEP, threshold), bands: 4, format: valueText });
     } else {
         const runPmf = surgeRunPmf(config.permanents, config.nonPermanents);
         const rows = [];
@@ -209,68 +185,18 @@ function renderChart(config, result) {
     const lo = Math.max(0, stops - 10);
     const hi = stops + 6;
     const counts = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-    const hasPayback = Boolean(result.table);
-    if (chart && chart.$hasPayback !== hasPayback) {
-        // Axis options are fixed at creation; rebuild when the right axis comes or goes.
-        chart.destroy();
-        chart = null;
-    }
-    chart = createOrUpdateChart(chart, 'surge-chart', {
-        type: 'bar',
-        data: {
-            labels: counts.map(String),
-            datasets: [
-                {
-                    label: 'Permanents',
-                    data: counts.map(s => +(config.permanents / (s + 1)).toFixed(2)),
-                    backgroundColor: counts.map(s => s === stops ? TX_CHART.amber : withAlpha(TX_CHART.blue, 0.45)),
-                    hoverBackgroundColor: counts.map(s => s === stops ? TX_CHART.amber : withAlpha(TX_CHART.blue, 0.7)),
-                    borderRadius: 3,
-                    maxBarThickness: 34,
-                    yAxisID: 'y',
-                    order: 2
-                },
-                {
-                    label: 'Pays for itself',
-                    type: 'line',
-                    data: counts.map(s => hasPayback ? +(surgePaybackFor(result.table, s).paybackProbability * 100).toFixed(1) : null),
-                    borderColor: TX_CHART.green,
-                    backgroundColor: TX_CHART.green,
-                    borderWidth: 2,
-                    tension: 0.3,
-                    pointRadius: counts.map(s => s === stops ? 5 : 2),
-                    pointBackgroundColor: counts.map(s => s === stops ? TX_CHART.green : TX_CHART.bg),
-                    pointBorderColor: TX_CHART.green,
-                    hidden: !hasPayback,
-                    yAxisID: 'y2',
-                    order: 1
-                }
-            ]
-        },
-        options: {
-            scales: {
-                x: { title: { display: true, text: 'Instants and sorceries in your library', color: TX_CHART.dim }, grid: { display: false } },
-                y: { beginAtZero: true, title: { display: true, text: 'Permanents', color: TX_CHART.dim } },
-                y2: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: { stepSize: 25, callback: v => `${v}%` }, display: hasPayback }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        title: items => {
-                            const s = Number(items[0].label);
-                            const diff = s - stops;
-                            return `${plural(s, 'instant or sorcery', 'instants and sorceries')}${diff === 0 ? ' (your deck)' : ` (${diff > 0 ? '+' : '−'}${Math.abs(diff)})`}`;
-                        },
-                        label: item => item.datasetIndex === 0
-                            ? `Permanents: ${avg(item.parsed.y)}`
-                            : `Pays for itself: ${pct(item.parsed.y / 100)}`
-                    }
-                }
-            }
+    chart = paybackChart(chart, 'surge', {
+        points: counts,
+        current: stops,
+        bars: { label: 'Permanents', data: counts.map(s => +(config.permanents / (s + 1)).toFixed(2)) },
+        payback: result.table ? counts.map(s => +(surgePaybackFor(result.table, s).paybackProbability * 100).toFixed(1)) : null,
+        xTitle: 'Instants and sorceries in your library',
+        yTitle: 'Permanents',
+        title: s => {
+            const diff = s - stops;
+            return `${plural(s, 'instant or sorcery', 'instants and sorceries')}${diff === 0 ? ' (your deck)' : ` (${diff > 0 ? '+' : '−'}${Math.abs(diff)})`}`;
         }
     });
-    if (chart) chart.$hasPayback = hasPayback;
-    document.querySelectorAll('#surge-tab [data-payback-key]').forEach(key => { key.hidden = !hasPayback; });
 }
 
 function renderSamples(config) {
@@ -328,11 +254,6 @@ function libraryCards(cards) {
     return expandCards(cards);
 }
 
-function imageFor(name) {
-    const record = findCard(DeckConfig.getImportedCardData()?.cardsByName ?? {}, name);
-    return cardImageUrl(record ?? name, 'small');
-}
-
 /** What a cast depends on: a different deck or setting closes an open cast. */
 const castKey = config => `${config.deckKey}|${JSON.stringify(config.settings)}`;
 
@@ -344,16 +265,13 @@ function castIt() {
     const library = libraryCards(config.cards);
     shuffle(library);
     const plan = surgeCastPlan(library, config.settings);
-    playCast(stage, { ...plan, outLabel: 'Stopped by', librarySize: library.length, imageFor, key: castKey(config) }, castIt);
+    playCast(stage, { ...plan, outLabel: 'Stopped by', librarySize: library.length, imageFor: castImage, key: castKey(config) }, castIt);
 }
 
 export function updateUI() {
     const { config, result } = calculate();
     if (!result) {
-        const el = document.getElementById('surge-stats');
-        if (el) el.innerHTML = renderBottomLine({ html: 'Add cards to your deck to see how far Primal Surge gets.', tone: 'flat' });
-        const dots = document.getElementById('surge-dots');
-        if (dots) dots.innerHTML = '';
+        renderEmptyAnswer('surge', 'Add cards to your deck to see how far Primal Surge gets.');
         closeCast(document.getElementById('surge-cast'));
         chart?.destroy?.();
         chart = null;
@@ -371,25 +289,20 @@ export function init() {
         name: 'surge',
         calculate,
         updateUI,
-        init: debouncedUpdate => {
-            ['surge-payback-threshold', 'surge-land-value', 'surge-card-value'].forEach(id => {
-                document.getElementById(id)?.addEventListener('input', debouncedUpdate);
-            });
-            document.getElementById('surge-reshuffle-btn')?.addEventListener('click', () => {
+        init: debouncedUpdate => bindBigSpellControls('surge', {
+            update: debouncedUpdate,
+            values: ['surge-payback-threshold', 'surge-land-value', 'surge-card-value'],
+            reshuffle: () => {
                 sampler.reshuffle();
                 renderSamples(readInputs());
-            });
-            document.getElementById('surge-cast-btn')?.addEventListener('click', castIt);
-            document.getElementById('surge-cast')?.addEventListener('cast-closed', () => {
-                document.getElementById('surge-cast-btn')?.focus({ preventScroll: true });
-            });
-            document.getElementById('surge-dots-view')?.addEventListener('click', e => {
-                const view = e.target.closest('[data-surge-view]')?.dataset.surgeView;
-                if (!view || view === dotView) return;
+            },
+            cast: castIt,
+            dotsView: view => {
+                if (view === dotView) return;
                 dotView = view;
                 const { config, result } = calculate();
                 if (result) renderDots(config, result);
-            });
-        }
+            }
+        })
     });
 }

@@ -12,10 +12,10 @@ import { cardRef } from '../data/glossary.js';
 import { CARD_TYPES } from '../utils/library.js';
 import { avg, pct, plural, points, pointsShort } from '../utils/text.js';
 import {
-    barsHTML, createSampler, noticeHTML, renderHowItCompares, sampleCardHTML, typeLabel,
-    syncXControl, bindXPresets, readX
+    barsHTML, bindBigSpellControls, createSampler, noticeHTML, readXSpell, renderEmptyAnswer, renderHowItCompares,
+    sampleCardHTML, setXInputs, syncXControl, typeLabel
 } from '../utils/bigSpells.js';
-import { cardListKey, deckCardList, expandCards } from '../utils/models/cardList.js';
+import { expandCards } from '../utils/models/cardList.js';
 import {
     ON_STACK, PORTENT, analyze, buildTypeMasks, masksKey, portentResults, resolvePortent, summarize, typeCounts
 } from '../utils/models/portent.js';
@@ -36,14 +36,11 @@ let chart = null;
  * input when its page is mounted; falls back to the default otherwise.
  */
 export function readInputs() {
-    const deck = DeckConfig.getDeckConfig();
-    const cards = deckCardList(deck, ON_STACK);
-    const masks = buildTypeMasks(cards, deck);
-    const deckSize = masks.length;
-    const maxX = Math.max(1, Math.min(deckSize, PORTENT.MAX_X));
-    const x = Math.min(maxX, readX('portent', CONFIG.DEFAULT_X));
-    const types = typeCounts(masks);
-    return { deckSize, x, maxX, types, cards, masks, deckKey: cards.length ? cardListKey(cards) : masksKey(masks) };
+    const { cards, library: masks, deckSize, maxX, x, deckKey } = readXSpell('portent', DeckConfig.getDeckConfig(), {
+        onStack: ON_STACK, build: buildTypeMasks, maxX: PORTENT.MAX_X, defaultX: CONFIG.DEFAULT_X,
+        size: list => list.length, countsKey: masksKey
+    });
+    return { deckSize, x, maxX, types: typeCounts(masks), cards, masks, deckKey };
 }
 
 /**
@@ -250,10 +247,7 @@ function renderDetails(config, results, a) {
 
 /** Set X from a preset chip or a chart click. */
 function setX(x) {
-    const slider = document.getElementById('portent-xSlider');
-    const input = document.getElementById('portent-xValue');
-    if (slider) slider.value = x;
-    if (input) input.value = x;
+    setXInputs('portent', x);
     updateUI();
 }
 
@@ -264,8 +258,7 @@ export function updateUI() {
     renderTypeMix(config);
 
     if (config.deckSize === 0 || !results[config.x]) {
-        const el = document.getElementById('portent-stats');
-        if (el) el.innerHTML = renderBottomLine({ html: 'Add cards to your deck to see how Portent performs.', tone: 'flat' });
+        renderEmptyAnswer('portent', 'Add cards to your deck to see how Portent performs.');
         chart?.destroy?.();
         chart = null;
         return;
@@ -286,12 +279,13 @@ export function init() {
         calculate,
         updateUI,
         inputs: ['x'],
-        init: () => {
-            bindXPresets('portent', setX);
-            document.getElementById('portent-reshuffle-btn')?.addEventListener('click', () => {
+        init: debouncedUpdate => bindBigSpellControls('portent', {
+            update: debouncedUpdate,
+            setX,
+            reshuffle: () => {
                 sampler.reshuffle();
                 renderSamples(readInputs());
-            });
-        }
+            }
+        })
     });
 }

@@ -34,8 +34,8 @@ export const template = `
         <div class="tx-h">
             <h2 class="bs-h" id="wave-dots-title">Out of 100 casts</h2>
             <div class="seg seg-sm" role="group" aria-label="Stack the casts by" id="wave-dots-view">
-                <button class="seg-btn active" type="button" data-wave-view="value" aria-pressed="true">Value</button>
-                <button class="seg-btn" type="button" data-wave-view="permanents" aria-pressed="false">Permanents</button>
+                <button class="seg-btn active" type="button" data-dots-view="value" aria-pressed="true">Value</button>
+                <button class="seg-btn" type="button" data-dots-view="permanents" aria-pressed="false">Permanents</button>
             </div>
         </div>
         <div id="wave-dots"></div>
