@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-11-21
+
+A new Mana Development page, answer-first visuals across eight pages, and CI gates that keep it fast and correct.
+
 ### Added
 - **Mana Development** (`?tab=manadev`, Your deck) — "How fast does this deck's mana come online?" for any deck. 5,000 seeded goldfish games (London mulligan with the Opening Hands keep rule, format-aware draws and free mulligan, on the play/draw for 60- and 40-card decks) report mana by turn as percentiles (a p10–p90 / p25–p75 fan chart with the typical game), the chance to have each amount of mana by each turn, the turn you can first cast your commander — mana value *and* colours — or, without one, your top end, and how many turns your ramp saves: every shuffle is replayed with each ramp card blank, so the saving is measured game by game. A ramp table shows what the model reads each card as and how often it's in hand and cast by turns 3 and 4; sample games show the turns land by land. Runs in ~10 ms slices so the page never blocks (≈90–110 ms of work in Chromium), cached per deck and setting. Listed with the deck tools on the overview.
 - **Ramp classifier** (`js/utils/manaDevelopment.js`) — reads rules text for mana rocks and dorks (amount, colours, activation cost, enters tapped or summoning sick), mana auras, planeswalker mana, land searches (how many, tapped or untapped, battlefield or hand, basic/typed/any, extra activation cost), extra land drops and playing lands from the top. Rituals, mana that doesn't untap, cost reducers, mana doublers and triggered Treasure are recognised and labelled "not counted"; spell Treasure is counted only with the "Count Treasure as ramp" setting. Lands are read for tapped/shock/fast/slow/check/"two or more opponents" entry and karoo bounce. Tested against 70 cards' real oracle text.
