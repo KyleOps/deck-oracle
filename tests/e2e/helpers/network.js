@@ -63,7 +63,8 @@ export async function isolateNetwork(page, { fonts = true } = {}) {
             return route.fulfill({ body: mirrored, contentType: 'application/javascript', headers: OPEN_HEADERS });
         }
         if (url.startsWith('https://cdn.jsdelivr.net/')) return route.continue();
-        if (hostname.endsWith('scryfall.io') || route.request().resourceType() === 'image') {
+        const scryfall = hostname === 'scryfall.io' || hostname.endsWith('.scryfall.io');
+        if (scryfall || route.request().resourceType() === 'image') {
             return route.fulfill({ body: PIXEL, contentType: 'image/png', headers: OPEN_HEADERS });
         }
         if (hostname === 'fonts.googleapis.com' || hostname === 'fonts.gstatic.com') {
