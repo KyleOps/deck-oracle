@@ -28,6 +28,18 @@ export const template = `
 
     <section class="panel bs-answer" id="wave-stats" aria-label="Answer"></section>
 
+    <section class="panel" aria-labelledby="wave-dots-title">
+        <div class="tx-h">
+            <h2 class="bs-h" id="wave-dots-title">Out of 100 casts</h2>
+            <div class="seg seg-sm" role="group" aria-label="Stack the casts by" id="wave-dots-view">
+                <button class="seg-btn active" type="button" data-wave-view="value" aria-pressed="true">Value</button>
+                <button class="seg-btn" type="button" data-wave-view="permanents" aria-pressed="false">Permanents</button>
+            </div>
+        </div>
+        <div id="wave-dots"></div>
+        <p class="bs-caption" id="wave-dots-caption"></p>
+    </section>
+
     <section class="panel" aria-labelledby="wave-chart-title">
         <div class="tx-h">
             <h2 class="bs-h" id="wave-chart-title">What each X gets you</h2>
@@ -67,10 +79,6 @@ export const template = `
                 <div class="bs-table-wrap" id="wave-comparisonTable"></div>
             </div>
         </details>
-        <details class="tx-collapse">
-            <summary class="tx-collapse-head">How many permanents <span class="bs-sub" id="wave-dist-sub"></span></summary>
-            <div class="tx-collapse-body" id="wave-dist"></div>
-        </details>
     </section>
 </div>
 `;
@@ -82,11 +90,12 @@ export const guide = {
     howToRead: [
         '<strong>Pays for itself</strong> is the chance the value put into play reaches the mana spent. Value is each permanent’s mana value plus the land and per-permanent credits you set on the left.',
         '<strong>Permanents</strong> is the average number put onto the battlefield, with the range 8 casts in 10 fall inside.',
+        '<strong>Out of 100 casts</strong> shows the whole spread at your X: each dot is one cast in a hundred, stacked by the value it puts into play (or by permanents). Solid dots paid for themselves, rings fell short — count them. Hover a column, or open “Exact chances”, for the numbers.',
         'The <strong>chart</strong> shows both at every X: bars for permanents, the line for payback. Click a bar to try that X.',
         '<strong>Sample casts</strong> are real shuffles of your list resolved at your X.',
         '<strong>How it compares</strong> puts Genesis Wave beside Kamahl’s Druidic Vow, Primal Surge and Portent of Calamity at the same total mana.'
     ],
-    method: 'Exact, no simulation. The number of hits among X cards is hypergeometric — drawing without replacement from your real counts of permanents at each mana value. The payback chance is an exact count over every possible set of X cards, scoring each with the value model in quarter-mana steps. Results are cached per deck and setting, so the slider is instant.',
+    method: 'Exact, no simulation. The number of hits among X cards is hypergeometric — drawing without replacement from your real counts of permanents at each mana value. The payback chance is an exact count over every possible set of X cards, scoring each with the value model in quarter-mana steps; the dot plot uses the same count over every total. Results are cached per deck and setting, so the slider is instant.',
     assumptions: [
         'Your library is the full decklist, shuffled — cards already drawn or played are not removed, and the Genesis Wave you are casting is not taken out.',
         'Every eligible permanent is put onto the battlefield (you never choose to leave one behind).',

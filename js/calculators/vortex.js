@@ -27,12 +27,13 @@ import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
-import { buildDeckFromCardData, renderDistributionChart } from '../utils/sampleSimulator.js';
+import { buildDeckFromCardData } from '../utils/sampleSimulator.js';
 import {
     DISCOVER_RUNS, isBigCreature, discoverForCreature, sampleDiscoverFrom,
-    simulateDiscoverChain, seededShuffle, mulberry32, hashSeed, withoutOne, foldTail
+    simulateDiscoverChain, seededShuffle, mulberry32, hashSeed, withoutOne
 } from '../utils/discover.js';
 import { cardRef, term, escapeHtml } from '../data/glossary.js';
+import { describeDots, dotPlot, pmfQuantiles } from '../utils/viz.js';
 
 /** Monstrous Vortex's own mana value — the bar a trigger is measured against. */
 export const VORTEX_COST = 4;
@@ -186,6 +187,20 @@ export function pointAt(analysis, mv) {
     if (rows.length === 0) return null;
     const clamped = Math.min(analysis.maxMV, Math.max(analysis.minMV, Math.round(Number(mv) || DEFAULT_MV)));
     return rows.find(r => r.mv === clamped) ?? rows[0];
+}
+
+/**
+ * "Out of 100 triggers": quantile dots of the free mana one trigger casts.
+ * Rings found nothing; solid green cast at least Vortex's own mana value;
+ * neutral dots cast something smaller.
+ * @param {number[]} manaDist - counts by free mana (discover summary)
+ * @returns {Array<{value:number, tone:'good'|'flat'|'bad'}>}
+ */
+export function vortexDots(manaDist) {
+    return pmfQuantiles(manaDist ?? [], 100).map(value => ({
+        value,
+        tone: value === 0 ? 'bad' : value >= VORTEX_COST ? 'good' : 'flat'
+    }));
 }
 
 /** "about 1 trigger in 8 chains…" — chain frequency in words. */
@@ -411,7 +426,54 @@ function renderSelected(analysis, point) {
             }
         ]);
     }
+    renderDots(point);
     updateChart(analysis, point);
+}
+
+const DOT_LEGEND = Object.freeze([
+    { tone: 'good', label: `cast ${VORTEX_COST}+ mana` },
+    { tone: 'flat', label: 'cast something smaller' },
+    { tone: 'bad', label: 'found nothing' }
+]);
+
+/** "Out of 100 triggers" for the selected mana value. */
+function renderDots(point) {
+    const el = document.getElementById('vortex-dots');
+    if (!el) return;
+    const s = point?.stats;
+    if (!s?.runs) {
+        el.innerHTML = '';
+        return;
+    }
+    const dots = vortexDots(s.manaDist);
+    const legend = DOT_LEGEND.filter(l => dots.some(d => d.tone === l.tone));
+    const rows = [];
+    let atLeast = 1;
+    (s.manaDist ?? []).forEach((n, mana) => {
+        const p = n / s.runs;
+        if (n > 0 && p >= 0.0005) rows.push([`${mana} mana`, pct(p), pct(atLeast)]);
+        atLeast -= p;
+    });
+    const spells = (s.chainDist ?? []).map((n, k) => (n / s.runs >= 0.005 ? `${k}${k === 1 ? ' spell' : ' spells'} ${pct(n / s.runs)}` : null)).filter(Boolean);
+    el.innerHTML = `
+        <div class="vx-dots-head"><span>Out of 100 triggers</span><span class="vx-dots-sub">free spells per trigger: ${spells.join(' · ')}</span></div>
+        ${dotPlot({
+            dots,
+            label: `Free mana from one discover ${point.mv} trigger, out of 100 triggers. ${describeDots(dots, { unit: 'trigger', format: v => `${v} mana`, legend })}`,
+            unit: 'trigger',
+            format: v => String(v),
+            xLabel: 'Free mana cast by one trigger (chains included)',
+            threshold: VORTEX_COST,
+            thresholdLabel: `${VORTEX_COST}+ = Vortex’s own cost`,
+            legend,
+            maxColumns: 30,
+            table: {
+                summary: `All ${s.runs.toLocaleString('en-US')} shuffles`,
+                caption: 'Share of simulated triggers by free mana',
+                head: ['Free mana', 'Triggers', 'At least this'],
+                rows
+            }
+        })}`;
 }
 
 /**
@@ -568,11 +630,9 @@ function renderSamples(library, analysis, point, config) {
 function renderDetails(library, analysis, point, config) {
     const poolEl = document.getElementById('vortex-pool');
     const poolSummary = document.getElementById('vortex-pool-summary');
-    const distEl = document.getElementById('vortex-dist');
-    const distSummary = document.getElementById('vortex-dist-summary');
 
     if (!point || !analysis.hasLibrary) {
-        [poolEl, distEl].forEach(e => { if (e) e.innerHTML = ''; });
+        if (poolEl) poolEl.innerHTML = '';
         renderSweepTable('vortex-comparisonTable', { rows: [], columns: [], emptyText: 'Import a decklist to fill this in.' });
         return;
     }
@@ -605,33 +665,7 @@ function renderDetails(library, analysis, point, config) {
             { label: 'Your creatures', align: 'left', render: r => (r.names.length ? r.names.map(n => cardRef(n)).join(', ') : '<span class="vx-dim">—</span>') }
         ]
     });
-
-    const s = point.stats;
-    if (distSummary) distSummary.textContent = `How one discover ${point.mv} trigger spreads out`;
-    if (distEl) {
-        distEl.innerHTML = `
-            <div class="vx-dist-grid">
-                <div>
-                    <div class="tx-sim-block-title">Free spells per trigger</div>
-                    ${foldedChart(s.chainDist, s.runs, (i, plus) => `${i}${plus} spell${i === 1 && !plus ? '' : 's'}`, i => (i >= 2 ? 'chain' : null))}
-                </div>
-                <div>
-                    <div class="tx-sim-block-title">Free mana per trigger</div>
-                    ${foldedChart(s.manaDist, s.runs, (i, plus) => `${i}${plus} mana`, i => (i === s.p95Mana ? 'good turn' : i === s.medianMana ? 'typical' : null))}
-                </div>
-            </div>`;
-    }
 }
-
-/**
- * A spread chart whose far tail is folded into one "N+" row, so its last row
- * is never the largest run seen — that is a sampled maximum by another name.
- */
-function foldedChart(dist, runs, label, marker) {
-    const { counts, cut, folded } = foldTail(dist);
-    return renderDistributionChart(counts, runs, i => label(i, folded && i === cut ? '+' : ''), marker, i => (i === 0 ? 'bad' : null));
-}
-
 
 /** Show or hide the evidence panels; without a deck only the answer remains. */
 function showPanels(ids, visible) {

@@ -33,6 +33,12 @@ export const template = `
         <div id="chimil-hero"></div>
     </section>
 
+    <section class="panel" aria-labelledby="chimil-dots-title">
+        <div class="tx-h"><h2 class="ch-h" id="chimil-dots-title">Out of 100 games</h2><span class="tx-h-r">2,000 simulated games</span></div>
+        <div id="chimil-dots"></div>
+        <p class="ch-caption">Each dot is one game in a hundred, stacked by the total mana of free spells Chimil cast. Solid dots earned back its own six mana; rings never did. Move the slider to see a shorter or longer game.</p>
+    </section>
+
     <section class="panel" aria-label="Free mana by end step">
         <div class="tx-h"><span>Free mana by end step</span><span class="tx-h-r" id="chimil-chart-meta"></span></div>
         <div class="chart-container ch-chart">
@@ -57,10 +63,6 @@ export const template = `
         <details class="tx-collapse">
             <summary class="tx-collapse-head">What one discover finds</summary>
             <div class="tx-collapse-body" id="chimil-distribution"></div>
-        </details>
-        <details class="tx-collapse">
-            <summary class="tx-collapse-head">Spread of whole games</summary>
-            <div class="tx-collapse-body" id="chimil-spread"></div>
         </details>
     </section>
 </div>
@@ -112,6 +114,7 @@ export const styles = `
     margin-bottom: 14px;
 }
 
+#chimil-tab .ch-h { margin: 0; font: inherit; color: inherit; letter-spacing: inherit; }
 #chimil-tab .ch-chart { height: 300px; }
 #chimil-tab .ch-caption {
     margin: 0;
@@ -219,6 +222,7 @@ export const guide = {
         '<strong>Over N end steps</strong> is the total in a typical simulated game; the range under it covers the middle half of games.',
         '<strong>Paid off by end step</strong> is when the typical game has cast at least six mana of free spells — Chimil’s own cost.',
         '<strong>Cheap hits</strong> are free spells of mana value 2 or less — the hits that feel like a waste off a six-mana artifact. They are amber in the sample games.',
+        '<strong>Out of 100 games</strong> shows the whole spread for your number of end steps: each dot is one game in a hundred, stacked by its total. Solid dots paid back Chimil’s six mana; rings did not. Hover a column for its share of games.',
         'In the chart, the line is the typical game and the shaded band holds 8 games in 10. Where the band clears the dashed line, Chimil has paid for itself in almost every game.'
     ],
     method: 'The per-end-step average is exact: in a random library the first eligible card is equally likely to be any eligible card, so its expected mana value is the average of all of them. Totals, ranges, payback and sample games come from 2,000 simulated games that shuffle your decklist and resolve discover end step by end step — the cast card leaves the library and the skipped cards go to the bottom in a random order, as printed. The games are simulated once per deck; moving the slider reads more or fewer end steps from the same games.',

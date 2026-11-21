@@ -17,6 +17,7 @@ import {
     simulateGame,
     summariseGames,
     cheatedDistribution,
+    chimilDots,
     AUTO_SIM_GAMES,
     MAX_TURNS,
     simulateGames,
@@ -462,6 +463,23 @@ describe('cheatedDistribution', () => {
     it('handles no games without throwing', () => {
         assert.deepStrictEqual(cheatedDistribution([]), []);
         assert.deepStrictEqual(cheatedDistribution(undefined), []);
+    });
+});
+
+describe('chimilDots (out of 100 games)', () => {
+    it('draws 100 dots, solid once a game repaid Chimil', () => {
+        const games = [
+            ...Array.from({ length: 30 }, () => simulateGame(lib([['One', 1, 10, false]]), 3)),
+            ...Array.from({ length: 70 }, () => simulateGame(lib([['Three', 3, 10, false]]), 3))
+        ];
+        const dots = chimilDots(games);
+        assert.strictEqual(dots.length, 100);
+        assert.strictEqual(dots.filter(d => d.tone === 'bad').length, 30, '3 mana never repays 6');
+        assert.ok(dots.every(d => (d.value >= CHIMIL_COST) === (d.tone === 'good')));
+    });
+
+    it('is empty without games', () => {
+        assert.deepStrictEqual(chimilDots([]), []);
     });
 });
 

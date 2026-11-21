@@ -97,6 +97,40 @@ export function sampleQuantiles(samples, n = 100) {
     });
 }
 
+/**
+ * Tone quantile dots that share a value by an exact share: e.g. of the 12 dots
+ * at "5 permanents", the share of 5-permanent casts that paid for themselves.
+ * The number of good dots is fixed (`goodTotal`, normally the count another
+ * view of the same casts shows) and handed out by largest remainder, so two
+ * views of one distribution always agree. Within a column misses sit at the
+ * bottom.
+ *
+ * @param {number[]} values - quantile dot values, ascending
+ * @param {(value:number) => number} goodShare - 0..1 for each distinct value
+ * @param {number} [goodTotal] - defaults to the rounded expected count
+ * @returns {Array<{value:number, tone:'good'|'bad'}>}
+ */
+export function splitDots(values, goodShare, goodTotal) {
+    const list = (values ?? []).filter(Number.isFinite);
+    const distinct = [...new Set(list)];
+    const per = distinct.map(v => list.filter(x => x === v).length);
+    const expected = distinct.map((v, i) => per[i] * clamp01(goodShare(v)));
+    const target = Math.min(list.length, Math.max(0, Math.round(Number.isFinite(goodTotal) ? goodTotal : expected.reduce((a, b) => a + b, 0))));
+    const good = allocate(expected, target).map((g, i) => Math.min(g, per[i]));
+    // A capped column can leave a dot over; hand it to the highest values.
+    let left = target - good.reduce((a, b) => a + b, 0);
+    for (let i = distinct.length - 1; left > 0 && i >= 0; i--) {
+        const add = Math.min(per[i] - good[i], left);
+        good[i] += add;
+        left -= add;
+    }
+    const dots = [];
+    distinct.forEach((v, i) => {
+        for (let j = 0; j < per[i]; j++) dots.push({ value: v, tone: j < per[i] - good[i] ? 'bad' : 'good' });
+    });
+    return dots;
+}
+
 /** A "nice" step at least `rough`: 1, 2, 2.5 or 5 × a power of ten. */
 export function niceStep(rough) {
     if (!(rough > 0)) return 1;
@@ -127,7 +161,11 @@ export function binDots(dots, { threshold = null, maxColumns = 30 } = {}) {
     let lo = Math.min(...values);
     let hi = Math.max(...values);
     const hasThreshold = Number.isFinite(threshold);
-    if (hasThreshold) {
+    // Stretch the axis to show a nearby threshold; one far from every dot
+    // would only add empty space (the legend still says "all 100 …").
+    const reach = 0.35 * Math.max(hi - lo, 1);
+    const showThreshold = hasThreshold && threshold >= lo - reach && threshold <= hi + reach;
+    if (showThreshold) {
         lo = Math.min(lo, threshold);
         hi = Math.max(hi, threshold);
     }
@@ -166,8 +204,23 @@ export function binDots(dots, { threshold = null, maxColumns = 30 } = {}) {
     for (const col of columns) {
         col.dots.sort((a, b) => a.value - b.value || TONE_RANK[toneOf(a.tone)] - TONE_RANK[toneOf(b.tone)]);
     }
-    const thresholdIndex = hasThreshold ? Math.round((threshold - origin) / width) : null;
+    const thresholdIndex = showThreshold ? Math.round((threshold - origin) / width) : null;
     return { discrete, width, origin, columns, thresholdIndex };
+}
+
+/**
+ * How many dots sit side by side in a column. A few wide columns with tall
+ * stacks (everything lands on 5, 6 or 7) would otherwise draw thin spikes of
+ * tiny dots; wrapping a stack into blocks keeps dots large and the plot short.
+ * Many narrow columns keep single stacks so the shape stays a dot plot.
+ * @param {number} tallest - dots in the fullest column
+ * @param {number} cols
+ * @returns {number}
+ */
+export function stackWidth(tallest, cols) {
+    const want = Math.ceil(Math.max(1, tallest) / 16);
+    const room = Math.max(1, Math.floor(64 / Math.max(1, cols)));
+    return Math.max(1, Math.min(want, room, 6));
 }
 
 /** Which tick positions to label so the axis never crowds (at most ~`max`). */
@@ -238,9 +291,13 @@ export function dotPlot(o = {}) {
     const total = dots.length;
     const bins = binDots(dots, { threshold: o.threshold ?? null, maxColumns: o.maxColumns ?? 30 });
     const cols = bins.columns.length;
-    const rows = Math.max(1, ...bins.columns.map(c => c.dots.length));
+    const tallest = Math.max(1, ...bins.columns.map(c => c.dots.length));
+    const per = stackWidth(tallest, cols);
+    const rows = Math.ceil(tallest / per);
 
-    const legend = (o.legend ?? []).map(l => ({ ...l, tone: toneOf(l.tone), n: dots.filter(d => toneOf(d.tone) === toneOf(l.tone)).length }));
+    const legend = (o.legend ?? [])
+        .map(l => ({ ...l, tone: toneOf(l.tone), n: dots.filter(d => toneOf(d.tone) === toneOf(l.tone)).length }))
+        .filter(l => l.n > 0);
     const legendLabel = tone => legend.find(l => l.tone === tone)?.label ?? tone;
     const rangeText = col => (bins.discrete ? format(col.start) : `${format(col.start)} to under ${format(col.end)}`);
     const tipFor = col => {
@@ -253,7 +310,7 @@ export function dotPlot(o = {}) {
     const columnsHtml = bins.columns.map(col => {
         if (col.dots.length === 0) return '<div class="viz-dots-col" aria-hidden="true"></div>';
         const marks = col.dots.map(d => `<span class="viz-dot is-${toneOf(d.tone)}"></span>`).join('');
-        return `<div class="viz-dots-col" data-tip="${attr(tipFor(col))}">${marks}</div>`;
+        return `<div class="viz-dots-col" data-tip="${attr(tipFor(col))}"><div class="viz-dots-stack">${marks}</div></div>`;
     }).join('');
 
     // Axis ticks: centred under whole-number columns, on the boundaries for bins.
@@ -264,7 +321,7 @@ export function dotPlot(o = {}) {
             if (col.start % every === 0 || cols <= 12) ticks.push({ left: ((i + 0.5) / cols) * 100, text: format(col.start) });
         });
     } else {
-        const every = tickEvery(cols + 1, 7);
+        const every = tickEvery(cols + 1, 10);
         const step = bins.width * every;
         const round = i => Math.abs((bins.origin + i * bins.width) / step - Math.round((bins.origin + i * bins.width) / step)) < 1e-9;
         const indices = Array.from({ length: cols + 1 }, (_, i) => i);
@@ -300,7 +357,7 @@ export function dotPlot(o = {}) {
         </ul>` : '';
 
     return `
-        <figure class="viz viz-dots" style="--cols:${cols};--rows:${rows}">
+        <figure class="viz viz-dots" style="--cols:${cols};--rows:${rows};--per:${per}">
             <div class="viz-dots-chart" role="img" aria-label="${attr(o.label ?? `${total} ${units}`)}">
                 ${lineLabelHtml ? `<div class="viz-dots-head">${lineLabelHtml}</div>` : ''}
                 <div class="viz-dots-plot">${columnsHtml}${lineHtml}</div>

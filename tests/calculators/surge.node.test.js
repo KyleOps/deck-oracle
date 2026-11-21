@@ -3,13 +3,15 @@ import assert from 'node:assert';
 import { assertClose } from '../node-test-helper.js';
 import {
     buildDeckExcludingSurge,
-    buildSurgeValueRanges,
     calculateSurgePayback,
     calculateSurgeRunValue,
     getDeckConfig,
     simulatePrimalSurge,
     summarize,
-    surgeRunOdds
+    surgeDots,
+    surgeRunOdds,
+    surgeRunPmf,
+    surgeValuePmf
 } from '../../js/calculators/surge.js';
 import * as DeckConfig from '../../js/utils/deckConfig.js';
 
@@ -133,19 +135,6 @@ describe('Primal Surge Calculator', () => {
             DeckConfig.updateDeck(original);
         }
     });
-
-    it('covers every sampled result with non-overlapping ranges split at the payback threshold', () => {
-        const values = [0, 4.9, 10, 10.25, 25, 999];
-        const ranges = buildSurgeValueRanges(values, 10.25);
-
-        assert.equal(ranges.reduce((sum, range) => sum + range.count, 0), values.length);
-        assert.equal(ranges.filter(range => !range.paidBack).reduce((sum, range) => sum + range.count, 0), 3);
-        assert.equal(ranges.filter(range => range.paidBack).reduce((sum, range) => sum + range.count, 0), 3);
-        assert.ok(ranges.filter(range => !range.paidBack).every(range => range.end <= 10.25));
-        assert.ok(ranges.filter(range => range.paidBack).every(range => range.start >= 10.25));
-        assert.equal(ranges.at(-1).count, 1, 'the long-tail result remains visible');
-        assert.ok(ranges.length <= 13, 'wide spreads should remain readable');
-    });
 });
 
 /** Every distinct ordering of a small library, each equally likely. */
@@ -193,6 +182,76 @@ describe('Primal Surge exact odds', () => {
         }
         const exact = calculateSurgePayback(permanents, 2, settings);
         assertClose(exact.paybackProbability, paid / all.length, 'subset-sum count agrees with enumeration');
+    });
+});
+
+describe('Primal Surge exact distributions (out of 100 casts)', () => {
+    const permanents = [
+        { key: 'a', cmc: 1, isLand: false, count: 1 },
+        { key: 'b', cmc: 2, isLand: false, count: 1 },
+        { key: 'c', cmc: 0, isLand: true, count: 1 }
+    ];
+    const settings = { threshold: 3, landValue: 1, cardValue: 0.5 };
+
+    it('gives the exact chance of each run length', () => {
+        const pmf = surgeRunPmf(3, 2);
+        assertClose(pmf.reduce((a, b) => a + b, 0), 1, 'sums to one');
+        assertClose(pmf[0], 2 / 5, 'first card stops it');
+        assertClose(pmf[3], 3 / 5 * 2 / 4 * 1 / 3, 'all three, then a stop');
+        assert.deepStrictEqual(surgeRunPmf(4, 0), [0, 0, 0, 0, 1], 'no stops: the whole library');
+    });
+
+    it('matches a brute-force count of every library order, value by value', () => {
+        const library = [...permanents, { key: 's', stop: true }, { key: 's', stop: true }];
+        const all = orderings(library);
+        const counts = new Map();
+        for (const order of all) {
+            let value = 0;
+            for (const card of order) {
+                if (card.stop) break;
+                value += card.cmc + settings.cardValue + (card.isLand ? settings.landValue : 0);
+            }
+            counts.set(value, (counts.get(value) ?? 0) + 1);
+        }
+        const pmf = surgeValuePmf(permanents, 2, settings);
+        assertClose(pmf.reduce((a, e) => a + e.p, 0), 1, 'sums to one');
+        for (const { value, p } of pmf) assertClose(p, (counts.get(value) ?? 0) / all.length, `value ${value}`);
+        const paid = pmf.filter(e => e.value >= settings.threshold).reduce((a, e) => a + e.p, 0);
+        assertClose(paid, calculateSurgePayback(permanents, 2, settings).paybackProbability, 'agrees with the payback chance');
+    });
+
+    it('draws 100 dots, and both views agree on how many paid for themselves', () => {
+        const cards = [
+            { cmc: 0, isLand: true, count: 30 },
+            { cmc: 2, isLand: false, count: 20 },
+            { cmc: 5, isLand: false, count: 10 }
+        ];
+        const s = { threshold: 10, landValue: 1, cardValue: 0.25 };
+        const payback = calculateSurgePayback(cards, 15, s).paybackProbability;
+        const valuePmf = surgeValuePmf(cards, 15, s);
+        // Short runs never pay, long ones always do (shape only; the page passes its real subset table).
+        const shortBySize = Array.from({ length: 61 }, (_, k) => (k < 3 ? 1 : k < 6 ? 0.5 : 0));
+        const dots = surgeDots({ permanents: 60, stops: 15, table: { shortBySize }, valuePmf, threshold: 10 });
+        assert.strictEqual(dots.permanents.length, 100);
+        assert.strictEqual(dots.value.length, 100);
+        const goodValue = dots.value.filter(d => d.tone === 'good').length;
+        assert.ok(Math.abs(goodValue - payback * 100) <= 1, `${goodValue} dots vs ${payback}`);
+        assert.ok(dots.value.every(d => (d.value >= 10) === (d.tone === 'good')), 'tone follows the target');
+        assert.strictEqual(dots.permanents.filter(d => d.tone === 'good').length, goodValue, 'same count in both views');
+    });
+
+    it('splits each run length by its own exact payback share', () => {
+        const table = { shortBySize: [1, 1, 0.5, 0, 0, 0, 0, 0, 0, 0, 0] };
+        const dots = surgeDots({ permanents: 10, stops: 5, table, valuePmf: null, threshold: 10 });
+        assert.strictEqual(dots.permanents.length, 100);
+        assert.ok(dots.permanents.filter(d => d.value < 2).every(d => d.tone === 'bad'), 'runs that never pay are rings');
+        assert.ok(dots.permanents.filter(d => d.value >= 3).every(d => d.tone === 'good'), 'runs that always pay are solid');
+        assert.strictEqual(dots.value, null);
+    });
+
+    it('shows neutral dots without mana values', () => {
+        const dots = surgeDots({ permanents: 10, stops: 5, table: null });
+        assert.ok(dots.permanents.every(d => d.tone === 'flat'));
     });
 });
 

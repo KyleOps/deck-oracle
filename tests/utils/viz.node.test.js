@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
-    allocate, pmfQuantiles, sampleQuantiles, niceStep, binDots, dotPlot, describeDots,
+    allocate, pmfQuantiles, sampleQuantiles, niceStep, binDots, dotPlot, describeDots, splitDots, stackWidth,
     heatStrip, heatLevel, bulletChart, dumbbell, vizTable
 } from '../../js/utils/viz.js';
 
@@ -97,10 +97,16 @@ describe('binDots', () => {
         assert.deepStrictEqual(bins.columns[0].dots.map(d => d.tone), ['bad', 'good', 'good']);
     });
 
-    it('extends the axis to show a threshold beyond every dot', () => {
-        const bins = binDots([{ value: 1 }, { value: 2 }], { threshold: 6 });
+    it('extends the axis to show a nearby threshold beyond every dot', () => {
+        const bins = binDots([1, 2, 3, 4, 5].map(value => ({ value })), { threshold: 6 });
         assert.strictEqual(bins.thresholdIndex, 5);
         assert.strictEqual(bins.columns.length, 6);
+    });
+
+    it('leaves out a threshold far from every dot rather than pad the axis', () => {
+        const bins = binDots([30, 35, 44].map(value => ({ value })), { threshold: 6 });
+        assert.strictEqual(bins.thresholdIndex, null);
+        assert.strictEqual(bins.columns[0].start, 30);
     });
 });
 
@@ -230,5 +236,30 @@ describe('vizTable', () => {
         assert.match(html, /<details class="viz-table">/);
         assert.match(html, /<th scope="row">1<\/th><td class="num">50%<\/td>/);
         assert.strictEqual(vizTable({ rows: [] }), '');
+    });
+});
+
+describe('splitDots', () => {
+    it('splits each value by its share and hits the requested total exactly', () => {
+        const values = [...Array(40).fill(1), ...Array(60).fill(5)];
+        const dots = splitDots(values, v => (v === 1 ? 0.25 : 1), 70);
+        assert.strictEqual(dots.length, 100);
+        assert.strictEqual(dots.filter(d => d.tone === 'good').length, 70);
+        assert.strictEqual(dots.filter(d => d.value === 1 && d.tone === 'good').length, 10);
+        assert.ok(dots.filter(d => d.value === 5).every(d => d.tone === 'good'));
+    });
+
+    it('never paints more good dots than a value has', () => {
+        const dots = splitDots([1, 1, 2], () => 1, 5);
+        assert.strictEqual(dots.filter(d => d.tone === 'good').length, 3);
+    });
+});
+
+describe('stackWidth', () => {
+    it('keeps single stacks for many columns and wraps tall stacks in few', () => {
+        assert.strictEqual(stackWidth(20, 33), 1);
+        assert.strictEqual(stackWidth(46, 8), 3);
+        assert.strictEqual(stackWidth(100, 1), 6);
+        assert.strictEqual(stackWidth(10, 2), 1);
     });
 });

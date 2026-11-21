@@ -1419,79 +1419,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .dist-bar.is-bad  { background: var(--tx-bad); }
 .dist-bar.is-warn { background: var(--tx-accent); }
 
-/* Surge's outcome ranges form one horizontal 100% band. The seam between
-   semantic colours is the payback boundary; each run belongs to one segment. */
-.surge-range-band {
-    display: flex;
-    height: 30px;
-    overflow: hidden;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-}
-
-.surge-range-segment {
-    min-width: 0;
-    flex-basis: 0;
-    border-right: 1px solid var(--tx-panel);
-}
-
-.surge-range-segment.is-whiff,
-.surge-range-item.is-whiff .surge-range-swatch { background: var(--tx-bad); }
-.surge-range-segment.is-paid,
-.surge-range-item.is-paid .surge-range-swatch { background: var(--tx-good); }
-.surge-range-segment:nth-child(even) { filter: brightness(0.78); }
-
-.surge-range-axis,
-.surge-range-totals {
-    display: flex;
-    justify-content: space-between;
-    font-feature-settings: 'tnum' 1;
-}
-
-.surge-range-totals {
-    margin: 10px 0 12px;
-    font-size: var(--t-xs);
-    font-weight: 600;
-}
-
-.surge-range-totals .is-whiff { color: var(--tx-bad); }
-.surge-range-totals .is-paid { color: var(--tx-good); }
-
-.surge-range-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 24px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.surge-range-item {
-    display: grid;
-    grid-template-columns: 8px minmax(0, 1fr) auto 48px;
-    gap: 8px;
-    align-items: center;
-    min-width: 0;
-    padding: 5px 0;
-    border-top: 1px solid var(--tx-rule);
-    font-size: var(--t-xs);
-    font-feature-settings: 'tnum' 1;
-}
-
-.surge-range-swatch { width: 8px; height: 8px; }
-.surge-range-label { color: var(--tx-text); }
-.surge-range-count { color: var(--tx-dim); }
-.surge-range-item strong { color: var(--tx-bright); text-align: right; }
-
-@container shell (max-width: 700px) {
-    .surge-range-list { grid-template-columns: minmax(0, 1fr); }
-}
-
-@container shell (max-width: 420px) {
-    .surge-range-item { grid-template-columns: 8px minmax(0, 1fr) 48px; }
-    .surge-range-count { display: none; }
-}
-
 /* Shared sample-simulation controls (used by every calculator via
    generateSampleRevealsHTML). */
 .tx-sim-controls {
@@ -2298,7 +2225,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .viz-dots-chart {
     /* One dot per 1% of outcomes. As wide as the columns allow, never so
        tall that a spiky distribution makes the panel huge. */
-    --dot: max(6px, min(16px, calc(100cqi / var(--cols)), calc(210px / var(--rows))));
+    --dot: max(5px, min(16px, calc(100cqi / (var(--cols) * var(--per, 1))), calc(210px / var(--rows))));
     position: relative;
 }
 .viz-dots-head { position: relative; height: 18px; }
@@ -2315,6 +2242,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
     align-items: center;
     min-width: 0;
     border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+}
+/* A stack fills from the bottom-left, `--per` dots to a row. */
+.viz-dots-stack {
+    display: flex;
+    flex-wrap: wrap-reverse;
+    align-content: flex-start;
+    width: calc(var(--per, 1) * var(--dot));
 }
 .viz-dots-col[data-tip] { cursor: default; }
 .viz-dots-col[data-tip]:hover { background: var(--tx-row-hi); }
