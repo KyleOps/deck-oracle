@@ -151,13 +151,24 @@ const DOUBLER = /whenever you tap (?:a|an) (?:land|permanent|creature|forest|[a-
  */
 export function classifyRamp(card, { identity = COLORS } = {}) {
     if (!card || typeof card !== 'object') return null;
+    // The card is read once, with no identity: "any colour" mana keeps only the
+    // colours it names plus `any`. Only those cards differ by deck, so only
+    // they get a copy per identity (their colours = named | the identity's).
+    let entry = memo.get(card);
+    if (!entry) {
+        const r = readRamp(card, 0);
+        entry = { base: r ? Object.freeze(r) : null, byIdentity: null };
+        memo.set(card, entry);
+    }
+    const base = entry.base;
+    if (!base || !base.any) return base;
     const idKey = Array.isArray(identity) ? identity.join('') : '';
-    let byIdentity = memo.get(card);
-    if (!byIdentity) memo.set(card, (byIdentity = new Map()));
-    if (byIdentity.has(idKey)) return byIdentity.get(idKey);
-    const r = readRamp(card, maskOf(identity));
-    const out = r ? Object.freeze(r) : null;
-    byIdentity.set(idKey, out);
+    entry.byIdentity ??= new Map();
+    let out = entry.byIdentity.get(idKey);
+    if (!out) {
+        out = Object.freeze({ ...base, mask: base.mask | maskOf(identity) });
+        entry.byIdentity.set(idKey, out);
+    }
     return out;
 }
 

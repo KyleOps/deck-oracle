@@ -496,12 +496,28 @@ function renderSamples(r, lib) {
         <p class="md-samples-foot">${games.length} of ${r.games.toLocaleString('en-US')} simulated games${reshuffles ? ', reshuffled' : ''}.</p>`;
 }
 
+let renderToken = 0;
+
+/** Run after the next paint (a task queued from requestAnimationFrame). */
+const afterPaint = fn => (typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame(() => setTimeout(fn, 0))
+    : setTimeout(fn, 0));
+
+/**
+ * The answer first, the evidence a frame later: the bottom line and hero
+ * paint without waiting for the chart, grid, ramp table and sample games,
+ * and no single task builds the whole page.
+ */
 function render(r, lib) {
+    const token = ++renderToken;
     renderSummary(r);
-    updateChart(r);
-    renderGrid(r);
-    renderRamp(r, lib);
-    renderSamples(r, lib);
+    afterPaint(() => {
+        if (token !== renderToken || !isCalculatorActive(NAME)) return;
+        updateChart(r);
+        renderGrid(r);
+        renderRamp(r, lib);
+        renderSamples(r, lib);
+    });
 }
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
