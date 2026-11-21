@@ -17,9 +17,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const read = file => readFileSync(path.join(root, file), 'utf8');
 const pkg = JSON.parse(read('package.json'));
 
+const vendor = read('js/shell/vendor.js');
 const pins = {
-    'chart.js': read('js/shell/vendor.js').match(/CHART_JS_URL = '[^']*\/chart\.js@(\d+\.\d+\.\d+)\//)?.[1],
-    'lz-string': read('index.html').match(/cdn\.jsdelivr\.net\/npm\/lz-string@(\d+\.\d+\.\d+)\//)?.[1]
+    'chart.js': vendor.match(/CHART_JS_URL = '[^']*\/chart\.js@(\d+\.\d+\.\d+)\//)?.[1],
+    'lz-string': vendor.match(/LZ_STRING_URL = '[^']*\/lz-string@(\d+\.\d+\.\d+)\//)?.[1]
 };
 
 describe('CDN scripts and their local copies', () => {

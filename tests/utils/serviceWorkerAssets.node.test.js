@@ -48,14 +48,20 @@ describe('service worker asset manifest', () => {
     });
 
     it('pre-caches the pinned external runtime scripts the app loads', () => {
-        const html = readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
         const vendor = readFileSync(path.join(projectRoot, 'js/shell/vendor.js'), 'utf8');
-        const chartUrl = vendor.match(/CHART_JS_URL = '([^']+)'/)?.[1];
-        assert.ok(chartUrl, 'vendor.js declares the Chart.js URL');
-        assert.match(chartUrl, /@\d+\.\d+\.\d+\//, 'Chart.js must be pinned to an exact version');
-        assert.ok(staticAssets.includes(chartUrl), 'pinned Chart.js is pre-cached');
-        const lz = html.match(/src="(https:\/\/cdn\.jsdelivr\.net\/npm\/lz-string[^"]+)"/)?.[1];
-        assert.ok(lz && staticAssets.includes(lz), 'LZ-String is pre-cached');
+        for (const [name, constant] of [['Chart.js', 'CHART_JS_URL'], ['LZ-String', 'LZ_STRING_URL']]) {
+            const url = vendor.match(new RegExp(`${constant} = '([^']+)'`))?.[1];
+            assert.ok(url, `vendor.js declares the ${name} URL`);
+            assert.match(url, /@\d+\.\d+\.\d+\//, `${name} must be pinned to an exact version`);
+            assert.ok(staticAssets.includes(url), `pinned ${name} is pre-cached`);
+        }
+    });
+
+    it('loads no third-party script before the app', () => {
+        const html = readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
+        // A classic deferred script ahead of js/main.js holds the app back
+        // until it has downloaded; vendor.js loads them on demand instead.
+        assert.deepEqual(html.match(/<script[^>]+src="https?:[^"]+"/g) ?? [], []);
     });
 
     it('preloads the whole startup import graph (npm run sw:manifest)', async () => {

@@ -27,10 +27,9 @@ import { CALCULATORS, DEFAULT_TAB } from '../js/utils/calculatorRegistry.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export const EXTERNAL_ASSETS = [
-    'https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js',
-    'https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js'
-];
+/** The pinned CDN scripts js/shell/vendor.js loads on demand (read, never retyped). */
+export const EXTERNAL_ASSETS = [...readFileSync(path.join(root, 'js/shell/vendor.js'), 'utf8')
+    .matchAll(/^const \w+_URL = '(https:\/\/[^']+)';$/gm)].map(m => m[1]);
 
 function walk(dir, ext) {
     return readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap(entry => {

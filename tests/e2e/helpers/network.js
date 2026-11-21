@@ -21,7 +21,7 @@ const read = file => readFileSync(path.join(root, file), 'utf8');
 
 /** The exact CDN URLs the app loads (read from the source, never retyped). */
 export const CHART_URL = read('js/shell/vendor.js').match(/CHART_JS_URL = '([^']+)'/)?.[1];
-export const LZ_URL = read('index.html').match(/src="(https:\/\/cdn\.jsdelivr\.net\/npm\/lz-string[^"]+)"/)?.[1];
+export const LZ_URL = read('js/shell/vendor.js').match(/LZ_STRING_URL = '([^']+)'/)?.[1];
 
 /** node_modules copy of a pinned CDN file, or null when the versions differ. */
 function localCopy(url, pkg, file) {

@@ -22,6 +22,7 @@ import { initPalette, openPalette } from './shell/palette.js';
 import { initDeckDialog, openDeckDialog, renderSavedDecks } from './shell/deckDialog.js';
 import { initOverlays, toast } from './shell/overlays.js';
 import { initTheme, toggleTheme } from './shell/theme.js';
+import { ensureLzString } from './shell/vendor.js';
 
 const EXAMPLE_OPPONENTS = [
     'https://moxfield.com/decks/NVsnEkQ3y02ATHYk6n1pTA',
@@ -105,6 +106,10 @@ function initOpponentsBar() {
 // ── Share ────────────────────────────────────────────────────────────────────
 
 async function copyShareLink() {
+    // Share links pack mulligan requirements with LZ-String. It is normally
+    // here already (loaded once the first page is up); only a very early
+    // click waits for it.
+    await ensureLzString();
     const url = Share.getShareUrl(currentTab());
     try {
         await navigator.clipboard.writeText(url);
@@ -243,11 +248,14 @@ async function init() {
     // wired here, before the awaits below, and still never compete with it.
     initServiceWorker();
     initPWAInstall();
+    afterFirstPage(ensureLzString);
 
     // Shared links: import the deck and apply page settings before the first
-    // render, so the landing state is the shared state.
+    // render, so the landing state is the shared state. Mulligan requirements
+    // are LZ-String-packed, so a link carrying them loads it first.
     const tab = tabFromUrl();
     if (window.location.search.length > 1) {
+        if (new URLSearchParams(window.location.search).has('mullTypes')) await ensureLzString();
         await Share.applyShareUrl({ ensureMounted });
     }
     await navigate(tab, { history: 'replace' });
