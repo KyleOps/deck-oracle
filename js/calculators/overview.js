@@ -161,7 +161,7 @@ function renderCurve(stats) {
     return `
         <div class="vbars ov-curve-bars" role="group" aria-label="Mana curve: ${buckets.map(b => `${b.total} at ${b.mv}`).join(', ')}. Pick a bar to list its cards.">
             ${cols}
-            <span class="vbars-marker" style="left:calc(${(avgPos * 7 + 0.5) / 8 * 100}% )" data-tip="Average mana value ${average.toFixed(2)}"><span>avg</span></span>
+            <span class="vbars-marker" style="left:calc(${(avgPos * 7 + 0.5) / 8 * 100}% )" data-tip="Average mana value ${average.toFixed(2)}" aria-hidden="true"></span>
         </div>
         <div class="legend">${present.map(t => `<span class="legend-item"><span class="legend-swatch" style="background:var(--type-${TYPE_VAR[t]})"></span>${TYPE_LABEL[t]}</span>`).join('')}</div>
         <div class="ov-curve-cards" id="ov-curve-cards" aria-live="polite">${curveCardsHtml(stats)}</div>

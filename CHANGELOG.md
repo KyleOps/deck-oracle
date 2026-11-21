@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Primal Surge's "How far it gets" milestone bars and its simulated "How big the wins and misses are" band are replaced by the exact dot plot; the page no longer simulates anything except the sample casts.
 - Genesis Wave's "How many permanents" bars, Chimil's "Spread of whole games", Vortex's "How one trigger spreads out" and Dream Harvest's per-opponent "Mana stolen" bars are replaced by the dot plots (Dream Harvest now shows the total across all opponents).
-- Draw Odds' "Turn by turn" table becomes the heat map; Deck Overview's "What the cards do" list moves under the deck profile; the mana curve's average marker is neutral ink, since the accent now marks the picked bar.
+- Draw Odds' "Turn by turn" table becomes the heat map; Deck Overview's "What the cards do" list moves under the deck profile; the mana curve's average marker is neutral ink, since the accent now marks the picked bar, and starts below the bar counts with its key in the card header (its "avg" label used to collide with the count of a tall bar).
 - The legacy outlined-button style no longer applies to `viz-*` components (as it already skipped `tx-*`).
 - `npm run check` runs lint, unit tests with coverage and the browser tests with budgets: everything CI runs except screenshots. `npm run test:perf` runs both Node benchmark files.
 - Security fixes for development-only dependencies (`follow-redirects`, `qs`; `npm audit fix`). The remaining `minimatch` advisory needs ESLint 10.15, which Dependabot's first npm PR brings.

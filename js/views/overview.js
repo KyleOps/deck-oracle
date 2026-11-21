@@ -21,7 +21,7 @@ export const template = `
         <section class="ov-card" aria-labelledby="ov-curve-title">
             <div class="ov-card-head">
                 <h3 class="ov-card-title" id="ov-curve-title">Mana curve</h3>
-                <span class="ov-card-meta" id="ov-curve-meta"></span>
+                <span class="ov-card-meta vbars-key" id="ov-curve-meta"></span>
             </div>
             <div id="ov-curve"></div>
         </section>
