@@ -482,6 +482,17 @@ export function bulletChart(o = {}) {
         </div>`;
 }
 
+/**
+ * Several bullet rows sharing one set of columns, so every track starts and
+ * ends at the same x and the rows read as one chart.
+ * @param {Array<Object>} rows - bulletChart() options
+ * @returns {string}
+ */
+export function bulletList(rows = []) {
+    if (!rows.length) return '';
+    return `<div class="viz-bullets"><div class="viz-bullets-grid">${rows.map(bulletChart).join('')}</div></div>`;
+}
+
 // ── Dumbbell ─────────────────────────────────────────────────────────────────
 
 /**

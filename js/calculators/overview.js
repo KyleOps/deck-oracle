@@ -18,6 +18,8 @@ import { CALCULATORS, getGroup } from '../utils/calculatorRegistry.js';
 import { CARD_META } from '../data/cards.js';
 import { escapeHtml, cardRef, term } from '../data/glossary.js';
 import { cardImageUrl, findCard } from '../data/images.js';
+import { curveCards, deckProfile } from '../utils/deckProfile.js';
+import { bulletList } from '../utils/viz.js';
 
 const NAME = 'overview';
 const TYPE_LABEL = {
@@ -33,6 +35,8 @@ const GENERIC_TOOLS = ['odds', 'manabase', 'manadev', 'hands', 'mulligan', 'land
 
 let onPlay = true;
 let debouncedUpdate = null;
+/** The mana-curve bar whose cards are listed (0…7), or null. */
+let curvePick = null;
 
 const pct = (p, digits = 0) => `${(p * 100).toFixed(digits)}%`;
 
@@ -140,25 +144,48 @@ function renderCurve(stats) {
     const types = ['creatures', 'planeswalkers', 'battles', 'artifacts', 'enchantments', 'instants', 'sorceries'];
     const present = types.filter(t => buckets.some(b => b.byType[t] > 0));
     const avgPos = Math.min(7, average) / 7;
+    if (curvePick != null && !(buckets[curvePick]?.total > 0)) curvePick = null;
 
-    const cols = buckets.map(b => {
+    const cols = buckets.map((b, i) => {
         const segs = present.filter(t => b.byType[t] > 0).map(t =>
             `<span class="bar-seg" style="flex:${b.byType[t]};background:var(--type-${TYPE_VAR[t]})" data-tip="${b.byType[t]} ${TYPE_LABEL[t].toLowerCase()} at ${b.mv}"></span>`).join('');
+        const label = `${b.total} ${b.total === 1 ? 'card' : 'cards'} at mana value ${b.mv}`;
         return `
-            <div class="vbar">
+            <button type="button" class="vbar viz-curve-bar" data-ov-mv="${i}" aria-pressed="${curvePick === i}" aria-controls="ov-curve-cards" aria-label="${label}"${b.total ? '' : ' disabled'}>
                 <span class="vbar-value">${b.total || ''}</span>
                 <span class="vbar-track"><span class="vbar-fill" style="height:${(b.total / max) * 100}%">${segs}</span></span>
                 <span class="vbar-label">${b.mv}</span>
-            </div>`;
+            </button>`;
     }).join('');
 
     return `
-        <div class="vbars" role="img" aria-label="Mana curve: ${buckets.map(b => `${b.total} at ${b.mv}`).join(', ')}">
+        <div class="vbars ov-curve-bars" role="group" aria-label="Mana curve: ${buckets.map(b => `${b.total} at ${b.mv}`).join(', ')}. Pick a bar to list its cards.">
             ${cols}
             <span class="vbars-marker" style="left:calc(${(avgPos * 7 + 0.5) / 8 * 100}% )" data-tip="Average mana value ${average.toFixed(2)}"><span>avg</span></span>
         </div>
         <div class="legend">${present.map(t => `<span class="legend-item"><span class="legend-swatch" style="background:var(--type-${TYPE_VAR[t]})"></span>${TYPE_LABEL[t]}</span>`).join('')}</div>
+        <div class="ov-curve-cards" id="ov-curve-cards" aria-live="polite">${curveCardsHtml(stats)}</div>
         <p class="ov-note">${nonlandCount} nonland cards · median mana value ${median}</p>`;
+}
+
+/** The cards behind the picked mana-curve bar, grouped by type, with previews. */
+function curveCardsHtml() {
+    if (curvePick == null) return '<p class="ov-curve-hint">Pick a bar to list its cards.</p>';
+    const { cardsByName } = DeckConfig.getDeckConfig();
+    const { total, groups } = curveCards(cardsByName, curvePick);
+    const mv = curvePick === 7 ? '7 or more' : String(curvePick);
+    return `
+        <div class="ov-curve-list">
+            <div class="ov-curve-list-head">
+                <strong>${total} ${total === 1 ? 'card' : 'cards'} at mana value ${mv}</strong>
+                <button type="button" class="btn btn-ghost btn-sm" data-ov-mv-close>Close</button>
+            </div>
+            ${groups.map(g => `
+                <div class="ov-curve-group">
+                    <span class="ov-curve-type"><span class="legend-swatch" style="background:var(--type-${TYPE_VAR[g.type] ?? 'artifact'})"></span>${escapeHtml(TYPE_LABEL[g.type] ?? 'Other')} <span class="ov-curve-n">${g.count}</span></span>
+                    <span class="ov-curve-names">${g.cards.map(c => `${cardRef(c.name)}${c.count > 1 ? `<span class="ov-curve-n">×${c.count}</span>` : ''}`).join('')}</span>
+                </div>`).join('')}
+        </div>`;
 }
 
 function renderHands(stats, format) {
@@ -220,12 +247,36 @@ function renderColors(stats) {
     return rows + colorless;
 }
 
+function renderProfile(stats, format) {
+    const rows = deckProfile(stats, format);
+    if (rows.length === 0) return '<p class="ov-empty">Import a decklist to see its profile.</p>';
+    const bullets = bulletList(rows.map(r => ({
+        label: escapeHtml(r.label),
+        value: r.value,
+        min: r.min,
+        max: r.max,
+        range: r.range,
+        format: r.format,
+        tone: r.tone,
+        status: r.status,
+        tip: r.tip,
+        rangeTip: r.rangeTip,
+        sub: r.card ? `${manaPip(r.color)} ${cardRef(r.card)}, turn ${r.turn}` : escapeHtml(r.sub ?? '')
+    })));
+    const commander = format?.key === 'commander';
+    return `
+        <p class="ov-profile-key"><span class="ov-profile-swatch" aria-hidden="true"></span><span class="term" tabindex="0" data-tip="The shaded band is where most ${commander ? 'Commander' : (format?.label ?? 'similar')} decks sit — a rule of thumb, not a rule. Hover a band for where it comes from.">Typical range</span>${commander ? '' : ' · role counts have no common guideline outside Commander'}</p>
+        ${bullets}
+        ${renderRoles(stats)}`;
+}
+
 function renderRoles(stats) {
     const entries = Object.entries(TAGS);
-    if (Object.keys(stats.tags.byCard).length === 0) {
-        return '<p class="ov-empty">Import a decklist to detect ramp, draw and removal.</p>';
-    }
-    return `<ul class="role-list">${entries.map(([key, meta]) => {
+    if (Object.keys(stats.tags.byCard).length === 0) return '';
+    return `
+        <details class="ov-roles">
+            <summary>Every role, with its cards</summary>
+            <ul class="role-list">${entries.map(([key, meta]) => {
         const count = stats.tags.counts[key] ?? 0;
         const members = stats.tags.members[key] ?? [];
         return `
@@ -238,7 +289,8 @@ function renderRoles(stats) {
                     ${members.length ? `<div class="role-members">${members.map(n => cardRef(n)).join('')}</div>` : '<p class="ov-note">None detected.</p>'}
                 </details>
             </li>`;
-    }).join('')}</ul>`;
+    }).join('')}</ul>
+        </details>`;
 }
 
 function toolCard(key, reason, tone) {
@@ -303,7 +355,7 @@ export function updateUI() {
     set('ov-hands', renderHands(stats, format));
     set('ov-hands-meta', `${pct(stats.odds.keepable)} keepable`);
     set('ov-colors', renderColors(stats));
-    set('ov-roles', renderRoles(stats));
+    set('ov-roles', renderProfile(stats, format));
     set('ov-tools', renderTools(config));
 
     const sub = document.getElementById('ov-health-sub');
@@ -322,6 +374,19 @@ export function init() {
         if (e.target.id === 'ov-format') DeckConfig.setFormatPreference(e.target.value);
     });
     root?.addEventListener('click', e => {
+        const bar = e.target.closest('[data-ov-mv]');
+        if (bar) {
+            const i = Number(bar.dataset.ovMv);
+            curvePick = curvePick === i ? null : i;
+            refreshCurve(i);
+            return;
+        }
+        if (e.target.closest('[data-ov-mv-close]')) {
+            const was = curvePick;
+            curvePick = null;
+            refreshCurve(was);
+            return;
+        }
         const play = e.target.closest('[data-ov-play]');
         if (play) {
             onPlay = play.dataset.ovPlay === '1';
@@ -332,7 +397,26 @@ export function init() {
             document.getElementById('deck-switcher')?.click();
         }
     });
+    // Arrow keys move between curve bars, like one control.
+    root?.addEventListener('keydown', e => {
+        const bar = e.target.closest?.('[data-ov-mv]');
+        if (!bar || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+        const bars = [...root.querySelectorAll('[data-ov-mv]:not([disabled])')];
+        const at = bars.indexOf(bar);
+        const next = e.key === 'Home' ? 0 : e.key === 'End' ? bars.length - 1
+            : Math.max(0, Math.min(bars.length - 1, at + (e.key === 'ArrowRight' ? 1 : -1)));
+        bars[next]?.focus();
+        e.preventDefault();
+    });
     ({ updateUI: debouncedUpdate } = registerCalculator({ name: NAME, calculate, updateUI }));
+}
+
+/** Re-render just the curve card, keeping focus on the bar that was used. */
+function refreshCurve(focusIndex) {
+    const { stats } = calculate();
+    const el = document.getElementById('ov-curve');
+    if (el) el.innerHTML = renderCurve(stats);
+    if (focusIndex != null) document.querySelector(`#ov-curve [data-ov-mv="${focusIndex}"]`)?.focus({ preventScroll: true });
 }
 
 /** For tests and share links. */

@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
     allocate, pmfQuantiles, sampleQuantiles, niceStep, binDots, dotPlot, describeDots, splitDots, stackWidth,
-    heatStrip, heatLevel, bulletChart, dumbbell, vizTable
+    heatStrip, heatLevel, bulletChart, bulletList, dumbbell, vizTable
 } from '../../js/utils/viz.js';
 
 const HEX = /#[0-9a-f]{3,8}\b/i;
@@ -261,5 +261,14 @@ describe('stackWidth', () => {
         assert.strictEqual(stackWidth(46, 8), 3);
         assert.strictEqual(stackWidth(100, 1), 6);
         assert.strictEqual(stackWidth(10, 2), 1);
+    });
+});
+
+describe('bulletList', () => {
+    it('puts every row in one shared grid so the tracks line up', () => {
+        const html = bulletList([{ label: 'A', value: 1, min: 0, max: 2 }, { label: 'B', value: 2, min: 0, max: 2 }]);
+        assert.match(html, /^<div class="viz-bullets"><div class="viz-bullets-grid">/);
+        assert.strictEqual(count(html, 'class="viz-bullet"'), 2);
+        assert.strictEqual(bulletList([]), '');
     });
 });

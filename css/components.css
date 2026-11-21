@@ -2391,10 +2391,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .viz-heat-cell[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--tx-accent); color: var(--tx-bright); font-weight: 650; }
 
 /* ---- Bullet rows ---- */
-.viz-bullets { display: grid; container-type: inline-size; }
+.viz-bullets { container-type: inline-size; }
+/* One column set for every row (subgrid), so the tracks line up. */
+.viz-bullets-grid { display: grid; grid-template-columns: minmax(84px, max-content) minmax(0, 1fr) max-content; column-gap: 14px; }
 .viz-bullet {
     display: grid;
-    grid-template-columns: minmax(92px, 0.8fr) minmax(0, 2fr) minmax(84px, auto);
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
     gap: 3px 14px;
     align-items: center;
     padding: 9px 0;
@@ -2442,7 +2445,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .viz-bullet-status.tone-bad  { color: var(--tx-bad); }
 .viz-bullet-sub { grid-column: 2 / -1; font-size: var(--t-label); line-height: 1.45; color: var(--tx-dim); }
 @container (max-width: 420px) {
-    .viz-bullet { grid-template-columns: minmax(0, 1fr) auto; }
+    .viz-bullets-grid { grid-template-columns: minmax(0, 1fr) auto; }
     .viz-bullet-track { grid-column: 1 / -1; grid-row: 2; }
     .viz-bullet-value { grid-row: 1; grid-column: 2; display: flex; gap: 8px; align-items: baseline; }
     .viz-bullet-sub { grid-column: 1 / -1; }

@@ -80,6 +80,7 @@ const STATIC_ASSETS = [
     'js/utils/deckCompare.js',
     'js/utils/deckConfig.js',
     'js/utils/deckLibrary.js',
+    'js/utils/deckProfile.js',
     'js/utils/deckRadar.js',
     'js/utils/deckStats.js',
     'js/utils/decklistImport.js',

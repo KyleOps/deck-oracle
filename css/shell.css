@@ -1590,7 +1590,7 @@
     top: 0;
     bottom: 22px;
     width: 0;
-    border-left: 1.5px dashed var(--tx-accent);
+    border-left: 1.5px dashed var(--tx-mid);
     pointer-events: auto;
 }
 
@@ -1599,8 +1599,81 @@
     top: -2px;
     left: 4px;
     font-size: var(--t-micro);
-    color: var(--tx-accent);
+    color: var(--tx-mid);
     font-weight: 600;
+}
+
+/* ---- Overview visualisations: interactive curve + deck profile ----
+   The accent marks the picked curve bar (it is the selected, interactive
+   thing), so the average marker above is neutral ink. */
+.viz-curve-bar {
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+.viz-curve-bar:disabled { cursor: default; }
+.viz-curve-bar:not(:disabled):hover .vbar-track { box-shadow: inset 0 0 0 1px var(--tx-rule-hi); }
+.viz-curve-bar:not(:disabled):hover .vbar-label { color: var(--tx-bright); }
+.viz-curve-bar[aria-pressed="true"] .vbar-track { box-shadow: 0 0 0 2px var(--tx-accent); }
+.viz-curve-bar[aria-pressed="true"] .vbar-label { color: var(--tx-accent); font-weight: 600; }
+.ov-curve-bars .vbar-track { overflow: hidden; }
+
+.ov-curve-hint { margin: 0; font-size: var(--t-xs); color: var(--tx-dim); }
+.ov-curve-list {
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--tx-rule);
+    border-radius: var(--radius-md);
+    background: var(--tx-panel-alt);
+}
+.ov-curve-list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: var(--t-sm); color: var(--tx-bright); }
+.ov-curve-list-head strong { font-weight: 600; }
+.ov-curve-group { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 4px 12px; align-items: baseline; font-size: var(--t-xs); }
+.ov-curve-type { display: inline-flex; align-items: center; gap: 6px; color: var(--tx-mid); white-space: nowrap; }
+.ov-curve-names { display: flex; flex-wrap: wrap; gap: 3px 12px; min-width: 0; color: var(--tx-text); }
+.ov-curve-n { margin-left: 4px; font-family: var(--font-mono); font-size: var(--t-label); color: var(--tx-dim); }
+
+.ov-profile-key { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: -4px 0 0; font-size: var(--t-xs); color: var(--tx-dim); }
+.ov-profile-swatch {
+    width: 22px;
+    height: 10px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--tx-flat) 30%, transparent);
+    border-inline: 1px solid var(--tx-dim);
+}
+.ov-card .viz-bullet-sub .ms { width: 14px; height: 14px; min-width: 14px; font-size: 8px; vertical-align: -2px; }
+
+.ov-roles > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+    font-size: var(--t-xs);
+    color: var(--tx-mid);
+    cursor: pointer;
+    list-style: none;
+}
+.ov-roles > summary::-webkit-details-marker { display: none; }
+.ov-roles > summary::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform var(--transition-fast);
+}
+.ov-roles[open] > summary::before { transform: rotate(45deg); }
+.ov-roles > summary:hover { color: var(--tx-bright); }
+.ov-roles .role-list { margin-top: 8px; }
+
+@container shell (max-width: 560px) {
+    .ov-curve-group { grid-template-columns: minmax(0, 1fr); }
 }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; }
