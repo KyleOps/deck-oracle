@@ -21,7 +21,7 @@
 
 import { choose } from './hypergeometric.js';
 import { COLORS, parseManaCost, isLand, landColors, deckColorIdentity } from './mana.js';
-import { sourcesNeeded } from './deckStats.js';
+import { colorCastProbability, sourcesNeeded } from './deckStats.js';
 import { FORMATS, cardsSeenByTurn } from './format.js';
 
 /** One bit per colour, WUBRG order. */
@@ -432,9 +432,11 @@ export function sourcesTable({ deckSize, lands, format = FORMATS.commander, onPl
  * Full castability analysis of a deck.
  *
  * @param {Record<string, Object>} cardsByName
- * @param {{deckSize?:number, format?:object, onPlay?:boolean, target?:number}} [opts]
+ * @param {{deckSize?:number, format?:object, onPlay?:boolean, target?:number, byTurn?:number}} [opts]
+ *   byTurn: also give every card and colour its chance on turns 1…byTurn (the
+ *   "when does it become reliable" strips); 0 skips the extra work.
  */
-export function analyzeCastability(cardsByName = {}, { deckSize, format = FORMATS.commander, onPlay = true, target = 0.9 } = {}) {
+export function analyzeCastability(cardsByName = {}, { deckSize, format = FORMATS.commander, onPlay = true, target = 0.9, byTurn = 0 } = {}) {
     const cards = Object.values(cardsByName).filter(c => c?.name && Number(c.count) > 0);
     const identity = deckColorIdentity(cardsByName);
     const landInfo = describeLands(cards, identity);
@@ -460,6 +462,20 @@ export function analyzeCastability(cardsByName = {}, { deckSize, format = FORMAT
         }
         return p;
     };
+    // By turn t (with t land drops made), can the lands pay this card? Before
+    // its own turn there are not enough lands, so there is no chance to give.
+    const stripTurns = Math.max(0, Math.min(12, Math.floor(Number(byTurn) || 0)));
+    const turnMemo = new Map();
+    const stripFor = req => Array.from({ length: stripTurns }, (_, i) => {
+        const t = i + 1;
+        if (t < req.turn) return null;
+        if (t === req.turn) return probFor(req).conditional;
+        const key = `${t}|${req.turn}|${req.pipTypes.map(x => `${x.mask}x${x.count}`).sort().join(',')}`;
+        if (!turnMemo.has(key)) {
+            turnMemo.set(key, castProbability({ deckSize: N, landGroups, pipTypes: req.pipTypes, landsNeeded: t, seen: seenFor(t) }).conditional);
+        }
+        return turnMemo.get(key);
+    });
     const neededFor = (pips, turn) => {
         const key = `${pips}|${turn}`;
         if (!needMemo.has(key)) {
@@ -499,7 +515,8 @@ export function analyzeCastability(cardsByName = {}, { deckSize, format = FORMAT
             twobrid: req.twobrid,
             chance: p.conditional,
             overall: p.joint,
-            landsOk: p.landsOk
+            landsOk: p.landsOk,
+            ...(stripTurns ? { byTurn: stripFor(req) } : {})
         });
     }
     // Worst first; ties broken by the harder overall odds, then name.
@@ -519,6 +536,17 @@ export function analyzeCastability(cardsByName = {}, { deckSize, format = FORMAT
             }
         }
         const peers = hardest ? strict.filter(r => r.pips[c] === hardest.pips && r.turn === hardest.turn).length : 0;
+        // One strip per pip count this colour's cards ask for (up to three):
+        // with t land drops made by turn t, can they pay that many symbols?
+        const maxPips = Math.min(3, strict.reduce((m, r) => Math.max(m, r.pips[c]), 0));
+        const strips = stripTurns ? Array.from({ length: maxPips }, (_, i) => ({
+            pips: i + 1,
+            cells: Array.from({ length: stripTurns }, (__, j) => {
+                const t = j + 1;
+                if (t < i + 1) return null;
+                return colorCastProbability({ deckSize: N, lands, sources: sources[c], pips: i + 1, landsNeeded: t, seen: seenFor(t) }).conditional;
+            })
+        })) : undefined;
         return {
             color: c,
             sources: sources[c],
@@ -529,6 +557,7 @@ export function analyzeCastability(cardsByName = {}, { deckSize, format = FORMAT
             hardest,
             peers,
             want: hardest ? hardest.needed : null,
+            ...(strips ? { byTurn: strips } : {}),
             gap: hardest ? (hardest.needed == null ? Infinity : hardest.needed - sources[c]) : -Infinity
         };
     });

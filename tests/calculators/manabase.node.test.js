@@ -10,7 +10,10 @@ import {
     filterCards,
     deckKey,
     getShareParams,
-    applyShareParams
+    applyShareParams,
+    stripCells,
+    reliableFrom,
+    STRIP_TURNS
 } from '../../js/calculators/manabase.js';
 import { analyzeCastability } from '../../js/utils/castability.js';
 import { DEFAULT_DECK_DATA } from '../../js/utils/defaultDeckData.js';
@@ -178,5 +181,25 @@ describe('manabase - performance', () => {
         analyzeCastability(DEFAULT_DECK_DATA.cardsByName, { deckSize: 99, format: FORMATS.commander });
         // The budget is 30 ms in the browser; keep head-room for slow CI machines.
         assert.ok(performance.now() - start < budget(200));
+    });
+});
+
+describe('Mana Base turn strips', () => {
+    it('tones each turn against the 90% target and outlines the on-curve turn', () => {
+        const cells = stripCells([null, 0.62, 0.85, 0.93], { current: 2 });
+        assert.deepStrictEqual(cells.map(c => c.tone), ['flat', 'bad', 'warn', 'good']);
+        assert.strictEqual(cells[0].value, null);
+        assert.deepStrictEqual(cells.map(c => c.current), [false, true, false, false]);
+        assert.strictEqual(cells[3].label, 'Turn 4');
+    });
+
+    it('finds the first reliable turn', () => {
+        assert.strictEqual(reliableFrom([null, 0.62, 0.85, 0.93, 0.97]), 4);
+        assert.strictEqual(reliableFrom([null, 0.5, 0.7]), null);
+        assert.strictEqual(reliableFrom([0.9]), 1);
+    });
+
+    it('covers turns 1 to 8', () => {
+        assert.strictEqual(STRIP_TURNS, 8);
     });
 });
