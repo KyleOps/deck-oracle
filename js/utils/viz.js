@@ -546,8 +546,21 @@ export function dumbbell(o = {}) {
         </span>`;
 }
 
+const ENTITIES = Object.freeze({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" });
+
+/**
+ * Plain text from a small HTML label, for an aria-label: tags dropped and
+ * escapeHtml's entities decoded (so "Kodama&#39;s" reads "Kodama's"). Any
+ * angle bracket left over is removed, so the result can never form a tag;
+ * callers still attribute-escape it.
+ */
 function stripTags(html) {
-    return String(html ?? '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    return String(html ?? '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&(amp|lt|gt|quot|#39);/g, (_, name) => ENTITIES[name])
+        .replace(/[<>]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 export const __test__ = { TONE_RANK, tickEvery, stripTags, plural };

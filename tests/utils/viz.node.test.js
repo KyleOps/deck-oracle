@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
     allocate, pmfQuantiles, sampleQuantiles, niceStep, binDots, dotPlot, describeDots, splitDots, stackWidth,
-    heatStrip, heatLevel, bulletChart, bulletList, dumbbell, vizTable
+    heatStrip, heatLevel, bulletChart, bulletList, dumbbell, vizTable, __test__
 } from '../../js/utils/viz.js';
 
 const HEX = /#[0-9a-f]{3,8}\b/i;
@@ -245,6 +245,25 @@ describe('dumbbell', () => {
     it('stays neutral without a direction or when equal', () => {
         assert.doesNotMatch(dumbbell({ a: 1, b: 2, min: 0, max: 4 }), /is-better/);
         assert.doesNotMatch(dumbbell({ a: 2, b: 2, min: 0, max: 4, better: 'higher' }), /is-better/);
+    });
+
+    it('turns an HTML label into plain words for screen readers', () => {
+        const html = dumbbell({ a: 1, b: 2, min: 0, max: 4, label: '<span class="term">Kodama&#39;s</span> &amp; friends' });
+        assert.match(html, /aria-label="Kodama&#39;s &amp; friends: A 1, B 2"/, 'decoded once, then attribute-escaped once');
+    });
+});
+
+describe('stripTags', () => {
+    const { stripTags } = __test__;
+
+    it('drops tags and decodes the entities escapeHtml writes', () => {
+        assert.strictEqual(stripTags('<b>Kodama&#39;s</b>  Reach &quot;x&quot; &lt;3'), 'Kodama\'s Reach "x" 3');
+    });
+
+    it('never leaves anything that could form a tag', () => {
+        for (const input of ['<<script>script>alert(1)<</script>/script>', '<scr<b>ipt>', '&lt;script&gt;', '<img src=x onerror=alert(1)']) {
+            assert.doesNotMatch(stripTags(input), /[<>]/, input);
+        }
     });
 });
 
