@@ -33,7 +33,7 @@ export const template = `
                 <h2 class="opp-section-title">The next six rounds</h2>
                 <p class="opp-section-sub">One real shuffle of each list — the card each opponent exiles on each of their turns.</p>
             </div>
-            <div class="opp-section-actions"><button type="button" class="btn btn-ghost btn-sm" id="mnds-resample-btn">Reshuffle</button></div>
+            <div class="opp-section-actions"><button type="button" class="btn btn-ghost btn-sm" id="mnds-resample-btn" data-opp-sample="reshuffle">Reshuffle</button></div>
         </div>
         <div class="mnds-samples" id="mnds-samples"></div>
     </section>

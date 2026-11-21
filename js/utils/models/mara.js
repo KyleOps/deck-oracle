@@ -19,7 +19,7 @@ import { escapeHtml } from '../../data/glossary.js';
 import { choose } from '../hypergeometric.js';
 import { isLand } from '../library.js';
 import { one } from '../text.js';
-import { countWord, createRevealer, opponentLibrary, tailAtLeast, typicalRange } from './opponentLibrary.js';
+import { countWord, createRevealer, opponentLibrary, spread, tailAtLeast, typicalRange, versusCost } from './opponentLibrary.js';
 
 /** Mara's own mana value — what the free spells are measured against. */
 export const MARA_COST = 4;
@@ -158,21 +158,6 @@ export function calculateMaraStats(opponentData) {
     };
 }
 
-function spread(values, unit) {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const lo = Math.min(...values);
-    const hi = Math.max(...values);
-    return values.length > 1 && hi - lo >= 0.5
-        ? `${one(lo)}–${one(hi)} ${unit}`
-        : `about ${one(mean)} ${unit}`;
-}
-
-function versusCost(total) {
-    if (total >= 2 * MARA_COST) return `more than twice Mara’s ${MARA_COST}-mana cost`;
-    if (total >= MARA_COST) return `more than Mara’s ${MARA_COST}-mana cost`;
-    return `less than Mara’s ${MARA_COST}-mana cost`;
-}
-
 /**
  * The bottom line for a table of opponents.
  * @param {Array<{name:string, stats:Object}>} rows
@@ -190,12 +175,12 @@ export function summarizeMara(rows) {
     if (valid.length === 1) {
         return {
             tone,
-            html: `Against ${escapeHtml(valid[0].name)}, Mara either hands you a free spell worth <strong>${spread(spells, 'mana')}</strong> or deals <strong>${spread(damage, 'damage')}</strong> — they choose before anything is revealed. On its own, the spell is worth ${versusCost(totalSpell)}.`
+            html: `Against ${escapeHtml(valid[0].name)}, Mara either hands you a free spell worth <strong>${spread(spells, 'mana')}</strong> or deals <strong>${spread(damage, 'damage')}</strong> — they choose before anything is revealed. On its own, the spell is worth ${versusCost(totalSpell, MARA_COST, 'Mara’s')}.`
         };
     }
     return {
         tone,
-        html: `Each of the ${countWord(valid.length)} opponents either hands you a free spell worth <strong>${spread(spells, 'mana')}</strong> or takes <strong>${spread(damage, 'damage')}</strong> — their choice. Across the table that’s <strong>${one(totalSpell)} mana</strong> of free spells (${versusCost(totalSpell)}), <strong>${one(totalDamage)} damage</strong>, or a mix.`
+        html: `Each of the ${countWord(valid.length)} opponents either hands you a free spell worth <strong>${spread(spells, 'mana')}</strong> or takes <strong>${spread(damage, 'damage')}</strong> — their choice. Across the table that’s <strong>${one(totalSpell)} mana</strong> of free spells (${versusCost(totalSpell, MARA_COST, 'Mara’s')}), <strong>${one(totalDamage)} damage</strong>, or a mix.`
     };
 }
 

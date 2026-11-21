@@ -1,36 +1,23 @@
 /**
- * Ensnared by the Mara — {2}{R}{R} sorcery. The page: readInputs() (the
- * opponents → a plain object), the model, then rendering. The maths — exact
- * for both of the opponent's options — lives in js/utils/models/mara.js.
+ * Ensnared by the Mara — {2}{R}{R} sorcery. The maths — exact for both of the
+ * opponent's options — lives in js/utils/models/mara.js; the page itself
+ * (readInputs() → the model → rendering, sample casts) is the multiplayer
+ * family's, from createOpponentPage() in js/utils/opponentPages.js. This
+ * module is the page's markup.
  */
 
-import { registerCalculator, updateCalculatorIfActive } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { renderHeroStats } from '../utils/components.js';
 import { cardRef } from '../data/glossary.js';
-import * as OpponentState from '../utils/opponentState.js';
 import { one, pct } from '../utils/text.js';
 import {
-    objectId, readOpponents, frameScheduler, opponentLabel, cardChip, miniBars,
-    renderOpponentPlaceholder, renderLoadingNote, bindOpponentActions, renderDisclosure, hasRoom
+    createOpponentPage, opponentLabel, cardChip, miniBars, renderDisclosure, hasRoom,
+    opponentTableHTML, sampleCastsHTML, sectionHeadHTML
 } from '../utils/opponentPages.js';
 import { opponentLibrary, formatRange, capDistribution, countWord } from '../utils/models/opponentLibrary.js';
 import { BIG_DAMAGE, BIG_SPELL_MV, calculateMaraStats, sampleCast, summarizeMara } from '../utils/models/mara.js';
 
 const SAMPLE_BATCH = 3;
 const SAMPLE_MAX = 24;
-
-// ── Inputs ──────────────────────────────────────────────────────────────────
-
-/** The opponents with decks, their import state and a signature of both. */
-export function readInputs() {
-    return readOpponents();
-}
-
-const statsCache = new WeakMap();
-function statsFor(data) {
-    if (!statsCache.has(data)) statsCache.set(data, calculateMaraStats(data));
-    return statsCache.get(data);
-}
 
 // ── Rendering ───────────────────────────────────────────────────────────────
 
@@ -91,23 +78,18 @@ function tableHtml(rows) {
             <td data-label="${BIG_DAMAGE}+ damage">${pct(c2.pct10Plus / 100)}</td>
         </tr>`;
     }).join('');
-    const foot = rows.length > 1 ? `<tfoot><tr>
+    const foot = rows.length > 1 ? `
             <td>All ${countWord(rows.length)} opponents</td>
             <td data-label="Free spells">${one(rows.reduce((a, r) => a + r.stats.choice1.avgCMC, 0))}<span class="opp-cell-sub">mana if all pick the spell</span></td>
             <td data-label=""></td>
             <td data-label="Damage">${one(rows.reduce((a, r) => a + r.stats.choice2.avgDamage, 0))}<span class="opp-cell-sub">if all pick damage</span></td>
             <td data-label=""></td>
-        </tr></tfoot>` : '';
-    return `<div class="opp-table-wrap"><table class="opp-table">
-        <thead><tr>
-            <th scope="col">Opponent</th>
-            <th scope="col">Free spell</th>
-            <th scope="col">Costs ${BIG_SPELL_MV}+</th>
-            <th scope="col">Damage</th>
-            <th scope="col">${BIG_DAMAGE}+ damage</th>
-        </tr></thead>
-        <tbody>${body}</tbody>${foot}
-    </table></div>`;
+        ` : '';
+    return opponentTableHTML({
+        head: ['Opponent', 'Free spell', `Costs ${BIG_SPELL_MV}+`, 'Damage', `${BIG_DAMAGE}+ damage`],
+        body,
+        foot
+    });
 }
 
 const SPELL_CAP = 7;
@@ -140,20 +122,6 @@ function multiplesHtml(rows) {
         <p class="opp-caption">How often each outcome happens. Every opponent is drawn on the same scale, so a longer bar means more likely — compare across columns.</p>`;
 }
 
-let lastSignature = null;
-let sampleRound = 0;
-let samplesShown = SAMPLE_BATCH;
-const sampleCache = new Map();
-
-function samplesFor(opp) {
-    const key = `${objectId(opp.data)}:${sampleRound}`;
-    if (!sampleCache.has(key)) {
-        const library = opponentLibrary(opp.data);
-        sampleCache.set(key, Array.from({ length: SAMPLE_MAX }, () => sampleCast(library)));
-    }
-    return sampleCache.get(key);
-}
-
 function gameRow(opp, cast) {
     const lands = cast.spell ? cast.spellRun.slice(0, -1) : cast.spellRun;
     const run = lands.map(c => cardChip(c)).join('')
@@ -173,103 +141,45 @@ function gameRow(opp, cast) {
     </div>`;
 }
 
-function renderSamples(state) {
-    const panel = document.getElementById('mara-sample-reveals');
-    if (!panel) return;
-    if (state.opponents.length === 0) {
-        panel.hidden = true;
-        panel.innerHTML = '';
-        return;
-    }
-    panel.hidden = false;
-    const casts = state.opponents.map(opp => samplesFor(opp));
-    const games = Array.from({ length: samplesShown }, (_, g) => `
+function samplesHtml(opponents, casts, shown) {
+    const games = Array.from({ length: shown }, (_, g) => `
         <div class="opp-game">
             <div class="opp-game-head tx-eyebrow">Cast ${g + 1}</div>
-            ${state.opponents.map((opp, i) => gameRow(opp, casts[i][g])).join('')}
+            ${opponents.map((opp, i) => gameRow(opp, casts[i][g])).join('')}
         </div>`).join('');
-    panel.innerHTML = `
-        <div class="opp-section-head">
-            <div>
-                <h2 class="opp-section-title">Sample casts</h2>
-                <p class="opp-section-sub">Real shuffles of each list. Both options come from the same shuffle — the opponent only gets one.</p>
-            </div>
-            <div class="opp-section-actions"><button type="button" class="btn btn-ghost btn-sm" data-mara-action="reshuffle">Reshuffle</button></div>
-        </div>
-        <div class="mara-game-cols" aria-hidden="true"><span></span><span>If they give you a spell</span><span>If they take damage</span></div>
-        <div class="opp-games">${games}</div>
-        ${samplesShown < SAMPLE_MAX ? '<div class="opp-more"><button type="button" class="btn btn-ghost btn-sm" data-mara-action="more">Show more casts</button></div>' : ''}`;
+    return sampleCastsHTML({
+        sub: 'Real shuffles of each list. Both options come from the same shuffle — the opponent only gets one.',
+        before: `
+        <div class="mara-game-cols" aria-hidden="true"><span></span><span>If they give you a spell</span><span>If they take damage</span></div>`,
+        games,
+        more: shown < SAMPLE_MAX
+    });
 }
 
-function renderResults(state) {
-    const panel = document.getElementById('mara-results');
-    if (!panel) return;
-    if (state.opponents.length === 0) {
-        panel.innerHTML = renderOpponentPlaceholder(PLACEHOLDER, state);
-        return;
-    }
-    const rows = state.opponents.map(opp => ({ opp, name: opp.name, stats: statsFor(opp.data) })).filter(r => r.stats);
-    const line = summarizeMara(rows);
-    panel.innerHTML = `
-        ${renderLoadingNote(state)}
-        ${renderBottomLine(line)}
-        ${heroStats(rows)}
-        <div class="opp-section-head">
-            <h2 class="opp-section-title">Opponent by opponent</h2>
-            <span class="opp-section-sub">Exact odds from each list</span>
-        </div>
+function sectionsHtml(rows, { panel }) {
+    return `
+        ${sectionHeadHTML('Opponent by opponent', 'Exact odds from each list')}
         ${tableHtml(rows)}
         ${renderDisclosure({ id: 'mara-spread', title: 'How often each outcome happens', body: multiplesHtml(rows), open: hasRoom(panel) })}`;
 }
 
-/**
- * Stats for every active opponent with a deck, keyed by seat.
- * @returns {Object<string, Object>}
- */
-export function calculate() {
-    const results = {};
-    for (const opp of readInputs().opponents) {
-        const stats = statsFor(opp.data);
-        if (stats) results[opp.key] = stats;
+const page = createOpponentPage({
+    key: 'mara',
+    stats: data => calculateMaraStats(data),
+    summarize: summarizeMara,
+    hero: heroStats,
+    sections: sectionsHtml,
+    placeholder: PLACEHOLDER,
+    sample: {
+        panel: 'mara-sample-reveals',
+        count: SAMPLE_MAX,
+        batch: SAMPLE_BATCH,
+        draw: opp => {
+            const library = opponentLibrary(opp.data);
+            return Array.from({ length: SAMPLE_MAX }, () => sampleCast(library));
+        },
+        render: samplesHtml
     }
-    return results;
-}
+});
 
-/** Render — only when the opponents (or their import state) changed. */
-export function updateUI() {
-    const state = readInputs();
-    if (state.signature === lastSignature && document.getElementById('mara-results')?.firstElementChild) return;
-    lastSignature = state.signature;
-    samplesShown = SAMPLE_BATCH;
-    // Keep the sample casts of decks that are still loaded; drop the rest.
-    const live = new Set(state.opponents.map(o => String(objectId(o.data))));
-    for (const key of sampleCache.keys()) if (!live.has(key.split(':')[0])) sampleCache.delete(key);
-    renderResults(state);
-    renderSamples(state);
-}
-
-export function init() {
-    const scheduleRender = frameScheduler(() => updateCalculatorIfActive('mara', updateUI));
-    OpponentState.onOpponentChange(scheduleRender);
-
-    registerCalculator({
-        name: 'mara',
-        calculate,
-        updateUI,
-        init: () => {
-            const root = document.getElementById('mara-tab');
-            bindOpponentActions(root);
-            root?.addEventListener('click', e => {
-                const action = e.target.closest('[data-mara-action]')?.dataset.maraAction;
-                if (action === 'reshuffle') {
-                    sampleRound += 1;
-                    sampleCache.clear();
-                    renderSamples(readInputs());
-                } else if (action === 'more') {
-                    samplesShown = Math.min(SAMPLE_MAX, samplesShown + SAMPLE_BATCH);
-                    renderSamples(readInputs());
-                }
-            });
-        }
-    });
-}
+export const { readInputs, calculate, updateUI, init } = page;

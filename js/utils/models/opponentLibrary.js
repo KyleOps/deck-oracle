@@ -10,6 +10,7 @@
 import { cardTypes, expandLibrary, frontTypeLine, isLand, libraryOf } from '../library.js';
 import { hashString } from '../random.js';
 import { quantile } from '../stats.js';
+import { one } from '../text.js';
 
 // ── Library model ───────────────────────────────────────────────────────────
 
@@ -128,4 +129,31 @@ export function capDistribution(dist, cap) {
 /** "the three decks" / "this deck" style counts in prose. */
 export function countWord(n) {
     return ['no', 'one', 'two', 'three', 'four', 'five'][n] ?? String(n);
+}
+
+/**
+ * Per-opponent averages in prose: "about 4.2 mana", or the range when the
+ * opponents differ by half a point or more ("3.1–5.0 mana").
+ * @param {number[]} values - one per opponent
+ * @param {string} unit
+ */
+export function spread(values, unit) {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+    return values.length > 1 && hi - lo >= 0.5
+        ? `${one(lo)}–${one(hi)} ${unit}`
+        : `about ${one(mean)} ${unit}`;
+}
+
+/**
+ * A total measured against the card's own cost, in words.
+ * @param {number} total - mana value gained
+ * @param {number} cost - the card's mana value
+ * @param {string} [owner='its'] - whose cost: "its", "Mara’s"
+ */
+export function versusCost(total, cost, owner = 'its') {
+    if (total >= 2 * cost) return `more than twice ${owner} ${cost}-mana cost`;
+    if (total >= cost) return `more than ${owner} ${cost}-mana cost`;
+    return `less than ${owner} ${cost}-mana cost`;
 }
