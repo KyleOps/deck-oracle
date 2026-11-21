@@ -120,9 +120,17 @@ export function pageModuleMap() {
     return { default: DEFAULT_TAB, pages };
 }
 
+/**
+ * The page map as a script literal (not JSON text read back from the DOM), so
+ * the preloader never turns document text into a URL. Paths are our own
+ * module files; the preloader and router still accept only `js/….js`.
+ */
 export function pageModulesTag() {
-    return `    <script type="application/json" id="page-modules">${JSON.stringify(pageModuleMap())}</script>`;
+    return `    <script>window.__deckOraclePages = ${JSON.stringify(pageModuleMap())};</script>`;
 }
+
+/** The only shape a preloaded module path may take (same rule in index.html and router.js). */
+export const MODULE_PATH = /^js\/[A-Za-z0-9_/-]+\.js$/;
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     const htmlPath = path.join(root, 'index.html');

@@ -114,12 +114,13 @@ function panelFor(name) {
 let pageModules;
 const preloaded = new Set();
 
+/** Our own module files only: the same rule as index.html's preloader. */
+const MODULE_PATH = /^js\/[A-Za-z0-9_/-]+\.js$/;
+
 function readPageModules() {
-    try {
-        pageModules = JSON.parse(document.getElementById('page-modules')?.textContent ?? 'null')?.pages ?? null;
-    } catch {
-        pageModules = null;
-    }
+    // A script literal in index.html (written by `npm run sw:manifest`).
+    const pages = globalThis.__deckOraclePages?.pages;
+    pageModules = pages && typeof pages === 'object' ? pages : null;
     // index.html has preloaded the shell and the landing page already.
     document.querySelectorAll('link[rel="modulepreload"]').forEach(link => preloaded.add(link.getAttribute('href')));
 }
@@ -127,8 +128,9 @@ function readPageModules() {
 /** Start fetching every module page `name` needs that is not already on its way. */
 export function preloadPage(name) {
     if (pageModules === undefined) readPageModules();
-    for (const href of pageModules?.[name] ?? []) {
-        if (preloaded.has(href)) continue;
+    const files = Object.hasOwn(pageModules ?? {}, name) ? pageModules[name] : [];
+    for (const href of Array.isArray(files) ? files : []) {
+        if (typeof href !== 'string' || !MODULE_PATH.test(href) || preloaded.has(href)) continue;
         preloaded.add(href);
         const link = document.createElement('link');
         link.rel = 'modulepreload';

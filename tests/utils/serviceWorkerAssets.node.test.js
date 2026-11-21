@@ -114,11 +114,25 @@ describe('page module preloads', () => {
 
     it('preloads the landing page before any stylesheet can hold the script back', () => {
         const head = html.slice(0, html.indexOf('</head>'));
-        const script = head.indexOf("getElementById('page-modules')");
+        const script = head.indexOf('var map = window.__deckOraclePages;');
         const firstStylesheet = head.search(/<link[^>]+rel="stylesheet"|<link[^>]+stylesheet"/);
         assert.ok(script > 0, 'inline page-module preloader');
         assert.ok(firstStylesheet > script, 'every stylesheet comes after the preloader');
-        assert.ok(head.indexOf('id="page-modules"') < script, 'the map is parsed before the preloader runs');
+        assert.ok(head.indexOf('window.__deckOraclePages = ') < script, 'the map is defined before the preloader runs');
+        assert.equal(head.includes('getElementById(\'page-modules\')'), false, 'no URL is built from document text');
+    });
+
+    it('preloads only our own module paths, with one rule in all three places', async () => {
+        const { pageModuleMap, MODULE_PATH } = await import('../../scripts/update-sw-manifest.mjs');
+        for (const [key, files] of Object.entries(pageModuleMap().pages)) {
+            for (const file of files) assert.match(file, MODULE_PATH, `${key}: ${file}`);
+        }
+        const router = readFileSync(path.join(projectRoot, 'js/shell/router.js'), 'utf8');
+        assert.ok(html.includes(`/${MODULE_PATH.source}/`), 'index.html preloader uses the same path rule');
+        assert.ok(router.includes(`/${MODULE_PATH.source}/`), 'router.js uses the same path rule');
+        assert.doesNotMatch('javascript:alert(1)', MODULE_PATH);
+        assert.doesNotMatch('https://evil.example/x.js', MODULE_PATH);
+        assert.doesNotMatch('js/../x.js', MODULE_PATH);
     });
 
     it('reads static imports and re-exports, never dynamic imports', async () => {
