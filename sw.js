@@ -33,7 +33,6 @@ const STATIC_ASSETS = [
     'css/mobile.css',
     'css/shell.css',
     'css/tokens.css',
-    'css/ux-enhancements.css',
     'js/calculators/abstract.js',
     'js/calculators/chimil.js',
     'js/calculators/compare.js',
