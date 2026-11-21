@@ -4,7 +4,7 @@
  * js/utils/models/portent.js.
  */
 
-import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART, withAlpha } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell, toneColor, toneFor } from '../utils/components.js';
@@ -13,7 +13,7 @@ import { CARD_TYPES } from '../utils/library.js';
 import { avg, pct, plural, points, pointsShort } from '../utils/text.js';
 import {
     barsHTML, createSampler, noticeHTML, renderHowItCompares, sampleCardHTML, typeLabel,
-    syncXControl, bindXPresets, readX, fade
+    syncXControl, bindXPresets, readX
 } from '../utils/bigSpells.js';
 import { cardListKey, deckCardList, expandCards } from '../utils/models/cardList.js';
 import {
@@ -95,7 +95,7 @@ function renderChart(config, results) {
     const probs = xs.map(x => +((results[x]?.prob4Plus ?? 0) * 100).toFixed(1));
     const colors = xs.map((x, i) => x === config.x
         ? TX_CHART.amber
-        : fade({ good: TX_CHART.green, warn: TX_CHART.amber, bad: TX_CHART.red }[toneFor(probs[i] / 100)] ?? TX_CHART.blue, 0.38));
+        : withAlpha({ good: TX_CHART.green, warn: TX_CHART.amber, bad: TX_CHART.red }[toneFor(probs[i] / 100)] ?? TX_CHART.blue, 0.38));
 
     chart = createOrUpdateChart(chart, 'portent-combinedChart', {
         type: 'bar',

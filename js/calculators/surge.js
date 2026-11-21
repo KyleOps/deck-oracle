@@ -5,7 +5,7 @@
  */
 
 import { formatNumber } from '../utils/simulation.js';
-import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART, withAlpha } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats, toneColor, toneFor } from '../utils/components.js';
@@ -16,7 +16,7 @@ import { closeCast, playCast, syncCast } from '../utils/castAnimation.js';
 import { shuffle } from '../utils/random.js';
 import { isPermanent, libraryOf, sameCard } from '../utils/library.js';
 import { avg, pct, plural } from '../utils/text.js';
-import { createSampler, fade, noticeHTML, renderHowItCompares, sampleCardHTML } from '../utils/bigSpells.js';
+import { createSampler, noticeHTML, renderHowItCompares, sampleCardHTML } from '../utils/bigSpells.js';
 import { deckCardList, expandCards } from '../utils/models/cardList.js';
 import {
     ON_STACK, PRIMAL_SURGE, SURGE, cachedValuePmf, calculateSurgeRunValue, summarize, surgeCastPlan, surgeDots,
@@ -223,8 +223,8 @@ function renderChart(config, result) {
                 {
                     label: 'Permanents',
                     data: counts.map(s => +(config.permanents / (s + 1)).toFixed(2)),
-                    backgroundColor: counts.map(s => s === stops ? TX_CHART.amber : fade(TX_CHART.blue, 0.45)),
-                    hoverBackgroundColor: counts.map(s => s === stops ? TX_CHART.amber : fade(TX_CHART.blue, 0.7)),
+                    backgroundColor: counts.map(s => s === stops ? TX_CHART.amber : withAlpha(TX_CHART.blue, 0.45)),
+                    hoverBackgroundColor: counts.map(s => s === stops ? TX_CHART.amber : withAlpha(TX_CHART.blue, 0.7)),
                     borderRadius: 3,
                     maxBarThickness: 34,
                     yAxisID: 'y',

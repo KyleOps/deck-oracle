@@ -11,7 +11,7 @@
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats, toneFor } from '../utils/components.js';
-import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART, withAlpha } from '../utils/chartHelpers.js';
 import { debounce } from '../utils/simulation.js';
 import { cardsSeenByTurn } from '../utils/format.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
@@ -103,21 +103,6 @@ const pctHtml = p => escapeHtml(pct(p));
 
 function groupColor(index) {
     return TX_CHART.series[SERIES_SLOT[index]] ?? TX_CHART.blue;
-}
-
-function fade(color, alpha) {
-    const value = String(color ?? '').trim();
-    const hex = /^#([0-9a-f]{6})$/i.exec(value);
-    if (hex) {
-        const n = parseInt(hex[1], 16);
-        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-    }
-    const rgb = /rgba?\(([^)]+)\)/.exec(value);
-    if (rgb) {
-        const [r, g, b] = rgb[1].split(',').map(s => s.trim());
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-    return value;
 }
 
 function seenAt(turn, ctx = last) {
@@ -651,7 +636,7 @@ function renderChart(result) {
             label: `${g.id} · ${g.name}`,
             data: result.turns.map(t => toPercent(t.each[i])),
             borderColor: color,
-            backgroundColor: multi ? color : fade(color, 0.14),
+            backgroundColor: multi ? color : withAlpha(color, 0.14),
             fill: multi ? false : 'origin',
             borderWidth: multi ? 1.75 : 2.5,
             borderDash: multi ? [5, 4] : [],
@@ -668,7 +653,7 @@ function renderChart(result) {
             label: 'All together',
             data: result.turns.map(t => toPercent(t.all)),
             borderColor: TX_CHART.bright,
-            backgroundColor: fade(TX_CHART.bright, 0.07),
+            backgroundColor: withAlpha(TX_CHART.bright, 0.07),
             fill: 'origin',
             borderWidth: 2.75,
             borderDash: [],

@@ -4,7 +4,7 @@
  * maths lives in js/utils/models/vow.js.
  */
 
-import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART, withAlpha } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell, toneColor, toneFor } from '../utils/components.js';
@@ -13,7 +13,7 @@ import { quantile } from '../utils/stats.js';
 import { commanderNamesOf, isPermanent } from '../utils/library.js';
 import { avg, pct, plural } from '../utils/text.js';
 import {
-    barsHTML, bindXPresets, createSampler, fade, noticeHTML, readX, renderHowItCompares, sampleCardHTML, syncXControl
+    barsHTML, bindXPresets, createSampler, noticeHTML, readX, renderHowItCompares, sampleCardHTML, syncXControl
 } from '../utils/bigSpells.js';
 import { cardListKey, deckCardList, expandCards } from '../utils/models/cardList.js';
 import { ON_STACK, VOW, analyze, buildVowLibrary, classifyForVow, commanderCopiesVow, summarize, vowSweep } from '../utils/models/vow.js';
@@ -141,8 +141,8 @@ function renderChart(config, results) {
                 {
                     label: 'Lands & legends',
                     data: xs.map(x => +(results[x]?.expectedHits ?? 0).toFixed(2)),
-                    backgroundColor: xs.map(x => x === config.x ? TX_CHART.amber : fade(TX_CHART.blue, 0.45)),
-                    hoverBackgroundColor: xs.map(x => x === config.x ? TX_CHART.amber : fade(TX_CHART.blue, 0.7)),
+                    backgroundColor: xs.map(x => x === config.x ? TX_CHART.amber : withAlpha(TX_CHART.blue, 0.45)),
+                    hoverBackgroundColor: xs.map(x => x === config.x ? TX_CHART.amber : withAlpha(TX_CHART.blue, 0.7)),
                     borderRadius: 3,
                     maxBarThickness: 34,
                     yAxisID: 'y',

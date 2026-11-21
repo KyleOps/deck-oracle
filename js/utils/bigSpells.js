@@ -167,25 +167,6 @@ export function noticeHTML(html, tone = 'warn') {
     return `<p class="bs-notice tone-${tone}">${html}</p>`;
 }
 
-/**
- * A chart colour at reduced opacity. Takes the live TX_CHART value (hex or
- * rgb), so faded series still follow the theme.
- */
-export function fade(color, alpha) {
-    const value = String(color ?? '').trim();
-    const hex = value.match(/^#([0-9a-f]{6})$/i);
-    if (hex) {
-        const n = parseInt(hex[1], 16);
-        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-    }
-    const rgb = value.match(/^rgba?\(([^)]+)\)$/i);
-    if (rgb) {
-        const [r, g, b] = rgb[1].split(',').map(v => v.trim());
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-    return value;
-}
-
 // ── Page helpers (only ever called by the page that owns the inputs) ─────────
 
 function byId(id) {
