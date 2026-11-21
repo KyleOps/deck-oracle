@@ -144,14 +144,6 @@
     --shell-max: 1680px;
 
     color-scheme: dark;
-
-    /* ==================== LEGACY ALIASES ====================
-       Old names still read by JS (deckRadar.js, components.js pBarCell,
-       sampleSimulator.js). Delete each once nothing references it. */
-    --tx-green: var(--tx-good);
-    --tx-amber: var(--tx-accent);
-    --tx-blue:  var(--tx-flat);
-    --text-dim: var(--tx-dim);
 }
 
 /* ==================== LIGHT THEME ====================

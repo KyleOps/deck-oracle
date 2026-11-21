@@ -13,7 +13,7 @@ import {
 describe('renderHeroStats', () => {
     it('renders a stat cell per entry with label/value/sub', () => {
         const html = renderHeroStats([
-            { label: 'P(HIT)', value: '72%', sub: 'at X=6', color: 'var(--tx-green)', size: 'big' },
+            { label: 'P(HIT)', value: '72%', sub: 'at X=6', color: 'var(--tx-good)', size: 'big' },
             { label: 'E[X]', value: '4.5', sub: 'avg' }
         ]);
         assert.ok(html.includes('tx-hero'));
