@@ -10,11 +10,14 @@
 
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
-import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
+import { renderBottomLine, renderHeroStats, toneFor } from '../utils/components.js';
+import { createOrUpdateChart, TX_CHART, withAlpha } from '../utils/chartHelpers.js';
 import { debounce } from '../utils/simulation.js';
 import { cardsSeenByTurn } from '../utils/format.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked, turnOrderHTML, turnOrderMatters } from '../utils/turnOrder.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
+import { libraryOf, sameCard } from '../utils/library.js';
+import { pct, plural } from '../utils/text.js';
 import * as O from '../utils/drawOdds.js';
 import { heatLevel } from '../utils/viz.js';
 
@@ -58,23 +61,20 @@ function getLibrary(config, format) {
     if (!DeckConfig.hasCardList()) {
         return O.buildManualLibrary(config, DeckConfig.getDeckSize(true));
     }
-    const key = [config.cardsByName, format.key, config.commanderName, config.actualCardCount];
+    const source = libraryOf(config, { format });
+    const key = [source, config.actualCardCount];
     if (libCache.lib && libCache.key.every((v, i) => v === key[i])) return libCache.lib;
-    const lib = O.buildLibrary(config.cardsByName, {
-        commanderName: config.commanderName,
-        excludeCommander: format.key === 'commander',
-        deckSize: config.actualCardCount ?? null
-    });
+    const lib = O.buildLibrary(source, { deckSize: config.actualCardCount ?? null });
     libCache = { key, lib };
     return lib;
 }
 
-function context() {
+/** The deck, its library, the format and the turn order (defaults when not mounted). */
+export function readInputs() {
     const config = DeckConfig.getDeckConfig();
     const format = DeckConfig.getFormat();
     const library = getLibrary(config, format);
-    const onPlay = format.firstPlayerDraws ? true : state.onPlay;
-    return { config, format, library, onPlay };
+    return { config, format, library, onPlay: effectiveOnPlay(state.onPlay, format) };
 }
 
 /** Keep the groups valid for the current library (card list vs bare counts). */
@@ -89,7 +89,7 @@ function fitGroups(library) {
 
 /** Recompute everything. Exported for tests and share links. */
 export function calculate() {
-    const ctx = context();
+    const ctx = readInputs();
     fitGroups(ctx.library);
     const result = O.analyzeOdds({ library: ctx.library, groups: state.groups, format: ctx.format, onPlay: ctx.onPlay });
     last = { ...ctx, result };
@@ -98,27 +98,11 @@ export function calculate() {
 
 // ── Small helpers ────────────────────────────────────────────────────────────
 
-const toneOf = p => (p >= 0.8 ? 'good' : p >= 0.5 ? 'warn' : 'bad');
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-const pctHtml = p => escapeHtml(O.formatPct(p));
+const toneOf = p => toneFor(p, { good: 0.8, warn: 0.5 });
+const pctHtml = p => escapeHtml(pct(p));
 
 function groupColor(index) {
     return TX_CHART.series[SERIES_SLOT[index]] ?? TX_CHART.blue;
-}
-
-function fade(color, alpha) {
-    const value = String(color ?? '').trim();
-    const hex = /^#([0-9a-f]{6})$/i.exec(value);
-    if (hex) {
-        const n = parseInt(hex[1], 16);
-        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-    }
-    const rgb = /rgba?\(([^)]+)\)/.exec(value);
-    if (rgb) {
-        const [r, g, b] = rgb[1].split(',').map(s => s.trim());
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-    return value;
 }
 
 function seenAt(turn, ctx = last) {
@@ -157,7 +141,10 @@ function renderTurnBox(ctx) {
     const key = `${format.key}|${format.firstPlayerDraws}`;
     const meta = document.getElementById('odds-format');
     if (meta) {
-        const tip = library.commanderExcluded ? ' data-tip="Your commander starts in the command zone, so it is not in the library." tabindex="0"' : '';
+        const several = library.commanders?.length > 1;
+        const tip = library.commanderExcluded
+            ? ` data-tip="Your ${several ? 'commanders start' : 'commander starts'} in the command zone, so ${several ? 'they are' : 'it is'} not in the library." tabindex="0"`
+            : '';
         meta.innerHTML = `<span${tip}>${escapeHtml(format.label)} · ${library.size}-card library</span>`;
     }
     if (turnBoxKey !== key || !document.getElementById('odds-turn')) {
@@ -172,11 +159,7 @@ function renderTurnBox(ctx) {
             <input type="range" class="odds-range" id="odds-turn" min="0" max="${O.MAX_TURN}" step="1"
                 value="${state.turn}" aria-labelledby="odds-turn-title">
             <div class="odds-ticks" aria-hidden="true">${ticks}</div>
-            ${format.firstPlayerDraws ? '' : `
-            <div class="seg seg-sm odds-order" role="group" aria-label="Turn order">
-                <button class="seg-btn" type="button" id="odds-play" data-play="1">On the play</button>
-                <button class="seg-btn" type="button" id="odds-draw" data-play="0">On the draw</button>
-            </div>`}
+            ${turnOrderMatters(format) ? turnOrderHTML({ onPlay: ctx.onPlay, className: 'odds-order' }) : ''}
             <p class="odds-hint" id="odds-turn-hint"></p>`);
     }
     syncTurn(ctx);
@@ -199,14 +182,7 @@ function syncTurn(ctx = last) {
     document.querySelectorAll('#odds-turn-box [data-tick]').forEach(t => {
         t.classList.toggle('is-on', Number(t.dataset.tick) === state.turn);
     });
-    const play = document.getElementById('odds-play');
-    const draw = document.getElementById('odds-draw');
-    if (play && draw) {
-        play.classList.toggle('active', ctx.onPlay);
-        draw.classList.toggle('active', !ctx.onPlay);
-        play.setAttribute('aria-pressed', String(ctx.onPlay));
-        draw.setAttribute('aria-pressed', String(!ctx.onPlay));
-    }
+    syncTurnOrder(document.getElementById('odds-turn-box'), ctx.onPlay, ctx.format);
     const hint = document.getElementById('odds-turn-hint');
     if (hint) {
         hint.textContent = ctx.format.firstPlayerDraws
@@ -222,14 +198,14 @@ function syncTurn(ctx = last) {
 function chipHtml(gi, name, copies, missing, idx) {
     const label = escapeHtml(name);
     const body = missing
-        ? `<span class="og-chip-name" data-tip="${missing === 'commander' ? 'Your commander starts in the command zone, so it is never drawn.' : 'Not in this deck’s library'}" tabindex="0">${label}</span>`
+        ? `<span class="og-chip-name" data-tip="${missing === 'commander' ? 'A commander starts in the command zone, so it is never drawn.' : 'Not in this deck’s library'}" tabindex="0">${label}</span>`
         : `${cardRef(name)}${copies > 1 ? `<span class="og-chip-n">×${copies}</span>` : ''}`;
     return `<span class="og-chip${missing ? ' is-missing' : ''}">${body}<button type="button" class="og-chip-x" id="odds-g${gi}-x${idx}" data-act="drop" data-name="${label}" aria-label="Remove ${label} from group ${O.GROUP_IDS[gi]}">×</button></span>`;
 }
 
 function membersHtml(gi, group, resolved, library) {
     if (library.manual) return '';
-    const commander = DeckConfig.getDeckConfig().commanderName;
+    const isCommander = n => (library.commanders ?? []).some(c => sameCard(c, n));
     const names = group.kind === 'cards' ? group.cards : resolved.names;
     if (names.length === 0) return '';
     const sorted = group.kind === 'cards' ? names : names.slice().sort((a, b) =>
@@ -238,7 +214,7 @@ function membersHtml(gi, group, resolved, library) {
     const shown = open ? sorted : sorted.slice(0, MEMBER_PREVIEW);
     const chips = shown.map((n, i) => {
         const card = library.byName.get(n);
-        const missing = card ? null : (n === commander && library.commanderExcluded ? 'commander' : 'missing');
+        const missing = card ? null : (isCommander(n) ? 'commander' : 'missing');
         return chipHtml(gi, n, card?.count ?? 0, missing, i);
     }).join('');
     const rest = sorted.length - shown.length;
@@ -591,7 +567,7 @@ function renderEmpty(ctx) {
         : 'Search your list on the left, start from a type, role or mana value — or open one of these from this deck:';
     return `
         <section class="panel odds-empty" aria-labelledby="odds-empty-title">
-            <p class="odds-eyebrow">${library.size}-card library · ${escapeHtml(format.label)}</p>
+            <p class="odds-eyebrow tx-eyebrow">${library.size}-card library · ${escapeHtml(format.label)}</p>
             <h2 class="odds-empty-title" id="odds-empty-title">What are you hoping to draw?</h2>
             <p class="odds-empty-text">${intro}</p>
             ${cards ? `<div class="odds-sugs">${cards}</div>` : ''}
@@ -642,14 +618,14 @@ function renderChart(result) {
     const multi = result.groups.length > 1;
     const labels = result.turns.map(t => (t.turn === 0 ? 'Hand' : `T${t.turn}`));
     const radius = result.turns.map(t => (t.turn === state.turn ? 5 : 0));
-    const pct = v => Math.round(v * 10000) / 100;
+    const toPercent = v => Math.round(v * 10000) / 100;
     const datasets = result.groups.map((g, i) => {
         const color = groupColor(g.index);
         return {
             label: `${g.id} · ${g.name}`,
-            data: result.turns.map(t => pct(t.each[i])),
+            data: result.turns.map(t => toPercent(t.each[i])),
             borderColor: color,
-            backgroundColor: multi ? color : fade(color, 0.14),
+            backgroundColor: multi ? color : withAlpha(color, 0.14),
             fill: multi ? false : 'origin',
             borderWidth: multi ? 1.75 : 2.5,
             borderDash: multi ? [5, 4] : [],
@@ -664,9 +640,9 @@ function renderChart(result) {
     if (multi) {
         datasets.push({
             label: 'All together',
-            data: result.turns.map(t => pct(t.all)),
+            data: result.turns.map(t => toPercent(t.all)),
             borderColor: TX_CHART.bright,
-            backgroundColor: fade(TX_CHART.bright, 0.07),
+            backgroundColor: withAlpha(TX_CHART.bright, 0.07),
             fill: 'origin',
             borderWidth: 2.75,
             borderDash: [],
@@ -681,7 +657,7 @@ function renderChart(result) {
 
     const canvas = document.getElementById('odds-chart');
     if (canvas) {
-        const series = result.turns.map(t => `${t.turn === 0 ? 'opening hand' : `turn ${t.turn}`} ${O.formatPct(t.all)}`).join(', ');
+        const series = result.turns.map(t => `${t.turn === 0 ? 'opening hand' : `turn ${t.turn}`} ${pct(t.all)}`).join(', ');
         canvas.setAttribute('aria-label', `Chance by turn${multi ? ' of having every group' : ''}: ${series}.`);
     }
 
@@ -705,7 +681,7 @@ function renderChart(result) {
                             const t = last?.result?.turns?.[items[0]?.dataIndex];
                             return t ? `${O.turnLabel(t.turn)} · ${t.seen} cards seen` : '';
                         },
-                        label: item => ` ${item.dataset.label}: ${O.formatPct(item.parsed.y / 100)}`
+                        label: item => ` ${item.dataset.label}: ${pct(item.parsed.y / 100)}`
                     }
                 }
             },
@@ -760,7 +736,7 @@ function heatmapHtml(result) {
             const p = O.atLeastChance(result.N, g.copies, t.seen, k);
             const on = sel && k === g.need;
             const cls = `viz-heat-cell${p >= 0.5 ? ' is-hot' : ''}${p < 0.005 ? ' is-zero' : ''}`;
-            const label = `${O.turnLabel(t.turn)}, at least ${k} from ${g.name}: ${O.formatPct(p)}`;
+            const label = `${O.turnLabel(t.turn)}, at least ${k} from ${g.name}: ${pct(p)}`;
             return `<td><button type="button" class="${cls}" style="--heat:${heatLevel(p)}" data-heat-turn="${t.turn}" data-heat-need="${k}" aria-pressed="${on}" aria-label="${escapeHtml(label)}">${pctHtml(p)}</button></td>`;
         }).join('');
         return `
@@ -900,9 +876,9 @@ function onClick(e) {
         return;
     }
 
-    const play = target.closest('[data-play]');
-    if (play) {
-        state.onPlay = play.dataset.play === '1';
+    const order = turnOrderClicked(e);
+    if (order !== null) {
+        state.onPlay = order;
         refresh();
         return;
     }
@@ -1064,7 +1040,7 @@ export function init() {
  */
 export function focusCard(name) {
     if (typeof name !== 'string' || !name.trim()) return;
-    const { library } = context();
+    const { library } = readInputs();
     const card = O.findCard(library, name);
     state.groups = [library.manual ? O.emptyGroup(true) : O.cardsGroup([card?.name ?? name.trim().slice(0, 160)])];
     state.active = 0;
@@ -1099,7 +1075,7 @@ export function applyShareParams(params) {
     if (draw === '1') state.onPlay = false;
     else if (draw === '0') state.onPlay = true;
 
-    const { library } = context();
+    const { library } = readInputs();
     const groups = [];
     for (const key of ['g1', 'g2', 'g3']) {
         const group = O.decodeGroup(params.get(key));

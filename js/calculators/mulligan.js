@@ -7,27 +7,34 @@
  * imported list (lands, ramp, cards costing 2 or less, …) so their counts
  * follow the deck, or typed by hand.
  *
- * Share links: share.js reads getState() (requirement rows) and the inputs
- * mull-penalty / mull-threshold / mulligan-sample-count; getShareParams()
- * carries the rest (turn order, free mulligan, limits, linked groups).
+ * Share links: `shareInputs` carries the inputs mull-penalty / mull-threshold
+ * / mulligan-sample-count; getShareParams() the rest — the requirement rows
+ * (LZ-String-packed as mullTypes), turn order, free mulligan, limits and
+ * linked groups.
  */
 
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, toneColor } from '../utils/components.js';
 import { escapeHtml } from '../data/glossary.js';
 import { tagDeck } from '../utils/cardTags.js';
-import { isLand } from '../utils/mana.js';
-import { TX_CHART } from '../utils/chartHelpers.js';
+import { cardTypes as typesOf, isLand, landCount, libraryOf, unlistedCopies } from '../utils/library.js';
 import { createCache, debounce } from '../utils/simulation.js';
-import { formatChance } from '../utils/percent.js';
+import { pct } from '../utils/text.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked, turnOrderMatters } from '../utils/turnOrder.js';
 import {
     HAND_SIZE, mulliganPlan, marginalGains, drawSchedule, handSuccess, keepRules,
-    chooseBottom, bottomCount, keepBar
+    bottomCount, keepBar, simulateGames, SAMPLE_GAMES, packRequirements, unpackRequirements
 } from '../utils/mulliganModel.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'mullSims', id: 'mulligan-sample-count', min: 1, max: 10000 },
+    { param: 'mullPenalty', id: 'mull-penalty', min: 0, max: 100, float: true },
+    { param: 'mullThreshold', id: 'mull-threshold', min: 0, max: 100, float: true }
+]);
+
 const NAME = 'mulligan';
-const SAMPLE_DEFAULT = 500;
 const GAMES_SHOWN = 4;
 const STEP_TABS = 4;
 const PRESETS = Object.freeze({
@@ -43,7 +50,7 @@ export const SOURCES = Object.freeze({
     cheap: { label: 'Cards costing 2 or less', name: 'Early plays', unit: 'early plays', needsList: true, test: c => !isLand(c) && (Number(c.cmc) || 0) <= 2 },
     draw: { label: 'Card draw', name: 'Card draw', unit: 'card draw', needsList: true, test: (c, tags) => !isLand(c) && tags.includes('draw') },
     interaction: { label: 'Removal and interaction', name: 'Interaction', unit: 'interaction', needsList: true, test: (c, tags) => tags.some(t => t === 'removal' || t === 'counter' || t === 'wipe') },
-    creature: { label: 'Creatures', name: 'Creatures', unit: 'creatures', needsList: true, test: c => !isLand(c) && /\bcreature\b/i.test(String(c.type_line ?? '').split('//')[0]) }
+    creature: { label: 'Creatures', name: 'Creatures', unit: 'creatures', needsList: true, test: c => !isLand(c) && typesOf(c.type_line).includes('creature') }
 });
 
 const LAND_ROW = Object.freeze({ source: 'land', required: 3, byTurn: 3, max: 5 });
@@ -77,22 +84,26 @@ let deckVersion = 0;
 const $ = id => (typeof document !== 'undefined' ? document.getElementById(id) : null);
 const sum = arr => arr.reduce((s, n) => s + n, 0);
 const groupColor = i => `var(--series-${(i % 6) + 1})`;
-const isHex = v => typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v.trim());
-
-const pct = formatChance;
 
 // ── Deck groups ──────────────────────────────────────────────────────────────
 
+/** The library (commanders are never in it — see library.js) and its tags. */
 function deckData() {
-    const { cardsByName } = DeckConfig.getImportedCardData();
+    const config = DeckConfig.getDeckConfig();
     const hasList = DeckConfig.hasCardList();
-    if (tagCache.ref !== cardsByName) {
-        tagCache = { ref: cardsByName, byCard: hasList ? tagDeck(cardsByName).byCard : {} };
+    const library = hasList ? libraryOf(config) : null;
+    if (tagCache.ref !== library) {
+        tagCache = { ref: library, byCard: library ? tagDeck(library.cards).byCard : {} };
         deckVersion++;
     }
-    const cards = hasList ? Object.values(cardsByName).filter(c => c?.name && Number(c.count) > 0) : [];
-    const config = DeckConfig.getDeckConfig();
-    return { hasList, cards, tags: tagCache.byCard, lands: Number(config.lands) || 0, deckSize: DeckConfig.getDeckSize(true) };
+    const cards = library ? library.cards.slice() : [];
+    return {
+        hasList,
+        cards,
+        tags: tagCache.byCard,
+        lands: library ? landCount(library) : (Number(config.lands) || 0),
+        deckSize: library ? library.size + unlistedCopies(library, config.actualCardCount) : DeckConfig.getDeckSize(true)
+    };
 }
 
 /**
@@ -170,7 +181,7 @@ function readPercent(id, fallback) {
  * Current inputs. Deck size and format come from the active deck.
  * @returns {{deckSize:number, penalty:number, freeMulligan:boolean, confidenceThreshold:number, types:Array, format:Object, onPlay:boolean}}
  */
-export function getDeckConfig() {
+export function readInputs() {
     const deck = syncLinkedCounts();
     const format = DeckConfig.getFormat();
     if (lastFormatKey !== null && lastFormatKey !== format.key) freeOverride = null;
@@ -182,7 +193,7 @@ export function getDeckConfig() {
         confidenceThreshold: readPercent('mull-threshold', 75),
         types: cardTypes,
         format,
-        onPlay: format.firstPlayerDraws ? true : onPlay
+        onPlay: effectiveOnPlay(onPlay, format)
     };
 }
 
@@ -209,7 +220,7 @@ function planKey(config) {
  * @returns {{config:Object, result:Object|null}}
  */
 export function calculate() {
-    const config = getDeckConfig();
+    const config = readInputs();
     if (config.types.length === 0 || config.deckSize <= HAND_SIZE) return { config, result: null };
     const key = planKey(config);
     let result = planCache.get(key);
@@ -282,10 +293,6 @@ export function summarizeMulligan(plan, { names = [], freeMulligan = false } = {
         html += ` The hard part is <strong>${escapeHtml(names[worst] ?? `group ${worst + 1}`)}</strong>: on its own, a random seven gets it only ${pct(plan.alone[worst])} of the time.`;
     }
     return { html, tone };
-}
-
-function toneColor(tone) {
-    return { good: 'var(--tx-good)', warn: 'var(--tx-warn)', bad: 'var(--tx-bad)' }[tone] ?? 'var(--tx-bright)';
 }
 
 function stepLabel(step, free) {
@@ -458,15 +465,7 @@ function refreshGame(config) {
     const { format } = config;
     const label = $('mull-format-label');
     if (label) label.textContent = format.label;
-    const order = $('mull-turn-order');
-    if (order) {
-        order.hidden = !!format.firstPlayerDraws;
-        (order.querySelectorAll?.('[data-play]') ?? []).forEach(btn => {
-            const on = (btn.dataset.play === '1') === config.onPlay;
-            btn.classList.toggle('active', on);
-            btn.setAttribute('aria-pressed', String(on));
-        });
-    }
+    syncTurnOrder($('mull-turn-order'), config.onPlay, format);
     const free = $('mull-free');
     if (free) free.checked = config.freeMulligan;
     const note = $('mull-format-note');
@@ -604,12 +603,12 @@ function renderKeep(config, result) {
 
     el.innerHTML = `
         <div class="mull-keep-body">
-            <p class="mull-keep-caption">${caption}</p>
+            <p class="tx-caption is-inset">${caption}</p>
             ${rules ? `<ul class="mull-rules">${rules.map(r => `
                 <li class="is-${r.call}"><span class="mull-rule-call">${r.call === 'keep' ? 'Keep' : r.call === 'mull' ? 'Mulligan' : 'Depends'}</span>
                 <span><span class="mull-rule-label">${escapeHtml(r.label)}</span>${r.call === 'some' ? ` — ${escapeHtml(r.detail)}` : ''}</span></li>`).join('')}</ul>` : ''}
             ${renderKeepGrid(result, step, names)}
-            ${result.types.length <= 2 ? `<div class="mull-legend"><span class="lg-keep">Keep</span><span>Mulligan</span><span class="lg-over">Over a limit</span><span>Number: chance that hand gets there · bar: how often you see it</span></div>` : ''}
+            ${result.types.length <= 2 ? `<div class="tx-legend mull-legend"><span class="lg-keep">Keep</span><span>Mulligan</span><span class="lg-over">Over a limit</span><span>Number: chance that hand gets there · bar: how often you see it</span></div>` : ''}
         </div>`;
 }
 
@@ -685,16 +684,6 @@ function renderTuning(config, result) {
 
 // ── Sample games ─────────────────────────────────────────────────────────────
 
-function shuffleInPlace(arr, rng) {
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        const t = arr[i];
-        arr[i] = arr[j];
-        arr[j] = t;
-    }
-    return arr;
-}
-
 /**
  * Build the card pool for sample games: the real list when every group is
  * linked to it, otherwise stand-in cards named after each group.
@@ -722,111 +711,9 @@ function samplePool(config, deck) {
     return { pool, real: false };
 }
 
-/**
- * Play the keep rule out on shuffled decks.
- *
- * @param {Object} p
- * @param {Array<{name:string, group:number}>} p.pool - the library, one entry per card
- * @param {Object} p.plan - from mulliganPlan()
- * @param {(turn:number)=>number} p.drawsBy
- * @param {boolean} p.freeMulligan
- * @param {number} [p.games=500]
- * @param {number} [p.detail=40] - games to keep in full for display
- * @param {() => number} [p.rng=Math.random]
- * @returns {{stats:{games:number, keptSeven:number, success:number, avgMulligans:number, avgHandSize:number}, games:Array}}
- */
-export function simulateGames({ pool, plan, drawsBy, freeMulligan, games = SAMPLE_DEFAULT, detail = 40, rng = Math.random }) {
-    const types = plan.types;
-    const n = types.length;
-    const handIndex = new Map(plan.hands.map((h, i) => [h.counts.join(','), i]));
-    const due = types.map(t => drawsBy(t.byTurn));
-    const lastTurn = Math.max(1, ...types.filter(t => t.required > 0).map(t => t.byTurn));
-    const drawCount = Math.max(0, drawsBy(lastTurn));
-    const lastStep = freeMulligan ? HAND_SIZE : HAND_SIZE - 1;
-    const order = pool.map((_, i) => i);
-    const out = [];
-    let keptSeven = 0;
-    let success = 0;
-    let mulls = 0;
-    let handSizes = 0;
-
-    for (let g = 0; g < games; g++) {
-        const mulled = [];
-        for (let step = 0; step <= lastStep; step++) {
-            shuffleInPlace(order, rng);
-            const seven = order.slice(0, HAND_SIZE);
-            const counts = new Array(n).fill(0);
-            seven.forEach(ci => { const grp = pool[ci].group; if (grp >= 0) counts[grp]++; });
-            const others = HAND_SIZE - sum(counts);
-            const planStep = plan.steps[step];
-            const decision = planStep?.decisions[handIndex.get(counts.join(','))];
-            const keep = step === lastStep || !planStep || !!decision?.keep;
-            if (!keep) {
-                if (g < detail) mulled.push(seven.slice());
-                continue;
-            }
-
-            const bottom = bottomCount(step, freeMulligan);
-            const pick = chooseBottom(counts, others, bottom, types, decision?.cut ?? null);
-            const bottomed = new Set();
-            if (pick.legal) {
-                let needOthers = pick.bottomOthers;
-                const needType = pick.bottomByType.slice();
-                for (let k = seven.length - 1; k >= 0; k--) {
-                    const grp = pool[seven[k]].group;
-                    if (grp < 0 && needOthers > 0) { bottomed.add(k); needOthers--; }
-                    else if (grp >= 0 && needType[grp] > 0) { bottomed.add(k); needType[grp]--; }
-                }
-            }
-            const kept = new Array(n).fill(0);
-            seven.forEach((ci, k) => { const grp = pool[ci].group; if (grp >= 0 && !bottomed.has(k)) kept[grp]++; });
-            const draws = order.slice(HAND_SIZE, HAND_SIZE + drawCount);
-            const missing = [];
-            types.forEach((t, i) => {
-                if (t.required <= 0) return;
-                let have = kept[i];
-                for (let d = 0; d < Math.min(due[i], draws.length); d++) if (pool[draws[d]].group === i) have++;
-                if (have < t.required) missing.push(i);
-            });
-            const ok = pick.legal && missing.length === 0;
-
-            if (step === 0) keptSeven++;
-            if (ok) success++;
-            mulls += step;
-            handSizes += HAND_SIZE - bottom;
-            if (g < detail) {
-                out.push({
-                    mulled,
-                    seven: seven.slice(),
-                    bottomed,
-                    draws,
-                    step,
-                    handSize: HAND_SIZE - bottom,
-                    ok,
-                    legal: pick.legal,
-                    missing
-                });
-            }
-            break;
-        }
-    }
-    return {
-        stats: {
-            games,
-            keptSeven: games ? keptSeven / games : 0,
-            success: games ? success / games : 0,
-            avgMulligans: games ? mulls / games : 0,
-            avgHandSize: games ? handSizes / games : 0
-        },
-        games: out,
-        drawsBy,
-        lastTurn
-    };
-}
-
 function sampleCount() {
     const v = parseInt($('mulligan-sample-count')?.value, 10);
-    return Number.isFinite(v) ? Math.min(10000, Math.max(1, v)) : SAMPLE_DEFAULT;
+    return Number.isFinite(v) ? Math.min(10000, Math.max(1, v)) : SAMPLE_GAMES;
 }
 
 function chip(card, names, bottomed = false) {
@@ -944,27 +831,24 @@ export function setCardTypes(types) {
     updateUI();
 }
 
-/**
- * Current state for share links: the rows (with a hex colour per row, which
- * the link format requires) and the keep-rule settings.
- */
+/** The current inputs, with copies of the requirement rows (tests). */
 export function getState() {
-    const config = getDeckConfig();
-    const fallback = isHex(TX_CHART.dim) ? TX_CHART.dim : TX_CHART.series.find(isHex);
-    return {
-        ...config,
-        types: config.types.map((t, i) => {
-            const c = TX_CHART.series[i % TX_CHART.series.length];
-            return { ...t, color: isHex(c) ? c.trim() : fallback };
-        })
-    };
+    const config = readInputs();
+    return { ...config, types: config.types.map(t => ({ ...t })) };
 }
 
-/** Settings share.js doesn't carry on its own. */
+/** LZ-String, when it has loaded (js/shell/vendor.js loads it on demand). */
+function lz() {
+    return typeof window !== 'undefined' ? window.LZString : undefined;
+}
+
+/** Settings beyond the shared inputs: the requirement rows and the game rules. */
 export function getShareParams() {
     const format = DeckConfig.getFormat();
     const params = {};
-    if (!format.firstPlayerDraws && !onPlay) params.mullDraw = 1;
+    const packed = cardTypes.length ? packRequirements(cardTypes, lz()) : null;
+    if (packed) params.mullTypes = packed;
+    if (turnOrderMatters(format) && !onPlay) params.mullDraw = 1;
     if (freeOverride !== null && freeOverride !== format.freeMulligan) params.mullFree = freeOverride ? 1 : 0;
     if (cardTypes.some(t => t.max !== null)) params.mullMax = cardTypes.map(t => t.max ?? '').join(',');
     if (cardTypes.some(t => t.source)) params.mullSrc = cardTypes.map(t => t.source ?? '').join(',');
@@ -974,6 +858,10 @@ export function getShareParams() {
 /** Apply the params from getShareParams(); every value is validated. */
 export function applyShareParams(params) {
     if (!params?.get) return;
+    // The rows first: limits and linked groups below apply to them.
+    const rows = params.get('mullTypes') ? unpackRequirements(params.get('mullTypes'), lz()) : null;
+    if (rows) setCardTypes(rows);
+    else if (params.has('mullTypes')) console.warn('Ignoring unreadable mullTypes');
     if (params.get('mullDraw') === '1') onPlay = false;
     if (params.has('mullFree')) freeOverride = params.get('mullFree') === '1';
     const maxes = (params.get('mullMax') ?? '').split(',');
@@ -1033,9 +921,9 @@ function bindEvents() {
             updateUI();
             return;
         }
-        const play = target.closest('[data-play]');
-        if (play) {
-            onPlay = play.dataset.play === '1';
+        const order = turnOrderClicked(e);
+        if (order !== null) {
+            onPlay = order;
             updateUI();
             return;
         }
@@ -1062,7 +950,7 @@ function bindEvents() {
         const input = e.target;
         if (!(input instanceof HTMLInputElement)) return;
         if (input.id === 'mull-threshold' || input.id === 'mull-penalty') {
-            refreshRule(getDeckConfig());
+            refreshRule(readInputs());
             scheduleUpdate();
             return;
         }

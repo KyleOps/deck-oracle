@@ -22,16 +22,16 @@ const METHOD_TEXT = {
 };
 
 /**
- * Does the current deck contain this calculator's card?
+ * Does the current deck contain this calculator's card — in the library, or
+ * as any of its commanders?
  * @returns {true|false|null} null when the calculator isn't about one card
  */
 export function deckHasCard(name) {
     const entry = CALCULATORS[name];
     if (!entry?.cardInDeck || !entry.card) return null;
-    const config = DeckConfig.getDeckConfig();
     const target = normalizeCardName(entry.card);
-    if (normalizeCardName(config.commanderName ?? '') === target) return true;
-    return Object.values(config.cardsByName ?? {}).some(c =>
+    if (DeckConfig.getCommanderNames().some(n => normalizeCardName(n) === target)) return true;
+    return Object.values(DeckConfig.getImportedCardData().cardsByName ?? {}).some(c =>
         Number(c?.count) > 0 && normalizeCardName(c.name) === target);
 }
 

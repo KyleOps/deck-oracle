@@ -22,6 +22,7 @@
 
 import { choose } from './hypergeometric.js';
 import { FORMATS, cardsSeenByTurn } from './format.js';
+import { shuffle } from './random.js';
 
 export const HAND_SIZE = 7;
 const EPS = 1e-12;
@@ -489,4 +490,154 @@ export function keepRules(plan, stepIndex, names = []) {
     if (mulls.length) out.push({ label: `${mulls.map(range).join(' or ')} ${nameA}`, call: 'mull', detail: 'mulligan', from: Infinity });
     return out.sort((x, y) => (x.call === 'mull') - (y.call === 'mull') || x.from - y.from)
         .map(({ label, call, detail }) => ({ label, call, detail }));
+}
+
+// ── Sample games ─────────────────────────────────────────────────────────────
+
+/** Shuffled games played out by default (the page lets the player change it). */
+export const SAMPLE_GAMES = 500;
+
+/**
+ * Play the keep rule out on shuffled decks.
+ *
+ * @param {Object} p
+ * @param {Array<{name:string, group:number}>} p.pool - the library, one entry per card
+ * @param {Object} p.plan - from mulliganPlan()
+ * @param {(turn:number)=>number} p.drawsBy
+ * @param {boolean} p.freeMulligan
+ * @param {number} [p.games=500]
+ * @param {number} [p.detail=40] - games to keep in full for display
+ * @param {() => number} [p.rng=Math.random]
+ * @returns {{stats:{games:number, keptSeven:number, success:number, avgMulligans:number, avgHandSize:number}, games:Array}}
+ */
+export function simulateGames({ pool, plan, drawsBy, freeMulligan, games = SAMPLE_GAMES, detail = 40, rng = Math.random }) {
+    const types = plan.types;
+    const n = types.length;
+    const handIndex = new Map(plan.hands.map((h, i) => [h.counts.join(','), i]));
+    const due = types.map(t => drawsBy(t.byTurn));
+    const lastTurn = Math.max(1, ...types.filter(t => t.required > 0).map(t => t.byTurn));
+    const drawCount = Math.max(0, drawsBy(lastTurn));
+    const lastStep = freeMulligan ? HAND_SIZE : HAND_SIZE - 1;
+    const order = pool.map((_, i) => i);
+    const out = [];
+    let keptSeven = 0;
+    let success = 0;
+    let mulls = 0;
+    let handSizes = 0;
+
+    for (let g = 0; g < games; g++) {
+        const mulled = [];
+        for (let step = 0; step <= lastStep; step++) {
+            shuffle(order, rng);
+            const seven = order.slice(0, HAND_SIZE);
+            const counts = new Array(n).fill(0);
+            seven.forEach(ci => { const grp = pool[ci].group; if (grp >= 0) counts[grp]++; });
+            const others = HAND_SIZE - counts.reduce((s, c) => s + c, 0);
+            const planStep = plan.steps[step];
+            const decision = planStep?.decisions[handIndex.get(counts.join(','))];
+            const keep = step === lastStep || !planStep || !!decision?.keep;
+            if (!keep) {
+                if (g < detail) mulled.push(seven.slice());
+                continue;
+            }
+
+            const bottom = bottomCount(step, freeMulligan);
+            const pick = chooseBottom(counts, others, bottom, types, decision?.cut ?? null);
+            const bottomed = new Set();
+            if (pick.legal) {
+                let needOthers = pick.bottomOthers;
+                const needType = pick.bottomByType.slice();
+                for (let k = seven.length - 1; k >= 0; k--) {
+                    const grp = pool[seven[k]].group;
+                    if (grp < 0 && needOthers > 0) { bottomed.add(k); needOthers--; }
+                    else if (grp >= 0 && needType[grp] > 0) { bottomed.add(k); needType[grp]--; }
+                }
+            }
+            const kept = new Array(n).fill(0);
+            seven.forEach((ci, k) => { const grp = pool[ci].group; if (grp >= 0 && !bottomed.has(k)) kept[grp]++; });
+            const draws = order.slice(HAND_SIZE, HAND_SIZE + drawCount);
+            const missing = [];
+            types.forEach((t, i) => {
+                if (t.required <= 0) return;
+                let have = kept[i];
+                for (let d = 0; d < Math.min(due[i], draws.length); d++) if (pool[draws[d]].group === i) have++;
+                if (have < t.required) missing.push(i);
+            });
+            const ok = pick.legal && missing.length === 0;
+
+            if (step === 0) keptSeven++;
+            if (ok) success++;
+            mulls += step;
+            handSizes += HAND_SIZE - bottom;
+            if (g < detail) {
+                out.push({
+                    mulled,
+                    seven: seven.slice(),
+                    bottomed,
+                    draws,
+                    step,
+                    handSize: HAND_SIZE - bottom,
+                    ok,
+                    legal: pick.legal,
+                    missing
+                });
+            }
+            break;
+        }
+    }
+    return {
+        stats: {
+            games,
+            keptSeven: games ? keptSeven / games : 0,
+            success: games ? success / games : 0,
+            avgMulligans: games ? mulls / games : 0,
+            avgHandSize: games ? handSizes / games : 0
+        },
+        games: out,
+        drawsBy,
+        lastTurn
+    };
+}
+
+// ── Share links ──────────────────────────────────────────────────────────────
+
+/**
+ * Pack requirement rows for a share link: `[id, name, count, required,
+ * byTurn]` per row, as JSON, LZ-String-compressed (the page passes the codec:
+ * it is loaded on demand). Limits and linked groups travel separately
+ * (`mullMax`, `mullSrc`). Null without a codec.
+ * @param {Array<{id:number, name:string, count:number, required:number, byTurn:number}>} types
+ * @param {{compressToEncodedURIComponent:Function}} [codec]
+ * @returns {string|null}
+ */
+export function packRequirements(types, codec) {
+    if (typeof codec?.compressToEncodedURIComponent !== 'function') return null;
+    const rows = (types ?? []).map(t => [t.id, t.name, t.count, t.required, t.byTurn]);
+    return codec.compressToEncodedURIComponent(JSON.stringify(rows));
+}
+
+/**
+ * Unpack and validate requirement rows from a share link; null if anything is
+ * off. Links made before 3.2 carry a sixth element per row, a hex colour:
+ * accepted (and checked, so nothing but hex digits gets through) but unused.
+ * @param {string} str
+ * @param {{decompressFromEncodedURIComponent:Function}} [codec]
+ * @returns {Array<{id:number, name:string, count:number, required:number, byTurn:number}>|null}
+ */
+export function unpackRequirements(str, codec) {
+    try {
+        const json = codec?.decompressFromEncodedURIComponent?.(str);
+        if (!json) return null;
+        const rows = JSON.parse(json);
+        if (!Array.isArray(rows)) return null;
+        const inRange = (n, max) => typeof n === 'number' && n >= 0 && n <= max;
+        const valid = rows.every(row => Array.isArray(row)
+            && typeof row[0] === 'number'
+            && typeof row[1] === 'string' && row[1].length <= 60
+            && inRange(row[2], 100) && inRange(row[3], 100) && inRange(row[4], 20)
+            && (row[5] === undefined || row[5] === '' || (typeof row[5] === 'string' && /^[0-9a-f]{3,8}$/i.test(row[5]))));
+        return valid ? rows.map(([id, name, count, required, byTurn]) => ({ id, name, count, required, byTurn })) : null;
+    } catch {
+        return null;
+    }
 }

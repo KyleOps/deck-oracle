@@ -19,10 +19,22 @@ describe('Opening Hands calculator', () => {
         }
     });
 
-    it('deals from the library without the commander', () => {
+    it('reads the deck and settings into a plain object, defaults when not mounted', () => {
+        const inputs = Hands.readInputs();
+        assert.strictEqual(inputs.format.key, 'commander');
+        assert.strictEqual(inputs.library.cards.length, DEFAULT_DECK_DATA.actualCardCount);
+        assert.match(inputs.library.key, /\|/);
+        assert.deepStrictEqual(inputs.rule, { ...DEFAULT_RULE });
+        assert.strictEqual(inputs.onPlay, true, 'everyone draws in Commander: the maths is on the play');
+    });
+
+    it('deals from the library without the commanders', () => {
         const r = Hands.calculate();
         const lands = Object.values(DEFAULT_DECK_DATA.cardsByName).filter(c => c.category === 'lands').reduce((s, c) => s + c.count, 0);
-        assert.strictEqual(r.N, DEFAULT_DECK_DATA.actualCardCount - 1);
+        // The list is the 98-card library; both commanders are in the command zone.
+        assert.strictEqual(DEFAULT_DECK_DATA.commanders.length, 2);
+        assert.strictEqual(r.N, DEFAULT_DECK_DATA.actualCardCount);
+        assert.strictEqual(r.N, 98);
         assert.strictEqual(r.L, lands);
     });
 

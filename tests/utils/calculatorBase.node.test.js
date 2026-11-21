@@ -1,7 +1,11 @@
 import { beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    invalidateRenders,
     isCalculatorActive,
+    markRendered,
+    needsRender,
+    owesRender,
     registerCalculator,
     updateCalculatorIfActive
 } from '../../js/utils/calculatorBase.js';
@@ -79,5 +83,58 @@ describe('calculator render lifecycle', () => {
         DeckConfig.updateField('lands', originalLands);
         await new Promise(resolve => setTimeout(resolve, 180));
         assert.equal(renders, 1, 'active calculator should render');
+    });
+});
+
+describe('revisit stamps', () => {
+    it('renders a page the router has never rendered', () => {
+        assert.equal(needsRender('never-rendered'), true);
+    });
+
+    it('skips a revisit when nothing the page shows has changed', () => {
+        markRendered('quiet');
+        assert.equal(needsRender('quiet'), false);
+        assert.equal(needsRender('quiet'), false, 'asking does not change the answer');
+    });
+
+    it('renders every page again after shared state changes', () => {
+        markRendered('first');
+        markRendered('second');
+        invalidateRenders();
+        assert.equal(needsRender('first'), true);
+        assert.equal(needsRender('second'), true);
+        markRendered('first');
+        assert.equal(needsRender('first'), false);
+        assert.equal(needsRender('second'), true, 'each page is current only once it renders');
+    });
+
+    it('renders a page that wanted to render while it was hidden', () => {
+        panels.set('wave-tab', panel(true));
+        markRendered('wave');
+        assert.equal(isCalculatorActive('wave'), true);
+        assert.equal(needsRender('wave'), false, 'a visible page renders itself and owes nothing');
+
+        panels.set('wave-tab', panel(false));
+        let renders = 0;
+        updateCalculatorIfActive('wave', () => { renders += 1; });
+        assert.equal(renders, 0);
+        assert.equal(needsRender('wave'), true, 'the skipped render is owed');
+
+        markRendered('wave');
+        assert.equal(needsRender('wave'), false, 'rendering pays it');
+    });
+
+    it('records misses reported directly (a chart that could not be built)', () => {
+        markRendered('vortex');
+        owesRender('vortex');
+        assert.equal(needsRender('vortex'), true);
+    });
+
+    it('ignores a miss without a page name', () => {
+        markRendered('portent');
+        owesRender(null);
+        owesRender('');
+        owesRender(undefined);
+        assert.equal(needsRender('portent'), false);
     });
 });

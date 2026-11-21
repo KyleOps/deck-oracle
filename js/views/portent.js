@@ -4,10 +4,12 @@
  * js/calculators/portent.js fills the containers.
  */
 
-import { sharedStyles, xControlHTML } from '../utils/bigSpells.js';
+import { injectSharedStyles, xControlHTML } from '../utils/bigSpells.js';
+
+injectSharedStyles();
 
 export const template = `
-<div class="main-grid single-column">
+<div class="main-grid single-column bs-page">
     <section class="panel panel-config" aria-label="Settings">
         ${xControlHTML({
             key: 'portent',
@@ -41,7 +43,7 @@ export const template = `
         <div class="bs-chart">
             <canvas id="portent-combinedChart" role="img" aria-label="Chance of a free spell for each value of X"></canvas>
         </div>
-        <p class="bs-caption">Each bar is the chance a cast exiles four or more cards at that X. Green bars clear 7 in 10, amber 4 in 10. Click a bar to try that X.</p>
+        <p class="tx-caption is-below">Each bar is the chance a cast exiles four or more cards at that X. Green bars clear 7 in 10, amber 4 in 10. Click a bar to try that X.</p>
     </section>
 
     <section class="panel" aria-labelledby="portent-reveal-header">
@@ -50,7 +52,7 @@ export const template = `
             <button class="btn btn-ghost btn-sm" type="button" id="portent-reshuffle-btn">Reshuffle</button>
         </div>
         <div class="bs-samples" id="portent-trials-container"></div>
-        <p class="bs-caption">Real shuffles of your list. Each card shows the type it was exiled for; the costliest spell is the one cast free.</p>
+        <p class="tx-caption is-below">Real shuffles of your list. Each card shows the type it was exiled for; the costliest spell is the one cast free.</p>
     </section>
 
     <section class="panel" aria-labelledby="portent-compare-title">
@@ -65,7 +67,7 @@ export const template = `
         <details class="tx-collapse">
             <summary class="tx-collapse-head">Every X, side by side</summary>
             <div class="tx-collapse-body">
-                <p class="bs-caption">Your X is highlighted; the marked row is the cheapest X that gets the free spell 9 times in 10.</p>
+                <p class="tx-caption is-below">Your X is highlighted; the marked row is the cheapest X that gets the free spell 9 times in 10.</p>
                 <div class="bs-table-wrap" id="portent-sweep"></div>
             </div>
         </details>
@@ -78,7 +80,6 @@ export const template = `
 `;
 
 export const styles = `
-${sharedStyles('#portent-tab')}
 #portent-tab .por-typebar { display: flex; gap: 2px; height: 8px; border-radius: var(--radius-full); overflow: hidden; background: var(--tx-rule); }
 #portent-tab .por-typebar > span { min-width: 3px; }
 #portent-tab .por-types { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 4px 18px; }

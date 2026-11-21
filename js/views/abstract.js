@@ -16,7 +16,7 @@ export const template = `
         <div class="chart-container ap-chart">
             <canvas id="abstract-chart" role="img" aria-label="Share of casts by the mana value of the free spell, for three kinds of opponent"></canvas>
         </div>
-        <p class="ap-caption">How often each mana value is the best spell in the pile you keep. Amber is the realistic opponent, who sees only the face-up pile; red and green are an opponent who always picks right or always picks wrong.</p>
+        <p class="tx-caption">How often each mana value is the best spell in the pile you keep. Amber is the realistic opponent, who sees only the face-up pile; red and green are an opponent who always picks right or always picks wrong.</p>
     </section>
 
     <section class="panel" aria-label="Sample casts">
@@ -41,24 +41,17 @@ export const template = `
 `;
 
 export const styles = `
-#abstract-tab .ap-answer .tx-hero { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); border-bottom: 0; }
+#abstract-tab .ap-answer .tx-hero { border-bottom: 0; }
 #abstract-tab .ap-answer .bottom-line { border-bottom: 1px solid var(--tx-rule); }
 
 #abstract-tab .ap-chart { height: 300px; }
-#abstract-tab .ap-caption {
-    margin: 0;
-    padding: 0 16px 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-}
-#abstract-tab .tx-collapse-body .ap-caption { padding: 0 0 10px; }
+#abstract-tab .tx-collapse-body .tx-caption { padding: 0 0 10px; }
 
 #abstract-tab .ap-samples {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
     gap: 12px;
-    padding: 14px 16px 16px;
+    padding: 14px var(--pad-x) 16px;
 }
 #abstract-tab .ap-sample {
     display: grid;

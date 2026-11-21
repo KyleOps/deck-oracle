@@ -43,7 +43,7 @@ export const template = `
                         <canvas id="odds-chart" role="img" aria-label="Chance by turn"></canvas>
                     </div>
                 </div>
-                <p class="odds-caption" id="odds-caption"></p>
+                <p class="tx-caption is-below" id="odds-caption"></p>
             </section>
 
             <div class="odds-pair">
@@ -88,7 +88,6 @@ export const styles = `
     min-width: 0;
 }
 
-#odds-tab .odds-filled[hidden] { display: none; }
 
 #odds-tab .odds-h {
     margin: 0;
@@ -97,7 +96,7 @@ export const styles = `
     letter-spacing: inherit;
 }
 
-#odds-tab .odds-pad { padding: 14px 16px 16px; }
+#odds-tab .odds-pad { padding: 14px var(--pad-x) 16px; }
 #odds-tab .odds-answer:focus { outline: none; }
 
 /* The typeahead list must be able to hang below its panel. */
@@ -200,7 +199,7 @@ export const styles = `
     position: relative;
     display: grid;
     gap: 10px;
-    padding: 14px 16px;
+    padding: 14px var(--pad-x);
     border-bottom: 1px solid var(--tx-rule);
     transition: background var(--transition-fast);
 }
@@ -274,6 +273,8 @@ export const styles = `
 #odds-tab .odds-sug,
 #odds-tab .odds-rowbtn {
     font-family: inherit;
+    font-size: var(--t-xs);
+    font-weight: 600;
     cursor: pointer;
     transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
@@ -473,8 +474,6 @@ export const styles = `
     box-shadow: var(--shadow-lg);
 }
 
-#odds-tab .og-list[hidden] { display: none; }
-
 #odds-tab .og-opt {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
@@ -533,7 +532,7 @@ export const styles = `
     align-items: center;
     flex-wrap: wrap;
     gap: 8px 12px;
-    padding: 14px 16px 16px;
+    padding: 14px var(--pad-x) 16px;
 }
 
 #odds-tab .odds-addrow .odds-hint { margin: 0; }
@@ -541,14 +540,6 @@ export const styles = `
 /* ---------- Empty state ---------- */
 #odds-tab .odds-empty {
     padding: clamp(24px, 4cqi, 44px) clamp(18px, 3.4cqi, 40px);
-}
-
-#odds-tab .odds-eyebrow {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
 }
 
 #odds-tab .odds-empty-title {
@@ -598,19 +589,15 @@ export const styles = `
 #odds-tab .is-bad { color: var(--tx-bad); }
 
 /* ---------- Answer ---------- */
-#odds-tab .odds-answer .tx-hero {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr));
-    border-bottom: 0;
-}
+#odds-tab .odds-answer .tx-hero { border-bottom: 0; }
 
 #odds-tab .odds-answer .tx-stat { border-right: 1px solid var(--tx-rule); border-bottom: 0; }
 #odds-tab .odds-answer .tx-stat:last-child { border-right: 0; }
 #odds-tab .odds-answer .tx-stat-value.medium { font-size: var(--t-xl); }
 #odds-tab .odds-word { font-family: var(--font-body); font-size: 0.82em; font-weight: 700; letter-spacing: var(--track-tight); }
 
-@container shell (max-width: 760px) {
-    #odds-tab .odds-answer .tx-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Two across (the shared hero grid): a rule between the pair and under the first row. */
+@container shell (max-width: 600px) {
     #odds-tab .odds-answer .tx-stat { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
     #odds-tab .odds-answer .tx-stat:nth-child(odd) { border-right: 1px solid var(--tx-rule); }
     #odds-tab .odds-answer .tx-stat:nth-last-child(-n + 2) { border-bottom: 0; }
@@ -643,13 +630,6 @@ export const styles = `
 
 #odds-tab .odds-chart-wrap { padding: 14px 12px 4px 6px; }
 #odds-tab .odds-chart { height: clamp(220px, 26cqi, 300px); }
-
-#odds-tab .odds-caption {
-    padding: 4px 16px 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-}
 
 /* ---------- Table + members ---------- */
 #odds-tab .odds-pair {
@@ -696,7 +676,6 @@ export const styles = `
 #odds-tab .odds-table tbody tr:last-child > * { border-bottom: 0; }
 #odds-tab .odds-table td { font-family: var(--font-mono); color: var(--tx-text); }
 #odds-tab .odds-table td.dim { color: var(--tx-dim); }
-#odds-tab .odds-table .gcol { color: var(--g); }
 #odds-tab .odds-table tbody tr:hover { background: var(--tx-row-hi); }
 #odds-tab .odds-table tbody tr.is-sel { background: var(--accent-soft); }
 #odds-tab .odds-table tbody tr.is-sel th { box-shadow: inset 3px 0 0 var(--tx-accent); }

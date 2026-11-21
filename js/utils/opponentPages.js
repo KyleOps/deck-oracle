@@ -1,208 +1,26 @@
 /**
- * Shared building blocks for the multiplayer pages — Ensnared by the Mara,
- * Dream Harvest and Mind's Dilation.
+ * The multiplayer pages — Ensnared by the Mara, Dream Harvest and Mind's
+ * Dilation — as one family.
  *
- * All three read the same opponent libraries and need the same things: a
- * compact library model (built once per imported deck), deterministic random
- * draws, distribution helpers, the "no opponents yet" and "loading" states, and
- * the per-opponent markup (seat dot + name, card chips, small bar charts).
- * Keeping them here means the three pages look and behave as one family.
+ * All three read the same opponents and work the same way, so the page itself
+ * is built here: createOpponentPage() takes a page's model and markup and
+ * returns its readInputs() / calculate() / updateUI() / init(), with the
+ * shared behaviour — per-opponent stats cached on each deck, a render only
+ * when the opponents (or the page's settings) changed, the "no opponents yet"
+ * and "loading" states, and sample casts with Reshuffle and Show more.
+ *
+ * Also here: the per-opponent markup (seat dot + name, card chips, small bar
+ * charts, tables) and the family's CSS. The library model, seeded draws and
+ * distribution helpers their maths shares are in
+ * js/utils/models/opponentLibrary.js.
  */
 
 import * as OpponentState from './opponentState.js';
+import { registerCalculator, updateCalculatorIfActive } from './calculatorBase.js';
+import { renderBottomLine } from './components.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
-
-// ── Library model ───────────────────────────────────────────────────────────
-
-const TYPE_ORDER = ['creature', 'planeswalker', 'battle', 'instant', 'sorcery', 'artifact', 'enchantment', 'land'];
-
-/**
- * The front face of a type line, lower-cased. A modal double-faced card in a
- * library has only its front face's characteristics, so "Sorcery // Land" is a
- * nonland card there.
- */
-export function frontFace(typeLine) {
-    return String(typeLine ?? '').split('//')[0].toLowerCase();
-}
-
-/** @returns {boolean} whether a card (by type line) is a land in the library */
-export function isLandType(typeLine) {
-    return /\bland\b/.test(frontFace(typeLine));
-}
-
-/** @returns {boolean} historic = artifact, legendary or Saga (front face) */
-export function isHistoricType(typeLine) {
-    return /\b(artifact|legendary|saga)\b/.test(frontFace(typeLine));
-}
-
-/**
- * Land test that accepts both library records ({land}) and the legacy deck
- * shape used by tests and buildDeckFromCardData ({types: [...]}).
- */
-export function isLandCard(card) {
-    if (typeof card?.land === 'boolean') return card.land;
-    if (Array.isArray(card?.types)) return card.types.includes('land');
-    return isLandType(card?.type_line);
-}
-
-function primaryType(front) {
-    return TYPE_ORDER.find(t => front.includes(t)) ?? 'artifact';
-}
-
-const libraries = new WeakMap();
-
-/**
- * An opponent's library as an array of compact, frozen card records — one per
- * physical card — built once per imported deck object.
- * @param {Object} data - opponent deck data with cardsByName
- * @returns {Array<{name:string, cmc:number, land:boolean, historic:boolean, type:string, types:string[]}>}
- */
-export function libraryOf(data) {
-    if (!data?.cardsByName) return [];
-    const cached = libraries.get(data);
-    if (cached) return cached;
-    const library = [];
-    for (const card of Object.values(data.cardsByName)) {
-        const count = Math.max(0, Math.floor(card?.count ?? 1));
-        if (!count) continue;
-        const front = frontFace(card?.type_line);
-        const land = isLandType(card?.type_line);
-        const type = land ? 'land' : primaryType(front);
-        const record = Object.freeze({
-            name: String(card?.name ?? 'Unknown card'),
-            cmc: Math.max(0, Number(card?.cmc) || 0),
-            land,
-            historic: !land && isHistoricType(card?.type_line),
-            type,
-            types: Object.freeze([type])
-        });
-        for (let i = 0; i < count; i++) library.push(record);
-    }
-    libraries.set(data, library);
-    return library;
-}
-
-// ── Randomness ──────────────────────────────────────────────────────────────
-
-/** 32-bit FNV-1a hash. */
-export function hashString(text) {
-    let h = 0x811c9dc5;
-    const s = String(text);
-    for (let i = 0; i < s.length; i++) {
-        h ^= s.charCodeAt(i);
-        h = Math.imul(h, 0x01000193);
-    }
-    return h >>> 0;
-}
-
-/** Small, fast seeded PRNG (mulberry32) → () => [0, 1). */
-export function seededRandom(seed) {
-    let a = seed >>> 0;
-    return () => {
-        a = (a + 0x6d2b79f5) >>> 0;
-        let t = a;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
-
-/** A seed that depends only on the list's contents: same deck, same answer. */
-export function deckSeed(library) {
-    const counts = new Map();
-    for (const card of library) counts.set(card.name, (counts.get(card.name) ?? 0) + 1);
-    return hashString([...counts].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([n, c]) => `${c} ${n}`).join('\n'));
-}
-
-/**
- * Reveal cards from the top of a shuffled library one at a time, shuffling only
- * as far as the reveal goes (a lazy Fisher–Yates). Call reset() before each run;
- * the pool stays a permutation, so continuing the shuffle from it is still
- * uniform and nothing is re-allocated between runs.
- * @param {Array} cards
- * @param {Function} [rng=Math.random]
- */
-export function createRevealer(cards, rng = Math.random) {
-    const pool = cards.slice();
-    let next = 0;
-    return {
-        reset() { next = 0; },
-        reveal() {
-            if (next >= pool.length) return null;
-            const j = next + Math.floor(rng() * (pool.length - next));
-            const card = pool[j];
-            pool[j] = pool[next];
-            pool[next] = card;
-            next += 1;
-            return card;
-        }
-    };
-}
-
-// ── Distributions & formatting ──────────────────────────────────────────────
-
-/**
- * Smallest value v with P(X ≤ v) ≥ q, for a distribution given as an array of
- * weights indexed by value (counts or probabilities).
- */
-export function quantile(dist, q) {
-    let total = 0;
-    for (const w of dist) total += w || 0;
-    if (!(total > 0)) return 0;
-    const target = q * total - 1e-9;
-    let cum = 0;
-    for (let v = 0; v < dist.length; v++) {
-        cum += dist[v] || 0;
-        if (cum >= target) return v;
-    }
-    return dist.length - 1;
-}
-
-/** The middle half of outcomes, [25th, 75th percentile]. */
-export function typicalRange(dist) {
-    return [quantile(dist, 0.25), quantile(dist, 0.75)];
-}
-
-/** "3" or "2–4". */
-export function formatRange([lo, hi]) {
-    return lo === hi ? `${lo}` : `${lo}–${hi}`;
-}
-
-/** Whole-number percentage, with honest ends: "<1%" and ">99%" instead of 0/100 for rare outcomes. */
-export function formatPct(p) {
-    const x = Number.isFinite(p) ? p : 0;
-    if (x > 0 && x < 0.005) return '<1%';
-    if (x < 1 && x > 0.995) return '>99%';
-    return `${Math.round(x * 100)}%`;
-}
-
-/** One decimal. */
-export function fmt1(x) {
-    return (Number.isFinite(x) ? x : 0).toFixed(1);
-}
-
-/** P(X ≥ k) from a weight array. */
-export function tailAtLeast(dist, k) {
-    let total = 0;
-    let tail = 0;
-    dist.forEach((w, v) => {
-        total += w || 0;
-        if (v >= k) tail += w || 0;
-    });
-    return total > 0 ? tail / total : 0;
-}
-
-/** Bucket a distribution: values ≥ cap pile into the last bucket. */
-export function capDistribution(dist, cap) {
-    const out = new Array(cap + 1).fill(0);
-    dist.forEach((w, v) => { out[Math.min(v, cap)] += w || 0; });
-    return out;
-}
-
-/** "the three decks" / "this deck" style counts in prose. */
-export function countWord(n) {
-    return ['no', 'one', 'two', 'three', 'four', 'five'][n] ?? String(n);
-}
+import { pct } from './text.js';
+import { countWord } from './models/opponentLibrary.js';
 
 // ── Page state ──────────────────────────────────────────────────────────────
 
@@ -257,6 +75,200 @@ export function frameScheduler(fn) {
     };
 }
 
+// ── The page ────────────────────────────────────────────────────────────────
+
+/**
+ * Build a multiplayer page. The page module passes its model and markup and
+ * exports what comes back:
+ *
+ *     const page = createOpponentPage({ key: 'mara', stats: calculateMaraStats, … });
+ *     export const { readInputs, calculate, updateUI, init } = page;
+ *
+ * Rows handed to `summarize`, `hero` and `sections` are
+ * `{ opp, name, stats }`, one per opponent with a deck (seat order).
+ *
+ * @param {Object} spec
+ * @param {string} spec.key - calculator key; the page root is `#<key>-tab`
+ * @param {(data:Object, settings:Object) => Object|null} spec.stats - one opponent's numbers (the model), cached per deck
+ * @param {(settings:Object) => string} [spec.statsKey] - the settings `stats` depends on, as a cache key
+ * @param {() => Object} [spec.settings] - the page's own settings; part of readInputs() and of the render signature
+ * @param {(rows:Array, settings:Object) => {html:string, tone:string}} spec.summarize - the bottom line
+ * @param {(rows:Array, settings:Object) => string} spec.hero - hero stats markup
+ * @param {(rows:Array, ctx:{panel:Element, settings:Object}) => string} spec.sections - the evidence under the hero
+ * @param {Object} spec.placeholder - copy for renderOpponentPlaceholder()
+ * @param {{summary?:string, detail?:string, options?:string}} [spec.layout] - element ids: the
+ *   placeholder or the answer goes in `summary` (default `<key>-results`); with `detail`, the
+ *   sections go there instead; `options` (static controls) shows only once there are opponents
+ * @param {Object} [spec.sample] - sample casts: real shuffles, kept until Reshuffle
+ * @param {string} spec.sample.panel - element id; hidden while there are no opponents
+ * @param {string} [spec.sample.list] - element id the samples render into (default: the panel)
+ * @param {number} spec.sample.count - samples drawn per opponent per shuffle
+ * @param {number} [spec.sample.batch] - shown at first and per "Show more" (default: all of them)
+ * @param {(opp:Object) => Array} spec.sample.draw - `count` samples against one opponent's list
+ * @param {(opponents:Array, samples:Array<Array>, shown:number, settings:Object) => string} spec.sample.render
+ * @param {(root:Element|null, page:Object) => void} [spec.bind] - page-specific wiring, once at init
+ * @param {() => {opponents:Array, loading:string[], errors:string[], signature:string}} [spec.read] - the opponents (default readOpponents; tests pass their own)
+ * @returns {{readInputs:Function, calculate:Function, updateUI:Function, init:Function, rows:Function, renderSamples:Function, sampleAction:Function}}
+ */
+export function createOpponentPage(spec) {
+    const {
+        key, stats, statsKey = () => '', settings: readSettings = () => ({}), summarize, hero, sections,
+        placeholder, sample = null, bind = null, read = readOpponents
+    } = spec;
+    const layout = { summary: `${key}-results`, ...spec.layout };
+    const byId = id => (id && typeof document !== 'undefined' ? document.getElementById(id) : null);
+
+    const statsCache = new WeakMap();
+    const sampleCache = new Map();
+    let lastSignature = null;
+    let round = 0;
+    const batch = () => sample?.batch ?? sample?.count ?? 0;
+    let shown = batch();
+
+    function inputs() {
+        return { state: read(), settings: readSettings() };
+    }
+
+    function statsFor(data, settings) {
+        let entry = statsCache.get(data);
+        if (!entry) statsCache.set(data, (entry = new Map()));
+        const k = statsKey(settings);
+        if (!entry.has(k)) entry.set(k, stats(data, settings));
+        return entry.get(k);
+    }
+
+    /** One row per opponent with a deck the model could read. */
+    function rowsFor(state, settings) {
+        return state.opponents
+            .map(opp => ({ opp, name: opp.name, stats: statsFor(opp.data, settings) }))
+            .filter(r => r.stats);
+    }
+
+    function samplesFor(opp) {
+        const id = `${objectId(opp.data)}:${round}`;
+        if (!sampleCache.has(id)) sampleCache.set(id, sample.draw(opp));
+        return sampleCache.get(id);
+    }
+
+    function renderResults(state, settings) {
+        const summary = byId(layout.summary);
+        const detail = byId(layout.detail);
+        if (!summary || (layout.detail && !detail)) return;
+        const options = byId(layout.options);
+        if (state.opponents.length === 0) {
+            summary.innerHTML = renderOpponentPlaceholder(placeholder, state);
+            if (detail) detail.innerHTML = '';
+            if (options) options.hidden = true;
+            return;
+        }
+        if (options) options.hidden = false;
+        const rows = rowsFor(state, settings);
+        const answer = `
+        ${renderLoadingNote(state)}
+        ${renderBottomLine(summarize(rows, settings))}
+        ${hero(rows, settings)}`;
+        const evidence = sections(rows, { panel: summary, settings });
+        if (detail) {
+            summary.innerHTML = answer;
+            detail.innerHTML = evidence;
+        } else {
+            summary.innerHTML = answer + evidence;
+        }
+    }
+
+    function renderSamples(state, settings) {
+        if (!sample) return;
+        const panel = byId(sample.panel);
+        const target = sample.list ? byId(sample.list) : panel;
+        if (!panel || !target) return;
+        panel.hidden = state.opponents.length === 0;
+        if (panel.hidden) {
+            target.innerHTML = '';
+            return;
+        }
+        target.innerHTML = sample.render(state.opponents, state.opponents.map(samplesFor), shown, settings);
+    }
+
+    /** "reshuffle" (new shuffles) or "more" (another batch); re-renders the samples only. */
+    function sampleAction(action) {
+        if (!sample) return;
+        if (action === 'reshuffle') {
+            round += 1;
+            sampleCache.clear();
+        } else if (action === 'more') {
+            shown = Math.min(sample.count, shown + batch());
+        } else {
+            return;
+        }
+        const { state, settings } = inputs();
+        renderSamples(state, settings);
+    }
+
+    const page = {
+        /** The opponents with decks, their import state, a signature of both, and the page's settings. */
+        readInputs() {
+            const { state, settings } = inputs();
+            return { ...state, ...settings };
+        },
+
+        /**
+         * Stats for every active opponent with a deck, keyed by seat.
+         * @returns {Object<string, Object>}
+         */
+        calculate() {
+            const { state, settings } = inputs();
+            const results = {};
+            for (const opp of state.opponents) {
+                const s = statsFor(opp.data, settings);
+                if (s) results[opp.key] = s;
+            }
+            return results;
+        },
+
+        /** Render — only when the opponents, their import state or the page's settings changed. */
+        updateUI() {
+            const { state, settings } = inputs();
+            const signature = `${state.signature}|${JSON.stringify(settings)}`;
+            if (signature === lastSignature && byId(layout.summary)?.firstElementChild) return;
+            lastSignature = signature;
+            shown = batch();
+            // Keep the samples of decks that are still loaded; drop the rest.
+            const live = new Set(state.opponents.map(o => String(objectId(o.data))));
+            for (const id of sampleCache.keys()) if (!live.has(id.split(':')[0])) sampleCache.delete(id);
+            renderResults(state, settings);
+            renderSamples(state, settings);
+        },
+
+        init() {
+            const scheduleRender = frameScheduler(() => updateCalculatorIfActive(key, page.updateUI));
+            OpponentState.onOpponentChange(scheduleRender);
+            registerCalculator({
+                name: key,
+                calculate: page.calculate,
+                updateUI: page.updateUI,
+                init: () => {
+                    const root = byId(`${key}-tab`);
+                    bindOpponentActions(root);
+                    root?.addEventListener('click', e => {
+                        const action = e.target.closest?.('[data-opp-sample]')?.dataset.oppSample;
+                        if (action) sampleAction(action);
+                    });
+                    bind?.(root, page);
+                }
+            });
+        },
+
+        /** The rows the page renders now (tests). */
+        rows() {
+            const { state, settings } = inputs();
+            return rowsFor(state, settings);
+        },
+
+        sampleAction
+    };
+    return page;
+}
+
 // ── Markup ──────────────────────────────────────────────────────────────────
 
 /** Seat dot + deck name (+ optional sub line). */
@@ -300,13 +312,57 @@ export function miniBars({ title, probs, label, scaleMax = null, color = 'var(--
         return `<div class="opp-bar-row${dimFn?.(i) ? ' is-dim' : ''}">
             <span class="opp-bar-label">${label(i)}</span>
             <span class="opp-bar-track"><span class="opp-bar-fill" style="width:${width.toFixed(1)}%"></span></span>
-            <span class="opp-bar-val">${formatPct(p)}</span>
+            <span class="opp-bar-val">${pct(p)}</span>
         </div>`;
     }).join('');
     return `<div class="opp-bars" style="--bar:${color}">
         <div class="opp-bars-title">${escapeHtml(title)}</div>
         ${rows}
     </div>`;
+}
+
+/**
+ * A section heading: title on the left, a short note on the right.
+ * @param {string} title
+ * @param {string} [sub]
+ */
+export function sectionHeadHTML(title, sub = '') {
+    return `
+        <div class="opp-section-head">
+            <h2 class="opp-section-title">${title}</h2>
+            ${sub ? `<span class="opp-section-sub">${sub}</span>` : ''}
+        </div>`;
+}
+
+/**
+ * The opponent-by-opponent table: one row per opponent, plus a total row when
+ * there are several. Cells carry `data-label` so narrow screens can show each
+ * row as a card.
+ * @param {{head:string[], body:string, foot?:string}} parts - `body` is `<tr>` rows; `foot` the total row's cells
+ */
+export function opponentTableHTML({ head, body, foot = '' }) {
+    return `<div class="opp-table-wrap"><table class="opp-table">
+        <thead><tr>${head.map(label => `<th scope="col">${label}</th>`).join('')}</tr></thead>
+        <tbody>${body}</tbody>${foot ? `<tfoot><tr>${foot}</tr></tfoot>` : ''}
+    </table></div>`;
+}
+
+/**
+ * The "Sample casts" panel: a heading with Reshuffle, the games, and "Show
+ * more" while there are more to show (createOpponentPage() handles both).
+ * @param {{sub:string, games:string, more?:boolean, before?:string, title?:string}} parts
+ */
+export function sampleCastsHTML({ sub, games, more = false, before = '', title = 'Sample casts' }) {
+    return `
+        <div class="opp-section-head">
+            <div>
+                <h2 class="opp-section-title">${title}</h2>
+                <p class="opp-section-sub">${sub}</p>
+            </div>
+            <div class="opp-section-actions"><button type="button" class="btn btn-ghost btn-sm" data-opp-sample="reshuffle">Reshuffle</button></div>
+        </div>${before}
+        <div class="opp-games">${games}</div>
+        ${more ? '<div class="opp-more"><button type="button" class="btn btn-ghost btn-sm" data-opp-sample="more">Show more casts</button></div>' : ''}`;
 }
 
 /**
@@ -419,11 +475,12 @@ export function bindOpponentActions(root) {
 }
 
 /**
- * CSS shared by the three multiplayer pages, scoped to one page root. Each
- * view's `styles` export includes it.
- * @param {string} s - scope selector, e.g. '#mara-tab'
+ * CSS shared by the three multiplayer pages. Scoped under `.opp-page` (the
+ * root of each view's template) so one copy serves all three: see
+ * injectOpponentPageStyles().
+ * @param {string} [s]
  */
-export function opponentPageStyles(s) {
+export function opponentPageStyles(s = '.opp-page') {
     return `
 ${s} .opp-empty { display: grid; gap: 20px; padding: clamp(20px, 3cqi, 36px); }
 ${s} .opp-empty-intro { display: grid; gap: 8px; }
@@ -432,7 +489,7 @@ ${s} .opp-empty-lead { font-size: var(--t-body); color: var(--tx-mid); line-heig
 ${s} .opp-steps { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; padding: 0; margin: 0; }
 ${s} .opp-step {
     display: grid; gap: 8px; align-content: start;
-    padding: 14px 16px;
+    padding: 14px var(--pad-x);
     background: var(--tx-panel-alt); border: 1px solid var(--tx-rule); border-radius: var(--radius-md);
 }
 ${s} .opp-step-kicker {
@@ -473,7 +530,7 @@ ${s} .opp-skeleton span {
 ${s} .opp-skeleton span:nth-child(2) { width: 82%; }
 ${s} .opp-skeleton span:nth-child(3) { width: 64%; }
 ${s} .opp-note {
-    display: flex; align-items: center; padding: 10px 16px;
+    display: flex; align-items: center; padding: 10px var(--pad-x);
     border-bottom: 1px solid var(--tx-rule); font-size: var(--t-xs); color: var(--tx-mid);
 }
 
@@ -488,12 +545,12 @@ ${s} .opp-section-actions { display: flex; gap: 6px; }
 ${s} .opp-table-wrap { overflow-x: auto; }
 ${s} .opp-table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
 ${s} .opp-table th {
-    padding: 8px 16px; text-align: right; white-space: nowrap;
+    padding: 8px var(--pad-x); text-align: right; white-space: nowrap;
     font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim);
     border-bottom: 1px solid var(--tx-rule);
 }
 ${s} .opp-table td {
-    padding: 12px 16px; text-align: right; white-space: nowrap; vertical-align: middle;
+    padding: var(--pad-y) var(--pad-x); text-align: right; white-space: nowrap; vertical-align: middle;
     font-family: var(--font-mono); font-feature-settings: 'tnum' 1; color: var(--tx-text);
     border-bottom: 1px solid var(--tx-rule);
 }
@@ -508,7 +565,7 @@ ${s} .opp-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; w
 ${s} .opp-name-sub { flex: none; font-size: var(--t-xs); color: var(--tx-dim); font-weight: 400; }
 
 ${s} .opp-multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); border-top: 1px solid var(--tx-rule); }
-${s} .opp-multiple { min-width: 0; padding: 14px 16px 16px; border-right: 1px solid var(--tx-rule); border-bottom: 1px solid var(--tx-rule); margin: 0 -1px -1px 0; }
+${s} .opp-multiple { min-width: 0; padding: 14px var(--pad-x) 16px; border-right: 1px solid var(--tx-rule); border-bottom: 1px solid var(--tx-rule); margin: 0 -1px -1px 0; }
 ${s} .opp-multiple-head { margin-bottom: 4px; }
 ${s} .opp-bars { display: grid; gap: 3px; margin-top: 12px; }
 ${s} .opp-bars-title { font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); margin-bottom: 4px; }
@@ -518,9 +575,9 @@ ${s} .opp-bar-track { height: 10px; border-radius: 2px; background: var(--tx-bg)
 ${s} .opp-bar-fill { display: block; height: 100%; border-radius: 2px; background: var(--bar); }
 ${s} .opp-bar-val { color: var(--tx-text); text-align: right; }
 ${s} .opp-bar-row.is-dim .opp-bar-fill { background: var(--tx-rule-hi); }
-${s} .opp-disclosure > .tx-collapse-head { padding: 12px 16px; }
+${s} .opp-disclosure > .tx-collapse-head { padding: var(--pad-y) var(--pad-x); }
 ${s} .opp-disclosure > .opp-multiples { border-top: 0; }
-${s} .opp-caption { padding: 10px 16px 14px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.55; max-width: 90ch; }
+${s} .tx-caption { max-width: 90ch; }
 
 ${s} .opp-chip {
     display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
@@ -535,18 +592,16 @@ ${s} .opp-chip.is-dim { opacity: 0.7; }
 ${s} .opp-chip-mv { flex: none; font-family: var(--font-mono); font-size: var(--t-label); color: var(--tx-mid); }
 ${s} .opp-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
 ${s} .opp-arrow { color: var(--tx-dim); padding: 0 2px; }
-${s} .opp-total { font-family: var(--font-mono); font-weight: 600; color: var(--tx-bright); white-space: nowrap; }
 ${s} .opp-miss { font-size: var(--t-xs); color: var(--tx-dim); }
 
 ${s} .opp-games { display: grid; }
-${s} .opp-game { display: grid; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--tx-rule); }
-${s} .opp-game-head { font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); }
-${s} .opp-more { display: flex; justify-content: center; padding: 12px 16px 16px; border-top: 1px solid var(--tx-rule); }
+${s} .opp-game { display: grid; gap: 10px; padding: 14px var(--pad-x); border-top: 1px solid var(--tx-rule); }
+${s} .opp-more { display: flex; justify-content: center; padding: var(--pad-y) var(--pad-x) 16px; border-top: 1px solid var(--tx-rule); }
 
 @container shell (max-width: 640px) {
     ${s} .opp-table thead { display: none; }
     ${s} .opp-table, ${s} .opp-table tbody, ${s} .opp-table tfoot { display: block; }
-    ${s} .opp-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: 12px 16px; border-bottom: 1px solid var(--tx-rule); }
+    ${s} .opp-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: var(--pad-y) var(--pad-x); border-bottom: 1px solid var(--tx-rule); }
     ${s} .opp-table tfoot tr { background: var(--tx-panel-alt); }
     ${s} .opp-table td { padding: 0; border: 0; text-align: left; white-space: normal; background: none !important; }
     ${s} .opp-table td:first-child { grid-column: 1 / -1; }
@@ -562,4 +617,17 @@ ${s} .opp-more { display: flex; justify-content: center; padding: 12px 16px 16px
     ${s} .opp-skeleton span { animation: none; }
 }
 `;
+}
+
+/**
+ * Add the shared multiplayer-page CSS to the document once, however many of those pages are opened
+ * (each view calls this when it loads). A no-op outside a browser.
+ * @param {Document} [doc]
+ */
+export function injectOpponentPageStyles(doc = globalThis.document) {
+    if (!doc?.head || doc.querySelector('style[data-owner="opponent-pages"]')) return;
+    const style = doc.createElement('style');
+    style.dataset.owner = 'opponent-pages';
+    style.textContent = opponentPageStyles();
+    doc.head.appendChild(style);
 }

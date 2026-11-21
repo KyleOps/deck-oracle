@@ -7,40 +7,44 @@
  */
 
 import * as DeckConfig from './utils/deckConfig.js';
-import * as OpponentState from './utils/opponentState.js';
 import * as Share from './utils/share.js';
 import { analyzeDeck } from './utils/deckRadar.js';
 import { featuredCardName } from './utils/deckStats.js';
+import { commanderLabel } from './utils/commanders.js';
 import { findCard } from './data/images.js';
 import { FORMATS } from './utils/format.js';
 import { debounce } from './utils/simulation.js';
 import { CALCULATORS, DEFAULT_TAB } from './utils/calculatorRegistry.js';
-import { initRouter, navigate, ensureMounted, currentTab, refreshCurrent, onNavigate, onNavigated, step, tabFromUrl, mountedModule } from './shell/router.js';
+import { initRouter, navigate, ensureMounted, currentTab, onNavigate, onNavigated, step, tabFromUrl, mountedModule, afterFirstPage } from './shell/router.js';
 import { initSidebar, markRelevance, renderDeckSwitcher } from './shell/sidebar.js';
 import { initGuide, openGuide, isGuideOpen, refreshPageHeader } from './shell/pageHeader.js';
 import { initPalette, openPalette } from './shell/palette.js';
 import { initDeckDialog, openDeckDialog, renderSavedDecks } from './shell/deckDialog.js';
 import { initOverlays, toast } from './shell/overlays.js';
-import { initTheme, toggleTheme, onThemeChange } from './shell/theme.js';
-
-const EXAMPLE_OPPONENTS = [
-    'https://moxfield.com/decks/NVsnEkQ3y02ATHYk6n1pTA',
-    'https://moxfield.com/decks/Vpiz7R8Rfk-0J7yX0AUQtA',
-    'https://moxfield.com/decks/KP_jB2nYqUmQHVjYQeldyA'
-];
+import { initTheme, toggleTheme } from './shell/theme.js';
+import { ensureLzString } from './shell/vendor.js';
 
 // ── Deck-dependent chrome ────────────────────────────────────────────────────
 
 function deckSummary(config) {
-    const size = DeckConfig.getDeckSize(true);
+    const size = DeckConfig.getDeckTotal();
     const format = DeckConfig.getFormat();
+    const commanders = commanderLabel(DeckConfig.getCommanderNames());
     const name = config.deckName
-        || (config.commanderName ? `${config.commanderName}` : null)
+        || commanders
         || (config.importSource === 'manual' ? 'Custom counts' : 'Untitled deck');
-    const parts = [`${size} cards`, format.label.replace(/ \(\d+\)/, '')];
+    // "100 cards" for 98 + 2 commanders: a deck is counted the way players count it.
+    const parts = [size.label, format.label.replace(/ \(\d+\)/, '')];
     if (config.importSource === 'manual') parts.push('counts only');
     const artName = featuredCardName(config);
-    return { name, meta: parts.join(' · '), artName, artCard: findCard(config.cardsByName, artName) };
+    return {
+        name,
+        nameTitle: commanders && commanders !== name ? `${name} — ${commanders}` : name,
+        meta: parts.join(' · '),
+        metaTitle: size.detail,
+        artName,
+        artCard: findCard(config.cardsByName, artName) ?? DeckConfig.getCommanders()[0]?.card ?? null
+    };
 }
 
 function syncDeckChrome() {
@@ -60,51 +64,43 @@ function syncDeckChrome() {
 
 // ── Opponents bar (multiplayer pages) ────────────────────────────────────────
 
+/** Pages that read opponents' decks show the opponents bar. */
+const usesOpponentBar = name => Boolean(CALCULATORS[name]?.needsOpponents || CALCULATORS[name]?.group === 'multiplayer');
+
+/**
+ * The bar (js/shell/opponentBar.js) loads with the first page that uses it;
+ * every other page leaves it hidden and never downloads it.
+ */
 function initOpponentsBar() {
     const bar = document.getElementById('opponents-config');
-    const body = document.getElementById('opponents-body');
-    const toggle = document.getElementById('opponents-toggle');
+    let module = null;
+    let wanted = null;
+    const load = () => (module ??= import('./shell/opponentBar.js').then(m => {
+        m.initOpponentBar();
+        return m;
+    }).catch(err => {
+        module = null;
+        console.error('Opponents bar failed to load:', err);
+        return null;
+    }));
     onNavigate(name => {
-        if (bar) bar.hidden = CALCULATORS[name]?.group !== 'multiplayer';
+        wanted = usesOpponentBar(name) ? name : null;
+        if (bar && !wanted) bar.hidden = true;
+        if (wanted) load();
     });
-    // Seat the bar under the page header, so a multiplayer page opens with
-    // what the card does before asking for decklists.
     onNavigated((name, panel) => {
-        if (!bar || CALCULATORS[name]?.group !== 'multiplayer') return;
-        const body = panel.querySelector(':scope > .calc-body');
-        if (body && bar.nextElementSibling !== body) body.before(bar);
-    });
-    toggle?.addEventListener('click', () => {
-        const open = toggle.getAttribute('aria-expanded') !== 'true';
-        toggle.setAttribute('aria-expanded', String(open));
-        toggle.textContent = open ? 'Hide' : 'Show';
-        if (body) body.hidden = !open;
-    });
-
-    const exampleBtn = document.getElementById('load-example-opponents-btn');
-    exampleBtn?.addEventListener('click', async () => {
-        const label = exampleBtn.textContent;
-        exampleBtn.textContent = 'Loading…';
-        exampleBtn.disabled = true;
-        try {
-            while (OpponentState.getActiveOpponents().length < 3) OpponentState.addOpponent();
-            await Promise.all(EXAMPLE_OPPONENTS.map((url, i) =>
-                OpponentState.importOpponentDeck(`opponent${i + 1}`, url, true)));
-            OpponentState.renderOpponentTabs();
-            toast('Loaded three example opponents.', { tone: 'good' });
-        } catch (e) {
-            console.error('Failed to load example opponents', e);
-            toast('Couldn’t load the example opponents. Check your connection.', { tone: 'bad' });
-        } finally {
-            exampleBtn.textContent = label;
-            exampleBtn.disabled = false;
-        }
+        if (!usesOpponentBar(name)) return;
+        load().then(m => { if (m && wanted === name) m.showBar(panel); });
     });
 }
 
 // ── Share ────────────────────────────────────────────────────────────────────
 
 async function copyShareLink() {
+    // Share links pack mulligan requirements with LZ-String. It is normally
+    // here already (loaded once the first page is up); only a very early
+    // click waits for it.
+    await ensureLzString();
     const url = Share.getShareUrl(currentTab());
     try {
         await navigator.clipboard.writeText(url);
@@ -159,6 +155,12 @@ function initShortcuts() {
 
 // ── PWA ──────────────────────────────────────────────────────────────────────
 
+/** Run `task` once the window `load` event has fired (now, if it already has). */
+function afterLoad(task) {
+    if (document.readyState === 'complete') task();
+    else window.addEventListener('load', () => task(), { once: true });
+}
+
 function initServiceWorker() {
     // Never on localhost: stale-while-revalidate would serve the previous
     // build's CSS/JS during development and every edit would appear to do nothing.
@@ -168,23 +170,29 @@ function initServiceWorker() {
         return;
     }
     if (!('serviceWorker' in navigator)) return;
-    window.addEventListener('load', () => {
-        const swPath = new URL('sw.js', document.baseURI).pathname;
-        navigator.serviceWorker.register(swPath).then(reg => {
-            // A new version installed in the background → offer a reload.
-            reg.addEventListener('updatefound', () => {
-                const worker = reg.installing;
-                worker?.addEventListener('statechange', () => {
-                    if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-                        toast('A new version of Deck Oracle is ready.', {
-                            timeout: 12000,
-                            action: { label: 'Reload', run: () => window.location.reload() }
-                        });
-                    }
-                });
+    // The install precaches every asset (~720 KB compressed), so it waits for
+    // the landing page to finish loading, paint and go idle. The page may
+    // well have loaded already by now — a plain `load` listener added here
+    // would then never fire, which is how registration silently stopped.
+    afterFirstPage(() => afterLoad(registerServiceWorker));
+}
+
+function registerServiceWorker() {
+    const swPath = new URL('sw.js', document.baseURI).pathname;
+    navigator.serviceWorker.register(swPath).then(reg => {
+        // A new version installed in the background → offer a reload.
+        reg.addEventListener('updatefound', () => {
+            const worker = reg.installing;
+            worker?.addEventListener('statechange', () => {
+                if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                    toast('A new version of Deck Oracle is ready.', {
+                        timeout: 12000,
+                        action: { label: 'Reload', run: () => window.location.reload() }
+                    });
+                }
             });
-        }).catch(err => console.warn('Service worker registration failed (optional):', err));
-    });
+        });
+    }).catch(err => console.warn('Service worker registration failed (optional):', err));
 }
 
 // ── Startup ──────────────────────────────────────────────────────────────────
@@ -196,7 +204,6 @@ async function init() {
     // Restore the last active deck before anything renders. A deck in a share
     // link replaces it below once its import finishes.
     DeckConfig.initDeckConfig({ restore: true });
-    OpponentState.init();
 
     initSidebar();
     initRouter();
@@ -226,19 +233,23 @@ async function init() {
         syncDeckChrome();
         renderSavedDecks();
     });
-    onThemeChange(() => refreshCurrent());
     syncDeckChrome();
+    // Registers only once the first page is up (afterFirstPage), so it can be
+    // wired here, before the awaits below, and still never compete with it.
+    initServiceWorker();
+    initPWAInstall();
+    afterFirstPage(ensureLzString);
 
     // Shared links: import the deck and apply page settings before the first
-    // render, so the landing state is the shared state.
+    // render, so the landing state is the shared state. Some parameters are
+    // LZ-String-packed, so a link carrying one loads it first.
     const tab = tabFromUrl();
     if (window.location.search.length > 1) {
+        const query = new URLSearchParams(window.location.search);
+        if (Share.PACKED_PARAMS.some(param => query.has(param))) await ensureLzString();
         await Share.applyShareUrl({ ensureMounted });
     }
     await navigate(tab, { history: 'replace' });
-
-    initServiceWorker();
-    initPWAInstall();
 
     const fmt = DeckConfig.getFormat();
     document.documentElement.dataset.format = fmt.key in FORMATS ? fmt.key : 'commander';

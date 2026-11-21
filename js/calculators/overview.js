@@ -20,6 +20,10 @@ import { escapeHtml, cardRef, term } from '../data/glossary.js';
 import { cardImageUrl, findCard } from '../data/images.js';
 import { curveCards, deckProfile } from '../utils/deckProfile.js';
 import { bulletList } from '../utils/viz.js';
+import { libraryOf } from '../utils/library.js';
+import { commanderLabel } from '../utils/commanders.js';
+import { pct } from '../utils/text.js';
+import { effectiveOnPlay, turnOrderClicked, turnOrderHTML, turnOrderMatters } from '../utils/turnOrder.js';
 
 const NAME = 'overview';
 const TYPE_LABEL = {
@@ -39,8 +43,6 @@ let debouncedUpdate = null;
 let curvePick = null;
 /** Deck stats from the last render; picking a curve bar re-renders only the curve. */
 let lastStats = null;
-
-const pct = (p, digits = 0) => `${(p * 100).toFixed(digits)}%`;
 
 function manaPip(color) {
     return `<span class="ms ms-${color.toLowerCase()}" aria-hidden="true">${color}</span>`;
@@ -62,11 +64,41 @@ function sourceLink(config) {
 
 // ── Sections ────────────────────────────────────────────────────────────────
 
+/**
+ * Who the deck is and how big, the way players say it: every commander (one,
+ * partners, a Doctor and their companion, a commander and a background), the
+ * deck size counting the command zone (98 in the library + 2 commanders = a
+ * 100-card deck) and the format Auto picks. Pure — exported for tests.
+ * @param {{deckName?:string|null, commanders?:Array<{name:string}>, total?:{total:number, detail:string|null}|null, librarySize?:number}} p
+ *   total: DeckConfig.getDeckTotal(); librarySize: the cards in the library
+ * @returns {{name:string, commanders:string[], commanderTitle:string, size:number, sizeDetail:string|null, detected:string}}
+ */
+export function deckIdentity({ deckName = null, commanders = [], total = null, librarySize = 0 } = {}) {
+    const names = (commanders ?? []).map(c => (typeof c === 'string' ? c : c?.name)).filter(Boolean);
+    return {
+        name: deckName || commanderLabel(names) || 'Your deck',
+        commanders: names,
+        commanderTitle: names.length > 1 ? 'Commanders' : 'Commander',
+        size: total?.total ?? librarySize,
+        sizeDetail: total?.detail ?? null,
+        detected: detectFormat({ deckSize: librarySize, commanders: names })
+    };
+}
+
 function renderHero(config, stats, format) {
     const featured = featuredCardName(config);
     const pref = config.format ?? 'auto';
-    const detected = FORMATS[detectFormat({ deckSize: stats.deckSize, commanderName: config.commanderName })];
-    const name = config.deckName || (config.commanderName ? `${config.commanderName}` : 'Your deck');
+    const deck = deckIdentity({
+        deckName: config.deckName,
+        commanders: DeckConfig.getCommanders(),
+        total: DeckConfig.getDeckTotal(),
+        librarySize: stats.deckSize
+    });
+    const detected = FORMATS[deck.detected];
+    const name = deck.name;
+    const size = deck.sizeDetail
+        ? `<span class="term" tabindex="0" data-tip="${escapeHtml(deck.sizeDetail)}">${deck.size}</span>`
+        : String(deck.size);
     const identity = stats.identity.length
         ? stats.identity.map(manaPip).join('')
         : '<span class="ov-muted">Colourless</span>';
@@ -82,9 +114,9 @@ function renderHero(config, stats, format) {
         <div class="ov-hero-body">
             <div class="ov-eyebrow">${escapeHtml(format.label)} deck ${sourceLink(config)}</div>
             <h2 class="ov-hero-name">${escapeHtml(name)}</h2>
-            ${config.commanderName ? `<div class="ov-hero-sub">Commander ${cardRef(config.commanderName)}</div>` : ''}
+            ${deck.commanders.length ? `<div class="ov-hero-sub">${deck.commanderTitle} ${deck.commanders.map(n => cardRef(n)).join(' + ')}</div>` : ''}
             <dl class="ov-hero-stats">
-                <div><dt>Cards</dt><dd>${stats.deckSize}</dd></div>
+                <div><dt>Cards</dt><dd>${size}</dd></div>
                 <div><dt>Lands</dt><dd>${stats.lands}</dd></div>
                 <div><dt>${term('mv', 'Avg. mana value')}</dt><dd>${stats.curve.average.toFixed(2)}</dd></div>
                 <div><dt>Colours</dt><dd class="ov-identity">${identity}</dd></div>
@@ -97,11 +129,7 @@ function renderHero(config, stats, format) {
                         ${Object.values(FORMATS).map(f => `<option value="${f.key}"${pref === f.key ? ' selected' : ''}>${escapeHtml(f.label)}</option>`).join('')}
                     </select>
                 </label>
-                ${format.firstPlayerDraws ? '' : `
-                <div class="seg seg-sm" role="group" aria-label="Turn order">
-                    <button class="seg-btn${onPlay ? ' active' : ''}" type="button" data-ov-play="1" aria-pressed="${onPlay}">On the play</button>
-                    <button class="seg-btn${!onPlay ? ' active' : ''}" type="button" data-ov-play="0" aria-pressed="${!onPlay}">On the draw</button>
-                </div>`}
+                ${turnOrderMatters(format) ? turnOrderHTML({ onPlay }) : ''}
                 <button class="btn btn-ghost btn-sm" type="button" data-ov-deck>Change deck</button>
                 <button class="btn btn-ghost btn-sm" type="button" data-open-guide="overview">How it works</button>
             </div>
@@ -173,8 +201,8 @@ function renderCurve(stats) {
 /** The cards behind the picked mana-curve bar, grouped by type, with previews. */
 function curveCardsHtml() {
     if (curvePick == null) return '<p class="ov-curve-hint">Pick a bar to list its cards.</p>';
-    const { cardsByName } = DeckConfig.getDeckConfig();
-    const { total, groups } = curveCards(cardsByName, curvePick);
+    // The library (commanders are never in it), as analyzeDeckStats counts it.
+    const { total, groups } = curveCards(libraryOf(DeckConfig.getDeckConfig(), { format: DeckConfig.getFormat() }), curvePick);
     const mv = curvePick === 7 ? '7 or more' : String(curvePick);
     return `
         <div class="ov-curve-list">
@@ -241,7 +269,7 @@ function renderColors(stats) {
                     <span class="meter"><span class="meter-fill tone-${tone}" style="width:${(p ?? 0) * 100}%"></span></span>
                     <span class="num">${p == null ? '—' : pct(p)}</span>
                 </div>
-                <p class="ov-note">Hardest: ${cardRef(c.heaviest.name)} — ${c.heaviest.pips} pip${c.heaviest.pips === 1 ? '' : 's'} on turn ${Math.max(1, c.heaviest.mv)}${c.needed != null && c.needed > c.sources ? `. About <strong>${c.needed}</strong> sources reach 90%.` : '.'}</p>` : ''}
+                <p class="ov-note">Hardest: ${cardRef(c.heaviest.name)}${c.heaviest.commander ? ' (your commander)' : ''} — ${c.heaviest.pips} pip${c.heaviest.pips === 1 ? '' : 's'} on turn ${Math.max(1, c.heaviest.mv)}${c.needed != null && c.needed > c.sources ? `. About <strong>${c.needed}</strong> sources reach 90%.` : '.'}</p>` : ''}
             </div>`;
     }).join('');
     const colorless = stats.colorlessLands > 0
@@ -333,8 +361,7 @@ function renderTools(config) {
 export function calculate() {
     const config = DeckConfig.getDeckConfig();
     const format = DeckConfig.getFormat();
-    const effectiveOnPlay = format.firstPlayerDraws ? true : onPlay;
-    const stats = analyzeDeckStats(config, { format, onPlay: effectiveOnPlay });
+    const stats = analyzeDeckStats(config, { format, onPlay: effectiveOnPlay(onPlay, format) });
     // Manual-count decks have no card records: fall back to the typed counts.
     if (!DeckConfig.hasCardList()) {
         stats.deckSize = DeckConfig.getDeckSize(true);
@@ -390,9 +417,9 @@ export function init() {
             refreshCurve(was);
             return;
         }
-        const play = e.target.closest('[data-ov-play]');
-        if (play) {
-            onPlay = play.dataset.ovPlay === '1';
+        const order = turnOrderClicked(e);
+        if (order !== null) {
+            onPlay = order;
             updateUI();
             return;
         }

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseManaCost, colorRequirements, isLand, landColors, deckColorIdentity, renderManaCost } from '../../js/utils/mana.js';
+import { parseManaCost, isLand, landColors, deckColorIdentity, renderManaCost } from '../../js/utils/mana.js';
 
 describe('parseManaCost', () => {
     it('splits generic, coloured and X symbols', () => {
@@ -26,7 +26,7 @@ describe('parseManaCost', () => {
     });
 
     it('reads only the front face of a split cost', () => {
-        assert.deepEqual(colorRequirements('{1}{U} // {3}{R}{R}'), { U: 1 });
+        assert.deepEqual(parseManaCost('{1}{U} // {3}{R}{R}').pips, { W: 0, U: 1, B: 0, R: 0, G: 0 });
     });
 
     it('returns an empty cost for missing input', () => {

@@ -9,17 +9,19 @@
 
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { renderBottomLine, renderHeroStats, toneColor } from '../utils/components.js';
 import { escapeHtml } from '../data/glossary.js';
 import { tagDeck } from '../utils/cardTags.js';
-import { isLand } from '../utils/mana.js';
+import { isLand, libraryOf, unlistedCopies } from '../utils/library.js';
+import { shuffle } from '../utils/random.js';
 import { createCache } from '../utils/simulation.js';
 import {
     DEFAULT_KEEP, DEFAULT_TURNS, landDropOdds, openingLands, firstLikelyMiss,
     landCountComparison, chanceWords, chanceTone, summarizeLandDrops
 } from '../utils/landDrops.js';
 import { drawSchedule, bottomCount } from '../utils/mulliganModel.js';
-import { formatChance } from '../utils/percent.js';
+import { pct } from '../utils/text.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked, turnOrderMatters } from '../utils/turnOrder.js';
 
 const NAME = 'lands';
 const HAND = 7;
@@ -37,29 +39,32 @@ let samples = { key: null, games: [], shown: GAMES_STEP };
 let sampleSeed = 0;
 
 const $ = id => (typeof document !== 'undefined' ? document.getElementById(id) : null);
-const pct = formatChance;
 
 // ── Deck ─────────────────────────────────────────────────────────────────────
 
-/** Lands and cheap ramp from the list (cached per imported list). */
-function deckCounts() {
-    const { cardsByName } = DeckConfig.getImportedCardData();
+/**
+ * Lands and cheap ramp in the library (cached per library). Commanders are
+ * never in the library (see library.js), so a commander that ramps is not
+ * counted as a card you might draw.
+ */
+function deckCounts(config, format) {
     const hasList = DeckConfig.hasCardList();
-    if (rampCache.ref !== cardsByName) {
-        const cards = hasList ? Object.values(cardsByName).filter(c => c?.name && Number(c.count) > 0) : [];
-        const tags = hasList ? tagDeck(cardsByName).byCard : {};
+    const library = hasList ? libraryOf(config, { format }) : null;
+    if (rampCache.ref !== library) {
+        const cards = library ? library.cards.slice() : [];
+        const tags = library ? tagDeck(library.cards).byCard : {};
         let lands = 0;
         let ramp = 0;
         const rampNames = new Set();
         cards.forEach(c => {
-            const n = Number(c.count) || 0;
+            const n = c.count;
             if (isLand(c)) lands += n;
             else if ((tags[c.name] ?? []).includes('ramp') && (Number(c.cmc) || 0) <= CHEAP_RAMP_MV) {
                 ramp += n;
                 rampNames.add(c.name);
             }
         });
-        rampCache = { ref: cardsByName, lands, ramp, cards, rampNames };
+        rampCache = { ref: library, size: library?.size ?? 0, lands, ramp, cards, rampNames };
     }
     return { hasList, ...rampCache };
 }
@@ -68,18 +73,20 @@ function deckCounts() {
  * Deck size, land count and settings.
  * @returns {{deckSize:number, landCount:number, ramp:number, format:Object, onPlay:boolean, countRamp:boolean, keepRange:[number,number]|null, hasList:boolean}}
  */
-export function getDeckConfig() {
-    const deck = deckCounts();
+export function readInputs() {
     const format = DeckConfig.getFormat();
     const config = DeckConfig.getDeckConfig();
-    const deckSize = DeckConfig.getDeckSize(true);
+    const deck = deckCounts(config, format);
+    const deckSize = deck.hasList
+        ? deck.size + unlistedCopies(deck.ref, config.actualCardCount)
+        : DeckConfig.getDeckSize(true);
     const landCount = deck.hasList ? deck.lands : (Number(config.lands) || 0);
     return {
         deckSize,
         landCount,
         ramp: deck.hasList ? deck.ramp : 0,
         format,
-        onPlay: format.firstPlayerDraws ? true : onPlay,
+        onPlay: effectiveOnPlay(onPlay, format),
         countRamp: countRamp && deck.hasList && deck.ramp > 0,
         keepRange: mulligans ? keepRange.slice() : null,
         hasList: deck.hasList
@@ -122,7 +129,7 @@ export function calculateOpeningHands(deckSize, landCount) {
 /** Turn-by-turn chance of having made every land drop (no mulligans, current turn order). */
 export function calculateLandDropByTurn(deckSize, landCount) {
     const format = DeckConfig.getFormat();
-    return landDropOdds({ deckSize, lands: landCount, format, onPlay: format.firstPlayerDraws ? true : onPlay, turns: 10 })
+    return landDropOdds({ deckSize, lands: landCount, format, onPlay: effectiveOnPlay(onPlay, format), turns: 10 })
         .byTurn.map(t => ({ turn: t.turn, makeProbability: t.chance, missProbability: 1 - t.chance }));
 }
 
@@ -140,7 +147,7 @@ export function calculateLandDropMiss(deckSize, landCount) {
  * Everything the page shows, cached by inputs.
  */
 export function calculate() {
-    const config = getDeckConfig();
+    const config = readInputs();
     if (config.deckSize <= HAND || config.landCount <= 0) {
         return { config, openingHands: null, landDropMiss: null, landDropByTurn: null };
     }
@@ -182,18 +189,8 @@ export function calculate() {
 
 // ── Rendering ────────────────────────────────────────────────────────────────
 
-const toneColor = tone => ({ good: 'var(--tx-good)', warn: 'var(--tx-warn)', bad: 'var(--tx-bad)' }[tone] ?? 'var(--tx-bright)');
-
 function syncControls(config, rampMatters = false) {
-    const order = $('lands-turn-order');
-    if (order) {
-        order.hidden = !!config.format.firstPlayerDraws;
-        (order.querySelectorAll?.('[data-play]') ?? []).forEach(btn => {
-            const on = (btn.dataset.play === '1') === config.onPlay;
-            btn.classList.toggle('active', on);
-            btn.setAttribute('aria-pressed', String(on));
-        });
-    }
+    syncTurnOrder($('lands-turn-order'), config.onPlay, config.format);
     const note = $('lands-format-note');
     if (note) note.textContent = config.format.firstPlayerDraws ? 'Commander: everyone draws on turn one.' : '';
     const mull = $('lands-mull');
@@ -269,7 +266,7 @@ function renderOpening(config, r) {
                 }).join('')}
             </div>
         </div>
-        <p class="ld-caption">${range
+        <p class="tx-caption">${range
             ? `Lands in a random seven. Shaded: the hands you keep (${range[0]}–${range[1]} lands) — ${pct(r.keepRate)} of sevens.`
             : 'Lands in a random seven. You are keeping every seven.'}</p>`;
 }
@@ -300,20 +297,10 @@ function renderCompare(config, r) {
                 }).join('')}</tbody>
             </table>
         </div>
-        <p class="ld-caption">Chance of making every land drop through each turn, with your settings above. Small numbers are the change in points from your deck.</p>`;
+        <p class="tx-caption">Chance of making every land drop through each turn, with your settings above. Small numbers are the change in points from your deck.</p>`;
 }
 
 // ── Sample games ─────────────────────────────────────────────────────────────
-
-function shuffleInPlace(arr, rng = Math.random) {
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(rng() * (i + 1));
-        const t = arr[i];
-        arr[i] = arr[j];
-        arr[j] = t;
-    }
-    return arr;
-}
 
 /**
  * Deal sample games from a card pool and track land drops turn by turn.
@@ -336,7 +323,7 @@ export function dealLandGames({ pool, drawsBy, keepRange, freeMulligan, countRam
         let mulls = 0;
         let seven;
         for (;;) {
-            shuffleInPlace(order, rng);
+            shuffle(order, rng);
             seven = order.slice(0, HAND);
             const lands = seven.filter(i => pool[i].kind === 'land').length;
             if (!keepRange || (lands >= keepRange[0] && lands <= keepRange[1]) || mulls >= 6) break;
@@ -389,7 +376,7 @@ export function runSampleReveals() {
     }
     const details = $('lands-samples-details');
     if (details && details.open === false) return;
-    const config = getDeckConfig();
+    const config = readInputs();
     const drawsBy = drawSchedule({ format: config.format, onPlay: config.onPlay });
     const key = JSON.stringify([config.format.key, config.onPlay, config.countRamp, config.keepRange, sampleSeed]);
     if (samples.key !== key || samples.ref !== deck.ref) {
@@ -449,7 +436,7 @@ export function updateUI() {
 /** Settings for share links. */
 export function getShareParams() {
     const params = {};
-    if (!onPlay && !DeckConfig.getFormat().firstPlayerDraws) params.ldDraw = 1;
+    if (!onPlay && turnOrderMatters(DeckConfig.getFormat())) params.ldDraw = 1;
     if (countRamp) params.ldRamp = 1;
     if (!mulligans) params.ldMull = 0;
     if (keepRange[0] !== DEFAULT_KEEP[0] || keepRange[1] !== DEFAULT_KEEP[1]) params.ldKeep = `${keepRange[0]}-${keepRange[1]}`;
@@ -494,9 +481,9 @@ function bindEvents() {
     root.addEventListener('click', e => {
         const target = e.target instanceof Element ? e.target : null;
         if (!target) return;
-        const play = target.closest('[data-play]');
-        if (play) {
-            onPlay = play.dataset.play === '1';
+        const order = turnOrderClicked(e);
+        if (order !== null) {
+            onPlay = order;
             updateUI();
         } else if (target.closest('#lands-more-games')) {
             samples.shown += GAMES_STEP;

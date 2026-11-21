@@ -4,17 +4,16 @@ import './../node-test-helper.js'; // installs global.document mock
 
 import {
     renderHeroStats,
-    renderVerdictBadge,
-    renderRecommendation,
     pBarCell,
     renderSweepTable,
-    renderOutcomeMatrix
+    toneColor,
+    toneFor
 } from '../../js/utils/components.js';
 
 describe('renderHeroStats', () => {
     it('renders a stat cell per entry with label/value/sub', () => {
         const html = renderHeroStats([
-            { label: 'P(HIT)', value: '72%', sub: 'at X=6', color: 'var(--tx-green)', size: 'big' },
+            { label: 'P(HIT)', value: '72%', sub: 'at X=6', color: 'var(--tx-good)', size: 'big' },
             { label: 'E[X]', value: '4.5', sub: 'avg' }
         ]);
         assert.ok(html.includes('tx-hero'));
@@ -35,34 +34,37 @@ describe('renderHeroStats', () => {
     });
 });
 
-describe('renderVerdictBadge', () => {
-    it('renders the label and color', () => {
-        const html = renderVerdictBadge({ label: 'STRONG', color: 'var(--tx-green)' });
-        assert.match(html, /STRONG/);
-        assert.match(html, /tx-verdict/);
-        assert.match(html, /var\(--tx-green\)/);
-    });
-
-    it('is empty for a null verdict', () => {
-        assert.strictEqual(renderVerdictBadge(null), '');
-    });
-});
-
-describe('renderRecommendation', () => {
-    it('wraps content with a marker', () => {
-        const html = renderRecommendation('Cast at <strong>X=6</strong>');
-        assert.match(html, /tx-rec/);
-        assert.match(html, /X=6/);
-        assert.match(html, /★/);
-    });
-});
-
 describe('pBarCell', () => {
     it('clamps fraction to 0..100%', () => {
         assert.match(pBarCell(0.5), /width:50\.0%/);
         assert.match(pBarCell(2), /width:100\.0%/);
         assert.match(pBarCell(-1), /width:0\.0%/);
         assert.match(pBarCell(NaN), /width:0\.0%/);
+    });
+
+    it('is neutral unless the caller says what the number means', () => {
+        assert.match(pBarCell(0.9), /background:var\(--tx-flat\)/);
+        assert.doesNotMatch(pBarCell(0.1), /tx-green|tx-good/);
+        assert.match(pBarCell(0.1, toneColor(toneFor(0.1))), /background:var\(--tx-bad\)/);
+    });
+});
+
+describe('toneFor / toneColor', () => {
+    it('maps a chance to what it means, with adjustable cut-offs', () => {
+        assert.strictEqual(toneFor(0.8), 'good');
+        assert.strictEqual(toneFor(0.5), 'warn');
+        assert.strictEqual(toneFor(0.1), 'bad');
+        assert.strictEqual(toneFor(NaN), 'flat');
+        assert.strictEqual(toneFor('0.9'), 'flat');
+        assert.strictEqual(toneFor(0.75, { good: 0.8, warn: 0.5 }), 'warn');
+    });
+
+    it('gives each tone one colour token, plain text otherwise', () => {
+        assert.strictEqual(toneColor('good'), 'var(--tx-good)');
+        assert.strictEqual(toneColor('warn'), 'var(--tx-warn)');
+        assert.strictEqual(toneColor('bad'), 'var(--tx-bad)');
+        assert.strictEqual(toneColor('flat'), 'var(--tx-bright)');
+        assert.strictEqual(toneColor(undefined), 'var(--tx-bright)');
     });
 });
 
@@ -101,86 +103,5 @@ describe('renderSweepTable', () => {
     it('does not throw for a missing container', () => {
         // getElementById in the mock always returns an element, so simulate via a guard:
         assert.doesNotThrow(() => renderSweepTable('sweep-test-4', { columns, rows }));
-    });
-});
-
-describe('renderOutcomeMatrix', () => {
-    const cells = [
-        [
-            { label: 'Correct keep', value: 0.474, good: true, note: 'Kept, and you got there.' },
-            { label: 'Bad beat', value: 0.044, good: false, note: 'Too greedy.' }
-        ],
-        [
-            { label: 'Missed opportunity', value: 0.164, good: false, note: 'Too cautious.' },
-            { label: 'Good mulligan', value: 0.318, good: true, note: 'Dodged a brick.' }
-        ]
-    ];
-    const opts = {
-        title: 'DECISION QUALITY',
-        subtitle: '5,000 SIMULATED HANDS',
-        rowLabels: ['STRATEGY SAYS KEEP', 'STRATEGY SAYS MULL'],
-        colLabels: ['HAND WOULD HIT', 'HAND WOULD BRICK'],
-        cells
-    };
-
-    it('renders all four cells with their labels and percentages', () => {
-        const html = renderOutcomeMatrix(opts);
-        for (const label of ['Correct keep', 'Bad beat', 'Missed opportunity', 'Good mulligan']) {
-            assert.ok(html.includes(label), `missing ${label}`);
-        }
-        assert.ok(html.includes('47.4%'));
-        assert.ok(html.includes('4.4%'));
-        assert.ok(html.includes('16.4%'));
-        assert.ok(html.includes('31.8%'));
-    });
-
-    it('renders the row and column axis labels', () => {
-        const html = renderOutcomeMatrix(opts);
-        assert.ok(html.includes('STRATEGY SAYS KEEP'));
-        assert.ok(html.includes('HAND WOULD BRICK'));
-    });
-
-    it('sums the diagonal into a strategy accuracy figure', () => {
-        const html = renderOutcomeMatrix(opts);
-        // 0.474 + 0.318 = 0.792
-        assert.ok(html.includes('79.2%'), html.slice(-400));
-    });
-
-    it('marks good cells with a check and bad cells with a cross', () => {
-        const html = renderOutcomeMatrix(opts);
-        assert.strictEqual((html.match(/✓/g) || []).length, 2);
-        assert.strictEqual((html.match(/✗/g) || []).length, 2);
-    });
-
-    it('tags cells so CSS can wash the off-diagonal errors', () => {
-        const html = renderOutcomeMatrix(opts);
-        assert.strictEqual((html.match(/is-good/g) || []).length, 2);
-        assert.strictEqual((html.match(/is-bad/g) || []).length, 2);
-    });
-
-    it('returns an empty string when the grid is not 2x2', () => {
-        assert.strictEqual(renderOutcomeMatrix({ cells: [] }), '');
-        assert.strictEqual(renderOutcomeMatrix({ cells: [[{}, {}]] }), '');
-        assert.strictEqual(renderOutcomeMatrix({ cells: [[{}], [{}, {}]] }), '');
-        assert.strictEqual(renderOutcomeMatrix({}), '');
-    });
-
-    it('treats non-finite values as zero rather than printing NaN', () => {
-        const html = renderOutcomeMatrix({
-            ...opts,
-            cells: [[{ label: 'a', value: undefined, good: true }, { label: 'b', value: NaN }],
-                    [{ label: 'c', value: null }, { label: 'd', value: 0.5, good: true }]]
-        });
-        assert.ok(!html.includes('NaN'));
-        assert.ok(html.includes('0.0%'));
-    });
-
-    it('omits the note line when a cell has no note', () => {
-        const html = renderOutcomeMatrix({
-            ...opts,
-            cells: [[{ label: 'a', value: 0.5, good: true }, { label: 'b', value: 0.1 }],
-                    [{ label: 'c', value: 0.2 }, { label: 'd', value: 0.2, good: true }]]
-        });
-        assert.ok(!html.includes('tx-mx-note'));
     });
 });

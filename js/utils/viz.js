@@ -14,6 +14,7 @@
  */
 
 import { escapeHtml } from '../data/glossary.js';
+import { pct } from './text.js';
 
 /** @typedef {'good'|'warn'|'bad'|'flat'} Tone */
 
@@ -234,10 +235,6 @@ function tickEvery(count, max = 9) {
     return Math.ceil(count / max);
 }
 
-function plural(n, one, many) {
-    return `${n} ${n === 1 ? one : many}`;
-}
-
 // ── Tables (the text alternative every chart carries) ────────────────────────
 
 /**
@@ -417,7 +414,7 @@ export function describeDots(dots, { unit = 'game', unitPlural, format = v => St
  * @param {(p:number)=>string} [o.format]
  * @returns {string}
  */
-export function heatStrip({ cells = [], label = '', format = p => `${Math.round(p * 100)}%` } = {}) {
+export function heatStrip({ cells = [], label = '', format = p => pct(p) } = {}) {
     if (!cells.length) return '';
     const words = cells.map(c => `${c.label} ${c.value == null ? (c.note ?? 'not yet') : format(c.value)}`).join(', ');
     const items = cells.map(c => {
@@ -572,4 +569,4 @@ function stripTags(html) {
         .trim();
 }
 
-export const __test__ = { TONE_RANK, tickEvery, stripTags, plural };
+export const __test__ = { TONE_RANK, tickEvery, stripTags };

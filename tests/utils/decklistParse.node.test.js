@@ -1,0 +1,427 @@
+/**
+ * Tests for decklistParse.js: text parsing, validation and limits.
+ */
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert';
+import { parseDecklistText, correctCardName } from '../../js/utils/decklistParse.js';
+import { budget, medianMs } from '../helpers/timing.js';
+
+describe('Decklist parse - commanders and noise', () => {
+    it('keeps every commander: partners, a Doctor and their companion', () => {
+        const result = parseDecklistText('Commander\n1 The Sixth Doctor\n1 Susan Foreman\n\nDeck\n1 Sol Ring\n97 Island');
+        assert.deepStrictEqual(result.commanders, [{ count: 1, name: 'The Sixth Doctor' }, { count: 1, name: 'Susan Foreman' }]);
+        assert.strictEqual(result.cards.reduce((s, c) => s + c.count, 0), 98);
+    });
+
+    it('marks several *CMDR* lines as commanders', () => {
+        const result = parseDecklistText('1 Tymna the Weaver *CMDR*\n1 Thrasios, Triton Hero *CMDR*\n1 Sol Ring');
+        assert.deepStrictEqual(result.commanders.map(c => c.name), ['Tymna the Weaver', 'Thrasios, Triton Hero']);
+    });
+
+    it('leaves companions (the keyword) out, like the sideboard', () => {
+        const result = parseDecklistText('Companion\n1 Lurrus of the Dream-Den\nDeck\n1 Sol Ring');
+        assert.deepStrictEqual(result.cards, [{ count: 1, name: 'Sol Ring' }]);
+        assert.deepStrictEqual(result.commanders, []);
+    });
+
+    it('reports the lines it skipped instead of logging them', () => {
+        const result = parseDecklistText(`101 Lightning Bolt\n4 ${'A'.repeat(101)}\n1 Sol Ring`);
+        assert.strictEqual(result.skipped.length, 2);
+        assert.deepStrictEqual(result.cards, [{ count: 1, name: 'Sol Ring' }]);
+    });
+
+    it('corrects names several cards share, and nothing else', () => {
+        assert.strictEqual(correctCardName('Vorinclex'), 'Vorinclex, Monstrous Raider');
+        assert.strictEqual(correctCardName('Sol Ring'), 'Sol Ring');
+    });
+});
+
+describe('Decklist Import - parseDecklistText', () => {
+    describe('Basic Parsing', () => {
+        it('parses simple decklist with counts', () => {
+            const decklist = `4 Lightning Bolt
+3 Counterspell
+2 Sol Ring`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 3, 'Should parse 3 cards');
+            assert.deepStrictEqual(result.cards[0], { count: 4, name: 'Lightning Bolt' });
+            assert.deepStrictEqual(result.cards[1], { count: 3, name: 'Counterspell' });
+            assert.deepStrictEqual(result.cards[2], { count: 2, name: 'Sol Ring' });
+            assert.strictEqual(result.hasSideboard, false);
+        });
+
+        it('parses decklist with "x" suffix', () => {
+            const decklist = `4x Lightning Bolt
+3x Counterspell`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 2);
+            assert.strictEqual(result.cards[0].count, 4);
+            assert.strictEqual(result.cards[0].name, 'Lightning Bolt');
+        });
+
+        it('assumes count of 1 when no number provided', () => {
+            const decklist = `Lightning Bolt
+Counterspell`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 2);
+            assert.strictEqual(result.cards[0].count, 1);
+            assert.strictEqual(result.cards[1].count, 1);
+        });
+
+        it('handles cards with commas and special characters', () => {
+            const decklist = `1 Jace, the Mind Sculptor
+1 Teferi's Protection`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 2);
+            assert.strictEqual(result.cards[0].name, 'Jace, the Mind Sculptor');
+            assert.strictEqual(result.cards[1].name, "Teferi's Protection");
+        });
+    });
+
+    describe('Sideboard Detection', () => {
+        it('detects sideboard marker', () => {
+            const decklist = `4 Lightning Bolt
+
+SIDEBOARD:
+3 Surgical Extraction`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.hasSideboard, true);
+            assert.strictEqual(result.sideboardCount, 3);
+            assert.strictEqual(result.cards.length, 1, 'Mainboard should have 1 card');
+        });
+
+        it('handles SIDEBOARD without colon', () => {
+            const decklist = `4 Lightning Bolt
+
+SIDEBOARD
+3 Surgical Extraction`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.hasSideboard, true);
+            assert.strictEqual(result.sideboardCount, 3);
+        });
+
+        it('counts sideboard cards with no explicit counts', () => {
+            const decklist = `4 Lightning Bolt
+
+SIDEBOARD:
+Surgical Extraction
+Grafdigger's Cage`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.sideboardCount, 2);
+        });
+    });
+
+    describe('Format Flexibility', () => {
+        it('skips section headers', () => {
+            const decklist = `Creatures:
+4 Lightning Bolt
+Lands:
+24 Island`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 2);
+            assert.strictEqual(result.cards[0].name, 'Lightning Bolt');
+            assert.strictEqual(result.cards[1].name, 'Island');
+        });
+
+        it('skips comment lines starting with //', () => {
+            const decklist = `// This is a comment
+4 Lightning Bolt
+// Another comment
+3 Counterspell`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 2);
+        });
+
+        it('skips comment lines starting with #', () => {
+            const decklist = `# This is a comment
+4 Lightning Bolt`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 1);
+        });
+
+        it('handles empty lines gracefully', () => {
+            const decklist = `4 Lightning Bolt
+
+
+3 Counterspell
+
+`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 2);
+        });
+    });
+
+    describe('Input Validation & Security', () => {
+        it('throws error for non-string input', () => {
+            assert.throws(
+                () => parseDecklistText(null),
+                { message: 'Invalid decklist: must be a string' }
+            );
+        });
+
+        it('throws error for empty string', () => {
+            assert.throws(
+                () => parseDecklistText(''),
+                { message: 'Invalid decklist: must be a string' }
+            );
+        });
+
+        it('throws error for decklist exceeding max length', () => {
+            const hugeDecklist = 'A'.repeat(50001);
+
+            assert.throws(
+                () => parseDecklistText(hugeDecklist),
+                { message: /Decklist too large/ }
+            );
+        });
+
+        it('throws error for too many lines', () => {
+            const lines = Array(501).fill('1 Lightning Bolt').join('\n');
+
+            assert.throws(
+                () => parseDecklistText(lines),
+                { message: /too many lines/ }
+            );
+        });
+
+        it('skips cards with invalid counts (too high)', () => {
+            const decklist = `101 Lightning Bolt
+4 Counterspell`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 1, 'Should skip card with count > 100');
+            assert.strictEqual(result.cards[0].name, 'Counterspell');
+        });
+
+        it('skips cards with invalid counts (zero)', () => {
+            const decklist = `0 Lightning Bolt
+4 Counterspell`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 1, 'Should skip card with count = 0');
+        });
+
+        it('skips cards with names that are too long', () => {
+            const longName = 'A'.repeat(101);
+            const decklist = `4 ${longName}
+4 Counterspell`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 1, 'Should skip card with name > 100 chars');
+        });
+
+        it('handles card names at exactly 100 characters', () => {
+            const exactName = 'A'.repeat(100);
+            const decklist = `4 ${exactName}`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 1, 'Should accept name at exactly 100 chars');
+            assert.strictEqual(result.cards[0].name, exactName);
+        });
+    });
+
+    describe('Edge Cases', () => {
+        it('handles decklist with only whitespace lines', () => {
+            const decklist = `
+
+4 Lightning Bolt
+    `;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 1);
+        });
+
+        it('handles mixed case section headers', () => {
+            const decklist = `CREATURES:
+4 Lightning Bolt
+Lands:
+24 Island`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 2);
+        });
+
+        it('handles double-faced card notation', () => {
+            const decklist = `1 Delver of Secrets // Insectile Aberration`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 1);
+            assert.strictEqual(result.cards[0].name, 'Delver of Secrets // Insectile Aberration');
+        });
+
+        it('trims whitespace from card names', () => {
+            const decklist = `4   Lightning Bolt   `;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards[0].name, 'Lightning Bolt');
+        });
+    });
+
+    describe('Real-World Formats', () => {
+        it('parses Moxfield-style export', () => {
+            const decklist = `Commander
+1 Atraxa, Praetors' Voice
+
+Creatures:
+1 Eternal Witness
+1 Sakura-Tribe Elder
+
+Lands:
+36 Forest
+1 Command Tower`;
+
+            const result = parseDecklistText(decklist);
+
+            // The commander lives in the command zone: reported separately and
+            // kept out of the library, matching the Moxfield/Archidekt importers.
+            assert.equal(result.cards.length, 4);
+            assert.deepEqual(result.commanders, [{ count: 1, name: "Atraxa, Praetors' Voice" }]);
+            assert.ok(!result.cards.some(c => c.name === "Atraxa, Praetors' Voice"));
+        });
+
+        it('recognises *CMDR* markers and skips maybeboards', () => {
+            const decklist = `1 Kenrith, the Returned King *CMDR*
+1 Sol Ring
+Maybeboard (2)
+1 Mana Crypt
+1 Mox Diamond`;
+            const result = parseDecklistText(decklist);
+            assert.deepEqual(result.cards, [{ count: 1, name: 'Sol Ring' }]);
+            assert.deepEqual(result.commanders, [{ count: 1, name: 'Kenrith, the Returned King' }]);
+        });
+
+        it('parses Arena-style export', () => {
+            const decklist = `Deck
+4 Lightning Bolt (M11) 146
+3 Counterspell (M25) 42`;
+
+            const result = parseDecklistText(decklist);
+
+            // "Deck" is a section header and set/collector suffixes are stripped
+            assert.deepEqual(result.cards, [
+                { count: 4, name: 'Lightning Bolt' },
+                { count: 3, name: 'Counterspell' }
+            ]);
+        });
+
+        it('strips printing and foil markers from names', () => {
+            const result = parseDecklistText(['1 Sol Ring [C21] *F*', '2 Arcane Signet (CMM) 371 #ramp'].join('\n'));
+            assert.deepEqual(result.cards, [
+                { count: 1, name: 'Sol Ring' },
+                { count: 2, name: 'Arcane Signet' }
+            ]);
+        });
+    });
+
+    describe('Performance & Constants', () => {
+        it('respects MAX_DECKLIST_LENGTH constant', () => {
+            // Test that the constant is being used
+            const justUnderLimit = 'A'.repeat(50000);
+
+            assert.doesNotThrow(() => parseDecklistText(justUnderLimit));
+        });
+
+        it('respects MAX_DECKLIST_LINES constant', () => {
+            // Test that the constant is being used
+            const lines = Array(500).fill('1 Lightning Bolt').join('\n');
+
+            assert.doesNotThrow(() => parseDecklistText(lines));
+        });
+
+        it('handles large valid decklist efficiently', () => {
+            // 100 unique cards, which is a large Commander deck
+            const cards = Array(100).fill(0).map((_, i) => `1 Card ${i}`).join('\n');
+
+            let result;
+            const duration = medianMs(() => { result = parseDecklistText(cards); });
+
+            assert.strictEqual(result.cards.length, 100);
+            assert.ok(duration < budget(100), 'Should parse 100 cards in < 100ms');
+        });
+    });
+});
+
+describe('Decklist Import - Security', () => {
+    describe('Injection Protection', () => {
+        it('safely handles cards with special regex characters', () => {
+            const decklist = `1 Card.$^*+?{}[]()`;
+
+            const result = parseDecklistText(decklist);
+
+            assert.strictEqual(result.cards.length, 1);
+            assert.strictEqual(result.cards[0].name, 'Card.$^*+?{}[]()');
+        });
+
+        it('handles cards with newlines in quoted names (should not parse)', () => {
+            const decklist = `4 "Card\nWith\nNewlines"
+3 Normal Card`;
+
+            const result = parseDecklistText(decklist);
+
+            // The card with newlines should not parse correctly
+            // and should be handled gracefully
+            assert.ok(result.cards.length >= 1, 'Should parse at least the normal card');
+        });
+
+        it('handles extremely long card names gracefully', () => {
+            const veryLongName = 'A'.repeat(1000);
+            const decklist = `4 ${veryLongName}
+3 Normal Card`;
+
+            const result = parseDecklistText(decklist);
+
+            // Should skip the too-long card but parse the normal one
+            assert.strictEqual(result.cards.length, 1);
+            assert.strictEqual(result.cards[0].name, 'Normal Card');
+        });
+    });
+
+    describe('DoS Prevention', () => {
+        it('rejects excessively large input quickly', () => {
+            const hugeInput = 'A'.repeat(100000);
+
+            const duration = medianMs(() => assert.throws(() => parseDecklistText(hugeInput)));
+
+            assert.ok(duration < budget(10), 'Should reject huge input quickly (< 10ms)');
+        });
+
+        it('rejects too many lines quickly', () => {
+            const manyLines = Array(10000).fill('1 Card').join('\n');
+
+            const duration = medianMs(() => assert.throws(() => parseDecklistText(manyLines)));
+
+            assert.ok(duration < budget(50), 'Should reject many lines quickly (< 50ms)');
+        });
+    });
+});

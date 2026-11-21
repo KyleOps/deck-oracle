@@ -11,6 +11,7 @@ import { renderBottomLine } from '../utils/components.js';
 import { DEFAULT_DECK_DATA } from '../utils/defaultDeckData.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
 import { dumbbell } from '../utils/viz.js';
+import { pct } from '../utils/text.js';
 
 const NAME = 'compare';
 const CURRENT = 'current';
@@ -22,7 +23,7 @@ let selB = null;
 function exampleDeck() {
     return {
         name: 'Example — Doctor Whostoric',
-        commanderName: DEFAULT_DECK_DATA.commanderName,
+        commanders: DEFAULT_DECK_DATA.commanders,
         cardsByName: DEFAULT_DECK_DATA.cardsByName,
         actualCardCount: DEFAULT_DECK_DATA.actualCardCount,
         counts: { lands: DEFAULT_DECK_DATA.lands }
@@ -70,7 +71,7 @@ function syncPickers(opts) {
 const fmtValue = (m, v) => {
     if (v === null || v === undefined || Number.isNaN(v)) return '—';
     switch (m.fmt) {
-        case 'pct': return `${Math.round(v * 100)}%`;
+        case 'pct': return pct(v);
         case 'dec2': return v.toFixed(2);
         case 'signed': return v > 0 ? `+${v}` : String(v);
         default: return String(Math.round(v));
@@ -159,7 +160,7 @@ function renderCurve(result) {
                 <span class="cmp-card-meta">share of nonland cards at each mana value</span>
             </div>
             <div class="cmp-curve" role="img" aria-label="Mana curve comparison">${cols}</div>
-            <div class="cmp-legend">
+            <div class="tx-legend is-panel cmp-legend">
                 <span><span class="cmp-dot cmp-dot-a"></span>A · average ${result.a.stats.curve.average.toFixed(2)}</span>
                 <span><span class="cmp-dot cmp-dot-b"></span>B · average ${result.b.stats.curve.average.toFixed(2)}</span>
             </div>
@@ -203,7 +204,7 @@ function renderDiff(result) {
 function renderEmpty() {
     return `
         <div class="cmp-empty">
-            <h3>Load a second deck to compare</h3>
+            <h3 class="cmp-empty-title">Load a second deck to compare</h3>
             <p>Every deck you import is saved in this browser. Import another list — or a newer version of this one — and it appears in the pickers above.</p>
             <button class="btn btn-primary" type="button" data-cmp-load>Load a deck</button>
         </div>`;

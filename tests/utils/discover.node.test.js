@@ -3,9 +3,11 @@ import assert from 'node:assert';
 
 import {
     isPower5Plus, isBigCreature, simulateDiscoverChain, sampleDiscover,
-    percentileFromDist, mergeDists, mulberry32, hashSeed, seededShuffle,
-    withoutOne, sampleDiscoverFrom, discoverForCreature, DISCOVER_RUNS, foldTail, tailRows
+    mergeDists, withoutOne, sampleDiscoverFrom, discoverForCreature, DISCOVER_RUNS, foldTail, tailRows
 } from '../../js/utils/discover.js';
+// Discover's percentiles, seeds and shuffles are the shared ones.
+import { quantile as percentileFromDist } from '../../js/utils/stats.js';
+import { mulberry32, hashString as hashSeed, shuffled as seededShuffle } from '../../js/utils/random.js';
 
 /** A card in the shape the simulation deck uses. */
 function card(name, cmc, types, power) {

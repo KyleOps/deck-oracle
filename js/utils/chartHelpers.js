@@ -1,8 +1,15 @@
 /**
- * Chart.js Helper Utilities
- * Standardizes chart creation and updates across all calculators.
+ * Chart.js helpers: the theme-synced chart palette (TX_CHART) and
+ * createOrUpdateChart(), which every calculator uses to draw.
+ *
+ * Neither Chart.js (js/shell/vendor.js) nor this module is loaded until a page
+ * that draws charts opens. New charts are built in a task of their own after
+ * the page's answer has painted — constructing one takes 40–190 ms on a
+ * phone, and the answer should wait neither for that nor for Chart.js to
+ * download. createOrUpdateChart() hands back a placeholder in the meantime.
  */
-import { getChartAnimationConfig } from './simulation.js';
+
+import { owesRender } from './calculatorBase.js';
 
 /**
  * Terminal chart palette.
@@ -59,11 +66,55 @@ export const TX_CHART = {
     }
 };
 
+/**
+ * A colour at the given opacity — pass live TX_CHART values, so faded series
+ * follow the theme. `#rrggbb`, `rgb()` and `rgba()` become
+ * `rgba(r, g, b, alpha)`; anything else (a name, `transparent`) comes back
+ * trimmed but otherwise unchanged, and a missing colour as ''.
+ * @param {string} color
+ * @param {number} alpha - 0..1
+ * @returns {string}
+ */
+export function withAlpha(color, alpha) {
+    const value = String(color ?? '').trim();
+    const hex = value.match(/^#([0-9a-f]{6})$/i);
+    if (hex) {
+        const n = parseInt(hex[1], 16);
+        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+    }
+    const rgb = value.match(/rgba?\(([^)]+)\)/);
+    if (rgb) {
+        const [r, g, b] = rgb[1].split(',').map(v => v.trim());
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+    return value;
+}
+
+/**
+ * Chart.js animation options: data changes ease into place (the first draw
+ * never animates — see createOrUpdateChart).
+ * @returns {Object}
+ */
+export function getChartAnimationConfig() {
+    return {
+        animation: { duration: 750, easing: 'easeInOutQuart' },
+        animations: {
+            tension: { duration: 500, easing: 'easeInOutCubic', from: 0.4, to: 0.3, loop: false }
+        },
+        transitions: {
+            active: { animation: { duration: 300 } },
+            resize: { animation: { duration: 0 } }
+        }
+    };
+}
+
 // ── Theme sync ──────────────────────────────────────────────────────────────
 // The palette above is the dark-theme default (and what Node tests see). In the
 // browser, applyChartTheme() re-reads every value from the live CSS tokens, so
 // one source of truth — css/tokens.css — drives both the DOM and the canvas,
-// and switching to the light theme recolours charts too.
+// and switching to the light theme recolours charts too. It runs when this
+// module loads, on every `themechange` event (js/shell/theme.js) and once
+// Chart.js has arrived (chartEngineReady).
 
 const TOKEN_MAP = {
     bg: '--tx-panel', rule: '--tx-rule', ruleHi: '--tx-rule-hi', dim: '--tx-dim', mid: '--tx-mid',
@@ -72,29 +123,20 @@ const TOKEN_MAP = {
 };
 const TYPE_KEYS = ['creature', 'instant', 'sorcery', 'artifact', 'enchantment', 'planeswalker', 'battle', 'land'];
 
-/** Bumped on every theme application; charts built under an older theme are rebuilt. */
+/** Bumped whenever the palette changes; charts built under an older one are rebuilt. */
 let themeVersion = 0;
+let paletteKey = '';
 
-function withAlpha(color, alpha) {
-    const hex = String(color).trim().match(/^#([0-9a-f]{6})$/i);
-    if (hex) {
-        const n = parseInt(hex[1], 16);
-        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-    }
-    const rgb = String(color).match(/rgba?\(([^)]+)\)/);
-    if (rgb) {
-        const [r, g, b] = rgb[1].split(',').map(v => v.trim());
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-    return color;
+function engine() {
+    return typeof Chart === 'undefined' ? null : Chart;
 }
 
 /**
  * Refresh TX_CHART from the CSS tokens and push it into Chart.js defaults.
- * Call after Chart.js loads and whenever the theme changes.
+ * Safe to call at any time; charts are rebuilt only if a colour changed.
  */
 export function applyChartTheme() {
-    if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return;
+    if (typeof document === 'undefined' || typeof getComputedStyle !== 'function' || !document.documentElement) return;
     const css = getComputedStyle(document.documentElement);
     const read = name => css.getPropertyValue(name).trim();
     for (const [key, token] of Object.entries(TOKEN_MAP)) {
@@ -111,18 +153,22 @@ export function applyChartTheme() {
         const value = read(`--type-${type}`);
         if (value) TX_CHART.types[type] = value;
     }
-    themeVersion += 1;
+    const key = JSON.stringify(TX_CHART);
+    if (key !== paletteKey) {
+        paletteKey = key;
+        themeVersion += 1;
+    }
 
-    const Chart = typeof window !== 'undefined' ? window.Chart : undefined;
-    if (!Chart) return;
+    const ChartJs = engine();
+    if (!ChartJs) return;
     const mono = read('--font-mono') || 'ui-monospace, monospace';
-    Chart.defaults.color = TX_CHART.dim;
-    Chart.defaults.borderColor = TX_CHART.rule;
-    Chart.defaults.backgroundColor = TX_CHART.bg;
-    Chart.defaults.font.family = mono;
-    Chart.defaults.font.size = 11;
-    Chart.defaults.plugins.legend.display = false;
-    Object.assign(Chart.defaults.plugins.tooltip, {
+    ChartJs.defaults.color = TX_CHART.dim;
+    ChartJs.defaults.borderColor = TX_CHART.rule;
+    ChartJs.defaults.backgroundColor = TX_CHART.bg;
+    ChartJs.defaults.font.family = mono;
+    ChartJs.defaults.font.size = 11;
+    ChartJs.defaults.plugins.legend.display = false;
+    Object.assign(ChartJs.defaults.plugins.tooltip, {
         backgroundColor: read('--surface-raised') || TX_CHART.bg,
         borderColor: TX_CHART.ruleHi,
         borderWidth: 1,
@@ -132,7 +178,7 @@ export function applyChartTheme() {
         cornerRadius: 6,
         boxPadding: 4
     });
-    if (Chart.defaults.scales) {
+    if (ChartJs.defaults.scales) {
         // Merge one level deeper than a plain spread. Replacing the whole `ticks`
         // object drops Chart.js's own tick callback — on a category axis that is
         // what maps an index back to its label.
@@ -142,135 +188,233 @@ export function applyChartTheme() {
             ticks: { ...scale.ticks, color: TX_CHART.dim, font: { size: 10 } },
             border: { ...scale.border, color: TX_CHART.rule, dash: [] }
         });
-        Chart.defaults.scales.linear = applyScaleDefaults(Chart.defaults.scales.linear);
-        Chart.defaults.scales.category = applyScaleDefaults(Chart.defaults.scales.category);
+        ChartJs.defaults.scales.linear = applyScaleDefaults(ChartJs.defaults.scales.linear);
+        ChartJs.defaults.scales.category = applyScaleDefaults(ChartJs.defaults.scales.category);
     }
 }
 
+// ── Charts waiting to be built ──────────────────────────────────────────────
+
 /**
- * Create or update a Chart.js instance.
- * @param {Object} chartInstance - The existing Chart instance (or null/undefined).
- * @param {string} canvasId - The ID of the canvas element.
- * @param {Object} config - The chart configuration object (type, data, options).
- * @returns {Object} - The created or updated Chart instance.
+ * What createOrUpdateChart() returns for a chart that is not built yet. Pass it
+ * back on the next call like a chart (it then stands for the chart it became);
+ * destroy() cancels the build, or destroys the built chart.
+ */
+class PendingChart {
+    constructor(canvasId, config, replaces = null) {
+        this.canvasId = canvasId;
+        this.config = config;
+        this.themeVersion = themeVersion;
+        /** A chart on the same canvas, kept on screen until this one replaces it. */
+        this.replaces = replaces;
+        this.chart = null;
+        this.cancelled = false;
+    }
+
+    destroy() {
+        this.cancelled = true;
+        pending.delete(this);
+        destroyQuietly(this.replaces);
+        destroyQuietly(this.chart);
+        this.replaces = null;
+        this.chart = null;
+    }
+
+    update(mode) {
+        this.chart?.update(mode);
+    }
+}
+
+const pending = new Set();
+let flushScheduled = false;
+
+function destroyQuietly(chart) {
+    try { chart?.destroy(); } catch { /* already gone */ }
+}
+
+/** The page (calculator key) a canvas belongs to, or null. */
+function pageOf(canvas) {
+    return canvas?.closest?.('.tab-content')?.id?.replace(/-tab$/, '') || null;
+}
+
+function schedule(handle) {
+    // One build per canvas: a newer placeholder supersedes an older one.
+    for (const other of pending) {
+        if (other !== handle && other.canvasId === handle.canvasId) {
+            pending.delete(other);
+            handle.replaces ??= other.replaces;
+            other.replaces = null;
+            other.cancelled = true;
+        }
+    }
+    pending.add(handle);
+    if (!flushScheduled) {
+        flushScheduled = true;
+        // After the next frame: the page's answer paints first.
+        requestAnimationFrame(() => setTimeout(flushPendingCharts, 0));
+    }
+    return handle;
+}
+
+/**
+ * Build every chart that is waiting, if Chart.js is here. A chart whose canvas
+ * has no size (its page was left before the build ran) stays waiting, and its
+ * page re-renders — and so builds it — on its next visit.
+ */
+function flushPendingCharts() {
+    flushScheduled = false;
+    if (!engine()) return; // chartEngineReady() flushes once Chart.js arrives
+    for (const handle of [...pending]) {
+        pending.delete(handle);
+        if (handle.cancelled) continue;
+        const canvas = document.getElementById(handle.canvasId);
+        if (!canvas) { // the page re-rendered without this chart
+            destroyQuietly(handle.replaces);
+            handle.replaces = null;
+            continue;
+        }
+        // Layout is clean here (a frame has just been drawn), so this is cheap.
+        if (canvas.getBoundingClientRect().width === 0) {
+            owesRender(pageOf(canvas));
+            continue;
+        }
+        destroyQuietly(handle.replaces);
+        handle.replaces = null;
+        try {
+            handle.chart = construct(canvas, handle.config, handle.themeVersion);
+        } catch (err) {
+            console.error(`Chart ${handle.canvasId} failed to build:`, err);
+        }
+    }
+}
+
+/** Chart.js has loaded (js/shell/vendor.js): theme it and build waiting charts. */
+export function chartEngineReady() {
+    applyChartTheme();
+    if (pending.size && !flushScheduled) {
+        flushScheduled = true;
+        requestAnimationFrame(() => setTimeout(flushPendingCharts, 0));
+    }
+}
+
+function construct(canvas, config, version) {
+    const ChartJs = engine();
+    const options = {
+        ...getChartAnimationConfig(),
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+            mode: 'index',
+            intersect: false
+        },
+        ...config.options, // User options override defaults
+        plugins: {
+            legend: { display: false },
+            ...config.options?.plugins
+        },
+        scales: {
+            x: {
+                grid: { color: TX_CHART.rule },
+                ticks: { color: TX_CHART.dim },
+                ...config.options?.scales?.x
+            },
+            y: {
+                grid: { color: TX_CHART.rule },
+                ticks: { color: TX_CHART.dim },
+                ...config.options?.scales?.y
+            },
+            ...config.options?.scales
+        }
+    };
+
+    // The first draw is static: animating it reads as the plot flying in from
+    // a corner. Animation is restored after it, so data changes still ease.
+    const chart = new ChartJs(canvas, {
+        type: config.type || 'line',
+        data: config.data,
+        options: { ...options, animation: false }
+    });
+    chart.$themeVersion = version;
+    const restoreAnimation = () => {
+        chart.options.animation = options.animation ?? {};
+        if (options.animations) chart.options.animations = options.animations;
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(restoreAnimation);
+    else restoreAnimation();
+    return chart;
+}
+
+/**
+ * Create or update a Chart.js chart.
+ *
+ * Updates apply at once. A new chart (or one rebuilt for a new theme) is built
+ * after the next paint, once Chart.js is here; until then the return value is
+ * a placeholder to pass back on the next call, like a chart.
+ *
+ * @param {Object|null} chartInstance - what the previous call returned, or null
+ * @param {string} canvasId - the canvas element's id
+ * @param {Object} config - Chart.js configuration (type, data, options)
+ * @returns {Object|null} the chart (or its placeholder); null without a canvas
  */
 export function createOrUpdateChart(chartInstance, canvasId, config) {
     const ctx = document.getElementById(canvasId);
     if (!ctx) return null;
-    // Chart.js loads lazily; offline (or before it arrives) charts are skipped
-    // rather than throwing and taking the rest of the calculator down.
-    if (typeof Chart === 'undefined') return null;
+
+    if (chartInstance instanceof PendingChart) {
+        if (chartInstance.chart) {
+            chartInstance = chartInstance.chart;
+        } else if (!chartInstance.cancelled) {
+            // Still waiting: it will be built from the newest configuration.
+            chartInstance.canvasId = canvasId;
+            chartInstance.config = config;
+            chartInstance.themeVersion = themeVersion;
+            return schedule(chartInstance);
+        } else {
+            chartInstance = null;
+        }
+    }
 
     // A chart built under the other theme, or whose canvas has been replaced,
     // is rebuilt from scratch — the surgical update path below deliberately
     // leaves options (and therefore colours) alone.
     if (chartInstance && (chartInstance.$themeVersion !== themeVersion
         || (chartInstance.canvas !== undefined && chartInstance.canvas !== ctx))) {
-        try { chartInstance.destroy(); } catch { /* already gone */ }
+        if (typeof requestAnimationFrame === 'function' && chartInstance.canvas === ctx) {
+            return schedule(new PendingChart(canvasId, config, chartInstance));
+        }
+        destroyQuietly(chartInstance);
         chartInstance = null;
     }
 
-    // Defer construction until the canvas actually has a layout box. Calculators
-    // render on init while their tab is still display:none, so the canvas is
-    // 0x0; Chart.js would lay out at a fallback size and then animate as it
-    // resized on first reveal, which reads as the plot flying in from a corner.
-    // switchTab() calls updateUI() for the tab being shown, so a deferred chart
-    // gets built the moment it becomes visible — at its real size.
-    // Feature-detected: the headless test DOM has no getBoundingClientRect, and
-    // there is nothing to defer for there.
-    if (!chartInstance && typeof ctx.getBoundingClientRect === 'function'
-        && ctx.getBoundingClientRect().width === 0) {
-        return null;
-    }
-
     if (!chartInstance) {
-        // Create new chart
-        // Merge default animation config into options
-        const defaultAnimation = getChartAnimationConfig();
-        const options = {
-            ...defaultAnimation,
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false
-            },
-            ...config.options, // User options override defaults
-            plugins: {
-                legend: { display: false },
-                ...config.options?.plugins
-            },
-            scales: {
-                x: {
-                    grid: { color: TX_CHART.rule },
-                    ticks: { color: TX_CHART.dim },
-                    ...config.options?.scales?.x
-                },
-                y: {
-                    grid: { color: TX_CHART.rule },
-                    ticks: { color: TX_CHART.dim },
-                    ...config.options?.scales?.y
-                },
-                ...config.options?.scales
-            }
-        };
-
-        // Charts are frequently constructed while their tab is still
-        // display:none, so the canvas has no layout box. Chart.js lays out at a
-        // fallback size, and when the tab is first shown the entry animation
-        // plays as the canvas resizes — which reads as the plot flying in from a
-        // corner. Build with animation off, then restore it so later data
-        // changes still animate.
-        const chart = new Chart(ctx, {
-            type: config.type || 'line',
-            data: config.data,
-            options: { ...options, animation: false }
-        });
-        chart.$themeVersion = themeVersion;
-
-        // Restore animation after the first static paint, so subsequent data
-        // changes still animate but the initial appearance does not.
-        const restoreAnimation = () => {
-            chart.options.animation = options.animation ?? {};
-            if (options.animations) chart.options.animations = options.animations;
-        };
-        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(restoreAnimation);
-        else restoreAnimation();
-
-        return chart;
-    } else {
-        // Update existing chart
-        // Perform surgical update to maintain animation smoothness
-        
-        // Update labels
-        if (config.data.labels) {
-            chartInstance.data.labels = config.data.labels;
-        }
-
-        // Update datasets
-        if (config.data.datasets) {
-            config.data.datasets.forEach((newDataset, i) => {
-                const existingDataset = chartInstance.data.datasets[i];
-                if (existingDataset) {
-                    // Update properties in place
-                    Object.assign(existingDataset, newDataset);
-                } else {
-                    // New dataset found (unexpected for these calculators but handled)
-                    chartInstance.data.datasets.push(newDataset);
-                }
-            });
-            
-            // Handle removed datasets if any
-            if (chartInstance.data.datasets.length > config.data.datasets.length) {
-                chartInstance.data.datasets.length = config.data.datasets.length;
-            }
-        }
-
-        // Note: We deliberately do NOT update chartInstance.options here to preserve 
-        // animation state and prevent full re-renders. 
-        // If dynamic option updates are needed, we can add a flag later.
-
-        chartInstance.update();
-        return chartInstance;
+        if (typeof requestAnimationFrame === 'function') return schedule(new PendingChart(canvasId, config));
+        // No frames to wait for (headless tests): build now, as long as the
+        // canvas has a size to build at.
+        if (!engine()) return null;
+        if (typeof ctx.getBoundingClientRect === 'function' && ctx.getBoundingClientRect().width === 0) return null;
+        return construct(ctx, config, themeVersion);
     }
+
+    // Update in place, keeping the animation state; options are deliberately
+    // left alone (a new theme rebuilds the chart instead, above).
+    if (config.data.labels) {
+        chartInstance.data.labels = config.data.labels;
+    }
+    if (config.data.datasets) {
+        config.data.datasets.forEach((newDataset, i) => {
+            const existingDataset = chartInstance.data.datasets[i];
+            if (existingDataset) Object.assign(existingDataset, newDataset);
+            else chartInstance.data.datasets.push(newDataset);
+        });
+        if (chartInstance.data.datasets.length > config.data.datasets.length) {
+            chartInstance.data.datasets.length = config.data.datasets.length;
+        }
+    }
+    chartInstance.update();
+    return chartInstance;
 }
+
+// Theme the palette now (a calculator reads it before Chart.js arrives), and
+// again whenever the theme changes.
+applyChartTheme();
+if (typeof document !== 'undefined') document.addEventListener?.('themechange', applyChartTheme);

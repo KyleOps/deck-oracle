@@ -1,11 +1,15 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { assertClose } from '../node-test-helper.js';
-import {
-    avg, barsHTML, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList, expandCards, fade,
-    hypergeometricPmf, isPermanentTypeLine, pct, plural, points, pointsShort, quantileOf, sampleCardHTML,
-    sharedStyles, xControlHTML
-} from '../../js/utils/bigSpells.js';
+import { barsHTML, createSampler, injectSharedStyles, sampleCardHTML, sharedStyles, xControlHTML } from '../../js/utils/bigSpells.js';
+import { cardListKey, deckCardList, expandCards } from '../../js/utils/models/cardList.js';
+import { hypergeometricPmf } from '../../js/utils/hypergeometric.js';
+// The helpers the four pages used to import from bigSpells.js now live in the
+// shared modules; the same expectations hold there.
+import { avg, pct, plural, points, pointsShort } from '../../js/utils/text.js';
+import { quantile as quantileOf } from '../../js/utils/stats.js';
+import { toneFor as chanceTone } from '../../js/utils/components.js';
+import { cardTypes as cardTypesOf, isPermanent as isPermanentTypeLine, libraryOf } from '../../js/utils/library.js';
 
 describe('Big spell helpers — maths', () => {
     it('gives an exact hypergeometric distribution', () => {
@@ -60,11 +64,6 @@ describe('Big spell helpers — formatting', () => {
         assert.strictEqual(chanceTone(0.1), 'bad');
         assert.strictEqual(chanceTone(undefined), 'flat');
     });
-
-    it('fades theme colours for chart fills', () => {
-        assert.strictEqual(fade('#55c97f', 0.5), 'rgba(85, 201, 127, 0.5)');
-        assert.strictEqual(fade('rgb(10, 20, 30)', 0.2), 'rgba(10, 20, 30, 0.2)');
-    });
 });
 
 describe('Big spell helpers — deck', () => {
@@ -78,6 +77,20 @@ describe('Big spell helpers — deck', () => {
         const cardsByName = { Forest: { name: 'Forest', type_line: 'Land', cmc: 0, count: 3 }, Gone: { name: 'Gone', type_line: 'Instant', count: 0 } };
         assert.strictEqual(deckCardList({ cardsByName, importSource: 'moxfield' }).length, 1, 'zero-count cards are dropped');
         assert.deepStrictEqual(deckCardList({ cardsByName, importSource: 'manual' }), []);
+    });
+
+    it('leaves every commander out of the card list, listed or not', () => {
+        const cardsByName = {
+            Forest: { name: 'Forest', type_line: 'Land', cmc: 0, count: 96 },
+            Doctor: { name: 'The Sixth Doctor', type_line: 'Legendary Creature — Time Lord Doctor', cmc: 6, count: 1 },
+            Susan: { name: 'Susan Foreman', type_line: 'Legendary Creature — Time Lord', cmc: 2, count: 1 }
+        };
+        const deck = { cardsByName, commanderName: 'The Sixth Doctor', commanders: [{ name: 'The Sixth Doctor' }, { name: 'Susan Foreman' }], format: 'auto' };
+        const list = deckCardList(deck);
+        assert.deepStrictEqual(list.map(c => c.name), ['Forest']);
+        assert.strictEqual(deckCardList(deck), list, 'cached per library');
+        assert.strictEqual(deckCardList(libraryOf(deck)), list, 'accepts a Library');
+        assert.strictEqual(deckCardList({ ...deck, format: 'constructed' }).length, 3, 'no command zone outside Commander');
     });
 
     it('keys a card list by content, not order', () => {
@@ -118,15 +131,32 @@ describe('Big spell helpers — markup', () => {
         assert.match(barsHTML([{ label: 'x', value: 0.5 }], { scale: 0.5 }), /width:100\.0%/);
     });
 
-    it('scopes every shared style rule to one page', () => {
-        const css = sharedStyles('#wave-tab');
+    it('scopes every shared style rule to the big-spell page root', () => {
+        // @keyframes steps (from / to) are not selectors.
+        const css = sharedStyles().replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*\s*\}/g, '');
         const selectors = css.split('}').map(rule => rule.split('{')[0].trim()).filter(s => s && !s.startsWith('@') && !s.startsWith('/*'));
         selectors.forEach(selector => {
             selector.split(',').forEach(part => {
                 const s = part.trim().replace(/^\/\*.*?\*\/\s*/s, '');
-                if (s) assert.match(s, /^#wave-tab /, `unscoped selector: ${s}`);
+                if (s) assert.match(s, /^\.bs-page /, `unscoped selector: ${s}`);
             });
         });
         assert.doesNotMatch(css, /#[0-9a-f]{3,6}\b(?!-tab)/i, 'no hard-coded hex colours');
+    });
+
+    it('injects the shared styles once, and does nothing without a document', () => {
+        const added = [];
+        const doc = {
+            head: { appendChild: el => added.push(el) },
+            createElement: () => ({ dataset: {} }),
+            querySelector: sel => added.find(el => sel === `style[data-owner="${el.dataset.owner}"]`) ?? null
+        };
+        injectSharedStyles(doc);
+        injectSharedStyles(doc);
+        assert.equal(added.length, 1);
+        assert.equal(added[0].dataset.owner, 'big-spells');
+        assert.match(added[0].textContent, /^\s*\.bs-page \.bs-h /m);
+        assert.doesNotThrow(() => injectSharedStyles(undefined));
+        assert.doesNotThrow(() => injectSharedStyles({}));
     });
 });

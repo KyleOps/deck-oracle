@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import {
     simulateDreamHarvest, calculateDreamHarvestStats, resolveDreamHarvest, summarizeDreamHarvest, poolDistributions,
     DREAM_HARVEST_COST, MV_THRESHOLD, totalStolenDistribution, harvestDots
-} from '../../js/calculators/dreamharvest.js';
+} from '../../js/utils/models/dreamharvest.js';
 
 describe('Dream Harvest Calculator', () => {
     describe('simulateDreamHarvest', () => {

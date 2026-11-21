@@ -25,7 +25,7 @@ export const template = `
             <div class="tx-h"><h2 class="mb-title" id="mb-colors-title">Colours</h2><span class="tx-h-r" id="mb-colors-meta"></span></div>
             <div class="mb-body">
                 <div class="mb-colors" id="mb-colors"></div>
-                <p class="mb-caption">The bar is your sources against what the colour’s hardest card wants for a 90% chance on curve. Lands that make two colours count for both.</p>
+                <p class="tx-caption is-inset">The bar is your sources against what the colour’s hardest card wants for a 90% chance on curve. Lands that make two colours count for both.</p>
             </div>
         </section>
 
@@ -37,7 +37,7 @@ export const template = `
                     <input type="search" id="mb-search" class="field field-sm mb-search" placeholder="Find a card" aria-label="Find a card" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="mb-table-wrap" id="mb-cards"></div>
-                <p class="mb-caption" id="mb-cards-caption"></p>
+                <p class="tx-caption is-inset" id="mb-cards-caption"></p>
             </div>
         </section>
 
@@ -46,7 +46,7 @@ export const template = `
             <div class="mb-body">
                 <div class="mb-toolbar" id="mb-table-colors"></div>
                 <div class="mb-table-wrap" id="mb-table"></div>
-                <p class="mb-caption" id="mb-table-caption"></p>
+                <p class="tx-caption is-inset" id="mb-table-caption"></p>
             </div>
         </section>
 
@@ -63,7 +63,6 @@ export const template = `
 export const styles = `
 #manabase-tab .mb,
 #manabase-tab .mb-content { display: grid; gap: 16px; min-width: 0; }
-#manabase-tab .mb [hidden] { display: none !important; }
 
 #manabase-tab .mb-title {
     margin: 0;
@@ -79,16 +78,13 @@ export const styles = `
     padding: 16px clamp(12px, 1.4cqi, 20px);
 }
 
-#manabase-tab .mb-caption,
 #manabase-tab .mb-note {
     margin: 0;
     font-size: var(--t-xs);
     line-height: 1.55;
     color: var(--tx-mid);
 }
-#manabase-tab .mb-caption { color: var(--tx-dim); }
-#manabase-tab .mb-note strong,
-#manabase-tab .mb-caption strong { color: var(--tx-bright); font-weight: 600; }
+#manabase-tab .mb-note strong { color: var(--tx-bright); font-weight: 600; }
 
 /* Answer panel */
 #manabase-tab .mb-answer .tx-hero { background: transparent; }
@@ -117,7 +113,7 @@ export const styles = `
     gap: 12px;
     align-content: start;
     min-width: 0;
-    padding: 14px 16px;
+    padding: 14px var(--pad-x);
     background: var(--tx-panel-alt);
     border: 1px solid var(--tx-rule);
     border-radius: var(--radius-md);
@@ -254,18 +250,6 @@ export const styles = `
 #manabase-tab .mb-copies { margin-left: 6px; font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-dim); }
 #manabase-tab .mb-cost-inline { display: none; }
 
-/* Phyrexian and twobrid symbols (the shared sheet styles only two-colour hybrids). */
-#manabase-tab .ms-wp { background: var(--mana-w); color: var(--mana-w-ink); }
-#manabase-tab .ms-up { background: var(--mana-u); color: var(--mana-u-ink); }
-#manabase-tab .ms-bp { background: var(--mana-b); color: var(--mana-b-ink); }
-#manabase-tab .ms-rp { background: var(--mana-r); color: var(--mana-r-ink); }
-#manabase-tab .ms-gp { background: var(--mana-g); color: var(--mana-g-ink); }
-#manabase-tab :is(.ms-wp, .ms-up, .ms-bp, .ms-rp, .ms-gp)::after { content: 'Φ'; }
-#manabase-tab .ms-2w { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-w) 50%); }
-#manabase-tab .ms-2u { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-u) 50%); }
-#manabase-tab .ms-2b { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-b) 50%); }
-#manabase-tab .ms-2r { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-r) 50%); }
-#manabase-tab .ms-2g { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-g) 50%); }
 #manabase-tab .mb-turn-short { display: none; }
 #manabase-tab .mb-tag {
     display: inline-flex;
@@ -336,7 +320,6 @@ export const styles = `
     font-weight: 500;
     color: var(--tx-mid);
 }
-#manabase-tab .mb-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--t-xs); color: var(--tx-mid); }
 #manabase-tab .mb-legend-swatch {
     display: inline-block;
     width: 12px;

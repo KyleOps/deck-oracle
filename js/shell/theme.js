@@ -2,10 +2,11 @@
  * Light / dark theme.
  *
  * The <head> script applies the saved (or system) theme before first paint;
- * this module handles toggling, persistence, and re-theming the charts.
+ * this module handles toggling and persistence. A change is announced first as
+ * a `themechange` event on document — the chart palette (chartHelpers.js)
+ * listens there once a chart page has loaded it, so the shell never has to —
+ * and then to onThemeChange() listeners, which re-render with the new colours.
  */
-
-import { applyChartTheme } from '../utils/chartHelpers.js';
 
 const KEY = 'deckOracle.theme';
 const listeners = [];
@@ -35,8 +36,8 @@ export function setTheme(theme, { persist = true } = {}) {
     if (persist) {
         try { localStorage.setItem(KEY, value); } catch { /* storage blocked */ }
     }
-    applyChartTheme();
     syncToggle();
+    document.dispatchEvent(new CustomEvent('themechange', { detail: { theme: value } }));
     listeners.forEach(cb => {
         try { cb(value); } catch (err) { console.error('Theme listener failed:', err); }
     });

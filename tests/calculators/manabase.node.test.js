@@ -6,11 +6,13 @@ import {
     pct,
     chanceTone,
     summarize,
+    commanderSentence,
     heroStats,
     filterCards,
     deckKey,
     getShareParams,
     applyShareParams,
+    readInputs,
     stripCells,
     reliableFrom,
     STRIP_TURNS
@@ -109,10 +111,40 @@ describe('manabase - summarize', () => {
     });
 
     it('gives the default Commander deck a sentence that matches its numbers', () => {
-        const result = analyzeCastability(DEFAULT_DECK_DATA.cardsByName, { deckSize: 99, format: FORMATS.commander });
+        // The 98-card library; both commanders (in the command zone) set the identity.
+        const commanderCards = DEFAULT_DECK_DATA.commanders.map(c => c.card);
+        const result = analyzeCastability(DEFAULT_DECK_DATA, { deckSize: 98, format: FORMATS.commander, commanderCards });
+        assert.ok(!result.cards.some(c => c.name === 'The Sixth Doctor' || c.name === 'Susan Foreman'), 'commanders are not library cards');
         const line = text(summarize(result).html);
         assert.ok(line.startsWith(`${result.under} of your ${result.total} coloured spells`));
         if (result.bottleneck) assert.ok(line.includes(`${result.bottleneck.sources} sources`));
+        // …and a line of their own for both commanders, in deck order.
+        assert.deepStrictEqual(result.commanders.map(c => [c.name, c.turn]), [['The Sixth Doctor', 6], ['Susan Foreman', 2]]);
+        const [doctor, susan] = result.commanders;
+        assert.ok(line.endsWith(`From the command zone, your commanders have their colours on curve: The Sixth Doctor ${pct(doctor.chance)} on turn 6 and Susan Foreman ${pct(susan.chance)} on turn 2.`), line);
+    });
+
+    it('never calls a deck all good while a commander misses', () => {
+        const allGood = analyzeCastability(deck([land('Forest', 20, ['G'], 'Basic Land — Forest'), land('Island', 2, ['U'], 'Basic Land — Island'), spell('Elf', 4, '{G}', 1, ['G']), spell('Filler', 34, '{3}', 3)]),
+            { deckSize: 60, format: FORMATS.constructed, commanderCards: [{ name: 'Blue Boss', type_line: 'Legendary Creature', mana_cost: '{U}{U}', cmc: 2, color_identity: ['U'] }] });
+        assert.strictEqual(allGood.under, 0);
+        assert.strictEqual(allGood.commandersUnder, 1);
+        const s = summarize(allGood);
+        assert.strictEqual(s.tone, 'warn');
+        assert.match(text(s.html), /your commander has its colours on curve: Blue Boss \d+% on turn 2 — under 90%\.$/);
+        // The bottleneck can be a commander, and says so.
+        assert.strictEqual(allGood.bottleneck.color, 'U');
+        assert.strictEqual(allGood.bottleneck.hardest.commander, true);
+    });
+
+    it('describes the command zone for one, two and three commanders', () => {
+        const row = (name, chance, turn) => ({ name, chance, turn });
+        const base = { target: 0.9 };
+        assert.strictEqual(commanderSentence({ ...base, commanders: [] }), null);
+        assert.strictEqual(commanderSentence(null), null);
+        assert.match(text(commanderSentence({ ...base, commanders: [row('A', 0.5, 3), row('B', 0.4, 4)] })), /both under 90%\.$/);
+        assert.match(text(commanderSentence({ ...base, commanders: [row('A', 0.95, 3), row('B', 0.4, 4), row('C', 0.99, 2)] })), /A 95% on turn 3, B 40% on turn 4 and C 99% on turn 2 — one under 90%\.$/);
+        assert.match(text(commanderSentence({ ...base, commanders: [row('A', 0.5, 3), row('B', 0.4, 4), row('C', 0.2, 2)] })), /all under 90%\.$/);
     });
 });
 
@@ -172,13 +204,20 @@ describe('manabase - caching and sharing', () => {
         applyShareParams(new URLSearchParams('draw=nope'));
         assert.deepStrictEqual(getShareParams(), { draw: 1 });
     });
+
+    it('reads the deck and the turn order its maths uses', () => {
+        const inputs = readInputs();
+        assert.strictEqual(inputs.format.key, 'commander');
+        assert.strictEqual(inputs.hasList, true);
+        assert.strictEqual(inputs.onPlay, true, 'on the draw was chosen, but everyone draws in Commander');
+    });
 });
 
 describe('manabase - performance', () => {
     it('analyses a 99-card Commander deck quickly', () => {
-        analyzeCastability(DEFAULT_DECK_DATA.cardsByName, { deckSize: 99 }); // warm the JIT and choose() cache
+        analyzeCastability(DEFAULT_DECK_DATA, { deckSize: 98 }); // warm the JIT and choose() cache
         const start = performance.now();
-        analyzeCastability(DEFAULT_DECK_DATA.cardsByName, { deckSize: 99, format: FORMATS.commander });
+        analyzeCastability(DEFAULT_DECK_DATA, { deckSize: 98, format: FORMATS.commander });
         // The budget is 30 ms in the browser; keep head-room for slow CI machines.
         assert.ok(performance.now() - start < budget(200));
     });

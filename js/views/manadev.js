@@ -6,6 +6,8 @@
  * on wide screens the settings rail moves into the left column.
  */
 
+import { turnOrderHTML } from '../utils/turnOrder.js';
+
 export const template = `
 <div class="main-grid single-column md">
     <section class="panel md-answer" aria-label="Answer">
@@ -17,27 +19,20 @@ export const template = `
         <div class="chart-container md-chart">
             <canvas id="manadev-chart" role="img" aria-label="Mana available each turn: the typical game, the middle half and eight games in ten, with your lands alone for comparison"></canvas>
         </div>
-        <div class="md-legend" aria-hidden="true">
+        <div class="tx-legend md-legend" aria-hidden="true">
             <span class="md-key md-key-line">Typical game</span>
             <span class="md-key md-key-mid">Half of games</span>
             <span class="md-key md-key-wide">8 games in 10</span>
             <span class="md-key md-key-lands">Lands alone, typical</span>
             <span class="md-key md-key-target" id="md-key-target" hidden></span>
         </div>
-        <p class="md-caption">The solid line is the typical game. The dark band holds the middle half of games and the light band eight in ten, so the bottom of the light band is a bad game and the top a good one. The dashed line is the same games with every ramp card left in hand.</p>
+        <p class="tx-caption is-below">The solid line is the typical game. The dark band holds the middle half of games and the light band eight in ten, so the bottom of the light band is a bad game and the top a good one. The dashed line is the same games with every ramp card left in hand.</p>
     </section>
 
     <section class="panel panel-config md-rail" aria-label="Settings and deck">
         <div class="tx-h"><span>Settings</span><span class="tx-h-r">only what changes the answer</span></div>
         <div class="md-rail-body">
-            <div class="md-group" id="md-order-group" hidden>
-                <span class="field-label" id="md-order-label">Turn order</span>
-                <div class="seg seg-sm" role="group" aria-labelledby="md-order-label">
-                    <button class="seg-btn active" type="button" data-md-play="1" aria-pressed="true">On the play</button>
-                    <button class="seg-btn" type="button" data-md-play="0" aria-pressed="false">On the draw</button>
-                </div>
-                <p class="field-hint">On the play you skip your first draw, so you see one card fewer each turn.</p>
-            </div>
+            ${turnOrderHTML({ id: 'md-order-group', className: 'md-group', label: 'Turn order', hint: 'On the play you skip your first draw, so you see one card fewer each turn.', hidden: true })}
             <div class="md-group" id="md-treasure-group" hidden>
                 <label class="checkbox-label" for="md-treasure">
                     <input type="checkbox" id="md-treasure">
@@ -58,13 +53,13 @@ export const template = `
     <section class="panel" aria-labelledby="md-grid-title">
         <div class="tx-h"><span id="md-grid-title">Chance to have this much mana by each turn</span><span class="tx-h-r" id="md-grid-meta"></span></div>
         <div class="md-scroll" id="md-grid" tabindex="0" role="region" aria-labelledby="md-grid-title"></div>
-        <p class="md-caption" id="md-grid-caption">Each cell is the share of games that had at least that much mana on some turn up to that one.</p>
+        <p class="tx-caption is-below" id="md-grid-caption">Each cell is the share of games that had at least that much mana on some turn up to that one.</p>
     </section>
 
     <section class="panel" aria-labelledby="md-ramp-title">
         <div class="tx-h"><span id="md-ramp-title">What your ramp does</span><span class="tx-h-r" id="md-ramp-meta"></span></div>
         <div class="md-scroll" id="md-ramp"></div>
-        <p class="md-caption">Read from each card’s rules text. If a line looks wrong, the numbers above are wrong for that card too. “In hand” counts the cards you draw; “cast” needs the mana as well.</p>
+        <p class="tx-caption is-below">Read from each card’s rules text. If a line looks wrong, the numbers above are wrong for that card too. “In hand” counts the cards you draw; “cast” needs the mana as well.</p>
     </section>
 
     <section class="panel" aria-labelledby="md-samples-title">
@@ -79,11 +74,9 @@ export const template = `
 
 export const styles = `
 #manadev-tab .md-answer .bottom-line { border-bottom: 1px solid var(--tx-rule); }
-#manadev-tab .md-answer .tx-hero {
-    border-bottom: 0;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-}
+#manadev-tab .md-answer .tx-hero { border-bottom: 0; }
 #manadev-tab .md-answer .tx-hero .tx-stat:first-child .tx-stat-value { font-size: clamp(36px, 3.6vw, 52px); }
+#manadev-tab .md-answer .md-scroll { border-top: 1px solid var(--tx-rule); }
 #manadev-tab .md-pending {
     display: flex;
     align-items: center;
@@ -105,7 +98,6 @@ export const styles = `
 /* ── Rail ─────────────────────────────────────────────────────────── */
 #manadev-tab .md-rail-body { display: grid; gap: 16px; padding: 16px; }
 #manadev-tab .md-group { display: grid; gap: 8px; }
-#manadev-tab .md-group[hidden] { display: none; }
 #manadev-tab .md-format { margin: 0; font-size: var(--t-xs); line-height: 1.5; color: var(--tx-mid); }
 #manadev-tab .md-format:empty { display: none; }
 #manadev-tab .md-facts { display: grid; gap: 8px; margin: 0; }
@@ -131,29 +123,14 @@ export const styles = `
 
 /* ── Chart ────────────────────────────────────────────────────────── */
 #manadev-tab .md-chart { height: 300px; }
-#manadev-tab .md-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 16px;
-    padding: 4px 16px 0;
-    font-size: var(--t-label);
-    color: var(--tx-mid);
-}
+#manadev-tab .md-legend { padding: 4px var(--pad-x) 0; }
 #manadev-tab .md-key { display: inline-flex; align-items: center; gap: 6px; }
-#manadev-tab .md-key[hidden] { display: none; }
 #manadev-tab .md-key::before { content: ''; display: inline-block; width: 16px; height: 10px; border-radius: 2px; }
 #manadev-tab .md-key-line::before { height: 2px; background: var(--tx-good); }
 #manadev-tab .md-key-mid::before { background: color-mix(in srgb, var(--tx-good) 30%, transparent); }
 #manadev-tab .md-key-wide::before { background: color-mix(in srgb, var(--tx-good) 14%, transparent); }
 #manadev-tab .md-key-lands::before { height: 0; border-top: 2px dashed var(--tx-mid); }
 #manadev-tab .md-key-target::before { height: 0; border-top: 1px dashed var(--tx-accent); }
-#manadev-tab .md-caption {
-    margin: 0;
-    padding: 10px 16px 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-}
 
 /* ── Chance grid ──────────────────────────────────────────────────── */
 #manadev-tab .md-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
@@ -236,7 +213,7 @@ export const styles = `
 
 /* ── Sample games ─────────────────────────────────────────────────── */
 #manadev-tab .md-games { display: grid; }
-#manadev-tab .md-game { padding: 12px 16px; border-bottom: 1px solid var(--tx-rule); }
+#manadev-tab .md-game { padding: var(--pad-y) var(--pad-x); border-bottom: 1px solid var(--tx-rule); }
 #manadev-tab .md-game:last-child { border-bottom: 0; }
 #manadev-tab .md-game-head {
     display: flex;
@@ -275,7 +252,7 @@ export const styles = `
 #manadev-tab .md-turn.is-target { background: var(--tx-row-hi); box-shadow: inset 3px 0 0 var(--tx-accent); }
 #manadev-tab .md-turn-flag { margin-left: 6px; color: var(--tx-accent); font-weight: 600; white-space: nowrap; }
 #manadev-tab .md-found, #manadev-tab .md-quiet { color: var(--tx-mid); }
-#manadev-tab .md-samples-foot { margin: 0; padding: 10px 16px 14px; font-size: var(--t-xs); color: var(--tx-dim); }
+#manadev-tab .md-samples-foot { margin: 0; padding: 10px var(--pad-x) 14px; font-size: var(--t-xs); color: var(--tx-dim); }
 
 @container shell (max-width: 560px) {
     #manadev-tab .md-chart { height: 240px; }
@@ -285,6 +262,7 @@ export const styles = `
     #manadev-tab .md-ramp-table th.md-col-seen, #manadev-tab .md-ramp-table td.md-col-seen { display: none; }
     #manadev-tab .md-ramp-table th, #manadev-tab .md-ramp-table td { padding: 8px 8px; }
     #manadev-tab .md-turn { grid-template-columns: 26px 58px minmax(0, 1fr); gap: 6px; }
+    #manadev-tab .md-cmd-table .md-cmd-alone { display: none; }
 }
 `;
 
@@ -293,8 +271,8 @@ export const guide = {
     howToRead: [
         '<strong>Mana on a turn</strong> is what your lands and mana permanents can make that turn after your land drop, before you cast anything. A Sol Ring cast on turn 1 counts from turn 2.',
         'The <strong>chart</strong> shows the typical game as a line, the middle half of games as the dark band and eight games in ten as the light band. The dashed line is the same shuffles with every ramp card left uncast — the gap between the two lines is what your ramp does.',
-        'The <strong>grid</strong> gives the chance to have had at least that much mana by each turn. The highlighted row is your commander’s mana value, and the outlined cell is casting it on curve.',
-        '<strong>Turns saved</strong> compares each game with its lands-only twin and averages the difference in the turn your commander becomes castable.',
+        'The <strong>grid</strong> gives the chance to have had at least that much mana by each turn. The highlighted rows are your commanders’ mana values, and the outlined cells are casting each on curve.',
+        '<strong>Turns saved</strong> compares each game with its lands-only twin and averages the difference in the turn your commander becomes castable. With two or more commanders, a table lists each one — on-curve chance, the turns it usually becomes castable, lands alone, turns saved — and a last row for all of them together.',
         'The <strong>ramp table</strong> says what the model thinks each ramp card does. If a line is wrong, that card’s effect is wrong in every number above.'
     ],
     method: '5,000 simulated games from a fixed seed, so the same deck always gives the same numbers. Each game: shuffle, London mulligan with the Opening Hands keep rule (2–4 lands; free first mulligan in Commander), then up to 12 turns of draw, land drop and ramp. The land drop plays an untapped land when the extra mana lets you cast something in hand that turn, and a tapped land when it doesn’t. Then the simulator casts the best ramp it can afford — pieces that pay for themselves first (Sol Ring), then the most mana gained, then the cheapest — until nothing fits. Colours are checked pip by pip against the lands and rocks you have. Every shuffle is played twice: once with ramp and once with every ramp card blank.',
@@ -302,9 +280,10 @@ export const guide = {
         'Goldfish: no opponents, no removal, no counterspells. Real games are slower.',
         'Greedy ramp: every turn the simulator spends its mana on ramp before anything else, and never holds mana up. Your commander is checked before and after each ramp spell, so a Sol Ring that pays for itself still counts that turn.',
         'Counted: mana rocks and dorks (dorks from the turn after they’re cast), mana auras, planeswalker mana abilities, land searches (tapped or untapped, battlefield or hand), extra land drops and playing lands from the top of your library.',
-        'Not counted: rituals and other one-turn bursts, cost reducers, mana doublers, and anything that only happens on a later trigger (Treasure on landfall, lands when a creature dies). Treasure from a spell or as a permanent enters counts only if you turn it on.',
+        'Not counted, though still ramp: mana doublers, mana that doesn’t untap, sacrifice-for-mana, and anything that only happens on a later trigger (Treasure on landfall, lands when a creature dies). Treasure from a spell or as a permanent enters counts only if you turn it on. Listed but not ramp: rituals and cost reducers. Every page counts ramp by this same rule, so the overview’s ramp count is what this page counts plus what it can’t.',
         'Mana that varies (Priest of Titania, Bloom Tender) counts as one. Lands that enter tapped “unless” something are checked for the common cases (shocks, fast lands, slow lands, check lands, two or more opponents); other conditions are assumed met.',
-        'Without a commander, the target is your top end: the middle of your three most expensive spells. You only need the mana for it, not the card in hand.'
+        'Every commander is checked on its own, cast from the command zone (never drawn). With partners, a Doctor and their companion or a commander and a background, the land drop and the colours a search fetches aim at every commander you can’t cast yet. The model checks whether you could cast each one; it never spends mana on them, so “both castable” is the turn by which each has been castable at least once.',
+        'Without a commander (or without any commander’s card), the target is your top end: the middle of your three most expensive spells. You only need the mana for it, not the card in hand.'
     ],
     tips: [
         'Two-mana rocks and one-mana dorks move turn 3–4 the most; four-mana land ramp mostly moves turn 5 and later.',

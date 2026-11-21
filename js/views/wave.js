@@ -4,10 +4,12 @@
  * js/calculators/wave.js fills the containers.
  */
 
-import { sharedStyles, valueModelHTML, xControlHTML } from '../utils/bigSpells.js';
+import { injectSharedStyles, valueModelHTML, xControlHTML } from '../utils/bigSpells.js';
+
+injectSharedStyles();
 
 export const template = `
-<div class="main-grid single-column">
+<div class="main-grid single-column bs-page">
     <section class="panel panel-config" aria-label="Settings">
         ${xControlHTML({
             key: 'wave',
@@ -32,12 +34,12 @@ export const template = `
         <div class="tx-h">
             <h2 class="bs-h" id="wave-dots-title">Out of 100 casts</h2>
             <div class="seg seg-sm" role="group" aria-label="Stack the casts by" id="wave-dots-view">
-                <button class="seg-btn active" type="button" data-wave-view="value" aria-pressed="true">Value</button>
-                <button class="seg-btn" type="button" data-wave-view="permanents" aria-pressed="false">Permanents</button>
+                <button class="seg-btn active" type="button" data-dots-view="value" aria-pressed="true">Value</button>
+                <button class="seg-btn" type="button" data-dots-view="permanents" aria-pressed="false">Permanents</button>
             </div>
         </div>
         <div id="wave-dots"></div>
-        <p class="bs-caption" id="wave-dots-caption"></p>
+        <p class="tx-caption is-below" id="wave-dots-caption"></p>
     </section>
 
     <section class="panel" aria-labelledby="wave-chart-title">
@@ -51,7 +53,7 @@ export const template = `
         <div class="bs-chart">
             <canvas id="wave-chart" role="img" aria-label="Permanents and payback chance for each value of X"></canvas>
         </div>
-        <p class="bs-caption">Bars: average permanents put onto the battlefield (left axis). Line: the chance that cast pays for itself (right axis). Your X is highlighted — click a bar to try another.</p>
+        <p class="tx-caption is-below">Bars: average permanents put onto the battlefield (left axis). Line: the chance that cast pays for itself (right axis). Your X is highlighted — click a bar to try another.</p>
     </section>
 
     <section class="panel" aria-labelledby="wave-samples-title">
@@ -64,7 +66,7 @@ export const template = `
         </div>
         <div class="bs-cast-stage" id="wave-cast" hidden></div>
         <div class="bs-samples" id="wave-samples"></div>
-        <p class="bs-caption">Real shuffles of your list. Bright cards go onto the battlefield; dimmed ones cost more than X or aren’t permanents, and go to the graveyard.</p>
+        <p class="tx-caption is-below">Real shuffles of your list. Bright cards go onto the battlefield; dimmed ones cost more than X or aren’t permanents, and go to the graveyard.</p>
     </section>
 
     <section class="panel" aria-labelledby="wave-compare-title">
@@ -79,15 +81,13 @@ export const template = `
         <details class="tx-collapse">
             <summary class="tx-collapse-head">Every X, side by side</summary>
             <div class="tx-collapse-body">
-                <p class="bs-caption">Hit rate is the share of revealed cards that are hits. The marked row is the cheapest X that pays for itself 3 times in 4.</p>
+                <p class="tx-caption is-below">Hit rate is the share of revealed cards that are hits. The marked row is the cheapest X that pays for itself 3 times in 4.</p>
                 <div class="bs-table-wrap" id="wave-comparisonTable"></div>
             </div>
         </details>
     </section>
 </div>
 `;
-
-export const styles = sharedStyles('#wave-tab');
 
 export const guide = {
     intro: 'Genesis Wave reveals the top X cards and puts every permanent with mana value X or less onto the battlefield; the rest go to the graveyard. This page shows how much a cast puts into play with your list at each X, and how often that is worth the X + 3 mana you paid.',

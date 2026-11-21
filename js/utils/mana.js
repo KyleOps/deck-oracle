@@ -6,6 +6,8 @@
  * touches the DOM, so every rule is unit-tested in isolation.
  */
 
+import { isLand } from './library.js';
+
 /** The five colours in WUBRG order — the order every colour list renders in. */
 export const COLORS = Object.freeze(['W', 'U', 'B', 'R', 'G']);
 
@@ -66,27 +68,10 @@ export function parseManaCost(cost) {
 }
 
 /**
- * Strict per-colour requirements of a cost (hybrid and phyrexian excluded).
- * @param {string} cost
- * @returns {Record<string, number>} only colours with at least one pip
+ * Is this card record a land? Uses the front face's type line. One definition
+ * for the whole app, in library.js; re-exported here for mana callers.
  */
-export function colorRequirements(cost) {
-    const { pips } = parseManaCost(cost);
-    const out = {};
-    for (const c of COLORS) if (pips[c] > 0) out[c] = pips[c];
-    return out;
-}
-
-/**
- * Is this card record a land? Uses the front face's type line.
- * @param {{type_line?:string, category?:string}} card
- */
-export function isLand(card) {
-    if (!card) return false;
-    if (card.category === 'lands') return true;
-    const front = String(card.type_line ?? '').split('//')[0];
-    return /\bland\b/i.test(front);
-}
+export { isLand };
 
 /**
  * Which colours of mana can this land produce?
@@ -151,13 +136,16 @@ export function landColors(card, deckIdentity = COLORS, basicColors = null) {
 
 /**
  * The deck's colour identity: union of every card's identity (or, failing
- * that, its cost's colours), plus the commander's.
- * @param {Record<string, Object>} cardsByName
+ * that, its cost's colours), plus every commander's. Lists usually leave the
+ * commanders out (they start in the command zone), so pass their records.
+ * @param {Record<string, Object>|ReadonlyArray<Object>} cardsByName - records with `count`
+ * @param {Array<Object|null>} [commanderCards] - the command zone's records
  * @returns {string[]} WUBRG-ordered
  */
-export function deckColorIdentity(cardsByName = {}) {
+export function deckColorIdentity(cardsByName = {}, commanderCards = []) {
     const found = new Set();
-    for (const card of Object.values(cardsByName)) {
+    const zone = (commanderCards ?? []).filter(Boolean).map(c => ({ ...c, count: 1 }));
+    for (const card of [...Object.values(cardsByName ?? {}), ...zone]) {
         if (!card || !(Number(card.count) > 0)) continue;
         const ci = card.color_identity ?? card.colorIdentity;
         if (Array.isArray(ci) && ci.length > 0) {

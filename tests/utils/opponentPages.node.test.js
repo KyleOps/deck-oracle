@@ -1,10 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { objectId, renderOpponentPlaceholder, miniBars, opponentPageStyles, injectOpponentPageStyles } from '../../js/utils/opponentPages.js';
 import {
-    frontFace, isLandType, isHistoricType, isLandCard, libraryOf, hashString, seededRandom, deckSeed, createRevealer,
-    quantile, typicalRange, formatRange, formatPct, tailAtLeast, capDistribution, objectId, renderOpponentPlaceholder,
-    miniBars
-} from '../../js/utils/opponentPages.js';
+    isHistoricType, opponentLibrary as libraryOf, deckSeed, createRevealer,
+    typicalRange, formatRange, tailAtLeast, capDistribution
+} from '../../js/utils/models/opponentLibrary.js';
+// The multiplayer pages use the shared typing, randomness, percentile and
+// percentage helpers; the same expectations hold for them.
+import { frontTypeLine as frontFace, isLand as isLandType, isLand as isLandCard } from '../../js/utils/library.js';
+import { hashString, mulberry32 as seededRandom } from '../../js/utils/random.js';
+import { quantile } from '../../js/utils/stats.js';
+import { pct as formatPct } from '../../js/utils/text.js';
 
 describe('opponentPages — card model', () => {
     it('reads the front face of double-faced cards', () => {
@@ -29,12 +35,13 @@ describe('opponentPages — card model', () => {
         assert.strictEqual(isLandCard({ type_line: 'Basic Land — Island' }), true);
     });
 
-    it('libraryOf expands counts, defaults a missing count to 1, and caches per deck object', () => {
+    it('opponentLibrary expands counts, skips empty rows, and caches per deck object', () => {
         const data = {
             cardsByName: {
                 Island: { name: 'Island', type_line: 'Basic Land — Island', cmc: 0, count: 3 },
-                Opt: { name: 'Opt', type_line: 'Instant', cmc: 1 },
-                Skip: { name: 'Skip', type_line: 'Instant', cmc: 1, count: 0 }
+                Opt: { name: 'Opt', type_line: 'Instant', cmc: 1, count: 1 },
+                Skip: { name: 'Skip', type_line: 'Instant', cmc: 1, count: 0 },
+                NoCount: { name: 'No Count', type_line: 'Instant', cmc: 1 }
             }
         };
         const lib = libraryOf(data);
@@ -42,7 +49,22 @@ describe('opponentPages — card model', () => {
         assert.strictEqual(lib.filter(c => c.land).length, 3);
         assert.strictEqual(lib.find(c => c.name === 'Opt').type, 'instant');
         assert.strictEqual(libraryOf(data), lib, 'same deck object → same array');
+        assert.strictEqual(libraryOf({ ...data }), lib, 'same list → same array');
         assert.deepStrictEqual(libraryOf(null), []);
+    });
+
+    it('never puts an opponent’s commanders in their library', () => {
+        const data = {
+            cardsByName: {
+                Island: { name: 'Island', type_line: 'Basic Land — Island', cmc: 0, count: 96 },
+                Kraum: { name: 'Kraum, Ludevic’s Opus', type_line: 'Legendary Creature — Zombie Horror', cmc: 5, count: 1 },
+                Tymna: { name: 'Tymna the Weaver', type_line: 'Legendary Creature — Human Cleric', cmc: 3, count: 1 }
+            },
+            commanders: [{ name: 'Kraum, Ludevic’s Opus' }, { name: 'Tymna the Weaver' }]
+        };
+        const lib = libraryOf(data);
+        assert.strictEqual(lib.length, 96);
+        assert.ok(lib.every(c => c.land));
     });
 });
 
@@ -151,5 +173,30 @@ describe('opponentPages — markup', () => {
         const html = miniBars({ title: 'T', probs: [0.25, 0.5], label: i => String(i), scaleMax: 1 });
         assert.match(html, /width:25\.0%/);
         assert.match(html, /width:50\.0%/);
+    });
+});
+
+describe('opponentPages — shared styles', () => {
+    it('scopes every rule to the multiplayer page root, tokens only', () => {
+        const css = opponentPageStyles();
+        const selectors = css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').map(r => r.split('{')[0].trim()).filter(s => s && !s.startsWith('@'));
+        assert.ok(selectors.length > 40);
+        selectors.forEach(sel => sel.split(',').forEach(part => assert.match(part.trim(), /^\.opp-page /, `unscoped selector: ${part}`)));
+        assert.doesNotMatch(css, /#[0-9a-f]{3,6}\b/i, 'no hard-coded hex colours');
+    });
+
+    it('injects them once, and does nothing without a document', () => {
+        const added = [];
+        const doc = {
+            head: { appendChild: el => added.push(el) },
+            createElement: () => ({ dataset: {} }),
+            querySelector: sel => added.find(el => sel === `style[data-owner="${el.dataset.owner}"]`) ?? null
+        };
+        injectOpponentPageStyles(doc);
+        injectOpponentPageStyles(doc);
+        assert.equal(added.length, 1);
+        assert.equal(added[0].dataset.owner, 'opponent-pages');
+        assert.equal(added[0].textContent, opponentPageStyles());
+        assert.doesNotThrow(() => injectOpponentPageStyles(undefined));
     });
 });

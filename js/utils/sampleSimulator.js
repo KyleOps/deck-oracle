@@ -1,4 +1,5 @@
-import { shuffle } from './simulation.js';
+import { shuffle } from './random.js';
+import { asLibrary, cardTypes, expandLibrary } from './library.js';
 
 /**
  * Shared Sample Simulator Utility
@@ -6,100 +7,34 @@ import { shuffle } from './simulation.js';
  */
 
 /**
- * Type color mapping (consistent across all calculators)
+ * The library as simulation cards, one object per copy (so a page may tag
+ * copies one by one). Commanders are never included — see library.js.
+ *
+ * @param {Object} deck - a Library from libraryOf(), or anything libraryOf()
+ *   accepts (a DeckConfig snapshot; a bare `{cardsByName}` has no commanders)
+ * @param {Object} [opts] - libraryOf() options when `deck` is not a Library
+ * @returns {Array<{name:string, types:ReadonlyArray<string>, type_line:string, cmc:number, mana_cost:string, power:*, toughness:*}>}
  */
-export const TYPE_COLORS = {
-    creature: '#55c97f',
-    sorcery: '#e8635c',
-    instant: '#5b8db8',
-    artifact: '#939c97',
-    enchantment: '#9878b8',
-    planeswalker: '#f0a92c',
-    battle: '#b8738f',
-    land: '#808b85'
-};
-
-/**
- * Extract card types from a card's type_line
- * @param {Object} card - Card object with type_line property
- * @returns {Array<string>} - Array of type names
- */
-export function extractCardTypes(card) {
-    const types = [];
-    const lower = card.type_line.toLowerCase();
-
-    if (lower.includes('creature')) types.push('creature');
-    if (lower.includes('artifact')) types.push('artifact');
-    if (lower.includes('enchantment')) types.push('enchantment');
-    if (lower.includes('planeswalker')) types.push('planeswalker');
-    if (lower.includes('instant')) types.push('instant');
-    if (lower.includes('sorcery')) types.push('sorcery');
-    if (lower.includes('battle')) types.push('battle');
-    if (lower.includes('land')) types.push('land');
-
-    return types;
+export function buildDeckFromCardData(deck, opts) {
+    return expandLibrary(asLibrary(deck, opts), card => ({
+        name: card.name,
+        types: cardTypes(card.type_line),
+        type_line: card.type_line,
+        cmc: card.cmc !== undefined ? card.cmc : 0,
+        mana_cost: card.mana_cost || '',
+        power: card.power,
+        toughness: card.toughness
+    }));
 }
 
 /**
- * Build a deck array from imported card data
- * @param {Object} cardData - Imported card data
- * @returns {Array<Object>} - Deck array with card objects including CMC
+ * Fisher–Yates shuffle, in place.
+ * @param {Array} array - modified in place
+ * @param {() => number} [rng=Math.random]
+ * @returns {Array} the same array
  */
-export function buildDeckFromCardData(cardData) {
-    const deck = [];
-    Object.values(cardData.cardsByName).forEach(card => {
-        const types = extractCardTypes(card);
-        const cmc = card.cmc !== undefined ? card.cmc : 0;
-
-        for (let i = 0; i < card.count; i++) {
-            deck.push({
-                name: card.name,
-                types,
-                type_line: card.type_line,
-                cmc: cmc,
-                mana_cost: card.mana_cost || '',
-                power: card.power,
-                toughness: card.toughness
-            });
-        }
-    });
-    return deck;
-}
-
-/**
- * Fisher-Yates shuffle
- * @param {Array} array - Array to shuffle (modified in place)
- * @returns {Array} - Shuffled array
- */
-export function shuffleDeck(array) {
-    shuffle(array);
-    return array;
-}
-
-/**
- * Render a card badge with color coding
- * @param {Object} card - Card object
- * @param {string} primaryType - Primary type for coloring
- * @returns {string} - HTML string
- */
-export function renderCardBadge(card, primaryType = null) {
-    if (!primaryType) {
-        primaryType = card.types[0] || 'land';
-    }
-    const isDual = card.types.length > 1;
-    return `<span class="reveal-card ${primaryType} ${isDual ? 'dual' : ''}" title="${card.type_line}">${card.name}</span>`;
-}
-
-/**
- * Render colored type names
- * @param {Array<string>} types - Array of type names
- * @returns {string} - HTML string with colored type names
- */
-export function renderColoredTypes(types) {
-    return types.map(type => {
-        const color = TYPE_COLORS[type] || '#9878b8';
-        return `<span style="color: ${color}; font-weight: 600;">${type}</span>`;
-    }).join(', ');
+export function shuffleDeck(array, rng = Math.random) {
+    return shuffle(array, rng);
 }
 
 /**
@@ -158,7 +93,7 @@ export function renderDistributionChart(distribution, totalSims, labelFn, marker
     finalRows.forEach(row => {
         // Check for gap
         if (lastIndex !== -1 && row.index > lastIndex + 1) {
-             html += `<div class="dist-gap" style="font-size: 0.8em; color: var(--text-dim); text-align: center; margin: 2px 0;">...</div>`;
+             html += `<div class="dist-gap" style="font-size: 0.8em; color: var(--tx-dim); text-align: center; margin: 2px 0;">...</div>`;
         }
         
         const pctStr = row.pct.toFixed(1) + '%';
@@ -184,20 +119,4 @@ export function renderDistributionChart(distribution, totalSims, labelFn, marker
 
     html += '</div>';
     return html;
-}
-
-/**
- * Create collapsible section for individual samples
- * @param {string} title - Section title
- * @param {string} content - Inner HTML content
- * @param {boolean} openByDefault - Whether section should be open initially
- * @returns {string} - HTML string
- */
-export function createCollapsibleSection(title, content, openByDefault = true) {
-    return `
-        <details class="tx-collapse" ${openByDefault ? 'open' : ''}>
-            <summary class="tx-collapse-head">${title}</summary>
-            <div class="tx-collapse-body">${content}</div>
-        </details>
-    `;
 }

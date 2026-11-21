@@ -13,6 +13,10 @@
  * Every function here is pure and DOM-free so the whole ranking is unit-testable.
  */
 
+import { CALCULATORS } from './calculatorRegistry.js';
+import { readCommanders } from './commanders.js';
+import { pct } from './text.js';
+
 // ==================== SCORING CONSTANTS ====================
 
 const SCORE = {
@@ -23,33 +27,36 @@ const SCORE = {
     BASELINE: 30      // universally applicable tools (mulligan, land drops)
 };
 
+// v3 meaning tokens: the accent marks the card that is in the deck, `good`
+// a strong fit; weaker tiers stay neutral.
 const TIERS = [
-    { min: 100, tier: 'core',     label: 'IN DECK',   color: 'var(--tx-green)' },
-    { min: 45,  tier: 'likely',   label: 'RELEVANT',  color: 'var(--tx-amber)' },
-    { min: 20,  tier: 'possible', label: 'POSSIBLE',  color: 'var(--tx-blue)' },
+    { min: 100, tier: 'core',     label: 'IN DECK',   color: 'var(--tx-accent)' },
+    { min: 45,  tier: 'likely',   label: 'RELEVANT',  color: 'var(--tx-good)' },
+    { min: 20,  tier: 'possible', label: 'POSSIBLE',  color: 'var(--tx-mid)' },
     { min: 0,   tier: 'idle',     label: '—',         color: 'var(--tx-dim)' }
 ];
 
 /**
- * Card names that pin a calculator to a deck. Written naturally here; they are
- * run through `normalizeCardName` before matching (see NORMALIZED_TRIGGERS) so
- * punctuation, casing, and double-faced "//" suffixes don't matter on either side.
+ * Other cards that make a calculator relevant: the same effect under another
+ * name, a second printing, or a common misspelling.
  */
-export const TRIGGER_CARDS = {
-    portent:       ['portent of calamity'],
-    surge:         ['primal surge'],
-    wave:          ['genesis wave'],
-    vow:           ["kamahl's druidic vow"],
-    vortex:        ['monstrous vortex'],
-    rashmi:        ['rashmi eternities crafter', 'rashmi and ragavan'],
-    lumra:         ['lumra bellow of the woods'],
-    mara:          ['ensnared by the mara'],
-    dreamharvest:  ['dream harvest'],
-    mindsdilation: ["mind's dilation", 'minds dilation'],
-    abstract:      ['abstract performance', 'fact or fiction', 'steam augury', 'temporal cascade'],
-    chimil:        ['chimil the inner sun'],
-    wildpair:      ['wild pair', 'wild pairs']
+const TRIGGER_ALIASES = {
+    rashmi: ['Rashmi and Ragavan'],
+    abstract: ['Fact or Fiction', 'Steam Augury', 'Temporal Cascade'],
+    wildpair: ['wild pairs']
 };
+
+/**
+ * Card names that pin a calculator to a deck: every card calculator's own
+ * card (from the registry, so a new calculator needs no entry here) plus its
+ * aliases. Matched after `normalizeCardName` (see NORMALIZED_TRIGGERS), so
+ * punctuation, casing and double-faced "//" suffixes don't matter.
+ */
+export const TRIGGER_CARDS = Object.freeze(Object.fromEntries(
+    Object.entries(CALCULATORS)
+        .filter(([, c]) => c.cardInDeck && c.card)
+        .map(([tab, c]) => [tab, Object.freeze([c.card, ...(TRIGGER_ALIASES[tab] ?? [])])])
+));
 
 // ==================== NORMALIZATION ====================
 
@@ -132,8 +139,15 @@ export function deriveDeckFacts(deck = {}) {
     for (const key of Object.keys(cardsByName)) addName(cardsByName[key]?.name || key);
     for (const c of cardDetails) addName(c?.name);
 
-    const commanderName = deck.commanderName || null;
-    const commander = normalizeCardName(commanderName);
+    // Every commander (partners, a Doctor and their companion, a background):
+    // normalized name → the commander's own spelling, for "X is your commander".
+    const commanderNames = readCommanders(deck).map(c => c.name);
+    const commanders = new Map();
+    for (const name of commanderNames) {
+        const key = normalizeCardName(name);
+        if (key && !commanders.has(key)) commanders.set(key, String(name).split('//')[0].trim());
+    }
+    const commanderName = commanderNames[0] ?? null;
 
     // Legendary permanent count (Kamahl's Vow hits lands + legendary permanents)
     let legendaryPermanents = 0;
@@ -153,7 +167,6 @@ export function deriveDeckFacts(deck = {}) {
         if (c?.type === 'lands') continue;
         if ((Number.isFinite(c?.cmc) ? c.cmc : 0) <= 5) cheapNonlands += 1;
     }
-    if (power5Plus === 0) power5Plus = num(deck.creaturesPower5Plus);
 
     // Wild Pair buckets: creatures grouped by total power + toughness. A bucket
     // of n creatures yields floor(n / 2) free bodies, because the fetched
@@ -198,7 +211,9 @@ export function deriveDeckFacts(deck = {}) {
         names,
         displayNames,
         commanderName,
-        commander,
+        commander: normalizeCardName(commanderName),
+        commanderNames,
+        commanders,
         legendaryPermanents,
         power5Plus,
         cheapNonlands,
@@ -228,10 +243,10 @@ const STRUCTURAL_SIGNALS = {
 
     lands: (f) => {
         if (f.counts.lands <= 0) return null;
-        const pct = f.total > 0 ? Math.round((f.counts.lands / f.total) * 100) : 0;
+        const share = f.total > 0 ? f.counts.lands / f.total : 0;
         return {
             score: SCORE.BASELINE,
-            reason: `${f.counts.lands} lands (${pct}% of deck) — check land-drop consistency`
+            reason: `${f.counts.lands} lands (${pct(share)} of deck) — check land-drop consistency`
         };
     },
 
@@ -251,7 +266,7 @@ const STRUCTURAL_SIGNALS = {
         if (f.permanentRatio >= 0.75 && f.avgCmc <= 4.5) {
             return {
                 score: SCORE.STRUCTURAL,
-                reason: `${Math.round(f.permanentRatio * 100)}% permanents at avg MV ${f.avgCmc.toFixed(1)} — strong X-spell target density`
+                reason: `${pct(f.permanentRatio)} permanents at avg MV ${f.avgCmc.toFixed(1)} — strong X-spell target density`
             };
         }
         return null;
@@ -305,7 +320,7 @@ const STRUCTURAL_SIGNALS = {
         if (eligible <= 0) return null;
         const share = f.total > 0 ? eligible / f.total : 0;
         if (share >= 0.30) {
-            return { score: SCORE.STRUCTURAL, reason: `${eligible} nonlands at MV 5 or less (${Math.round(share * 100)}%) — dense enough for discover 5 every turn` };
+            return { score: SCORE.STRUCTURAL, reason: `${eligible} nonlands at MV 5 or less (${pct(share)}) — dense enough for discover 5 every turn` };
         }
         if (share >= 0.18) {
             return { score: SCORE.WEAK, reason: `${eligible} nonlands at MV 5 or less — discover 5 converts, but digs to find them` };
@@ -378,10 +393,10 @@ export function analyzeDeck(deck = {}, opts = {}) {
         // Channel 1: named cards
         const triggers = NORMALIZED_TRIGGERS[tab] || [];
         for (const trigger of triggers) {
-            if (facts.commander && facts.commander === trigger) {
+            if (facts.commanders.has(trigger)) {
                 score += SCORE.COMMANDER;
                 hasCard = true;
-                reasons.push(`${facts.commanderName || titleize(trigger)} is your commander`);
+                reasons.push(`${facts.commanders.get(trigger) || titleize(trigger)} is your commander`);
                 break;
             }
             if (facts.names.has(trigger)) {

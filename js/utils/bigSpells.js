@@ -1,30 +1,38 @@
 /**
- * Shared building blocks for the four "big spell" pages — Portent of Calamity,
- * Genesis Wave, Kamahl's Druidic Vow and Primal Surge.
+ * The big-spell kit — what the four "big spell" pages share: Portent of
+ * Calamity, Genesis Wave, Kamahl's Druidic Vow and Primal Surge.
  *
- * Three kinds of thing live here, none of which touches the DOM:
- *   - deck helpers (the card list, card types, a cache key for the list)
- *   - exact maths and number formatting the four pages share
+ *   - the sample shuffles and card-type labels
  *   - markup and CSS strings the four views render, so the pages look and
  *     behave as one family
+ *   - the X-spell page kit: the X control, the value-model inputs, the
+ *     deck → library read, the payback chart, sample casts that pay for
+ *     themselves or fall short, the every-X table, the dots switch and the
+ *     page wiring. Genesis Wave and the Vow are the same page around a
+ *     different model; Portent and Primal Surge use the parts that fit.
  *
- * The exceptions are the "page helpers" (X control sync, preset chips) and
- * renderHowItCompares(); each is only ever called by the page that owns the
- * elements it touches. renderHowItCompares() lazy-loads the comparison so a
+ * The deck helpers (the card list, its size and cache key) live in
+ * models/cardList.js and the exact maths in the models and hypergeometric.js,
+ * so the models and the comparison never import this module.
+ *
+ * Functions that touch the DOM ("page helpers", the kit and
+ * renderHowItCompares()) are only ever called by the page that owns the
+ * elements they touch. renderHowItCompares() lazy-loads the comparison so a
  * page's first paint never waits on the other three calculators.
  */
 
+import { shuffle } from './random.js';
+import { CARD_TYPES } from './library.js';
+import { avg, pct, plural } from './text.js';
+import { createOrUpdateChart, TX_CHART, withAlpha } from './chartHelpers.js';
+import { renderBottomLine, renderSweepTable, pBarCell, toneColor, toneFor } from './components.js';
+import { scoreBattlefieldValue } from './payback.js';
 import * as DeckConfig from './deckConfig.js';
-import { shuffle } from './simulation.js';
+import { cardListKey, deckCardList } from './models/cardList.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
+import { cardImageUrl, findCard } from '../data/images.js';
 
 // ── Card types ───────────────────────────────────────────────────────────────
-
-/** Every card type a library card can have (kindred aside), in display order. */
-export const CARD_TYPES = Object.freeze(['creature', 'artifact', 'enchantment', 'planeswalker', 'battle', 'land', 'instant', 'sorcery']);
-
-/** Card types that make a card a permanent card. */
-export const PERMANENT_TYPES = Object.freeze(['creature', 'artifact', 'enchantment', 'planeswalker', 'battle', 'land']);
 
 const TYPE_LABELS = Object.freeze({
     creature: 'Creature', artifact: 'Artifact', enchantment: 'Enchantment', planeswalker: 'Planeswalker',
@@ -36,86 +44,7 @@ export function typeLabel(type) {
     return TYPE_LABELS[type] ?? String(type ?? '');
 }
 
-/**
- * Card types on a type line. Imports store the front face of double-faced
- * cards, which is what a card has while it is in the library.
- * @param {string} typeLine
- * @returns {string[]} keys from CARD_TYPES
- */
-export function cardTypesOf(typeLine) {
-    const lower = String(typeLine ?? '').toLowerCase();
-    return CARD_TYPES.filter(type => lower.includes(type));
-}
-
-/** Is this type line a permanent card (any permanent type)? */
-export function isPermanentTypeLine(typeLine) {
-    const lower = String(typeLine ?? '').toLowerCase();
-    return PERMANENT_TYPES.some(type => lower.includes(type));
-}
-
-// ── The deck ─────────────────────────────────────────────────────────────────
-
-/**
- * The deck's card records, or [] when only type counts are known.
- *
- * Hand-edited type counts no longer describe an imported list (DeckConfig
- * marks the deck 'manual'), so the counts win and the list is ignored —
- * otherwise a page would mix card odds from one deck with the size of another.
- *
- * @param {Object} [config] - a DeckConfig snapshot (defaults to the live deck)
- * @returns {Array<{name:string, type_line:string, cmc:number, count:number}>}
- */
-export function deckCardList(config = DeckConfig.getDeckConfig()) {
-    if (config?.importSource === 'manual') return [];
-    return Object.values(config?.cardsByName ?? {})
-        .filter(card => card && (Number(card.count) || 0) > 0)
-        .map(card => ({
-            name: String(card.name ?? ''),
-            type_line: String(card.type_line ?? ''),
-            cmc: Number.isFinite(Number(card.cmc)) ? Math.max(0, Number(card.cmc)) : 0,
-            count: Math.max(0, Math.floor(Number(card.count) || 0))
-        }));
-}
-
-/** Number of cards in a card list. */
-export function listSize(cards) {
-    return (cards ?? []).reduce((sum, card) => sum + (card?.count ?? 0), 0);
-}
-
-/**
- * A short, order-independent key for a card list (FNV-1a over its contents),
- * so results can be cached per deck without holding the whole list as a key.
- */
-export function cardListKey(cards) {
-    const text = (cards ?? [])
-        .map(card => `${card.name}|${card.count}|${card.cmc}|${card.type_line}`)
-        .sort()
-        .join('\n');
-    let hash = 0x811c9dc5;
-    for (let i = 0; i < text.length; i++) {
-        hash ^= text.charCodeAt(i);
-        hash = Math.imul(hash, 0x01000193);
-    }
-    return `${(cards ?? []).length}:${(hash >>> 0).toString(36)}`;
-}
-
-/**
- * Expand a card list into one object per physical card, with its types worked
- * out once. Copies of a card share one object.
- */
-export function expandCards(cards) {
-    const out = [];
-    for (const card of cards ?? []) {
-        const record = Object.freeze({
-            name: card.name,
-            type_line: card.type_line,
-            cmc: card.cmc ?? 0,
-            types: Object.freeze(cardTypesOf(card.type_line))
-        });
-        for (let i = 0; i < (card.count ?? 0); i++) out.push(record);
-    }
-    return out;
-}
+// ── Sample shuffles ──────────────────────────────────────────────────────────
 
 /**
  * A handful of shuffled libraries that stay put until the deck changes or the
@@ -134,11 +63,7 @@ export function createSampler(size = 4) {
         get(deckKey, build) {
             if (deckKey !== key) {
                 const base = build() ?? [];
-                decks = Array.from({ length: size }, () => {
-                    const copy = base.slice();
-                    shuffle(copy);
-                    return copy;
-                });
+                decks = Array.from({ length: size }, () => shuffle(base.slice()));
                 key = deckKey;
             }
             return decks;
@@ -147,112 +72,6 @@ export function createSampler(size = 4) {
             key = null;
         }
     };
-}
-
-// ── Exact maths ──────────────────────────────────────────────────────────────
-
-const LOG_FACTORIAL = [0];
-
-function logFactorial(n) {
-    for (let i = LOG_FACTORIAL.length; i <= n; i++) {
-        LOG_FACTORIAL[i] = LOG_FACTORIAL[i - 1] + Math.log(i);
-    }
-    return LOG_FACTORIAL[n];
-}
-
-function logChoose(n, k) {
-    return logFactorial(n) - logFactorial(k) - logFactorial(n - k);
-}
-
-/**
- * Exact distribution of successes when drawing without replacement.
- * @param {number} population - cards in the library
- * @param {number} successes - cards that count as a hit
- * @param {number} draws - cards looked at
- * @returns {number[]} pmf, index = number of hits (length draws + 1)
- */
-export function hypergeometricPmf(population, successes, draws) {
-    const N = Math.max(0, Math.floor(Number(population) || 0));
-    const K = Math.min(N, Math.max(0, Math.floor(Number(successes) || 0)));
-    const n = Math.min(N, Math.max(0, Math.floor(Number(draws) || 0)));
-    const pmf = new Array(n + 1).fill(0);
-    const lo = Math.max(0, n - (N - K));
-    const hi = Math.min(n, K);
-    const denominator = logChoose(N, n);
-    for (let k = lo; k <= hi; k++) {
-        pmf[k] = Math.exp(logChoose(K, k) + logChoose(N - K, n - k) - denominator);
-    }
-    return pmf;
-}
-
-/**
- * Smallest value whose cumulative probability reaches q.
- * @param {number[]} pmf - index = value
- * @param {number} q - 0..1
- */
-export function quantileOf(pmf, q) {
-    let cumulative = 0;
-    for (let k = 0; k < pmf.length; k++) {
-        cumulative += pmf[k];
-        if (cumulative >= q - 1e-9) return k;
-    }
-    return Math.max(0, pmf.length - 1);
-}
-
-// ── Formatting ───────────────────────────────────────────────────────────────
-
-/**
- * A probability as a whole percentage. Never rounds a possible result to 0%
- * or an uncertain one to 100%.
- */
-export function pct(p) {
-    if (!Number.isFinite(p)) return '—';
-    if (p <= 0) return '0%';
-    if (p >= 1) return '100%';
-    if (p < 0.005) return '<1%';
-    if (p >= 0.995) return '>99%';
-    return `${Math.round(p * 100)}%`;
-}
-
-/** An average to one decimal place. */
-export function avg(value, digits = 1) {
-    if (!Number.isFinite(value)) return '—';
-    const text = value.toFixed(digits);
-    return /^-0\.?0*$/.test(text) ? text.slice(1) : text;
-}
-
-/** Change in a probability, in percentage points: "+9 points". */
-export function points(delta) {
-    if (!Number.isFinite(delta)) return '—';
-    const rounded = Math.round(delta * 100);
-    if (rounded === 0) return 'no change';
-    return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded)} point${Math.abs(rounded) === 1 ? '' : 's'}`;
-}
-
-/** Compact change in a probability for tables: "+9 pts". */
-export function pointsShort(delta) {
-    if (!Number.isFinite(delta)) return '—';
-    const rounded = Math.round(delta * 100);
-    if (rounded === 0) return '0';
-    return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded)} pts`;
-}
-
-/** "1 card" / "3 cards". */
-export function plural(n, one, many = `${one}s`) {
-    return `${n} ${n === 1 ? one : many}`;
-}
-
-/** Tone for a chance the player wants to be high. */
-export function chanceTone(p, { good = 0.7, warn = 0.4 } = {}) {
-    if (!Number.isFinite(p)) return 'flat';
-    if (p >= good) return 'good';
-    if (p >= warn) return 'warn';
-    return 'bad';
-}
-
-/** CSS colour token for a tone. */
-export function toneColor(tone) {
-    return { good: 'var(--tx-good)', warn: 'var(--tx-warn)', bad: 'var(--tx-bad)' }[tone] ?? 'var(--tx-bright)';
 }
 
 // ── Markup (strings only) ────────────────────────────────────────────────────
@@ -272,8 +91,8 @@ export function xControlHTML({ key, label = 'Cards revealed (X)', hint = '', val
                 <span class="bs-cost" id="${key}-cost">${costLabel}</span>
             </div>
             <div class="bs-x">
-                <input class="bs-x-num" type="number" id="${key}-xValue" value="${value}" min="1" max="50" inputmode="numeric" aria-describedby="${key}-x-hint">
-                <input class="tx-slider" type="range" id="${key}-xSlider" value="${value}" min="1" max="${max}" step="1" aria-label="${escapeHtml(label)}">
+                <input class="field bs-x-num" type="number" id="${key}-xValue" value="${value}" min="1" max="50" inputmode="numeric" aria-describedby="${key}-x-hint">
+                <input type="range" id="${key}-xSlider" value="${value}" min="1" max="${max}" step="1" aria-label="${escapeHtml(label)}">
             </div>
             ${chips ? `<div class="bs-presets" id="${key}-presets" role="group" aria-label="Common X values">${chips}</div>` : ''}
             ${hint ? `<p class="bs-hint" id="${key}-x-hint">${hint}</p>` : ''}
@@ -289,7 +108,7 @@ export function valueModelHTML({ fields = [], intro = '', footer = '' }) {
     const rows = fields.map(f => `
         <label class="bs-value-row" for="${f.id}">
             <span class="bs-value-name">${f.label}</span>
-            <input type="number" id="${f.id}" value="${f.value}" min="${f.min ?? 0}" max="${f.max ?? 20}" step="0.25" inputmode="decimal">
+            <input type="number" class="field field-sm" id="${f.id}" value="${f.value}" min="${f.min ?? 0}" max="${f.max ?? 20}" step="0.25" inputmode="decimal">
             <small>${f.hint}</small>
         </label>`).join('');
     return `
@@ -358,25 +177,6 @@ export function noticeHTML(html, tone = 'warn') {
     return `<p class="bs-notice tone-${tone}">${html}</p>`;
 }
 
-/**
- * A chart colour at reduced opacity. Takes the live TX_CHART value (hex or
- * rgb), so faded series still follow the theme.
- */
-export function fade(color, alpha) {
-    const value = String(color ?? '').trim();
-    const hex = value.match(/^#([0-9a-f]{6})$/i);
-    if (hex) {
-        const n = parseInt(hex[1], 16);
-        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-    }
-    const rgb = value.match(/^rgba?\(([^)]+)\)$/i);
-    if (rgb) {
-        const [r, g, b] = rgb[1].split(',').map(v => v.trim());
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-    return value;
-}
-
 // ── Page helpers (only ever called by the page that owns the inputs) ─────────
 
 function byId(id) {
@@ -421,6 +221,317 @@ export function bindXPresets(key, onPick) {
     });
 }
 
+// ── X-spell page kit (only ever called by the page that owns the inputs) ────
+
+/** Set the X control (slider and box) to `x`; the page renders next. */
+export function setXInputs(key, x) {
+    const slider = byId(`${key}-xSlider`);
+    const input = byId(`${key}-xValue`);
+    if (slider) slider.value = x;
+    if (input) input.value = x;
+}
+
+/**
+ * A value-model input (credit per land, per permanent), clamped to 0–20, or
+ * the fallback when its page has not been mounted.
+ * @param {string} id
+ * @param {number} fallback
+ */
+export function readValueInput(id, fallback) {
+    const value = parseFloat(byId(id)?.value);
+    return Number.isFinite(value) ? Math.min(20, Math.max(0, value)) : fallback;
+}
+
+/**
+ * The deck as an X spell sees it: the card list without the copy being cast,
+ * the page's library model over it, how high X can go, the X chosen and a key
+ * that changes whenever the library does.
+ *
+ * @param {string} key - calculator key (its X control is `<key>-xValue`)
+ * @param {Object} deck - DeckConfig.getDeckConfig()
+ * @param {Object} opts
+ * @param {Object} opts.onStack - the model's ON_STACK (the card being cast)
+ * @param {(cards:Array, deck:Object) => Object} opts.build - the model's library builder
+ * @param {number} opts.maxX - the X control's own limit
+ * @param {number} opts.defaultX - X before the page is mounted
+ * @param {(library:Object) => number} [opts.size] - cards in the library (default `library.deckSize`)
+ * @param {(library:Object) => string} [opts.countsKey] - the key for a counts-only deck
+ * @returns {{cards:Array, library:Object, deckSize:number, maxX:number, x:number, deckKey:string}}
+ */
+export function readXSpell(key, deck, {
+    onStack, build, maxX: limit, defaultX,
+    size = library => library.deckSize,
+    countsKey = library => `counts:${library.entries.map(e => e.count).join(',')}`
+}) {
+    const cards = deckCardList(deck, onStack);
+    const library = build(cards, deck);
+    const deckSize = size(library);
+    const maxX = Math.max(1, Math.min(deckSize, limit));
+    const x = Math.min(maxX, readX(key, defaultX));
+    return { cards, library, deckSize, maxX, x, deckKey: cards.length ? cardListKey(cards) : countsKey(library) };
+}
+
+/**
+ * The page with nothing to show (an empty deck): a one-line answer and no dots.
+ * The page drops its own chart and cast.
+ * @param {string} key
+ * @param {string} html
+ */
+export function renderEmptyAnswer(key, html) {
+    const el = byId(`${key}-stats`);
+    if (el) el.innerHTML = renderBottomLine({ html, tone: 'flat' });
+    const dots = byId(`${key}-dots`);
+    if (dots) dots.innerHTML = '';
+}
+
+/**
+ * The big-spell chart: bars for what each X (or card count) puts into play,
+ * a line for the chance it pays for itself on the right axis (hidden for a
+ * counts-only deck, with the legend's `[data-payback-key]`), the current
+ * choice highlighted. With `onPick`, clicking a bar picks it.
+ *
+ * @param {Object|null} chart - the page's chart so far
+ * @param {string} key - calculator key (canvas `<key>-chart`)
+ * @param {Object} spec
+ * @param {number[]} spec.points - the x values (X, or a card count)
+ * @param {number} spec.current - the highlighted point
+ * @param {{label:string, data:number[]}} spec.bars
+ * @param {Array<number|null>|null} spec.payback - chance per point, in % (null: no line)
+ * @param {string} spec.xTitle
+ * @param {string} spec.yTitle
+ * @param {(point:number) => string} spec.title - tooltip title
+ * @param {(item:Object) => string} [spec.barLabel] - tooltip line for a bar
+ * @param {(point:number) => void} [spec.onPick]
+ * @returns {Object|null} the chart
+ */
+export function paybackChart(chart, key, { points, current, bars, payback, xTitle, yTitle, title, barLabel, onPick }) {
+    const hasPayback = Boolean(payback);
+    if (chart && chart.$hasPayback !== hasPayback) {
+        // Axis options are fixed at creation; rebuild when the right axis comes or goes.
+        chart.destroy();
+        chart = null;
+    }
+    const at = point => point === current;
+    const picking = onPick ? {
+        onClick: (event, elements) => {
+            const index = elements?.[0]?.index;
+            if (index != null) onPick(points[index]);
+        },
+        onHover: (event, elements) => {
+            const target = event?.native?.target;
+            if (target) target.style.cursor = elements?.length ? 'pointer' : 'default';
+        }
+    } : {};
+    chart = createOrUpdateChart(chart, `${key}-chart`, {
+        type: 'bar',
+        data: {
+            labels: points.map(String),
+            datasets: [
+                {
+                    label: bars.label,
+                    data: bars.data,
+                    backgroundColor: points.map(p => at(p) ? TX_CHART.amber : withAlpha(TX_CHART.blue, 0.45)),
+                    hoverBackgroundColor: points.map(p => at(p) ? TX_CHART.amber : withAlpha(TX_CHART.blue, 0.7)),
+                    borderRadius: 3,
+                    maxBarThickness: 34,
+                    yAxisID: 'y',
+                    order: 2
+                },
+                {
+                    label: 'Pays for itself',
+                    type: 'line',
+                    data: hasPayback ? payback : points.map(() => null),
+                    borderColor: TX_CHART.green,
+                    backgroundColor: TX_CHART.green,
+                    borderWidth: 2,
+                    tension: 0.3,
+                    pointRadius: points.map(p => at(p) ? 5 : 2),
+                    pointBackgroundColor: points.map(p => at(p) ? TX_CHART.green : TX_CHART.bg),
+                    pointBorderColor: TX_CHART.green,
+                    hidden: !hasPayback,
+                    yAxisID: 'y2',
+                    order: 1
+                }
+            ]
+        },
+        options: {
+            ...picking,
+            scales: {
+                x: { title: { display: true, text: xTitle, color: TX_CHART.dim }, grid: { display: false } },
+                y: { beginAtZero: true, title: { display: true, text: yTitle, color: TX_CHART.dim } },
+                y2: {
+                    position: 'right', min: 0, max: 100,
+                    grid: { drawOnChartArea: false },
+                    ticks: { stepSize: 25, callback: v => `${v}%` },
+                    display: hasPayback
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        title: items => title(Number(items[0].label)),
+                        label: item => item.datasetIndex === 0
+                            ? (barLabel ? barLabel(item) : `${bars.label}: ${avg(item.parsed.y)}`)
+                            : `Pays for itself: ${pct(item.parsed.y / 100)}`
+                    }
+                }
+            }
+        }
+    });
+    if (chart) chart.$hasPayback = hasPayback;
+    if (typeof document !== 'undefined') {
+        document.querySelectorAll(`#${key}-tab [data-payback-key]`).forEach(el => { el.hidden = !hasPayback; });
+    }
+    return chart;
+}
+
+/**
+ * One sample cast of a spell that puts cards onto the battlefield: the first
+ * `maxRows` cards it looked at, "+ N more", and whether what it put into play
+ * paid for the mana spent.
+ *
+ * @param {Object} opts
+ * @param {number} opts.index - which shuffle (0-based)
+ * @param {Array} opts.rows - every card looked at (sampleCardHTML rows; `state: 'miss'` for the ones it skips)
+ * @param {number} opts.maxRows
+ * @param {string} opts.hitUnit - a hit, in "+ 4 more cards (2 permanents)"
+ * @param {{manaValue:number, lands:number, cards:number}} opts.put - what went onto the battlefield
+ * @param {Object} opts.settings - the value model (landValue, cardValue)
+ * @param {number} opts.threshold - the mana spent
+ * @param {string} opts.lead - the footer's start, e.g. "<strong>5 permanents</strong>"
+ */
+export function paybackSampleHTML({ index, rows, maxRows, hitUnit, put, settings, threshold, lead }) {
+    const scored = scoreBattlefieldValue(put, { ...settings, threshold });
+    const hidden = rows.slice(maxRows);
+    return sampleCardHTML({
+        title: `Shuffle ${index + 1}`,
+        tag: scored.paidForItself ? 'Pays for itself' : 'Falls short',
+        tone: scored.paidForItself ? 'good' : 'bad',
+        rows: rows.slice(0, maxRows),
+        more: hidden.length ? `+ ${plural(hidden.length, 'more card')} (${plural(hidden.filter(r => r.state !== 'miss').length, hitUnit)})` : '',
+        footer: `${lead} · value <strong>${avg(scored.effectiveValue)}</strong> of ${threshold} needed`
+    });
+}
+
+/**
+ * The "every X" table of an X spell that pays for itself: X, mana, the page's
+ * own columns, the change from one X less, the hit rate and the payback chance.
+ *
+ * @param {string} tableId
+ * @param {Object} opts
+ * @param {number} opts.x - the current X
+ * @param {number|null} opts.recommended - the X to mark as recommended
+ * @param {Object<number, Object>} opts.results - the sweep, by X (each with `mana` and `payback`)
+ * @param {number} opts.maxX
+ * @param {number} opts.tableMax - the table stops here
+ * @param {(r:Object) => number} opts.hits - average hits at one X
+ * @param {(r:Object) => number} opts.seen - cards looked at, at one X
+ * @param {Array} opts.columns - the page's own columns, after Mana
+ * @param {boolean} [opts.hasPayback=true]
+ */
+export function renderXSweep(tableId, { x, recommended, results, maxX, tableMax, hits, seen, columns, hasPayback = true }) {
+    const rows = [];
+    for (let i = 1; i <= Math.min(maxX, tableMax); i++) {
+        const r = results[i];
+        if (!r) continue;
+        rows.push({ x: i, r, delta: results[i - 1] ? hits(r) - hits(results[i - 1]) : null });
+    }
+    renderSweepTable(tableId, {
+        current: x,
+        recommended,
+        rows,
+        columns: [
+            { label: 'X', align: 'left', render: row => `${row.x}` },
+            { label: 'Mana', render: row => `${row.r.mana}` },
+            ...columns,
+            { label: 'Change', render: row => row.delta == null ? '—' : `+${avg(row.delta, 2)}` },
+            { label: 'Hit rate', align: 'left', render: row => pBarCell(seen(row.r) ? hits(row.r) / seen(row.r) : 0, 'var(--tx-flat)') },
+            {
+                label: 'Pays for itself',
+                render: row => hasPayback
+                    ? `<span style="color:${toneColor(toneFor(row.r.payback.paybackProbability))}">${pct(row.r.payback.paybackProbability)}</span>`
+                    : '—'
+            }
+        ]
+    });
+}
+
+/**
+ * The table behind a "value put into play" dot plot: the exact chance of
+ * falling short, of each of `bands` steps above the threshold, and of more.
+ * @param {Array<{value:number, p:number}>} pmf - exact value distribution
+ * @param {{threshold:number, step:number, bands:number, format?:(v:number) => string}} opts
+ */
+export function valueBandsTable(pmf, { threshold, step, bands, format = String }) {
+    const list = [{ lo: 0, hi: threshold, label: `Under ${format(threshold)} (falls short)` }];
+    for (let i = 0; i < bands; i++) {
+        const lo = threshold + i * step;
+        list.push({ lo, hi: lo + step, label: `${format(lo)} to under ${format(lo + step)}` });
+    }
+    const top = threshold + bands * step;
+    list.push({ lo: top, hi: Infinity, label: `${format(top)} or more` });
+    const chance = band => pmf.reduce((s, e) => s + (e.value >= band.lo - 1e-9 && e.value < band.hi - 1e-9 ? e.p : 0), 0);
+    return {
+        summary: 'Exact chances',
+        caption: 'Exact chance of each value range',
+        head: ['Value put into play', 'Chance'],
+        rows: list.filter(b => b.hi > b.lo).map(b => [escapeHtml(b.label), pct(chance(b))])
+    };
+}
+
+/** The dot plots' legend: casts that paid for themselves, and casts that fell short. */
+export const PAYBACK_LEGEND = Object.freeze([
+    { tone: 'good', label: 'paid for itself' },
+    { tone: 'bad', label: 'fell short' }
+]);
+
+/**
+ * The "Value / Permanents" switch over the dots (`#<key>-dots-view`, buttons
+ * `[data-dots-view]`): press the view shown, hide the switch without values.
+ */
+export function syncDotsView(key, view, hasValue) {
+    byId(`${key}-dots-view`)?.querySelectorAll?.('[data-dots-view]').forEach(btn => {
+        const on = btn.dataset.dotsView === view;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+    });
+    const toggle = byId(`${key}-dots-view`);
+    if (toggle) toggle.hidden = !hasValue;
+}
+
+/** A card's small image for the "Cast it" stage: the deck's own printing when it was imported. */
+export function castImage(name) {
+    const record = findCard(DeckConfig.getImportedCardData()?.cardsByName ?? {}, name);
+    return cardImageUrl(record ?? name, 'small');
+}
+
+/**
+ * Wire a big-spell page's controls; call from registerCalculator's init.
+ * @param {string} key
+ * @param {Object} handlers
+ * @param {Function} handlers.update - the debounced render
+ * @param {(x:number) => void} [handlers.setX] - preset chips
+ * @param {string[]} [handlers.values] - value-model input ids
+ * @param {Function} [handlers.reshuffle] - `<key>-reshuffle-btn`
+ * @param {Function} [handlers.cast] - `<key>-cast-btn` (focus returns to it when the cast closes)
+ * @param {(view:string) => void} [handlers.dotsView] - `<key>-dots-view` switch
+ */
+export function bindBigSpellControls(key, { update, setX, values = [], reshuffle, cast, dotsView }) {
+    if (setX) bindXPresets(key, setX);
+    values.forEach(id => byId(id)?.addEventListener('input', update));
+    if (reshuffle) byId(`${key}-reshuffle-btn`)?.addEventListener('click', reshuffle);
+    if (cast) {
+        byId(`${key}-cast-btn`)?.addEventListener('click', cast);
+        byId(`${key}-cast`)?.addEventListener('cast-closed', () => byId(`${key}-cast-btn`)?.focus({ preventScroll: true }));
+    }
+    if (dotsView) {
+        byId(`${key}-dots-view`)?.addEventListener('click', e => {
+            const view = e.target.closest?.('[data-dots-view]')?.dataset.dotsView;
+            if (view) dotsView(view);
+        });
+    }
+}
+
 // ── How it compares (lazy) ───────────────────────────────────────────────────
 
 const idle = typeof requestIdleCallback === 'function'
@@ -429,7 +540,7 @@ const idle = typeof requestIdleCallback === 'function'
 
 /**
  * Fill the "How it compares" panel. The comparison module (which pulls in all
- * four calculators) is fetched on demand and computed when the browser is
+ * four models) is fetched on demand and computed when the browser is
  * idle; an unchanged comparison is not recomputed.
  *
  * @param {string} containerId
@@ -461,15 +572,30 @@ export function renderHowItCompares(containerId, { x, source, deckKey, options =
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 /**
- * CSS shared by the four big-spell views, scoped under one page.
- * @param {string} scope - e.g. '#wave-tab'
+ * Add the shared big-spell CSS to the document once, however many of those pages are opened
+ * (each view calls this when it loads). A no-op outside a browser.
+ * @param {Document} [doc]
  */
-export function sharedStyles(scope) {
+export function injectSharedStyles(doc = globalThis.document) {
+    if (!doc?.head || doc.querySelector('style[data-owner="big-spells"]')) return;
+    const style = doc.createElement('style');
+    style.dataset.owner = 'big-spells';
+    style.textContent = sharedStyles();
+    doc.head.appendChild(style);
+}
+
+/**
+ * CSS shared by the four big-spell views. Scoped under `.bs-page` (the root
+ * of each view's template) rather than a page id, so one copy serves every
+ * page: see injectSharedStyles().
+ * @param {string} [scope]
+ */
+export function sharedStyles(scope = '.bs-page') {
     const s = scope;
     return `
 ${s} .bs-h { margin: 0; font-size: var(--t-body); font-weight: 650; letter-spacing: 0; color: var(--tx-bright); }
-${s} .bs-caption { margin: 0; padding: 10px 18px 14px; font-size: var(--t-xs); line-height: 1.5; color: var(--tx-dim); }
-${s} .bs-caption strong { color: var(--tx-mid); font-weight: 600; }
+/* The family's panels are inset 18px; captions line up with them. */
+${s} .tx-caption { padding-inline: 18px; }
 
 /* Rail */
 ${s} .bs-field { display: grid; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--tx-rule); }
@@ -503,7 +629,7 @@ ${s} .bs-value-row input { width: 76px; text-align: right; border-radius: var(--
 ${s} .bs-value-row small { grid-column: 1 / -1; font-size: var(--t-label); color: var(--tx-dim); line-height: 1.4; }
 
 /* Answer */
-${s} .bs-answer .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); justify-content: stretch; border-bottom: 0; }
+${s} .bs-answer .tx-hero { justify-content: stretch; border-bottom: 0; }
 ${s} .bs-answer .tx-hero .tx-stat { border-bottom: 0; }
 ${s} .bs-notice { margin: 0; padding: 12px 18px; font-size: var(--t-sm); line-height: 1.5; color: var(--tx-text); border-bottom: 1px solid var(--tx-rule); }
 ${s} .bs-notice.tone-warn { background: var(--warn-soft); }
@@ -513,7 +639,6 @@ ${s} .bs-notice.tone-flat { background: var(--tx-panel-alt); }
 ${s} .bs-chart { position: relative; height: 270px; padding: 14px 14px 4px; }
 ${s} .bs-legend { display: inline-flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 ${s} .bs-key { display: inline-flex; align-items: center; gap: 6px; }
-${s} .bs-key[hidden] { display: none; }
 ${s} .bs-key::before { content: ''; width: 10px; height: 10px; border-radius: 2px; background: var(--key, var(--tx-flat)); }
 ${s} .bs-key.is-line::before { height: 3px; border-radius: 2px; }
 ${s} .bs-key.k-accent { --key: var(--tx-accent); }
@@ -522,7 +647,7 @@ ${s} .bs-key.k-flat { --key: var(--tx-flat); }
 ${s} .bs-key.k-dim { --key: var(--tx-dim); }
 
 /* Samples */
-${s} .bs-samples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; padding: 14px 16px 16px; }
+${s} .bs-samples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; padding: 14px var(--pad-x) 16px; }
 ${s} .bs-sample { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--tx-rule); border-radius: var(--radius-md); background: var(--tx-panel-alt); overflow: hidden; }
 ${s} .bs-sample-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--tx-rule); font-size: var(--t-xs); }
 ${s} .bs-sample-title { color: var(--tx-mid); }
@@ -577,7 +702,7 @@ ${s} .bs-details .tx-collapse[open] > .tx-collapse-head::before { content: ''; t
 ${s} .bs-details .tx-collapse-head:hover::before { border-color: var(--tx-accent); }
 ${s} .bs-details .tx-collapse-head .bs-sub { margin-left: 6px; font-weight: 400; color: var(--tx-dim); }
 ${s} .bs-details .tx-collapse-body { max-height: none; overflow: visible; padding: 0 0 8px; }
-${s} .bs-details .tx-collapse-body > .bs-caption { padding-top: 0; }
+${s} .bs-details .tx-collapse-body > .tx-caption { padding-top: 0; }
 ${s} .bs-table-wrap { overflow-x: auto; }
 ${s} .bs-table-wrap .tx-sweep-table td,
 ${s} .bs-table-wrap .tx-sweep-table th { white-space: nowrap; }
@@ -605,6 +730,115 @@ ${s} .bsc-value strong { font-family: var(--font-mono); font-size: var(--t-sm); 
 ${s} .bsc-note { margin: 0; padding: 10px 18px 14px; font-size: var(--t-xs); line-height: 1.5; color: var(--tx-dim); border-top: 1px solid var(--tx-rule); }
 ${s} .bsc-empty { margin: 0; padding: 16px 18px; font-size: var(--t-sm); color: var(--tx-dim); }
 
+/* "Cast it": one resolution played card by card (js/utils/castAnimation.js) */
+${s} .bs-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+${s} .bs-cast-stage { padding: 14px 16px 4px; border-bottom: 1px solid var(--tx-rule); container-type: inline-size; }
+${s} .cast { display: grid; gap: 12px; }
+${s} .cast-top { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 16px; align-items: center; }
+${s} .cast-pile { position: relative; display: grid; justify-items: center; gap: 6px; }
+${s} .cast-back {
+    width: 64px;
+    height: 89px;
+    border-radius: 6px;
+    border: 1px solid var(--tx-rule-hi);
+    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--tx-flat) 22%, transparent) 0 6px, transparent 6px 12px),
+        var(--tx-panel-alt);
+    box-shadow: 3px 3px 0 -1px var(--tx-panel-alt), 3px 3px 0 0 var(--tx-rule-hi);
+}
+${s} .cast-left { font-family: var(--font-mono); font-size: var(--t-label); color: var(--tx-dim); white-space: nowrap; }
+${s} .cast-slot { width: 120px; height: 167px; perspective: 700px; }
+${s} .cast-card {
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 6px;
+    border: 1px solid var(--tx-rule-hi);
+    background: var(--tx-panel-alt);
+    color: var(--tx-text);
+}
+${s} .cast-card img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+${s} .cast-card-name {
+    padding: 4px;
+    font-size: var(--t-label);
+    line-height: 1.25;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+${s} .cast-big { width: 120px; height: 167px; box-shadow: var(--shadow-md); }
+${s} .cast-big .cast-card-name { font-size: var(--t-xs); }
+${s} .cast-big.is-flip { animation: cast-flip 0.22s var(--ease-out) both; transform-origin: center; }
+${s} .cast-big.is-stop { outline: 2px solid var(--tx-bad); outline-offset: 2px; }
+${s} .cast-big.is-graveyard { filter: saturate(0.5); }
+${s} .cast-read { display: grid; gap: 10px; min-width: 0; align-content: center; }
+${s} .cast-status {
+    margin: 0;
+    min-height: 3em;
+    font-size: var(--t-sm);
+    line-height: 1.5;
+    color: var(--tx-text);
+}
+${s} .cast-status strong { color: var(--tx-bright); font-weight: 600; }
+${s} .cast-totals { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 0; }
+${s} .cast-totals dd {
+    margin: 2px 0 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-lg);
+    font-weight: 600;
+    color: var(--tx-bright);
+}
+${s} .cast-totals dd small { font-size: var(--t-xs); font-weight: 400; color: var(--tx-dim); }
+${s} .cast-totals dd.tone-good { color: var(--tx-good); }
+${s} .cast-zone { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; }
+${s} .cast-zone-label { padding-top: 6px; }
+${s} .cast-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 61px;
+    padding: 0;
+}
+${s} .cast-mini { width: 44px; height: 61px; border-radius: 3px; }
+${s} .cast-mini .cast-card-name { font-size: 7.5px; padding: 2px; }
+${s} .cast-mini.is-new { animation: cast-land 0.2s var(--ease-out) both; }
+${s} .cast-mini.is-stop { outline: 2px solid var(--tx-bad); outline-offset: 1px; }
+${s} .cast-mini.is-graveyard { opacity: 0.55; filter: grayscale(0.6); }
+${s} .cast-more {
+    align-self: center;
+    padding: 0 6px;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--tx-mid);
+}
+${s} .cast-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px; }
+${s} .cast[data-state="done"] .cast-status { color: var(--tx-bright); }
+@keyframes cast-flip {
+    from { transform: rotateY(90deg) translateX(-24px); opacity: 0.4; }
+    to { transform: none; opacity: 1; }
+}
+@keyframes cast-land {
+    from { transform: translateY(-16px) scale(1.25); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+@container (max-width: 520px) {
+    ${s} .cast-top { grid-template-columns: auto minmax(0, 1fr); }
+    ${s} .cast-pile { display: none; }
+    ${s} .cast-slot, ${s} .cast-big { width: 92px; height: 128px; }
+    ${s} .cast-zone { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    ${s} .cast-zone-label { padding-top: 0; }
+    ${s} .cast-row { min-height: 51px; }
+    ${s} .cast-mini { width: 36px; height: 50px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    ${s} .cast-big.is-flip, ${s} .cast-mini.is-new { animation: none; }
+}
+
 /* Narrow: lead with the answer, then the controls */
 @container shell (max-width: 1039.98px) {
     ${s} .bs-answer { order: -1; }
@@ -615,7 +849,7 @@ ${s} .bsc-empty { margin: 0; padding: 16px 18px; font-size: var(--t-sm); color: 
     ${s} .bsc-result { grid-column: 1 / -1; }
     ${s} .bs-bar-row { grid-template-columns: minmax(92px, 1fr) minmax(48px, 1.4fr) 44px; gap: 10px; }
     ${s} .bs-chart { height: 230px; padding-inline: 8px; }
-    ${s} .bs-field { padding: 14px 16px; }
+    ${s} .bs-field { padding: 14px var(--pad-x); }
 }
 `;
 }

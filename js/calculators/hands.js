@@ -16,8 +16,11 @@ import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.
 import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { renderManaCost } from '../utils/mana.js';
 import { escapeHtml, cardRef, term } from '../data/glossary.js';
+import { libraryOf } from '../utils/library.js';
+import { pct } from '../utils/text.js';
 import * as Lab from '../utils/handLab.js';
 import { cardImageUrl, findCard } from '../data/images.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked } from '../utils/turnOrder.js';
 
 const NAME = 'hands';
 const GAMES = 10000;
@@ -43,26 +46,36 @@ const cardEls = new Map();
 let hoverPreview = false;
 let debouncedUpdate = null;
 
-const pct = p => `${Math.round(p * 100)}%`;
 const $ = id => document.getElementById(id);
 
 // ── Library & numbers ────────────────────────────────────────────────────────
 
-function readLibrary() {
+/**
+ * The deck and the page's settings: the format, the library hands are dealt
+ * from (stand-in cards for bare type counts), the keep rule and the turn order.
+ * @returns {{format:Object, library:Object, rule:Object, onPlay:boolean}}
+ */
+export function readInputs() {
     const config = DeckConfig.getDeckConfig();
-    format = DeckConfig.getFormat();
+    const deckFormat = DeckConfig.getFormat();
+    let library;
     if (DeckConfig.hasCardList()) {
-        const commander = format.key === 'commander' ? config.commanderName : null;
-        const built = Lab.buildLibrary(config.cardsByName, { commanderName: commander });
-        return { ...built, key: Lab.libraryKey(built.cards) };
+        const source = libraryOf(config, { format: deckFormat });
+        const commanderCards = source.commanders.length ? DeckConfig.getCommanders().map(c => c.card) : [];
+        const built = Lab.buildLibrary(source, { commanderCards });
+        library = { ...built, key: `${Lab.libraryKey(built.cards)}|${built.identity.join('')}` };
+    } else {
+        const built = Lab.buildPlaceholderLibrary(config);
+        library = { ...built, key: `counts:${Lab.libraryKey(built.cards)}` };
     }
-    const built = Lab.buildPlaceholderLibrary(config);
-    return { ...built, key: `counts:${Lab.libraryKey(built.cards)}` };
+    return { format: deckFormat, library, rule: { ...rule }, onPlay: effectiveOnPlay(onPlay, deckFormat) };
 }
 
 /** Rebuild the library when the deck changed; deal a fresh hand if so. */
 function ensureLibrary() {
-    const next = readLibrary();
+    const inputs = readInputs();
+    format = inputs.format;
+    const next = inputs.library;
     const formatChanged = game.freeMulligan !== format.freeMulligan || game.firstPlayerDraws !== format.firstPlayerDraws;
     if (lib && next.key === lib.key && !formatChanged) return;
     lib = next;
@@ -229,7 +242,7 @@ function renderField() {
     const head = $('hl-field-head');
     if (head) {
         head.innerHTML = `
-            <span class="hl-field-title">Battlefield</span>
+            <span class="hl-field-title tx-eyebrow">Battlefield</span>
             <span>Turn <strong>${game.turn}</strong></span>
             <span>Mana <strong>${untapped}</strong> of ${lands.length}${colors.length ? ` · ${colors.map(c => `<span class="ms ms-${c.toLowerCase()}" aria-label="${c}">${c}</span>`).join('')}` : ''}</span>
             <span>Hand <strong>${game.hand.length}</strong></span>
@@ -394,7 +407,7 @@ function verdictHtml(v, { label = 'Your rule says', extra = [] } = {}) {
         <div class="hl-verdict ${v.keep ? 'tone-keep' : 'tone-mull'}">
             <span class="hl-verdict-mark" aria-hidden="true">${v.keep ? '✓' : '↻'}</span>
             <div>
-                <div class="hl-verdict-label">${label}</div>
+                <div class="hl-verdict-label tx-eyebrow">${label}</div>
                 <div class="hl-verdict-text">${escapeHtml(v.headline)}</div>
                 ${why.length ? `<ul class="hl-verdict-why">${why.map(r => `<li>${r}</li>`).join('')}</ul>` : ''}
             </div>
@@ -486,18 +499,12 @@ function renderRail() {
         b.classList.toggle('active', on);
         b.setAttribute('aria-pressed', String(on));
     });
-    document.querySelectorAll('#hands-tab [data-hl-play-first]').forEach(b => {
-        const on = (b.dataset.hlPlayFirst === '1') === onPlay;
-        b.classList.toggle('active', on);
-        b.setAttribute('aria-pressed', String(on));
-    });
     document.querySelectorAll('#hands-tab [data-hl-mode]').forEach(b => {
         const on = b.dataset.hlMode === mode;
         b.classList.toggle('active', on);
         b.setAttribute('aria-pressed', String(on));
     });
-    const order = $('hl-order-group');
-    if (order) order.hidden = Boolean(format?.firstPlayerDraws);
+    syncTurnOrder($('hl-order-group'), onPlay, format);
     const hint = $('hl-play-hint');
     if (hint) {
         hint.textContent = lib?.placeholder
@@ -509,7 +516,7 @@ function renderRail() {
         const parts = [format.freeMulligan
             ? `${format.label}: the first mulligan is free and everyone draws on turn one.`
             : `${format.label}: no free mulligan.`];
-        if (lib?.removedCommander) parts.push('Your commander starts in the command zone, so it’s never dealt.');
+        if (lib?.commanders?.length) parts.push(lib.commanders.length > 1 ? 'Your commanders start in the command zone, so they’re never dealt.' : 'Your commander starts in the command zone, so it’s never dealt.');
         if (lib?.placeholder) parts.push('Your deck is bare type counts, so the cards are stand-ins labelled by type.');
         note.textContent = parts.join(' ');
     }
@@ -544,7 +551,7 @@ function renderStats(stats) {
             <figure>
                 <figcaption class="hl-stat-title">Lands in your opening seven</figcaption>
                 <div class="vbars vbars-sm" role="img" aria-label="Chance of each land count in seven cards: ${stats.dist.map((p, k) => `${k} lands ${pct(p)}`).join(', ')}">${bars}</div>
-                <p class="hl-caption">${term('exact', 'Exact')}. Green bars are inside your keep range: <strong>${pct(stats.exactKeepable)}</strong> of sevens have ${range} lands. ${stats.exact ? '' : `With the early-play requirement, <strong>${pct(stats.keepable)}</strong> pass the whole rule (simulated).`}</p>
+                <p class="tx-caption is-inset is-below">${term('exact', 'Exact')}. Green bars are inside your keep range: <strong>${pct(stats.exactKeepable)}</strong> of sevens have ${range} lands. ${stats.exact ? '' : `With the early-play requirement, <strong>${pct(stats.keepable)}</strong> pass the whole rule (simulated).`}</p>
             </figure>
             <div>
                 <div class="hl-stat-title">Where you end up after mulligans</div>
@@ -556,7 +563,7 @@ function renderStats(stats) {
                             <span class="hl-keeprow-num">${pct(r.p)}</span>
                         </div>`).join('')}
                 </div>
-                <p class="hl-caption">${term('simulation', `${GAMES.toLocaleString('en-US')} simulated games`)}: ${term('mulligan', 'mulligan')} until the hand meets your rule${format.freeMulligan ? ', first mulligan free' : ''}, bottoming extra lands or the priciest spells. The simulated player keeps any four-card hand. On average <strong>${s.averageMulligans.toFixed(1)}</strong> mulligans a game.</p>
+                <p class="tx-caption is-inset is-below">${term('simulation', `${GAMES.toLocaleString('en-US')} simulated games`)}: ${term('mulligan', 'mulligan')} until the hand meets your rule${format.freeMulligan ? ', first mulligan free' : ''}, bottoming extra lands or the priciest spells. The simulated player keeps any four-card hand. On average <strong>${s.averageMulligans.toFixed(1)}</strong> mulligans a game.</p>
             </div>
         </div>`;
 }
@@ -705,9 +712,9 @@ function onClick(e) {
     if (modeBtn) { setMode(modeBtn.dataset.hlMode); return; }
     const playBtn = e.target.closest('[data-hl-play]');
     if (playBtn) { setRule({ playBy: Number(playBtn.dataset.hlPlay) }); return; }
-    const orderBtn = e.target.closest('[data-hl-play-first]');
-    if (orderBtn) {
-        onPlay = orderBtn.dataset.hlPlayFirst === '1';
+    const order = turnOrderClicked(e);
+    if (order !== null) {
+        onPlay = order;
         game.onPlay = onPlay;
         renderRail();
         return;

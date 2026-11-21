@@ -33,7 +33,11 @@ test('mana development answers for the example Commander deck', async ({ page })
     const tab = page.locator('#manadev-tab');
     await expect(tab.locator('.bottom-line')).toContainText('The Sixth Doctor');
     await expect(tab.locator('.tx-stat')).toHaveCount(4);
-    await expect(tab.locator('#md-grid tbody tr.is-target th')).toHaveText('6+');
+    // Both commanders: Susan Foreman's 2 mana and The Sixth Doctor's 6, each with its own row.
+    await expect(tab.locator('#md-grid tbody tr.is-target th')).toHaveText(['2+', '6+']);
+    await expect(tab.locator('.md-cmd-table tbody tr')).toHaveCount(3);
+    await expect(tab.locator('.md-cmd-table')).toContainText('Susan Foreman');
+    await expect(tab.locator('#md-facts')).toContainText('Susan Foreman');
     await expect(tab.locator('#md-ramp tbody tr').first()).toBeVisible();
     await expect(tab.locator('#md-samples .md-game')).toHaveCount(4);
     // Commander: no turn-order choice, everyone draws.
@@ -65,8 +69,8 @@ test('mana development offers turn order for a 60-card deck and shares it', asyn
     await expect(tab.locator('#md-order-group')).toBeVisible();
 
     const onPlay = await tab.locator('#md-grid').textContent();
-    await tab.locator('[data-md-play="0"]').click();
-    await expect(tab.locator('[data-md-play="0"]')).toHaveAttribute('aria-pressed', 'true');
+    await tab.locator('[data-turn-order] [data-play="0"]').click();
+    await expect(tab.locator('[data-turn-order] [data-play="0"]')).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => tab.locator('#md-grid').textContent()).not.toBe(onPlay);
 
     const share = await page.evaluate(async () => (await import('/js/utils/share.js')).getShareUrl('manadev'));

@@ -30,7 +30,6 @@
        the recommended row. Nothing decorative uses it, so it always means
        "look here" / "this is interactive". */
     --tx-accent:      #f0a92c;
-    --tx-accent-dim:  #7a5716;
     --accent-soft:    rgba(240, 169, 44, 0.12);
     --accent-ink:     #1a1205;   /* text on an accent fill */
 
@@ -101,21 +100,28 @@
     --radius-md:   9px;
     --radius-lg:   12px;
     --radius-xl:   16px;
-    --radius-2xl:  20px;
     --radius-full: 999px;
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
     --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.32);
     --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --overlay-bg: rgba(0, 0, 0, 0.6);
+    /* A hairline that keeps card art from bleeding into the surface, and the
+       bevel under a mana symbol. Both flip to warm ink on paper. */
+    --edge-inset: rgba(255, 255, 255, 0.06);
+    --mana-bevel: rgba(0, 0, 0, 0.18);
 
-    /* ---- SPACE ---- */
+    /* ---- SPACE ----
+       A 4px step scale for gaps and margins, and the panel inset: --pad-x is
+       the side padding of everything inside a card (headers, rows, notes),
+       --pad-y the top and bottom of a one-line row. */
     --spacing-xs: 4px;
     --spacing-sm: 8px;
     --spacing-md: 12px;
     --spacing-lg: 16px;
     --spacing-xl: 20px;
-    --spacing-2xl: 24px;
-    --spacing-3xl: 32px;
+    --pad-x: 16px;
+    --pad-y: 12px;
     --page-pad: clamp(16px, 2.6vw, 36px);
 
     /* ---- MOTION ---- */
@@ -123,10 +129,8 @@
     --transition-fast:   0.12s ease;
     --transition-normal: 0.18s ease;
     --transition-slow:   0.26s var(--ease-out);
-    --transition-bounce: 0.18s var(--ease-out);
 
     /* ---- LAYERS ---- */
-    --z-base:     1;
     --z-dropdown: 100;
     --z-sticky:   200;
     --z-drawer:   900;
@@ -138,67 +142,8 @@
     --sidebar-w: 268px;
     --topbar-h:  56px;
     --shell-max: 1680px;
-    --shell-gutter: 0px;
 
     color-scheme: dark;
-
-    /* ==================== LEGACY ALIASES ====================
-       Older calculator markup and CSS use these names; they resolve onto the
-       tokens above so both generations theme together. */
-    --tx-green:     var(--tx-good);
-    --tx-green-dim: #2c5f40;
-    --tx-amber:     var(--tx-accent);
-    --tx-amber-dim: var(--tx-accent-dim);
-    --tx-red:       var(--tx-bad);
-    --tx-blue:      var(--tx-flat);
-
-    --primary:        var(--tx-accent);
-    --primary-light:  var(--tx-bright);
-    --primary-dark:   var(--tx-accent-dim);
-    --primary-glow:   transparent;
-    --secondary:      var(--tx-good);
-    --secondary-light: var(--tx-good);
-    --secondary-dark: var(--tx-green-dim);
-    --secondary-glow: transparent;
-
-    --bg-dark:       var(--tx-bg);
-    --bg-gradient-1: var(--tx-panel);
-    --bg-gradient-2: var(--tx-panel);
-    --bg-gradient-3: var(--tx-panel);
-
-    --glass-bg:           var(--tx-panel);
-    --glass-bg-hover:     var(--tx-panel-alt);
-    --glass-border:       var(--tx-rule);
-    --glass-border-hover: var(--tx-rule-hi);
-    --glass-highlight:    transparent;
-    --glass-shadow:       none;
-    --glass-blur:         0px;
-
-    --text-primary:   var(--tx-text);
-    --text-secondary: var(--tx-mid);
-    --text-muted:     var(--tx-dim);
-    --text-dim:       var(--tx-dim);
-    --text-light:     var(--tx-bright);
-
-    --success:       var(--tx-good);
-    --success-light: var(--tx-good);
-    --success-dark:  var(--tx-green-dim);
-    --warning:       var(--tx-warn);
-    --warning-light: var(--tx-warn);
-    --danger:        var(--tx-bad);
-    --danger-light:  var(--tx-bad);
-    --danger-dark:   var(--tx-bad);
-    --info:          var(--tx-flat);
-    --info-dark:     var(--tx-flat);
-
-    --input-bg:      var(--tx-bg);
-    --overlay-bg:    rgba(0, 0, 0, 0.6);
-    --panel-bg-alt:  var(--tx-panel-alt);
-
-    --accent:       var(--tx-accent);
-    --accent-light: var(--tx-bright);
-    --accent-glow:  transparent;
-    --theme-tint:   transparent;
 }
 
 /* ==================== LIGHT THEME ====================
@@ -220,7 +165,6 @@
     --tx-bright:    #12110e;
 
     --tx-accent:     #8a5500;
-    --tx-accent-dim: #e9cf9f;
     --accent-soft:   rgba(138, 85, 0, 0.09);
     --accent-ink:    #ffffff;
 
@@ -231,7 +175,6 @@
     --good-soft: rgba(20, 107, 58, 0.09);
     --warn-soft: rgba(154, 84, 20, 0.09);
     --bad-soft:  rgba(178, 58, 40, 0.09);
-    --tx-green-dim: #bfe0cb;
 
     --series-1: #146b3a;
     --series-2: #8a5500;
@@ -257,6 +200,8 @@
     --shadow-md: 0 6px 18px rgba(60, 50, 30, 0.1);
     --shadow-lg: 0 24px 60px rgba(60, 50, 30, 0.18), 0 2px 8px rgba(60, 50, 30, 0.08);
     --overlay-bg: rgba(30, 26, 18, 0.35);
+    --edge-inset: rgba(60, 50, 30, 0.12);
+    --mana-bevel: rgba(60, 50, 30, 0.2);
 
     color-scheme: light;
 }

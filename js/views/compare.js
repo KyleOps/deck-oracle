@@ -131,7 +131,6 @@ export const styles = `
 #compare-tab .cmp-bar-b { background: var(--series-2); }
 #compare-tab .cmp-col-label { text-align: center; font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-dim); }
 
-#compare-tab .cmp-legend { display: flex; gap: 16px; padding: 0 18px 16px; font-size: var(--t-xs); color: var(--tx-mid); }
 #compare-tab .cmp-legend span { display: inline-flex; align-items: center; gap: 6px; }
 #compare-tab .cmp-dot { width: 10px; height: 10px; border-radius: 3px; }
 
@@ -164,7 +163,7 @@ export const styles = `
     border-radius: var(--radius-lg);
     color: var(--tx-mid);
 }
-#compare-tab .cmp-empty h3 { font-size: var(--t-lg); margin-bottom: 6px; color: var(--tx-bright); }
+#compare-tab .cmp-empty-title { font-size: var(--t-lg); margin-bottom: 6px; color: var(--tx-bright); }
 #compare-tab .cmp-empty p { margin: 0 auto 16px; max-width: 52ch; }
 
 @container shell (max-width: 720px) {

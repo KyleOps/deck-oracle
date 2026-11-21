@@ -10,6 +10,8 @@
  * the rule panel moves into the left rail.
  */
 
+import { turnOrderHTML } from '../utils/turnOrder.js';
+
 export const template = `
 <div class="main-grid single-column hl">
     <section class="panel hl-summary" id="hl-summary" aria-label="Opening hands at a glance"></section>
@@ -62,14 +64,7 @@ export const template = `
                 <p class="field-hint" id="hl-play-hint">A spell or ramp piece the lands in the hand can cast by then, colours included.</p>
             </div>
 
-            <div class="hl-group" id="hl-order-group">
-                <span class="field-label" id="hl-order-label">Turn order</span>
-                <div class="seg seg-sm" role="group" aria-labelledby="hl-order-label">
-                    <button class="seg-btn active" type="button" data-hl-play-first="1" aria-pressed="true">On the play</button>
-                    <button class="seg-btn" type="button" data-hl-play-first="0" aria-pressed="false">On the draw</button>
-                </div>
-                <p class="field-hint">Only changes the goldfish: the starting player skips their first draw.</p>
-            </div>
+            ${turnOrderHTML({ id: 'hl-order-group', className: 'hl-group', label: 'Turn order', hint: 'Only changes the goldfish: the starting player skips their first draw.' })}
 
             <p class="hl-format" id="hl-format"></p>
 
@@ -91,10 +86,7 @@ export const template = `
 
 export const styles = `
 #hands-tab .hl-summary .bottom-line { border-bottom: 1px solid var(--tx-rule); }
-#hands-tab .hl-summary .tx-hero {
-    border-bottom: 0;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-}
+#hands-tab .hl-summary .tx-hero { border-bottom: 0; }
 #hands-tab .hl-summary .tx-hero .tx-stat:first-child .tx-stat-value { font-size: clamp(36px, 3.6vw, 52px); }
 
 /* ── Toolbar & prompt ─────────────────────────────────────────────── */
@@ -105,7 +97,7 @@ export const styles = `
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding: 12px 16px;
+    padding: var(--pad-y) var(--pad-x);
     border-bottom: 1px solid var(--tx-rule);
 }
 
@@ -131,7 +123,7 @@ export const styles = `
     flex-wrap: wrap;
     align-items: center;
     gap: 8px 12px;
-    padding: 10px 16px;
+    padding: 10px var(--pad-x);
     font-size: var(--t-sm);
     color: var(--tx-mid);
     background: var(--tx-panel-alt);
@@ -210,11 +202,6 @@ export const styles = `
 #hands-tab .hl-cards .hl-card.is-selected { transform: translateY(18px) rotate(calc(var(--off) * 2.2deg)); }
 
 #hands-tab .hl-card.is-castable { box-shadow: 0 0 0 2px var(--tx-accent), var(--shadow-md); }
-
-#hands-tab .hl-card.is-bottomed {
-    filter: grayscale(1) brightness(0.6);
-    opacity: 0.55;
-}
 
 #hands-tab .hl-tag {
     position: absolute;
@@ -306,7 +293,6 @@ export const styles = `
 
 /* ── Battlefield ──────────────────────────────────────────────────── */
 #hands-tab .hl-field { border-top: 1px dashed var(--tx-rule-hi); }
-#hands-tab .hl-field[hidden] { display: none; }
 #hands-tab .hl-field-head {
     display: flex;
     flex-wrap: wrap;
@@ -316,13 +302,6 @@ export const styles = `
     font-size: var(--t-xs);
     color: var(--tx-mid);
 }
-#hands-tab .hl-field-title {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
 #hands-tab .hl-field-head strong { font-family: var(--font-mono); color: var(--tx-bright); font-weight: 600; }
 #hands-tab .hl-lane {
     --w: clamp(56px, 11cqi, 92px);
@@ -330,7 +309,7 @@ export const styles = `
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
-    padding: 12px 16px 16px;
+    padding: var(--pad-y) var(--pad-x) 16px;
     min-height: calc(var(--w) * 1.394 + 28px);
 }
 #hands-tab .hl-lane:empty::before {
@@ -368,13 +347,6 @@ export const styles = `
 }
 #hands-tab .hl-verdict.tone-keep .hl-verdict-mark { background: var(--good-soft); color: var(--tx-good); }
 #hands-tab .hl-verdict.tone-mull .hl-verdict-mark { background: var(--bad-soft); color: var(--tx-bad); }
-#hands-tab .hl-verdict-label {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
 #hands-tab .hl-verdict-text {
     margin-top: 2px;
     font-size: var(--t-lg);
@@ -437,8 +409,6 @@ export const styles = `
     align-items: start;
 }
 #hands-tab .hl-stat-title { font-size: var(--t-sm); font-weight: 600; color: var(--tx-bright); margin-bottom: 12px; }
-#hands-tab .hl-caption { margin-top: 10px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.55; }
-#hands-tab .hl-caption strong { color: var(--tx-text); }
 #hands-tab .hl-keeprows { display: grid; gap: 12px; }
 #hands-tab .hl-keeprow { display: grid; grid-template-columns: 9.5em minmax(0, 1fr) 3.2em; gap: 12px; align-items: center; font-size: var(--t-sm); }
 #hands-tab .hl-keeprow-label { color: var(--tx-text); }

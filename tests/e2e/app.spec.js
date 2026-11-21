@@ -35,7 +35,9 @@ test('opens on the deck overview with the example deck', async ({ page }) => {
     await expect(page.locator('.nav-item[data-tab="overview"]')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.ov-hero-name')).toContainText('Doctor Whostoric');
     await expect(page.locator('.finding').first()).toBeVisible();
-    await expect(page.locator('#deck-switcher-meta')).toContainText('99 cards');
+    // The example is a 98-card list with two commanders in the command zone,
+    // counted the way players count it: 98 + 2 = 100.
+    await expect(page.locator('#deck-switcher-meta')).toContainText('100 cards · Commander');
     expect(errors).toEqual([]);
 });
 

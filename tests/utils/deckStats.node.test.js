@@ -121,7 +121,7 @@ describe('analyzeDeckStats on the bundled example deck', () => {
     const stats = analyzeDeckStats(DEFAULT_DECK_DATA, { format: FORMATS.commander });
 
     it('reads the deck shape', () => {
-        assert.equal(stats.deckSize, 99);
+        assert.equal(stats.deckSize, 98, '100 cards less two commanders');
         assert.equal(stats.lands, 37);
         assert.deepEqual(stats.identity, ['U', 'G']);
         assert.ok(stats.curve.average > 4);
@@ -143,6 +143,17 @@ describe('analyzeDeckStats on the bundled example deck', () => {
         assert.ok(ids.includes('color-U'));
         assert.ok(ids.includes('role-ramp'));
         findings.forEach(f => assert.ok(['good', 'warn', 'bad', 'info'].includes(f.status)));
+    });
+
+    it('words its chances with honest ends and its counts in agreement', () => {
+        const sure = { ...stats, odds: { ...stats.odds, keepable: 0.998 } };
+        const opener = healthChecks(sure, { format: FORMATS.commander }).find(f => f.id === 'opener');
+        assert.strictEqual(opener.value, '>99%', 'not quite certain never prints as 100%');
+        assert.match(opener.title, /^>99% of opening hands/);
+        const color = healthChecks(stats, { format: FORMATS.commander }).find(f => f.id.startsWith('color-'));
+        assert.match(color.title, /^\d+ \w+ sources?$/);
+        assert.doesNotMatch(color.title, /^1 \w+ sources$/);
+        assert.match(color.detail, /\(\d+ pips? at mana value/);
     });
 
     it('skips Commander role guidelines for other formats', () => {
@@ -168,5 +179,17 @@ describe('colorProfile', () => {
         assert.equal(blue.sources, 10);
         assert.equal(blue.heaviest.name, 'Counterspell');
         assert.equal(profile.colorlessLands, 2);
+    });
+
+    it('lets a commander be the hardest card without adding to the library counts', () => {
+        const cards = {
+            a: { name: 'Counterspell', count: 1, cmc: 2, mana_cost: '{U}{U}', type_line: 'Instant', color_identity: ['U'] },
+            l: { name: 'Island', count: 10, type_line: 'Basic Land — Island' }
+        };
+        const boss = { name: 'Blue Boss', cmc: 3, mana_cost: '{U}{U}{U}', type_line: 'Legendary Creature', color_identity: ['U'] };
+        const blue = colorProfile(cards, { commanderCards: [boss, null, { name: 'Costless' }] }).colors.find(x => x.color === 'U');
+        assert.deepEqual(blue.heaviest, { name: 'Blue Boss', pips: 3, mv: 3, commander: true });
+        assert.equal(blue.pips, 2);
+        assert.equal(blue.cards, 1);
     });
 });

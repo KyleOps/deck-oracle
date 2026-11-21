@@ -2,11 +2,12 @@ import { describe, it } from 'node:test';
 import { assert, assertClose } from '../node-test-helper.js';
 import * as DeckConfig from '../../js/utils/deckConfig.js';
 import {
-    calculate, calcMultiTypeSuccess, runSampleReveals, getDeckConfig, getState, setCardTypes,
+    calculate, calcMultiTypeSuccess, runSampleReveals, readInputs, getState, setCardTypes,
     getShareParams, applyShareParams, summarizeMulligan, describeRequirement, assignCards,
-    simulateGames, TEMPLATES, SOURCES
+    TEMPLATES, SOURCES
 } from '../../js/calculators/mulligan.js';
-import { mulliganPlan, drawSchedule } from '../../js/utils/mulliganModel.js';
+import { mulliganPlan, drawSchedule, simulateGames, unpackRequirements } from '../../js/utils/mulliganModel.js';
+import LZString from 'lz-string';
 import { FORMATS } from '../../js/utils/format.js';
 
 /** Small seeded PRNG so simulation checks are repeatable. */
@@ -41,7 +42,6 @@ describe('Mulligan Planner — compatibility', () => {
         assert.strictEqual(state.types.length, 1);
         assert.strictEqual(state.types[0].source, 'land');
         assert.ok(state.types[0].count > 30, 'counted from the example list');
-        assert.match(state.types[0].color, /^#[0-9a-f]{3,8}$/i, 'share links need a hex colour');
         const { result } = calculate();
         assert.ok(result.expectedSuccess > 0 && result.expectedSuccess <= 1);
         assertClose(result.strategy.reduce((s, h) => s + h.handProb, 0), 1, 'hand probabilities sum to 1', 1e-9);
@@ -49,10 +49,10 @@ describe('Mulligan Planner — compatibility', () => {
 });
 
 describe('Mulligan Planner — formats', () => {
-    it('Commander: 99-card library, free first mulligan, everyone draws', () => {
-        const config = getDeckConfig();
+    it('Commander: 98-card library (100 less two commanders), free first mulligan, everyone draws', () => {
+        const config = readInputs();
         assert.strictEqual(config.format.key, 'commander');
-        assert.strictEqual(config.deckSize, 99);
+        assert.strictEqual(config.deckSize, 98);
         assert.strictEqual(config.freeMulligan, true);
         assert.strictEqual(config.onPlay, true);
     });
@@ -108,6 +108,29 @@ describe('Mulligan Planner — share links', () => {
         assert.strictEqual(types[0].source, 'land', 'count matches the deck, so it re-links');
         assert.strictEqual(types[1].source, null, 'count differs from the deck (18), so it stays as shared');
         assert.strictEqual(types[1].max, null);
+    });
+
+    it('packs the requirement rows into mullTypes once LZ-String is here, and restores them first', () => {
+        setCardTypes([
+            { id: 1, name: 'Lands', count: 22, required: 3, byTurn: 3 },
+            { id: 2, name: 'Bears', count: 10, required: 1, byTurn: 2 }
+        ]);
+        assert.strictEqual(getShareParams().mullTypes, undefined, 'no codec yet: no rows in the link');
+        globalThis.window.LZString = LZString;
+        try {
+            const { mullTypes } = getShareParams();
+            assert.deepStrictEqual(unpackRequirements(mullTypes, LZString).map(t => t.name), ['Lands', 'Bears']);
+            setCardTypes([{ id: 1, name: 'Other', count: 5, required: 1, byTurn: 1 }]);
+            applyShareParams(new URLSearchParams({ mullTypes, mullMax: '5,' }));
+            const types = getState().types;
+            assert.deepStrictEqual(types.map(t => t.name), ['Lands', 'Bears']);
+            assert.strictEqual(types[0].max, 5, 'limits apply to the restored rows');
+
+            applyShareParams(new URLSearchParams('mullTypes=garbage'));
+            assert.deepStrictEqual(getState().types.map(t => t.name), ['Lands', 'Bears'], 'an unreadable link changes nothing');
+        } finally {
+            delete globalThis.window.LZString;
+        }
     });
 
     it('ignores out-of-range values', () => {
