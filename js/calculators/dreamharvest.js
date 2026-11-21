@@ -1,18 +1,18 @@
 /**
- * Dream Harvest — {5}{U/B}{U/B} sorcery. The page: readInputs() (the
- * opponents → a plain object), the model, then rendering. The maths — a
- * seeded simulation per opponent list — lives in js/utils/models/dreamharvest.js.
+ * Dream Harvest — {5}{U/B}{U/B} sorcery. The maths — a seeded simulation per
+ * opponent list — lives in js/utils/models/dreamharvest.js; the page itself
+ * (readInputs() → the model → rendering, sample casts) is the multiplayer
+ * family's, from createOpponentPage() in js/utils/opponentPages.js. This
+ * module is the page's markup.
  */
 
-import { registerCalculator, updateCalculatorIfActive } from '../utils/calculatorBase.js';
-import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { renderHeroStats } from '../utils/components.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 import { describeDots, dotPlot } from '../utils/viz.js';
-import * as OpponentState from '../utils/opponentState.js';
 import { one, pct } from '../utils/text.js';
 import {
-    objectId, readOpponents, frameScheduler, opponentLabel, cardChip, miniBars,
-    renderOpponentPlaceholder, renderLoadingNote, bindOpponentActions, renderDisclosure, hasRoom
+    createOpponentPage, opponentLabel, cardChip, miniBars, renderDisclosure, hasRoom,
+    opponentTableHTML, sampleCastsHTML, sectionHeadHTML
 } from '../utils/opponentPages.js';
 import { opponentLibrary, createRevealer, formatRange, countWord } from '../utils/models/opponentLibrary.js';
 import {
@@ -22,19 +22,6 @@ import {
 
 const SAMPLE_BATCH = 3;
 const SAMPLE_MAX = 24;
-
-// ── Inputs ──────────────────────────────────────────────────────────────────
-
-/** The opponents with decks, their import state and a signature of both. */
-export function readInputs() {
-    return readOpponents();
-}
-
-const statsCache = new WeakMap();
-function statsFor(data) {
-    if (!statsCache.has(data)) statsCache.set(data, calculateDreamHarvestStats(data));
-    return statsCache.get(data);
-}
 
 // ── Rendering ───────────────────────────────────────────────────────────────
 
@@ -97,23 +84,18 @@ function tableHtml(rows) {
     }).join('');
     const sum = f => rows.reduce((a, r) => a + f(r.stats), 0);
     const anyBig = 1 - rows.reduce((a, r) => a * (1 - r.stats.pBigSpell), 1);
-    const foot = rows.length > 1 ? `<tfoot><tr>
+    const foot = rows.length > 1 ? `
             <td>All ${countWord(rows.length)} opponents</td>
             <td data-label="Cards exiled">${one(sum(s => s.avgCardsExiled))}</td>
             <td data-label="Spells">${one(sum(s => s.avgCastable))}</td>
             <td data-label="Mana stolen">${one(sum(s => s.avgCastableMV))}</td>
             <td data-label="A ${BIG_SPELL_MV}+ spell">${pct(anyBig)}<span class="opp-cell-sub">from at least one</span></td>
-        </tr></tfoot>` : '';
-    return `<div class="opp-table-wrap"><table class="opp-table">
-        <thead><tr>
-            <th scope="col">Opponent</th>
-            <th scope="col">Cards exiled</th>
-            <th scope="col">Spells</th>
-            <th scope="col">Mana stolen</th>
-            <th scope="col">A ${BIG_SPELL_MV}+ spell</th>
-        </tr></thead>
-        <tbody>${body}</tbody>${foot}
-    </table></div>`;
+        ` : '';
+    return opponentTableHTML({
+        head: ['Opponent', 'Cards exiled', 'Spells', 'Mana stolen', `A ${BIG_SPELL_MV}+ spell`],
+        body,
+        foot
+    });
 }
 
 const SPELL_CAP = 5;
@@ -131,7 +113,7 @@ function multiplesHtml(rows) {
             ${miniBars({ title: 'Spells you can cast', probs: spellDists[i], label: v => (v === SPELL_CAP ? `${v}+` : `${v}`), scaleMax: spellMax, color: r.opp.color, dimFn: v => v === 0 })}
         </div>`).join('');
     return `<div class="opp-multiples">${cells}</div>
-        <p class="opp-caption">How many spells each opponent’s pile hands you, on the same scale for every opponent. The pile always reaches mana value 5, so what varies is whether it arrives as one big spell or several small ones.</p>`;
+        <p class="tx-caption is-below">How many spells each opponent’s pile hands you, on the same scale for every opponent. The pile always reaches mana value 5, so what varies is whether it arrives as one big spell or several small ones.</p>`;
 }
 
 const DOT_LEGEND = Object.freeze([
@@ -151,10 +133,7 @@ function dotsHtml(rows) {
         atLeast -= p;
     });
     return `
-        <div class="opp-section-head">
-            <h2 class="opp-section-title">Out of 100 casts</h2>
-            <span class="opp-section-sub">mana stolen ${who}</span>
-        </div>
+        ${sectionHeadHTML('Out of 100 casts', `mana stolen ${who}`)}
         ${dotPlot({
             dots,
             label: `Total mana value of the spells stolen ${rows.length > 1 ? 'from all opponents' : ''}, out of 100 casts. ${describeDots(dots, { unit: 'cast', format: v => `${v} mana`, legend: DOT_LEGEND })}`,
@@ -172,24 +151,7 @@ function dotsHtml(rows) {
                 rows: tableRows
             }
         })}
-        <p class="opp-caption">Each dot is one cast in a hundred, stacked by the mana value of everything you may cast for free${rows.length > 1 ? ', added up across opponents' : ''}. Solid dots steal at least the ${DREAM_HARVEST_COST} mana Dream Harvest costs.</p>`;
-}
-
-let lastSignature = null;
-let sampleRound = 0;
-let samplesShown = SAMPLE_BATCH;
-const sampleCache = new Map();
-
-function samplesFor(opp) {
-    const key = `${objectId(opp.data)}:${sampleRound}`;
-    if (!sampleCache.has(key)) {
-        const revealer = createRevealer(opponentLibrary(opp.data));
-        sampleCache.set(key, Array.from({ length: SAMPLE_MAX }, () => {
-            revealer.reset();
-            return resolveDreamHarvest(revealer.reveal);
-        }));
-    }
-    return sampleCache.get(key);
+        <p class="tx-caption is-below">Each dot is one cast in a hundred, stacked by the mana value of everything you may cast for free${rows.length > 1 ? ', added up across opponents' : ''}. Solid dots steal at least the ${DREAM_HARVEST_COST} mana Dream Harvest costs.</p>`;
 }
 
 function gameRow(opp, result) {
@@ -204,104 +166,47 @@ function gameRow(opp, result) {
     </div>`;
 }
 
-function renderSamples(state) {
-    const panel = document.getElementById('dreamharvest-sample-reveals');
-    if (!panel) return;
-    if (state.opponents.length === 0) {
-        panel.hidden = true;
-        panel.innerHTML = '';
-        return;
-    }
-    panel.hidden = false;
-    const results = state.opponents.map(opp => samplesFor(opp));
-    const games = Array.from({ length: samplesShown }, (_, g) => {
+function samplesHtml(opponents, results, shown) {
+    const games = Array.from({ length: shown }, (_, g) => {
         const total = results.reduce((a, r) => a + r[g].totalCastableMV, 0);
         return `
         <div class="opp-game">
-            <div class="opp-game-head tx-eyebrow">Cast ${g + 1}${state.opponents.length > 1 ? ` · ${total} mana stolen in all` : ''}</div>
-            ${state.opponents.map((opp, i) => gameRow(opp, results[i][g])).join('')}
+            <div class="opp-game-head tx-eyebrow">Cast ${g + 1}${opponents.length > 1 ? ` · ${total} mana stolen in all` : ''}</div>
+            ${opponents.map((opp, i) => gameRow(opp, results[i][g])).join('')}
         </div>`;
     }).join('');
-    panel.innerHTML = `
-        <div class="opp-section-head">
-            <div>
-                <h2 class="opp-section-title">Sample casts</h2>
-                <p class="opp-section-sub">Real shuffles of each list, in the order the cards come off the top. Lands are dimmed.</p>
-            </div>
-            <div class="opp-section-actions"><button type="button" class="btn btn-ghost btn-sm" data-dh-action="reshuffle">Reshuffle</button></div>
-        </div>
-        <div class="opp-games">${games}</div>
-        ${samplesShown < SAMPLE_MAX ? '<div class="opp-more"><button type="button" class="btn btn-ghost btn-sm" data-dh-action="more">Show more casts</button></div>' : ''}`;
+    return sampleCastsHTML({
+        sub: 'Real shuffles of each list, in the order the cards come off the top. Lands are dimmed.',
+        games,
+        more: shown < SAMPLE_MAX
+    });
 }
 
-function renderResults(state) {
-    const panel = document.getElementById('dreamharvest-results');
-    if (!panel) return;
-    if (state.opponents.length === 0) {
-        panel.innerHTML = renderOpponentPlaceholder(PLACEHOLDER, state);
-        return;
-    }
-    const rows = state.opponents.map(opp => ({ opp, name: opp.name, stats: statsFor(opp.data) })).filter(r => r.stats);
-    panel.innerHTML = `
-        ${renderLoadingNote(state)}
-        ${renderBottomLine(summarizeDreamHarvest(rows))}
-        ${heroStats(rows)}
-        <div class="opp-section-head">
-            <h2 class="opp-section-title">Opponent by opponent</h2>
-            <span class="opp-section-sub">${SIM_RUNS.toLocaleString('en-US')} simulated casts per list</span>
-        </div>
+/** One opponent's sample casts: a fresh shuffle each, resolved card by card. */
+function drawSamples(opp) {
+    const revealer = createRevealer(opponentLibrary(opp.data));
+    return Array.from({ length: SAMPLE_MAX }, () => {
+        revealer.reset();
+        return resolveDreamHarvest(revealer.reveal);
+    });
+}
+
+function sectionsHtml(rows, { panel }) {
+    return `
+        ${sectionHeadHTML('Opponent by opponent', `${SIM_RUNS.toLocaleString('en-US')} simulated casts per list`)}
         ${tableHtml(rows)}
         ${dotsHtml(rows)}
         ${renderDisclosure({ id: 'dreamharvest-spread', title: 'Spells from each opponent', body: multiplesHtml(rows), open: hasRoom(panel) })}`;
 }
 
-/**
- * Stats for every active opponent with a deck, keyed by seat.
- * @returns {Object<string, Object>}
- */
-export function calculate() {
-    const results = {};
-    for (const opp of readInputs().opponents) {
-        const stats = statsFor(opp.data);
-        if (stats) results[opp.key] = stats;
-    }
-    return results;
-}
+const page = createOpponentPage({
+    key: 'dreamharvest',
+    stats: data => calculateDreamHarvestStats(data),
+    summarize: summarizeDreamHarvest,
+    hero: heroStats,
+    sections: sectionsHtml,
+    placeholder: PLACEHOLDER,
+    sample: { panel: 'dreamharvest-sample-reveals', count: SAMPLE_MAX, batch: SAMPLE_BATCH, draw: drawSamples, render: samplesHtml }
+});
 
-/** Render — only when the opponents (or their import state) changed. */
-export function updateUI() {
-    const state = readInputs();
-    if (state.signature === lastSignature && document.getElementById('dreamharvest-results')?.firstElementChild) return;
-    lastSignature = state.signature;
-    samplesShown = SAMPLE_BATCH;
-    const live = new Set(state.opponents.map(o => String(objectId(o.data))));
-    for (const key of sampleCache.keys()) if (!live.has(key.split(':')[0])) sampleCache.delete(key);
-    renderResults(state);
-    renderSamples(state);
-}
-
-export function init() {
-    const scheduleRender = frameScheduler(() => updateCalculatorIfActive('dreamharvest', updateUI));
-    OpponentState.onOpponentChange(scheduleRender);
-
-    registerCalculator({
-        name: 'dreamharvest',
-        calculate,
-        updateUI,
-        init: () => {
-            const root = document.getElementById('dreamharvest-tab');
-            bindOpponentActions(root);
-            root?.addEventListener('click', e => {
-                const action = e.target.closest('[data-dh-action]')?.dataset.dhAction;
-                if (action === 'reshuffle') {
-                    sampleRound += 1;
-                    sampleCache.clear();
-                    renderSamples(readInputs());
-                } else if (action === 'more') {
-                    samplesShown = Math.min(SAMPLE_MAX, samplesShown + SAMPLE_BATCH);
-                    renderSamples(readInputs());
-                }
-            });
-        }
-    });
-}
+export const { readInputs, calculate, updateUI, init } = page;

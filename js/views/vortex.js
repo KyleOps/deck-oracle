@@ -38,7 +38,7 @@ export const template = `
         <div class="chart-container vx-chart">
             <canvas id="vortex-chart" role="img" aria-label="Free mana per trigger by the mana value of the creature cast"></canvas>
         </div>
-        <p class="vx-caption">Each point is one trigger from a creature of that mana value. Dots mark the mana values you have a big creature at &mdash; click one to look closer.</p>
+        <p class="tx-caption is-below">Each point is one trigger from a creature of that mana value. Dots mark the mana values you have a big creature at &mdash; click one to look closer.</p>
     </section>
 
     <section class="panel" id="vortex-samples-panel" aria-label="Sample triggers">
@@ -62,8 +62,6 @@ export const template = `
 `;
 
 export const styles = `
-/* Four supporting numbers in one row; the bottom line above is the answer. */
-#vortex-tab .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 #vortex-tab .vx-dots { border-top: 1px solid var(--tx-rule); }
 #vortex-tab .vx-dots-head {
     display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 16px;
@@ -117,13 +115,6 @@ export const styles = `
 #vortex-tab .vx-dim { color: var(--tx-dim); }
 
 #vortex-tab .vx-chart { height: 300px; padding: 8px 12px 0; }
-#vortex-tab .vx-caption {
-    margin: 0;
-    padding: 8px var(--pad-x) 14px;
-    font-size: var(--t-xs);
-    color: var(--tx-dim);
-    line-height: 1.5;
-}
 
 /* Sample triggers: one card per trigger, one line per discover in its chain. */
 #vortex-tab .vx-samples {

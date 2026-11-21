@@ -5,7 +5,7 @@ import * as DeckConfig from '../../js/utils/deckConfig.js';
 
 // Mock DOM
 global.document = {
-    getElementById: (id) => {
+    getElementById: () => {
         return { value: 5 }; // Default value for inputs
     }
 };

@@ -33,7 +33,7 @@ export const template = `
                 <h2 class="opp-section-title">The next six rounds</h2>
                 <p class="opp-section-sub">One real shuffle of each list — the card each opponent exiles on each of their turns.</p>
             </div>
-            <div class="opp-section-actions"><button type="button" class="btn btn-ghost btn-sm" id="mnds-resample-btn">Reshuffle</button></div>
+            <div class="opp-section-actions"><button type="button" class="btn btn-ghost btn-sm" id="mnds-resample-btn" data-opp-sample="reshuffle">Reshuffle</button></div>
         </div>
         <div class="mnds-samples" id="mnds-samples"></div>
     </section>
@@ -83,7 +83,6 @@ export const styles = `
 #mindsdilation-tab .is-mid { background: color-mix(in srgb, var(--tx-good) 58%, var(--tx-panel-alt)); }
 #mindsdilation-tab .is-big { background: var(--tx-good); }
 #mindsdilation-tab .mnds-seg.is-big { color: var(--tx-void); }
-#mindsdilation-tab .mnds-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 2px 16px 16px; font-size: var(--t-xs); color: var(--tx-mid); }
 #mindsdilation-tab .mnds-key { display: inline-flex; align-items: center; gap: 6px; }
 #mindsdilation-tab .mnds-swatch { width: 12px; height: 12px; border-radius: 3px; }
 

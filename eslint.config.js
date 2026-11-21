@@ -1,18 +1,17 @@
 import js from '@eslint/js';
 import globals from 'globals';
 
+// Unused variables are errors everywhere: an unused import or leftover local
+// is usually a refactor that stopped half way. Prefix with _ to keep one on
+// purpose (an ignored argument, say).
 const sharedRules = {
     ...js.configs.recommended.rules,
-    // Unused-variable cleanup is tracked separately from this first correctness
-    // gate so legacy warnings do not bury actionable failures in CI.
-    'no-unused-vars': 'off'
-};
-
-const strictUnusedVars = ['error', {
+    'no-unused-vars': ['error', {
         argsIgnorePattern: '^_',
         caughtErrors: 'none',
         varsIgnorePattern: '^_'
-    }];
+    }]
+};
 
 export default [
     {
@@ -76,29 +75,9 @@ export default [
         rules: sharedRules
     },
     {
-        files: [
-            'eslint.config.js',
-            'playwright.config.js',
-            'playwright.visual.config.js',
-            'tests/e2e/**/*.js',
-            'tests/visual/**/*.js',
-            'scripts/**/*.mjs',
-            'js/main.js',
-            'js/shell/**/*.js',
-            'js/data/**/*.js',
-            'js/calculators/overview.js',
-            'js/utils/calculatorBase.js',
-            'js/utils/calculatorRegistry.js',
-            'js/utils/cardTags.js',
-            'js/utils/deckConfig.js',
-            'js/utils/deckLibrary.js',
-            'js/utils/deckStats.js',
-            'js/utils/format.js',
-            'js/utils/mana.js',
-            'js/utils/share.js'
-        ],
-        rules: {
-            'no-unused-vars': strictUnusedVars
-        }
+        // Being reworked on another branch (ramp classification); its unused
+        // import goes with that work. Remove this exception after the merge.
+        files: ['js/utils/manaDevelopment.js'],
+        rules: { 'no-unused-vars': 'off' }
     }
 ];

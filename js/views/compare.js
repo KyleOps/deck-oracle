@@ -131,7 +131,6 @@ export const styles = `
 #compare-tab .cmp-bar-b { background: var(--series-2); }
 #compare-tab .cmp-col-label { text-align: center; font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-dim); }
 
-#compare-tab .cmp-legend { display: flex; gap: 16px; padding: 0 18px 16px; font-size: var(--t-xs); color: var(--tx-mid); }
 #compare-tab .cmp-legend span { display: inline-flex; align-items: center; gap: 6px; }
 #compare-tab .cmp-dot { width: 10px; height: 10px; border-radius: 3px; }
 

@@ -17,7 +17,7 @@ import { pmfQuantiles } from '../viz.js';
 import { isLand } from '../library.js';
 import { mulberry32 } from '../random.js';
 import { one } from '../text.js';
-import { countWord, createRevealer, deckSeed, formatRange, opponentLibrary, typicalRange } from './opponentLibrary.js';
+import { countWord, createRevealer, deckSeed, formatRange, opponentLibrary, spread, typicalRange, versusCost } from './opponentLibrary.js';
 
 /** Dream Harvest's own mana value — what the stolen spells are measured against. */
 export const DREAM_HARVEST_COST = 7;
@@ -127,21 +127,6 @@ export function calculateDreamHarvestStats(opponentData, numSims = SIM_RUNS, see
     };
 }
 
-function spread(values, unit) {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const lo = Math.min(...values);
-    const hi = Math.max(...values);
-    return values.length > 1 && hi - lo >= 0.5
-        ? `${one(lo)}–${one(hi)} ${unit}`
-        : `about ${one(mean)} ${unit}`;
-}
-
-function versusCost(total) {
-    if (total >= 2 * DREAM_HARVEST_COST) return `more than twice its ${DREAM_HARVEST_COST}-mana cost`;
-    if (total >= DREAM_HARVEST_COST) return `more than its ${DREAM_HARVEST_COST}-mana cost`;
-    return `less than its ${DREAM_HARVEST_COST}-mana cost`;
-}
-
 /** Average several probability arrays into one (the "typical opponent"). */
 export function poolDistributions(dists) {
     const length = Math.max(0, ...dists.map(d => d.length));
@@ -167,12 +152,12 @@ export function summarizeDreamHarvest(rows) {
     if (valid.length === 1) {
         return {
             tone,
-            html: `Against ${escapeHtml(valid[0].name)}, Dream Harvest usually steals <strong>${spells}</strong> worth <strong>${mana}</strong> in all — ${versusCost(totalMana)}.`
+            html: `Against ${escapeHtml(valid[0].name)}, Dream Harvest usually steals <strong>${spells}</strong> worth <strong>${mana}</strong> in all — ${versusCost(totalMana, DREAM_HARVEST_COST)}.`
         };
     }
     return {
         tone,
-        html: `Against these ${countWord(valid.length)} decks, Dream Harvest usually steals <strong>${spells}</strong> worth <strong>${mana}</strong> from each opponent — <strong>${one(totalMana)} mana</strong> of free spells in all, ${versusCost(totalMana)}.`
+        html: `Against these ${countWord(valid.length)} decks, Dream Harvest usually steals <strong>${spells}</strong> worth <strong>${mana}</strong> from each opponent — <strong>${one(totalMana)} mana</strong> of free spells in all, ${versusCost(totalMana, DREAM_HARVEST_COST)}.`
     };
 }
 

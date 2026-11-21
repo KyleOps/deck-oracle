@@ -6,6 +6,8 @@
  * Ids kept for share links: mull-penalty, mull-threshold, mulligan-sample-count.
  */
 
+import { turnOrderHTML } from '../utils/turnOrder.js';
+
 export const template = `
 <div class="main-grid single-column mull-layout">
     <section class="panel panel-config" aria-label="What a keepable hand needs">
@@ -55,10 +57,7 @@ export const template = `
 
         <div class="tx-h"><span>Game</span><span class="tx-h-r" id="mull-format-label"></span></div>
         <div class="mull-block">
-            <div class="seg seg-sm" id="mull-turn-order" role="group" aria-label="Turn order" hidden>
-                <button class="seg-btn active" type="button" data-play="1" aria-pressed="true">On the play</button>
-                <button class="seg-btn" type="button" data-play="0" aria-pressed="false">On the draw</button>
-            </div>
+            ${turnOrderHTML({ id: 'mull-turn-order', hidden: true })}
             <label class="checkbox-label mull-check">
                 <input type="checkbox" id="mull-free">
                 <span>First mulligan is free</span>
@@ -98,7 +97,6 @@ export const template = `
 
 export const styles = `
 #mulligan-tab .mull-block { padding: var(--pad-y) var(--pad-x) 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-#mulligan-tab .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 #mulligan-tab .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* Templates */
@@ -155,7 +153,6 @@ export const styles = `
 /* What to keep */
 #mulligan-tab .mull-keep-head { flex-wrap: wrap; }
 #mulligan-tab .mull-keep-body { padding: 14px var(--pad-x) 16px; display: grid; gap: 14px; }
-#mulligan-tab .mull-keep-caption { font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.5; }
 #mulligan-tab .mull-rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 #mulligan-tab .mull-rules li { display: flex; align-items: baseline; gap: 10px; font-size: var(--t-sm); color: var(--tx-text); }
 #mulligan-tab .mull-rule-call {
@@ -180,7 +177,6 @@ export const styles = `
 #mulligan-tab .mull-kgrid td.is-over { color: var(--tx-bad); background: var(--bad-soft); border-color: transparent; }
 #mulligan-tab .mull-kgrid td.is-none { background: transparent; border-color: transparent; }
 #mulligan-tab .mull-freq { position: absolute; left: 3px; bottom: 2px; height: 2px; border-radius: 2px; background: currentColor; opacity: 0.45; }
-#mulligan-tab .mull-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--t-xs); color: var(--tx-dim); }
 #mulligan-tab .mull-legend span::before {
     content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px;
     border-radius: var(--radius-xs); border: 1px solid var(--tx-rule); background: var(--tx-panel-alt);

@@ -19,6 +19,15 @@ describe('Opening Hands calculator', () => {
         }
     });
 
+    it('reads the deck and settings into a plain object, defaults when not mounted', () => {
+        const inputs = Hands.readInputs();
+        assert.strictEqual(inputs.format.key, 'commander');
+        assert.strictEqual(inputs.library.cards.length, DEFAULT_DECK_DATA.actualCardCount);
+        assert.match(inputs.library.key, /\|/);
+        assert.deepStrictEqual(inputs.rule, { ...DEFAULT_RULE });
+        assert.strictEqual(inputs.onPlay, true, 'everyone draws in Commander: the maths is on the play');
+    });
+
     it('deals from the library without the commanders', () => {
         const r = Hands.calculate();
         const lands = Object.values(DEFAULT_DECK_DATA.cardsByName).filter(c => c.category === 'lands').reduce((s, c) => s + c.count, 0);

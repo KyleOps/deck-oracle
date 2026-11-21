@@ -41,7 +41,7 @@ export const template = `
 `;
 
 export const styles = `
-#abstract-tab .ap-answer .tx-hero { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); border-bottom: 0; }
+#abstract-tab .ap-answer .tx-hero { border-bottom: 0; }
 #abstract-tab .ap-answer .bottom-line { border-bottom: 1px solid var(--tx-rule); }
 
 #abstract-tab .ap-chart { height: 300px; }

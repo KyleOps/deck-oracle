@@ -17,6 +17,11 @@ import {
     oddsAround, oddsByCastMv, reliableFrom, revealBreakdown, summarize
 } from '../utils/models/rashmi.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'rashmiCMC', id: 'rashmi-cmcSlider', min: 0, max: 15 }
+]);
+
 /** Sample reveals shown. */
 export const SAMPLE_REVEALS = 12;
 
@@ -133,7 +138,7 @@ function renderBreakdown(state, castMv) {
         <div class="rs-band" role="img" aria-label="${parts.map(p => `${p.label}: ${pct(p.value)}`).join(', ')}">
             ${parts.map(p => `<span class="rs-band-seg is-${p.key}" style="width:${(p.value * 100).toFixed(2)}%"></span>`).join('')}
         </div>
-        <ul class="tx-legend">
+        <ul class="tx-legend is-below">
             ${parts.map(p => `<li><span class="rs-swatch is-${p.key}"></span>${p.label}<strong>${pct(p.value)}</strong></li>`).join('')}
         </ul>`;
 }

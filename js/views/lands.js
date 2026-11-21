@@ -6,6 +6,8 @@
  * side rail.
  */
 
+import { turnOrderHTML } from '../utils/turnOrder.js';
+
 export const template = `
 <div class="main-grid single-column">
     <section class="panel" aria-label="Land drop odds">
@@ -13,10 +15,7 @@ export const template = `
         <div id="lands-hero"></div>
 
         <div class="ld-controls" role="group" aria-label="Assumptions">
-            <div class="seg seg-sm" id="lands-turn-order" role="group" aria-label="Turn order" hidden>
-                <button class="seg-btn active" type="button" data-play="1" aria-pressed="true">On the play</button>
-                <button class="seg-btn" type="button" data-play="0" aria-pressed="false">On the draw</button>
-            </div>
+            ${turnOrderHTML({ id: 'lands-turn-order', hidden: true })}
             <span class="ld-format" id="lands-format-note"></span>
             <label class="checkbox-label ld-check">
                 <input type="checkbox" id="lands-mull" checked>
@@ -58,7 +57,6 @@ export const template = `
 `;
 
 export const styles = `
-#lands-tab .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 
 /* Assumptions strip */
 #lands-tab .ld-controls {
@@ -98,7 +96,6 @@ export const styles = `
 #lands-tab .ld-col.is-keep .ld-col-fill { background: var(--type-land); }
 #lands-tab .ld-col-label { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-dim); }
 #lands-tab .ld-col.is-keep .ld-col-label { color: var(--tx-text); font-weight: 600; }
-#lands-tab .ld-caption { padding: 0 var(--pad-x) 14px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.5; }
 
 /* Land-count comparison */
 #lands-tab .ld-table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }

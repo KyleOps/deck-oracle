@@ -22,6 +22,7 @@ import { curveCards, deckProfile } from '../utils/deckProfile.js';
 import { bulletList } from '../utils/viz.js';
 import { libraryOf } from '../utils/library.js';
 import { pct } from '../utils/text.js';
+import { effectiveOnPlay, turnOrderClicked, turnOrderHTML, turnOrderMatters } from '../utils/turnOrder.js';
 
 const NAME = 'overview';
 const TYPE_LABEL = {
@@ -97,11 +98,7 @@ function renderHero(config, stats, format) {
                         ${Object.values(FORMATS).map(f => `<option value="${f.key}"${pref === f.key ? ' selected' : ''}>${escapeHtml(f.label)}</option>`).join('')}
                     </select>
                 </label>
-                ${format.firstPlayerDraws ? '' : `
-                <div class="seg seg-sm" role="group" aria-label="Turn order">
-                    <button class="seg-btn${onPlay ? ' active' : ''}" type="button" data-ov-play="1" aria-pressed="${onPlay}">On the play</button>
-                    <button class="seg-btn${!onPlay ? ' active' : ''}" type="button" data-ov-play="0" aria-pressed="${!onPlay}">On the draw</button>
-                </div>`}
+                ${turnOrderMatters(format) ? turnOrderHTML({ onPlay }) : ''}
                 <button class="btn btn-ghost btn-sm" type="button" data-ov-deck>Change deck</button>
                 <button class="btn btn-ghost btn-sm" type="button" data-open-guide="overview">How it works</button>
             </div>
@@ -333,8 +330,7 @@ function renderTools(config) {
 export function calculate() {
     const config = DeckConfig.getDeckConfig();
     const format = DeckConfig.getFormat();
-    const effectiveOnPlay = format.firstPlayerDraws ? true : onPlay;
-    const stats = analyzeDeckStats(config, { format, onPlay: effectiveOnPlay });
+    const stats = analyzeDeckStats(config, { format, onPlay: effectiveOnPlay(onPlay, format) });
     // Manual-count decks have no card records: fall back to the typed counts.
     if (!DeckConfig.hasCardList()) {
         stats.deckSize = DeckConfig.getDeckSize(true);
@@ -390,9 +386,9 @@ export function init() {
             refreshCurve(was);
             return;
         }
-        const play = e.target.closest('[data-ov-play]');
-        if (play) {
-            onPlay = play.dataset.ovPlay === '1';
+        const order = turnOrderClicked(e);
+        if (order !== null) {
+            onPlay = order;
             updateUI();
             return;
         }

@@ -18,14 +18,32 @@ import { hashString } from './random.js';
 
 // ── Names ────────────────────────────────────────────────────────────────────
 
+/** Typographic stand-ins a pasted or exported name may carry, and the plain character each means. */
+const TYPOGRAPHIC = [
+    [/[‘’‚‛ʼ′´＇]/g, '\''], // ‘ ’ ‚ ‛ ʼ ′ ´ ＇ → '
+    [/[“”„″＂]/g, '"'],                    // “ ” „ ″ ＂ → "
+    [/[‐-―−﹘﹣－]/g, '-'],             // hyphens and dashes → -
+    [/Æ/g, 'Ae'], [/æ/g, 'ae']                           // Æther → Aether
+];
+
 /**
- * The key two card names match on: the front face, trimmed, lower-cased.
- * "Sea Gate Restoration // Sea Gate, Reborn" and "sea gate restoration" match.
+ * The key two card names match on: the front face, trimmed, lower-cased,
+ * with typographic variants folded to plain text — curly apostrophes and
+ * quotes, dashes, accents, "Æ" and runs of (non-breaking) spaces.
+ * "Sea Gate Restoration // Sea Gate, Reborn" and "sea gate restoration" match;
+ * so do "Kamahl’s Druidic Vow" and "Kamahl's Druidic Vow".
  * @param {*} name
  * @returns {string}
  */
 export function nameKey(name) {
-    return String(name ?? '').split('//')[0].trim().toLowerCase();
+    let text = String(name ?? '').split('//')[0];
+    // eslint-disable-next-line no-control-regex -- the fast path: plain ASCII needs no folding
+    if (/[^\x00-\x7F]/.test(text)) {
+        for (const [pattern, plain] of TYPOGRAPHIC) text = text.replace(pattern, plain);
+        // Then accents: Lim-Dûl → Lim-Dul (and full-width letters to plain ones).
+        text = text.normalize('NFKD').replace(/[̀-ͯ]/g, '');
+    }
+    return text.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 /** Do two card names refer to the same card (front face, any case)? */

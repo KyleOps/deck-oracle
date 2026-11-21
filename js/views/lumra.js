@@ -85,7 +85,6 @@ export const styles = `
 #lumra-tab .lm-more { margin-top: 4px; }
 #lumra-tab .lm-more .tx-collapse-head { background: transparent; }
 
-#lumra-tab .lm-answer .tx-hero { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 #lumra-tab .lm-answer .bottom-line { border-bottom: 1px solid var(--tx-rule); }
 
 #lumra-tab .lm-sources { padding: 14px var(--pad-x) 16px; }
@@ -147,7 +146,6 @@ export const styles = `
     color: var(--tx-text);
 }
 #lumra-tab .lm-game-back { margin-right: 10px; font-weight: 500; color: var(--tx-dim); }
-#lumra-tab .lm-games + .tx-caption { padding-top: 10px; }
 
 #lumra-tab .lm-details .tx-collapse:first-child { border-top: 0; }
 #lumra-tab .lm-flush { padding: 0; }

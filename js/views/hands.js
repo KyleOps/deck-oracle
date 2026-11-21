@@ -10,6 +10,8 @@
  * the rule panel moves into the left rail.
  */
 
+import { turnOrderHTML } from '../utils/turnOrder.js';
+
 export const template = `
 <div class="main-grid single-column hl">
     <section class="panel hl-summary" id="hl-summary" aria-label="Opening hands at a glance"></section>
@@ -62,14 +64,7 @@ export const template = `
                 <p class="field-hint" id="hl-play-hint">A spell or ramp piece the lands in the hand can cast by then, colours included.</p>
             </div>
 
-            <div class="hl-group" id="hl-order-group">
-                <span class="field-label" id="hl-order-label">Turn order</span>
-                <div class="seg seg-sm" role="group" aria-labelledby="hl-order-label">
-                    <button class="seg-btn active" type="button" data-hl-play-first="1" aria-pressed="true">On the play</button>
-                    <button class="seg-btn" type="button" data-hl-play-first="0" aria-pressed="false">On the draw</button>
-                </div>
-                <p class="field-hint">Only changes the goldfish: the starting player skips their first draw.</p>
-            </div>
+            ${turnOrderHTML({ id: 'hl-order-group', className: 'hl-group', label: 'Turn order', hint: 'Only changes the goldfish: the starting player skips their first draw.' })}
 
             <p class="hl-format" id="hl-format"></p>
 
@@ -91,10 +86,7 @@ export const template = `
 
 export const styles = `
 #hands-tab .hl-summary .bottom-line { border-bottom: 1px solid var(--tx-rule); }
-#hands-tab .hl-summary .tx-hero {
-    border-bottom: 0;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-}
+#hands-tab .hl-summary .tx-hero { border-bottom: 0; }
 #hands-tab .hl-summary .tx-hero .tx-stat:first-child .tx-stat-value { font-size: clamp(36px, 3.6vw, 52px); }
 
 /* ── Toolbar & prompt ─────────────────────────────────────────────── */
@@ -417,8 +409,6 @@ export const styles = `
     align-items: start;
 }
 #hands-tab .hl-stat-title { font-size: var(--t-sm); font-weight: 600; color: var(--tx-bright); margin-bottom: 12px; }
-#hands-tab .hl-caption { margin-top: 10px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.55; }
-#hands-tab .hl-caption strong { color: var(--tx-text); }
 #hands-tab .hl-keeprows { display: grid; gap: 12px; }
 #hands-tab .hl-keeprow { display: grid; grid-template-columns: 9.5em minmax(0, 1fr) 3.2em; gap: 12px; align-items: center; font-size: var(--t-sm); }
 #hands-tab .hl-keeprow-label { color: var(--tx-text); }

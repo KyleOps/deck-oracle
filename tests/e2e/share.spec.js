@@ -43,3 +43,20 @@ test('mulligan requirements survive a share link round trip', async ({ page }) =
     expect(lzRequests.length).toBeGreaterThan(0);
     expect(errors).toEqual([]);
 });
+
+test('a mulligan link made before 3.2 (a colour per row) still restores its rows and inputs', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await isolateNetwork(page, { fonts: false });
+    await page.addInitScript(() => localStorage.clear());
+    // [[1,'Legacy lands',30,2,2,'e2a84b'],[2,'Legacy ramp',9,1,3,'']], packed the old way.
+    const legacy = 'NrCMBoCIBkFMHMCGBjAngAgDaIHYBMBnScAZgAZwAmKqWSxADgBYAjSAXXGGpgRQwBOiALYAHYgE5wEElA7sgA';
+    await page.goto(`/?tab=mulligan&mullTypes=${legacy}&mullPenalty=30&mullThreshold=60&mullSims=800`);
+    await expect(page.locator('#mulligan-tab .bottom-line')).toBeVisible();
+    const state = await page.evaluate(async () => {
+        const { types, penalty, confidenceThreshold } = (await import('/js/calculators/mulligan.js')).getState();
+        return { names: types.map(t => t.name), penalty, confidenceThreshold, sims: document.getElementById('mulligan-sample-count').value };
+    });
+    expect(state).toEqual({ names: ['Legacy lands', 'Legacy ramp'], penalty: 0.3, confidenceThreshold: 0.6, sims: '800' });
+    expect(errors).toEqual([]);
+});

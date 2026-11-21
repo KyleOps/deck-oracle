@@ -17,6 +17,7 @@ import { escapeHtml, cardRef } from '../data/glossary.js';
 import { libraryOf } from '../utils/library.js';
 import { pct, inflect as plural } from '../utils/text.js';
 import * as MD from '../utils/manaDevelopment.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked } from '../utils/turnOrder.js';
 
 const NAME = 'manadev';
 const SLICE_MS = 10;
@@ -39,7 +40,7 @@ const $ = id => document.getElementById(id);
 // ── Deck → simulator input ──────────────────────────────────────────────────
 
 /** The simulator library for the active deck (memoised on the deck record). */
-function readDeck() {
+export function readInputs() {
     const config = DeckConfig.getDeckConfig();
     const format = DeckConfig.getFormat();
     const cardList = DeckConfig.hasCardList();
@@ -56,12 +57,10 @@ function readDeck() {
 }
 
 function settingsFor(format, lib) {
-    const turnOrder = !format.firstPlayerDraws;
     const treasureMatters = lib.ramp.some(r => r.info.treasure > 0);
     return {
-        onPlay: turnOrder ? onPlay : true,
+        onPlay: effectiveOnPlay(onPlay, format),
         treasure: treasureMatters && treasure,
-        turnOrder,
         treasureMatters
     };
 }
@@ -75,7 +74,7 @@ function cacheKey(lib, format, s) {
  * share links). The page itself uses the sliced version in updateUI().
  */
 export function calculate() {
-    const { format, lib } = readDeck();
+    const { format, lib } = readInputs();
     const s = settingsFor(format, lib);
     const key = cacheKey(lib, format, s);
     if (cache.has(key)) return cache.get(key);
@@ -183,13 +182,7 @@ function renderPending(progress = 0) {
 }
 
 function renderRail(lib, format, s) {
-    const order = $('md-order-group');
-    if (order) order.hidden = !s.turnOrder;
-    document.querySelectorAll('#manadev-tab [data-md-play]').forEach(b => {
-        const on = (b.dataset.mdPlay === '1') === onPlay;
-        b.classList.toggle('active', on);
-        b.setAttribute('aria-pressed', String(on));
-    });
+    syncTurnOrder($('md-order-group'), onPlay, format);
     const tGroup = $('md-treasure-group');
     if (tGroup) tGroup.hidden = !s.treasureMatters;
     const box = $('md-treasure');
@@ -397,7 +390,7 @@ function renderSamples(r, lib) {
             </article>`;
     }).join('');
     el.innerHTML = `
-        <p class="md-caption">Each row is one turn: the mana you had after your land drop (with its colours), the land you played, and the ramp you cast — <span class="md-found">→</span> shows what it found.</p>
+        <p class="tx-caption is-below">Each row is one turn: the mana you had after your land drop (with its colours), the land you played, and the ramp you cast — <span class="md-found">→</span> shows what it found.</p>
         <div class="md-games">${html}</div>
         <p class="md-samples-foot">${games.length} of ${r.games.toLocaleString('en-US')} simulated games${reshuffles ? ', reshuffled' : ''}.</p>`;
 }
@@ -414,7 +407,7 @@ function render(r, lib) {
 
 export function updateUI() {
     if (!isCalculatorActive(NAME)) return;
-    const { format, lib } = readDeck();
+    const { format, lib } = readInputs();
     const s = settingsFor(format, lib);
     renderRail(lib, format, s);
     const key = cacheKey(lib, format, s);
@@ -453,9 +446,9 @@ export function init() {
     const root = document.getElementById(`${NAME}-tab`);
     if (!root) return;
     root.addEventListener('click', e => {
-        const play = e.target.closest('[data-md-play]');
-        if (play) {
-            onPlay = play.dataset.mdPlay === '1';
+        const order = turnOrderClicked(e);
+        if (order !== null) {
+            onPlay = order;
             updateUI();
             return;
         }

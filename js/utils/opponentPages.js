@@ -1,16 +1,23 @@
 /**
- * Shared building blocks for the multiplayer pages — Ensnared by the Mara,
- * Dream Harvest and Mind's Dilation.
+ * The multiplayer pages — Ensnared by the Mara, Dream Harvest and Mind's
+ * Dilation — as one family.
  *
- * All three read the same opponents and need the same things: the opponent
- * state each render reads, the "no opponents yet" and "loading" states, and
- * the per-opponent markup (seat dot + name, card chips, small bar charts).
- * Keeping them here means the three pages look and behave as one family. The
- * library model, seeded draws and distribution helpers their maths shares are
- * in js/utils/models/opponentLibrary.js.
+ * All three read the same opponents and work the same way, so the page itself
+ * is built here: createOpponentPage() takes a page's model and markup and
+ * returns its readInputs() / calculate() / updateUI() / init(), with the
+ * shared behaviour — per-opponent stats cached on each deck, a render only
+ * when the opponents (or the page's settings) changed, the "no opponents yet"
+ * and "loading" states, and sample casts with Reshuffle and Show more.
+ *
+ * Also here: the per-opponent markup (seat dot + name, card chips, small bar
+ * charts, tables) and the family's CSS. The library model, seeded draws and
+ * distribution helpers their maths shares are in
+ * js/utils/models/opponentLibrary.js.
  */
 
 import * as OpponentState from './opponentState.js';
+import { registerCalculator, updateCalculatorIfActive } from './calculatorBase.js';
+import { renderBottomLine } from './components.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 import { pct } from './text.js';
 import { countWord } from './models/opponentLibrary.js';
@@ -68,6 +75,200 @@ export function frameScheduler(fn) {
     };
 }
 
+// ── The page ────────────────────────────────────────────────────────────────
+
+/**
+ * Build a multiplayer page. The page module passes its model and markup and
+ * exports what comes back:
+ *
+ *     const page = createOpponentPage({ key: 'mara', stats: calculateMaraStats, … });
+ *     export const { readInputs, calculate, updateUI, init } = page;
+ *
+ * Rows handed to `summarize`, `hero` and `sections` are
+ * `{ opp, name, stats }`, one per opponent with a deck (seat order).
+ *
+ * @param {Object} spec
+ * @param {string} spec.key - calculator key; the page root is `#<key>-tab`
+ * @param {(data:Object, settings:Object) => Object|null} spec.stats - one opponent's numbers (the model), cached per deck
+ * @param {(settings:Object) => string} [spec.statsKey] - the settings `stats` depends on, as a cache key
+ * @param {() => Object} [spec.settings] - the page's own settings; part of readInputs() and of the render signature
+ * @param {(rows:Array, settings:Object) => {html:string, tone:string}} spec.summarize - the bottom line
+ * @param {(rows:Array, settings:Object) => string} spec.hero - hero stats markup
+ * @param {(rows:Array, ctx:{panel:Element, settings:Object}) => string} spec.sections - the evidence under the hero
+ * @param {Object} spec.placeholder - copy for renderOpponentPlaceholder()
+ * @param {{summary?:string, detail?:string, options?:string}} [spec.layout] - element ids: the
+ *   placeholder or the answer goes in `summary` (default `<key>-results`); with `detail`, the
+ *   sections go there instead; `options` (static controls) shows only once there are opponents
+ * @param {Object} [spec.sample] - sample casts: real shuffles, kept until Reshuffle
+ * @param {string} spec.sample.panel - element id; hidden while there are no opponents
+ * @param {string} [spec.sample.list] - element id the samples render into (default: the panel)
+ * @param {number} spec.sample.count - samples drawn per opponent per shuffle
+ * @param {number} [spec.sample.batch] - shown at first and per "Show more" (default: all of them)
+ * @param {(opp:Object) => Array} spec.sample.draw - `count` samples against one opponent's list
+ * @param {(opponents:Array, samples:Array<Array>, shown:number, settings:Object) => string} spec.sample.render
+ * @param {(root:Element|null, page:Object) => void} [spec.bind] - page-specific wiring, once at init
+ * @param {() => {opponents:Array, loading:string[], errors:string[], signature:string}} [spec.read] - the opponents (default readOpponents; tests pass their own)
+ * @returns {{readInputs:Function, calculate:Function, updateUI:Function, init:Function, rows:Function, renderSamples:Function, sampleAction:Function}}
+ */
+export function createOpponentPage(spec) {
+    const {
+        key, stats, statsKey = () => '', settings: readSettings = () => ({}), summarize, hero, sections,
+        placeholder, sample = null, bind = null, read = readOpponents
+    } = spec;
+    const layout = { summary: `${key}-results`, ...spec.layout };
+    const byId = id => (id && typeof document !== 'undefined' ? document.getElementById(id) : null);
+
+    const statsCache = new WeakMap();
+    const sampleCache = new Map();
+    let lastSignature = null;
+    let round = 0;
+    const batch = () => sample?.batch ?? sample?.count ?? 0;
+    let shown = batch();
+
+    function inputs() {
+        return { state: read(), settings: readSettings() };
+    }
+
+    function statsFor(data, settings) {
+        let entry = statsCache.get(data);
+        if (!entry) statsCache.set(data, (entry = new Map()));
+        const k = statsKey(settings);
+        if (!entry.has(k)) entry.set(k, stats(data, settings));
+        return entry.get(k);
+    }
+
+    /** One row per opponent with a deck the model could read. */
+    function rowsFor(state, settings) {
+        return state.opponents
+            .map(opp => ({ opp, name: opp.name, stats: statsFor(opp.data, settings) }))
+            .filter(r => r.stats);
+    }
+
+    function samplesFor(opp) {
+        const id = `${objectId(opp.data)}:${round}`;
+        if (!sampleCache.has(id)) sampleCache.set(id, sample.draw(opp));
+        return sampleCache.get(id);
+    }
+
+    function renderResults(state, settings) {
+        const summary = byId(layout.summary);
+        const detail = byId(layout.detail);
+        if (!summary || (layout.detail && !detail)) return;
+        const options = byId(layout.options);
+        if (state.opponents.length === 0) {
+            summary.innerHTML = renderOpponentPlaceholder(placeholder, state);
+            if (detail) detail.innerHTML = '';
+            if (options) options.hidden = true;
+            return;
+        }
+        if (options) options.hidden = false;
+        const rows = rowsFor(state, settings);
+        const answer = `
+        ${renderLoadingNote(state)}
+        ${renderBottomLine(summarize(rows, settings))}
+        ${hero(rows, settings)}`;
+        const evidence = sections(rows, { panel: summary, settings });
+        if (detail) {
+            summary.innerHTML = answer;
+            detail.innerHTML = evidence;
+        } else {
+            summary.innerHTML = answer + evidence;
+        }
+    }
+
+    function renderSamples(state, settings) {
+        if (!sample) return;
+        const panel = byId(sample.panel);
+        const target = sample.list ? byId(sample.list) : panel;
+        if (!panel || !target) return;
+        panel.hidden = state.opponents.length === 0;
+        if (panel.hidden) {
+            target.innerHTML = '';
+            return;
+        }
+        target.innerHTML = sample.render(state.opponents, state.opponents.map(samplesFor), shown, settings);
+    }
+
+    /** "reshuffle" (new shuffles) or "more" (another batch); re-renders the samples only. */
+    function sampleAction(action) {
+        if (!sample) return;
+        if (action === 'reshuffle') {
+            round += 1;
+            sampleCache.clear();
+        } else if (action === 'more') {
+            shown = Math.min(sample.count, shown + batch());
+        } else {
+            return;
+        }
+        const { state, settings } = inputs();
+        renderSamples(state, settings);
+    }
+
+    const page = {
+        /** The opponents with decks, their import state, a signature of both, and the page's settings. */
+        readInputs() {
+            const { state, settings } = inputs();
+            return { ...state, ...settings };
+        },
+
+        /**
+         * Stats for every active opponent with a deck, keyed by seat.
+         * @returns {Object<string, Object>}
+         */
+        calculate() {
+            const { state, settings } = inputs();
+            const results = {};
+            for (const opp of state.opponents) {
+                const s = statsFor(opp.data, settings);
+                if (s) results[opp.key] = s;
+            }
+            return results;
+        },
+
+        /** Render — only when the opponents, their import state or the page's settings changed. */
+        updateUI() {
+            const { state, settings } = inputs();
+            const signature = `${state.signature}|${JSON.stringify(settings)}`;
+            if (signature === lastSignature && byId(layout.summary)?.firstElementChild) return;
+            lastSignature = signature;
+            shown = batch();
+            // Keep the samples of decks that are still loaded; drop the rest.
+            const live = new Set(state.opponents.map(o => String(objectId(o.data))));
+            for (const id of sampleCache.keys()) if (!live.has(id.split(':')[0])) sampleCache.delete(id);
+            renderResults(state, settings);
+            renderSamples(state, settings);
+        },
+
+        init() {
+            const scheduleRender = frameScheduler(() => updateCalculatorIfActive(key, page.updateUI));
+            OpponentState.onOpponentChange(scheduleRender);
+            registerCalculator({
+                name: key,
+                calculate: page.calculate,
+                updateUI: page.updateUI,
+                init: () => {
+                    const root = byId(`${key}-tab`);
+                    bindOpponentActions(root);
+                    root?.addEventListener('click', e => {
+                        const action = e.target.closest?.('[data-opp-sample]')?.dataset.oppSample;
+                        if (action) sampleAction(action);
+                    });
+                    bind?.(root, page);
+                }
+            });
+        },
+
+        /** The rows the page renders now (tests). */
+        rows() {
+            const { state, settings } = inputs();
+            return rowsFor(state, settings);
+        },
+
+        sampleAction
+    };
+    return page;
+}
+
 // ── Markup ──────────────────────────────────────────────────────────────────
 
 /** Seat dot + deck name (+ optional sub line). */
@@ -118,6 +319,50 @@ export function miniBars({ title, probs, label, scaleMax = null, color = 'var(--
         <div class="opp-bars-title">${escapeHtml(title)}</div>
         ${rows}
     </div>`;
+}
+
+/**
+ * A section heading: title on the left, a short note on the right.
+ * @param {string} title
+ * @param {string} [sub]
+ */
+export function sectionHeadHTML(title, sub = '') {
+    return `
+        <div class="opp-section-head">
+            <h2 class="opp-section-title">${title}</h2>
+            ${sub ? `<span class="opp-section-sub">${sub}</span>` : ''}
+        </div>`;
+}
+
+/**
+ * The opponent-by-opponent table: one row per opponent, plus a total row when
+ * there are several. Cells carry `data-label` so narrow screens can show each
+ * row as a card.
+ * @param {{head:string[], body:string, foot?:string}} parts - `body` is `<tr>` rows; `foot` the total row's cells
+ */
+export function opponentTableHTML({ head, body, foot = '' }) {
+    return `<div class="opp-table-wrap"><table class="opp-table">
+        <thead><tr>${head.map(label => `<th scope="col">${label}</th>`).join('')}</tr></thead>
+        <tbody>${body}</tbody>${foot ? `<tfoot><tr>${foot}</tr></tfoot>` : ''}
+    </table></div>`;
+}
+
+/**
+ * The "Sample casts" panel: a heading with Reshuffle, the games, and "Show
+ * more" while there are more to show (createOpponentPage() handles both).
+ * @param {{sub:string, games:string, more?:boolean, before?:string, title?:string}} parts
+ */
+export function sampleCastsHTML({ sub, games, more = false, before = '', title = 'Sample casts' }) {
+    return `
+        <div class="opp-section-head">
+            <div>
+                <h2 class="opp-section-title">${title}</h2>
+                <p class="opp-section-sub">${sub}</p>
+            </div>
+            <div class="opp-section-actions"><button type="button" class="btn btn-ghost btn-sm" data-opp-sample="reshuffle">Reshuffle</button></div>
+        </div>${before}
+        <div class="opp-games">${games}</div>
+        ${more ? '<div class="opp-more"><button type="button" class="btn btn-ghost btn-sm" data-opp-sample="more">Show more casts</button></div>' : ''}`;
 }
 
 /**
@@ -332,7 +577,7 @@ ${s} .opp-bar-val { color: var(--tx-text); text-align: right; }
 ${s} .opp-bar-row.is-dim .opp-bar-fill { background: var(--tx-rule-hi); }
 ${s} .opp-disclosure > .tx-collapse-head { padding: var(--pad-y) var(--pad-x); }
 ${s} .opp-disclosure > .opp-multiples { border-top: 0; }
-${s} .opp-caption { padding: 10px var(--pad-x) 14px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.55; max-width: 90ch; }
+${s} .tx-caption { max-width: 90ch; }
 
 ${s} .opp-chip {
     display: inline-flex; align-items: center; gap: 6px; max-width: 100%;

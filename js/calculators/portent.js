@@ -4,7 +4,7 @@
  * js/utils/models/portent.js.
  */
 
-import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART, withAlpha } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell, toneColor, toneFor } from '../utils/components.js';
@@ -12,13 +12,18 @@ import { cardRef } from '../data/glossary.js';
 import { CARD_TYPES } from '../utils/library.js';
 import { avg, pct, plural, points, pointsShort } from '../utils/text.js';
 import {
-    barsHTML, createSampler, noticeHTML, renderHowItCompares, sampleCardHTML, typeLabel,
-    syncXControl, bindXPresets, readX, fade
+    barsHTML, bindBigSpellControls, createSampler, noticeHTML, readXSpell, renderEmptyAnswer, renderHowItCompares,
+    sampleCardHTML, setXInputs, syncXControl, typeLabel
 } from '../utils/bigSpells.js';
-import { cardListKey, deckCardList, expandCards } from '../utils/models/cardList.js';
+import { expandCards } from '../utils/models/cardList.js';
 import {
     ON_STACK, PORTENT, analyze, buildTypeMasks, masksKey, portentResults, resolvePortent, summarize, typeCounts
 } from '../utils/models/portent.js';
+
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'portentX', id: 'portent-xSlider', min: 0, max: 20 }
+]);
 
 const CONFIG = Object.freeze({
     TABLE_MAX_X: 20,
@@ -36,14 +41,11 @@ let chart = null;
  * input when its page is mounted; falls back to the default otherwise.
  */
 export function readInputs() {
-    const deck = DeckConfig.getDeckConfig();
-    const cards = deckCardList(deck, ON_STACK);
-    const masks = buildTypeMasks(cards, deck);
-    const deckSize = masks.length;
-    const maxX = Math.max(1, Math.min(deckSize, PORTENT.MAX_X));
-    const x = Math.min(maxX, readX('portent', CONFIG.DEFAULT_X));
-    const types = typeCounts(masks);
-    return { deckSize, x, maxX, types, cards, masks, deckKey: cards.length ? cardListKey(cards) : masksKey(masks) };
+    const { cards, library: masks, deckSize, maxX, x, deckKey } = readXSpell('portent', DeckConfig.getDeckConfig(), {
+        onStack: ON_STACK, build: buildTypeMasks, maxX: PORTENT.MAX_X, defaultX: CONFIG.DEFAULT_X,
+        size: list => list.length, countsKey: masksKey
+    });
+    return { deckSize, x, maxX, types: typeCounts(masks), cards, masks, deckKey };
 }
 
 /**
@@ -95,7 +97,7 @@ function renderChart(config, results) {
     const probs = xs.map(x => +((results[x]?.prob4Plus ?? 0) * 100).toFixed(1));
     const colors = xs.map((x, i) => x === config.x
         ? TX_CHART.amber
-        : fade({ good: TX_CHART.green, warn: TX_CHART.amber, bad: TX_CHART.red }[toneFor(probs[i] / 100)] ?? TX_CHART.blue, 0.38));
+        : withAlpha({ good: TX_CHART.green, warn: TX_CHART.amber, bad: TX_CHART.red }[toneFor(probs[i] / 100)] ?? TX_CHART.blue, 0.38));
 
     chart = createOrUpdateChart(chart, 'portent-combinedChart', {
         type: 'bar',
@@ -243,17 +245,14 @@ function renderDetails(config, results, a) {
             value: p,
             tone: k >= PORTENT.FREE_SPELL_THRESHOLD ? 'good' : 'bad'
         }));
-        distEl.innerHTML = `<p class="bs-caption">How often each cast exiles that many cards, over ${PORTENT.ITERATIONS.toLocaleString('en-US')} simulated casts. Four or more is a free spell.</p>`
+        distEl.innerHTML = `<p class="tx-caption is-below">How often each cast exiles that many cards, over ${PORTENT.ITERATIONS.toLocaleString('en-US')} simulated casts. Four or more is a free spell.</p>`
             + barsHTML(bars, { scale: peak });
     }
 }
 
 /** Set X from a preset chip or a chart click. */
 function setX(x) {
-    const slider = document.getElementById('portent-xSlider');
-    const input = document.getElementById('portent-xValue');
-    if (slider) slider.value = x;
-    if (input) input.value = x;
+    setXInputs('portent', x);
     updateUI();
 }
 
@@ -264,8 +263,7 @@ export function updateUI() {
     renderTypeMix(config);
 
     if (config.deckSize === 0 || !results[config.x]) {
-        const el = document.getElementById('portent-stats');
-        if (el) el.innerHTML = renderBottomLine({ html: 'Add cards to your deck to see how Portent performs.', tone: 'flat' });
+        renderEmptyAnswer('portent', 'Add cards to your deck to see how Portent performs.');
         chart?.destroy?.();
         chart = null;
         return;
@@ -286,12 +284,13 @@ export function init() {
         calculate,
         updateUI,
         inputs: ['x'],
-        init: () => {
-            bindXPresets('portent', setX);
-            document.getElementById('portent-reshuffle-btn')?.addEventListener('click', () => {
+        init: debouncedUpdate => bindBigSpellControls('portent', {
+            update: debouncedUpdate,
+            setX,
+            reshuffle: () => {
                 sampler.reshuffle();
                 renderSamples(readInputs());
-            });
-        }
+            }
+        })
     });
 }

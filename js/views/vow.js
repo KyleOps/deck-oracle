@@ -51,7 +51,7 @@ export const template = `
         <div class="bs-chart">
             <canvas id="vow-chart" role="img" aria-label="Lands and legends put into play, and payback chance, for each value of X"></canvas>
         </div>
-        <p class="bs-caption">Bars: average lands and legendary permanents put onto the battlefield (left axis). Line: the chance that cast pays for itself (right axis). Your X is highlighted — click a bar to try another.</p>
+        <p class="tx-caption is-below">Bars: average lands and legendary permanents put onto the battlefield (left axis). Line: the chance that cast pays for itself (right axis). Your X is highlighted — click a bar to try another.</p>
     </section>
 
     <section class="panel" aria-labelledby="vow-samples-title">
@@ -60,7 +60,7 @@ export const template = `
             <button class="btn btn-ghost btn-sm" type="button" id="vow-reshuffle-btn">Reshuffle</button>
         </div>
         <div class="bs-samples" id="vow-samples"></div>
-        <p class="bs-caption">Real shuffles of your list. Lands and legends that go into play are bright (legends highlighted); everything else goes to the graveyard.</p>
+        <p class="tx-caption is-below">Real shuffles of your list. Lands and legends that go into play are bright (legends highlighted); everything else goes to the graveyard.</p>
     </section>
 
     <section class="panel" aria-labelledby="vow-compare-title">
@@ -75,7 +75,7 @@ export const template = `
         <details class="tx-collapse">
             <summary class="tx-collapse-head">Every X, side by side</summary>
             <div class="tx-collapse-body">
-                <p class="bs-caption">Hit rate is the share of cards looked at that go into play. The marked row is the cheapest X that pays for itself 3 times in 4.</p>
+                <p class="tx-caption is-below">Hit rate is the share of cards looked at that go into play. The marked row is the cheapest X that pays for itself 3 times in 4.</p>
                 <div class="bs-table-wrap" id="vow-comparisonTable"></div>
             </div>
         </details>

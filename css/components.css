@@ -86,13 +86,14 @@
 
 /* ==================== SHARED TERMINAL COMPONENTS (used site-wide) ==================== */
 
-/* Hero numerics row — headline metrics at the top of every calculator */
+/* Hero numerics row — headline metrics at the top of every calculator.
+   One grid for every page: as many 150px-or-wider columns as fit (a stat
+   never overflows a narrower panel), two across on a phone (below). Pages
+   style their stats, never the columns, so heroes reflow the same way
+   everywhere. */
 .tx-hero {
     display: grid;
-    /* auto-fit alongside an explicit track produced phantom 0px columns; sizing
-       tracks to content and packing them left keeps the stats as a readable
-       cluster rather than stretching them to the panel edges. */
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
     background: var(--tx-panel);
     border-bottom: 1px solid var(--tx-rule);
 }
@@ -317,7 +318,11 @@ input.x-number {
 /* Breathing room inside the card */
 .calc-body .chart-container { padding: 10px 12px 6px; }
 
-/* One line under a chart saying how to read it. */
+/* One line under a chart (or table, or sample) saying how to read it. The
+   one caption style: pages pick a modifier, never their own caption rule.
+     is-inset  inside a block that is already padded (a card, a rail group)
+     is-below  directly under a figure with no bottom padding of its own
+   (both: inset, with the figure's gap above). */
 .tx-caption {
     margin: 0;
     padding: 0 var(--pad-x) 14px;
@@ -325,9 +330,30 @@ input.x-number {
     line-height: 1.5;
     color: var(--tx-dim);
 }
+.tx-caption.is-inset { padding: 0; }
+.tx-caption.is-below { padding-top: 10px; }
 
-/* Key under a chart or band: swatch, label, value. */
-.tx-legend,
+/* Key to a chart, band or grid: swatch, label, value. The one legend style:
+   pages draw their own swatches, never their own legend row.
+     is-panel  on its own row in a panel (inset like a caption)
+     is-below  directly under the band or figure it explains */
+.tx-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--t-xs);
+    color: var(--tx-mid);
+}
+.tx-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.tx-legend strong { font-family: var(--font-mono); font-feature-settings: 'tnum' 1; }
+.tx-legend.is-panel { padding: 0 var(--pad-x) 14px; }
+.tx-legend.is-below { margin-top: 10px; }
+
+/* The dot plots' legend (js/utils/viz.js). */
 .viz-legend {
     display: flex;
     flex-wrap: wrap;
@@ -338,11 +364,7 @@ input.x-number {
     font-size: var(--t-xs);
     color: var(--tx-mid);
 }
-
-.tx-legend li,
 .viz-legend li { display: inline-flex; align-items: center; gap: 7px; }
-
-.tx-legend strong { font-family: var(--font-mono); font-feature-settings: 'tnum' 1; }
 
 /* ==================== TABLE WRAPPER ==================== */
 
@@ -469,7 +491,6 @@ input.x-number {
 /* Hero rows reflow on available space, not viewport width: stacked stats
    get a rule between rows instead of columns, and a phone gets two across. */
 @container shell (max-width: 720px) {
-    .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
     .tx-hero .tx-stat { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
 }
 

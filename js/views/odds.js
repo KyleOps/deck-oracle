@@ -43,7 +43,7 @@ export const template = `
                         <canvas id="odds-chart" role="img" aria-label="Chance by turn"></canvas>
                     </div>
                 </div>
-                <p class="odds-caption" id="odds-caption"></p>
+                <p class="tx-caption is-below" id="odds-caption"></p>
             </section>
 
             <div class="odds-pair">
@@ -589,19 +589,15 @@ export const styles = `
 #odds-tab .is-bad { color: var(--tx-bad); }
 
 /* ---------- Answer ---------- */
-#odds-tab .odds-answer .tx-hero {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr));
-    border-bottom: 0;
-}
+#odds-tab .odds-answer .tx-hero { border-bottom: 0; }
 
 #odds-tab .odds-answer .tx-stat { border-right: 1px solid var(--tx-rule); border-bottom: 0; }
 #odds-tab .odds-answer .tx-stat:last-child { border-right: 0; }
 #odds-tab .odds-answer .tx-stat-value.medium { font-size: var(--t-xl); }
 #odds-tab .odds-word { font-family: var(--font-body); font-size: 0.82em; font-weight: 700; letter-spacing: var(--track-tight); }
 
-@container shell (max-width: 760px) {
-    #odds-tab .odds-answer .tx-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Two across (the shared hero grid): a rule between the pair and under the first row. */
+@container shell (max-width: 600px) {
     #odds-tab .odds-answer .tx-stat { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
     #odds-tab .odds-answer .tx-stat:nth-child(odd) { border-right: 1px solid var(--tx-rule); }
     #odds-tab .odds-answer .tx-stat:nth-last-child(-n + 2) { border-bottom: 0; }
@@ -634,13 +630,6 @@ export const styles = `
 
 #odds-tab .odds-chart-wrap { padding: 14px 12px 4px 6px; }
 #odds-tab .odds-chart { height: clamp(220px, 26cqi, 300px); }
-
-#odds-tab .odds-caption {
-    padding: 4px 16px 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-}
 
 /* ---------- Table + members ---------- */
 #odds-tab .odds-pair {

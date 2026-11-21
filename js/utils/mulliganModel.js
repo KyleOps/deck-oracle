@@ -598,3 +598,46 @@ export function simulateGames({ pool, plan, drawsBy, freeMulligan, games = SAMPL
         lastTurn
     };
 }
+
+// ── Share links ──────────────────────────────────────────────────────────────
+
+/**
+ * Pack requirement rows for a share link: `[id, name, count, required,
+ * byTurn]` per row, as JSON, LZ-String-compressed (the page passes the codec:
+ * it is loaded on demand). Limits and linked groups travel separately
+ * (`mullMax`, `mullSrc`). Null without a codec.
+ * @param {Array<{id:number, name:string, count:number, required:number, byTurn:number}>} types
+ * @param {{compressToEncodedURIComponent:Function}} [codec]
+ * @returns {string|null}
+ */
+export function packRequirements(types, codec) {
+    if (typeof codec?.compressToEncodedURIComponent !== 'function') return null;
+    const rows = (types ?? []).map(t => [t.id, t.name, t.count, t.required, t.byTurn]);
+    return codec.compressToEncodedURIComponent(JSON.stringify(rows));
+}
+
+/**
+ * Unpack and validate requirement rows from a share link; null if anything is
+ * off. Links made before 3.2 carry a sixth element per row, a hex colour:
+ * accepted (and checked, so nothing but hex digits gets through) but unused.
+ * @param {string} str
+ * @param {{decompressFromEncodedURIComponent:Function}} [codec]
+ * @returns {Array<{id:number, name:string, count:number, required:number, byTurn:number}>|null}
+ */
+export function unpackRequirements(str, codec) {
+    try {
+        const json = codec?.decompressFromEncodedURIComponent?.(str);
+        if (!json) return null;
+        const rows = JSON.parse(json);
+        if (!Array.isArray(rows)) return null;
+        const inRange = (n, max) => typeof n === 'number' && n >= 0 && n <= max;
+        const valid = rows.every(row => Array.isArray(row)
+            && typeof row[0] === 'number'
+            && typeof row[1] === 'string' && row[1].length <= 60
+            && inRange(row[2], 100) && inRange(row[3], 100) && inRange(row[4], 20)
+            && (row[5] === undefined || row[5] === '' || (typeof row[5] === 'string' && /^[0-9a-f]{3,8}$/i.test(row[5]))));
+        return valid ? rows.map(([id, name, count, required, byTurn]) => ({ id, name, count, required, byTurn })) : null;
+    } catch {
+        return null;
+    }
+}

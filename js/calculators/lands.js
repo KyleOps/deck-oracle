@@ -21,6 +21,7 @@ import {
 } from '../utils/landDrops.js';
 import { drawSchedule, bottomCount } from '../utils/mulliganModel.js';
 import { pct } from '../utils/text.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked, turnOrderMatters } from '../utils/turnOrder.js';
 
 const NAME = 'lands';
 const HAND = 7;
@@ -85,7 +86,7 @@ export function readInputs() {
         landCount,
         ramp: deck.hasList ? deck.ramp : 0,
         format,
-        onPlay: format.firstPlayerDraws ? true : onPlay,
+        onPlay: effectiveOnPlay(onPlay, format),
         countRamp: countRamp && deck.hasList && deck.ramp > 0,
         keepRange: mulligans ? keepRange.slice() : null,
         hasList: deck.hasList
@@ -128,7 +129,7 @@ export function calculateOpeningHands(deckSize, landCount) {
 /** Turn-by-turn chance of having made every land drop (no mulligans, current turn order). */
 export function calculateLandDropByTurn(deckSize, landCount) {
     const format = DeckConfig.getFormat();
-    return landDropOdds({ deckSize, lands: landCount, format, onPlay: format.firstPlayerDraws ? true : onPlay, turns: 10 })
+    return landDropOdds({ deckSize, lands: landCount, format, onPlay: effectiveOnPlay(onPlay, format), turns: 10 })
         .byTurn.map(t => ({ turn: t.turn, makeProbability: t.chance, missProbability: 1 - t.chance }));
 }
 
@@ -189,15 +190,7 @@ export function calculate() {
 // ── Rendering ────────────────────────────────────────────────────────────────
 
 function syncControls(config, rampMatters = false) {
-    const order = $('lands-turn-order');
-    if (order) {
-        order.hidden = !!config.format.firstPlayerDraws;
-        (order.querySelectorAll?.('[data-play]') ?? []).forEach(btn => {
-            const on = (btn.dataset.play === '1') === config.onPlay;
-            btn.classList.toggle('active', on);
-            btn.setAttribute('aria-pressed', String(on));
-        });
-    }
+    syncTurnOrder($('lands-turn-order'), config.onPlay, config.format);
     const note = $('lands-format-note');
     if (note) note.textContent = config.format.firstPlayerDraws ? 'Commander: everyone draws on turn one.' : '';
     const mull = $('lands-mull');
@@ -273,7 +266,7 @@ function renderOpening(config, r) {
                 }).join('')}
             </div>
         </div>
-        <p class="ld-caption">${range
+        <p class="tx-caption">${range
             ? `Lands in a random seven. Shaded: the hands you keep (${range[0]}–${range[1]} lands) — ${pct(r.keepRate)} of sevens.`
             : 'Lands in a random seven. You are keeping every seven.'}</p>`;
 }
@@ -304,7 +297,7 @@ function renderCompare(config, r) {
                 }).join('')}</tbody>
             </table>
         </div>
-        <p class="ld-caption">Chance of making every land drop through each turn, with your settings above. Small numbers are the change in points from your deck.</p>`;
+        <p class="tx-caption">Chance of making every land drop through each turn, with your settings above. Small numbers are the change in points from your deck.</p>`;
 }
 
 // ── Sample games ─────────────────────────────────────────────────────────────
@@ -443,7 +436,7 @@ export function updateUI() {
 /** Settings for share links. */
 export function getShareParams() {
     const params = {};
-    if (!onPlay && !DeckConfig.getFormat().firstPlayerDraws) params.ldDraw = 1;
+    if (!onPlay && turnOrderMatters(DeckConfig.getFormat())) params.ldDraw = 1;
     if (countRamp) params.ldRamp = 1;
     if (!mulligans) params.ldMull = 0;
     if (keepRange[0] !== DEFAULT_KEEP[0] || keepRange[1] !== DEFAULT_KEEP[1]) params.ldKeep = `${keepRange[0]}-${keepRange[1]}`;
@@ -488,9 +481,9 @@ function bindEvents() {
     root.addEventListener('click', e => {
         const target = e.target instanceof Element ? e.target : null;
         if (!target) return;
-        const play = target.closest('[data-play]');
-        if (play) {
-            onPlay = play.dataset.play === '1';
+        const order = turnOrderClicked(e);
+        if (order !== null) {
+            onPlay = order;
             updateUI();
         } else if (target.closest('#lands-more-games')) {
             samples.shown += GAMES_STEP;

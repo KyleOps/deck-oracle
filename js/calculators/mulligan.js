@@ -7,9 +7,10 @@
  * imported list (lands, ramp, cards costing 2 or less, …) so their counts
  * follow the deck, or typed by hand.
  *
- * Share links: share.js reads getState() (requirement rows) and the inputs
- * mull-penalty / mull-threshold / mulligan-sample-count; getShareParams()
- * carries the rest (turn order, free mulligan, limits, linked groups).
+ * Share links: `shareInputs` carries the inputs mull-penalty / mull-threshold
+ * / mulligan-sample-count; getShareParams() the rest — the requirement rows
+ * (LZ-String-packed as mullTypes), turn order, free mulligan, limits and
+ * linked groups.
  */
 
 import * as DeckConfig from '../utils/deckConfig.js';
@@ -18,13 +19,20 @@ import { renderBottomLine, renderHeroStats, toneColor } from '../utils/component
 import { escapeHtml } from '../data/glossary.js';
 import { tagDeck } from '../utils/cardTags.js';
 import { cardTypes as typesOf, isLand, landCount, libraryOf, unlistedCopies } from '../utils/library.js';
-import { TX_CHART } from '../utils/chartHelpers.js';
 import { createCache, debounce } from '../utils/simulation.js';
 import { pct } from '../utils/text.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked, turnOrderMatters } from '../utils/turnOrder.js';
 import {
     HAND_SIZE, mulliganPlan, marginalGains, drawSchedule, handSuccess, keepRules,
-    bottomCount, keepBar, simulateGames, SAMPLE_GAMES
+    bottomCount, keepBar, simulateGames, SAMPLE_GAMES, packRequirements, unpackRequirements
 } from '../utils/mulliganModel.js';
+
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'mullSims', id: 'mulligan-sample-count', min: 1, max: 10000 },
+    { param: 'mullPenalty', id: 'mull-penalty', min: 0, max: 100, float: true },
+    { param: 'mullThreshold', id: 'mull-threshold', min: 0, max: 100, float: true }
+]);
 
 const NAME = 'mulligan';
 const GAMES_SHOWN = 4;
@@ -76,7 +84,6 @@ let deckVersion = 0;
 const $ = id => (typeof document !== 'undefined' ? document.getElementById(id) : null);
 const sum = arr => arr.reduce((s, n) => s + n, 0);
 const groupColor = i => `var(--series-${(i % 6) + 1})`;
-const isHex = v => typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v.trim());
 
 // ── Deck groups ──────────────────────────────────────────────────────────────
 
@@ -186,7 +193,7 @@ export function readInputs() {
         confidenceThreshold: readPercent('mull-threshold', 75),
         types: cardTypes,
         format,
-        onPlay: format.firstPlayerDraws ? true : onPlay
+        onPlay: effectiveOnPlay(onPlay, format)
     };
 }
 
@@ -458,15 +465,7 @@ function refreshGame(config) {
     const { format } = config;
     const label = $('mull-format-label');
     if (label) label.textContent = format.label;
-    const order = $('mull-turn-order');
-    if (order) {
-        order.hidden = !!format.firstPlayerDraws;
-        (order.querySelectorAll?.('[data-play]') ?? []).forEach(btn => {
-            const on = (btn.dataset.play === '1') === config.onPlay;
-            btn.classList.toggle('active', on);
-            btn.setAttribute('aria-pressed', String(on));
-        });
-    }
+    syncTurnOrder($('mull-turn-order'), config.onPlay, format);
     const free = $('mull-free');
     if (free) free.checked = config.freeMulligan;
     const note = $('mull-format-note');
@@ -604,12 +603,12 @@ function renderKeep(config, result) {
 
     el.innerHTML = `
         <div class="mull-keep-body">
-            <p class="mull-keep-caption">${caption}</p>
+            <p class="tx-caption is-inset">${caption}</p>
             ${rules ? `<ul class="mull-rules">${rules.map(r => `
                 <li class="is-${r.call}"><span class="mull-rule-call">${r.call === 'keep' ? 'Keep' : r.call === 'mull' ? 'Mulligan' : 'Depends'}</span>
                 <span><span class="mull-rule-label">${escapeHtml(r.label)}</span>${r.call === 'some' ? ` — ${escapeHtml(r.detail)}` : ''}</span></li>`).join('')}</ul>` : ''}
             ${renderKeepGrid(result, step, names)}
-            ${result.types.length <= 2 ? `<div class="mull-legend"><span class="lg-keep">Keep</span><span>Mulligan</span><span class="lg-over">Over a limit</span><span>Number: chance that hand gets there · bar: how often you see it</span></div>` : ''}
+            ${result.types.length <= 2 ? `<div class="tx-legend mull-legend"><span class="lg-keep">Keep</span><span>Mulligan</span><span class="lg-over">Over a limit</span><span>Number: chance that hand gets there · bar: how often you see it</span></div>` : ''}
         </div>`;
 }
 
@@ -832,27 +831,24 @@ export function setCardTypes(types) {
     updateUI();
 }
 
-/**
- * Current state for share links: the rows (with a hex colour per row, which
- * the link format requires) and the keep-rule settings.
- */
+/** The current inputs, with copies of the requirement rows (tests). */
 export function getState() {
     const config = readInputs();
-    const fallback = isHex(TX_CHART.dim) ? TX_CHART.dim : TX_CHART.series.find(isHex);
-    return {
-        ...config,
-        types: config.types.map((t, i) => {
-            const c = TX_CHART.series[i % TX_CHART.series.length];
-            return { ...t, color: isHex(c) ? c.trim() : fallback };
-        })
-    };
+    return { ...config, types: config.types.map(t => ({ ...t })) };
 }
 
-/** Settings share.js doesn't carry on its own. */
+/** LZ-String, when it has loaded (js/shell/vendor.js loads it on demand). */
+function lz() {
+    return typeof window !== 'undefined' ? window.LZString : undefined;
+}
+
+/** Settings beyond the shared inputs: the requirement rows and the game rules. */
 export function getShareParams() {
     const format = DeckConfig.getFormat();
     const params = {};
-    if (!format.firstPlayerDraws && !onPlay) params.mullDraw = 1;
+    const packed = cardTypes.length ? packRequirements(cardTypes, lz()) : null;
+    if (packed) params.mullTypes = packed;
+    if (turnOrderMatters(format) && !onPlay) params.mullDraw = 1;
     if (freeOverride !== null && freeOverride !== format.freeMulligan) params.mullFree = freeOverride ? 1 : 0;
     if (cardTypes.some(t => t.max !== null)) params.mullMax = cardTypes.map(t => t.max ?? '').join(',');
     if (cardTypes.some(t => t.source)) params.mullSrc = cardTypes.map(t => t.source ?? '').join(',');
@@ -862,6 +858,10 @@ export function getShareParams() {
 /** Apply the params from getShareParams(); every value is validated. */
 export function applyShareParams(params) {
     if (!params?.get) return;
+    // The rows first: limits and linked groups below apply to them.
+    const rows = params.get('mullTypes') ? unpackRequirements(params.get('mullTypes'), lz()) : null;
+    if (rows) setCardTypes(rows);
+    else if (params.has('mullTypes')) console.warn('Ignoring unreadable mullTypes');
     if (params.get('mullDraw') === '1') onPlay = false;
     if (params.has('mullFree')) freeOverride = params.get('mullFree') === '1';
     const maxes = (params.get('mullMax') ?? '').split(',');
@@ -921,9 +921,9 @@ function bindEvents() {
             updateUI();
             return;
         }
-        const play = target.closest('[data-play]');
-        if (play) {
-            onPlay = play.dataset.play === '1';
+        const order = turnOrderClicked(e);
+        if (order !== null) {
+            onPlay = order;
             updateUI();
             return;
         }

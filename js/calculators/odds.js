@@ -11,9 +11,10 @@
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats, toneFor } from '../utils/components.js';
-import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART, withAlpha } from '../utils/chartHelpers.js';
 import { debounce } from '../utils/simulation.js';
 import { cardsSeenByTurn } from '../utils/format.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked, turnOrderHTML, turnOrderMatters } from '../utils/turnOrder.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
 import { libraryOf, sameCard } from '../utils/library.js';
 import { pct, plural } from '../utils/text.js';
@@ -73,8 +74,7 @@ export function readInputs() {
     const config = DeckConfig.getDeckConfig();
     const format = DeckConfig.getFormat();
     const library = getLibrary(config, format);
-    const onPlay = format.firstPlayerDraws ? true : state.onPlay;
-    return { config, format, library, onPlay };
+    return { config, format, library, onPlay: effectiveOnPlay(state.onPlay, format) };
 }
 
 /** Keep the groups valid for the current library (card list vs bare counts). */
@@ -103,21 +103,6 @@ const pctHtml = p => escapeHtml(pct(p));
 
 function groupColor(index) {
     return TX_CHART.series[SERIES_SLOT[index]] ?? TX_CHART.blue;
-}
-
-function fade(color, alpha) {
-    const value = String(color ?? '').trim();
-    const hex = /^#([0-9a-f]{6})$/i.exec(value);
-    if (hex) {
-        const n = parseInt(hex[1], 16);
-        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-    }
-    const rgb = /rgba?\(([^)]+)\)/.exec(value);
-    if (rgb) {
-        const [r, g, b] = rgb[1].split(',').map(s => s.trim());
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
-    return value;
 }
 
 function seenAt(turn, ctx = last) {
@@ -174,11 +159,7 @@ function renderTurnBox(ctx) {
             <input type="range" class="odds-range" id="odds-turn" min="0" max="${O.MAX_TURN}" step="1"
                 value="${state.turn}" aria-labelledby="odds-turn-title">
             <div class="odds-ticks" aria-hidden="true">${ticks}</div>
-            ${format.firstPlayerDraws ? '' : `
-            <div class="seg seg-sm odds-order" role="group" aria-label="Turn order">
-                <button class="seg-btn" type="button" id="odds-play" data-play="1">On the play</button>
-                <button class="seg-btn" type="button" id="odds-draw" data-play="0">On the draw</button>
-            </div>`}
+            ${turnOrderMatters(format) ? turnOrderHTML({ onPlay: ctx.onPlay, className: 'odds-order' }) : ''}
             <p class="odds-hint" id="odds-turn-hint"></p>`);
     }
     syncTurn(ctx);
@@ -201,14 +182,7 @@ function syncTurn(ctx = last) {
     document.querySelectorAll('#odds-turn-box [data-tick]').forEach(t => {
         t.classList.toggle('is-on', Number(t.dataset.tick) === state.turn);
     });
-    const play = document.getElementById('odds-play');
-    const draw = document.getElementById('odds-draw');
-    if (play && draw) {
-        play.classList.toggle('active', ctx.onPlay);
-        draw.classList.toggle('active', !ctx.onPlay);
-        play.setAttribute('aria-pressed', String(ctx.onPlay));
-        draw.setAttribute('aria-pressed', String(!ctx.onPlay));
-    }
+    syncTurnOrder(document.getElementById('odds-turn-box'), ctx.onPlay, ctx.format);
     const hint = document.getElementById('odds-turn-hint');
     if (hint) {
         hint.textContent = ctx.format.firstPlayerDraws
@@ -651,7 +625,7 @@ function renderChart(result) {
             label: `${g.id} · ${g.name}`,
             data: result.turns.map(t => toPercent(t.each[i])),
             borderColor: color,
-            backgroundColor: multi ? color : fade(color, 0.14),
+            backgroundColor: multi ? color : withAlpha(color, 0.14),
             fill: multi ? false : 'origin',
             borderWidth: multi ? 1.75 : 2.5,
             borderDash: multi ? [5, 4] : [],
@@ -668,7 +642,7 @@ function renderChart(result) {
             label: 'All together',
             data: result.turns.map(t => toPercent(t.all)),
             borderColor: TX_CHART.bright,
-            backgroundColor: fade(TX_CHART.bright, 0.07),
+            backgroundColor: withAlpha(TX_CHART.bright, 0.07),
             fill: 'origin',
             borderWidth: 2.75,
             borderDash: [],
@@ -902,9 +876,9 @@ function onClick(e) {
         return;
     }
 
-    const play = target.closest('[data-play]');
-    if (play) {
-        state.onPlay = play.dataset.play === '1';
+    const order = turnOrderClicked(e);
+    if (order !== null) {
+        state.onPlay = order;
         refresh();
         return;
     }

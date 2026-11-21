@@ -117,7 +117,6 @@ export const styles = `
 #chimil-tab .ch-h { margin: 0; font: inherit; color: inherit; letter-spacing: inherit; }
 #chimil-tab .ch-chart { height: 300px; }
 #chimil-tab .tx-collapse-body .tx-caption { padding: 0 0 10px; }
-#chimil-tab .ch-caption-foot { padding-top: 10px; }
 #chimil-tab .ch-key-small { color: var(--tx-warn); font-weight: 600; }
 
 #chimil-tab #chimil-reveals-display { padding-top: 14px; }
@@ -185,7 +184,7 @@ export const styles = `
 #chimil-tab .ch-hit.is-small .ch-hit-mv { color: var(--tx-warn); }
 #chimil-tab .ch-hit.is-miss { border-color: var(--tx-bad); background: var(--bad-soft); color: var(--tx-bad); }
 
-#chimil-tab .ch-answer .tx-hero { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); border-bottom: 0; }
+#chimil-tab .ch-answer .tx-hero { border-bottom: 0; }
 #chimil-tab .ch-answer .bottom-line { border-bottom: 1px solid var(--tx-rule); }
 
 #chimil-tab .ch-details .tx-collapse:first-child { border-top: 0; }

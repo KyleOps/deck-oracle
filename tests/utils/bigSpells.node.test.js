@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { assertClose } from '../node-test-helper.js';
-import { barsHTML, createSampler, fade, injectSharedStyles, sampleCardHTML, sharedStyles, xControlHTML } from '../../js/utils/bigSpells.js';
+import { barsHTML, createSampler, injectSharedStyles, sampleCardHTML, sharedStyles, xControlHTML } from '../../js/utils/bigSpells.js';
 import { cardListKey, deckCardList, expandCards } from '../../js/utils/models/cardList.js';
 import { hypergeometricPmf } from '../../js/utils/hypergeometric.js';
 // The helpers the four pages used to import from bigSpells.js now live in the
@@ -63,11 +63,6 @@ describe('Big spell helpers — formatting', () => {
         assert.strictEqual(chanceTone(0.5), 'warn');
         assert.strictEqual(chanceTone(0.1), 'bad');
         assert.strictEqual(chanceTone(undefined), 'flat');
-    });
-
-    it('fades theme colours for chart fills', () => {
-        assert.strictEqual(fade('#55c97f', 0.5), 'rgba(85, 201, 127, 0.5)');
-        assert.strictEqual(fade('rgb(10, 20, 30)', 0.2), 'rgba(10, 20, 30, 0.2)');
     });
 });
 

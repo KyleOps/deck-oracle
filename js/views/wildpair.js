@@ -41,7 +41,7 @@ export const template = `
                 <div class="chart-container wp-chart">
                     <canvas id="wildpair-pt-chart" role="img" aria-label="Creatures at each total power and toughness"></canvas>
                 </div>
-                <p class="wp-caption">Each bar is one total. Green bars share it with another creature, so Wild Pair can find something; red bars are alone. Click a bar to inspect it.</p>
+                <p class="tx-caption is-below wp-caption">Each bar is one total. Green bars share it with another creature, so Wild Pair can find something; red bars are alone. Click a bar to inspect it.</p>
                 <div class="wp-table-wrap" id="wildpair-sweepTable"></div>
             </div>
         </details>
@@ -239,7 +239,6 @@ export const styles = `
 }
 
 /* ---- Answer ---- */
-#wildpair-tab .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 #wildpair-tab .tx-hero .tx-stat:first-child .tx-stat-value { font-size: var(--t-xxl); }
 #wildpair-tab .wp-fit-note, #wildpair-tab .wp-datanote p {
     margin: 0;
@@ -333,14 +332,7 @@ export const styles = `
 #wildpair-tab .wp-table-wrap .tx-sweep-table { min-width: max-content; }
 #wildpair-tab .wp-table-wrap tr[data-total] { cursor: pointer; }
 #wildpair-tab .wp-chart { height: 260px; padding: 12px 12px 0; }
-#wildpair-tab .wp-caption {
-    margin: 0;
-    padding: 8px var(--pad-x) 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-    border-bottom: 1px solid var(--tx-rule);
-}
+#wildpair-tab .wp-caption { border-bottom: 1px solid var(--tx-rule); }
 #wildpair-tab .wp-dim { color: var(--tx-dim); }
 #wildpair-tab .wp-yes { color: var(--tx-good); }
 #wildpair-tab .wp-no { color: var(--tx-bad); }

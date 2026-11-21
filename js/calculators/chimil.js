@@ -20,6 +20,11 @@ import {
     truncateGames, turnBands
 } from '../utils/models/chimil.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'chimilTurns', id: 'chimil-turnsSlider', min: 1, max: 20 }
+]);
+
 /** Sample games listed on the page (fewer on a phone, where each one wraps tall). */
 const SHOWN_GAMES = 6;
 const NARROW_GAMES = 3;
@@ -251,11 +256,11 @@ function renderSamples(games, turns) {
     display.innerHTML = `
         <p class="tx-caption">Each chip is one end step: the step number, the card discover cast, and its mana value. <span class="ch-key-small">Amber</span> chips are cheap hits (mana value ${SMALL_HIT_MV} or less); X spells cast free resolve with X&nbsp;=&nbsp;0.</p>
         <div class="ch-games">${rows}</div>
-        <p class="tx-caption ch-caption-foot"><span class="ch-shown-wide">${SHOWN_GAMES}</span><span class="ch-shown-narrow">${NARROW_GAMES}</span> of ${AUTO_SIM_GAMES.toLocaleString('en-US')} simulated games, ${plural(turns, 'end step')} each.</p>`;
+        <p class="tx-caption is-below"><span class="ch-shown-wide">${SHOWN_GAMES}</span><span class="ch-shown-narrow">${NARROW_GAMES}</span> of ${AUTO_SIM_GAMES.toLocaleString('en-US')} simulated games, ${plural(turns, 'end step')} each.</p>`;
 }
 
 function renderDetails(result) {
-    const { config, trigger, bands, games } = result;
+    const { config, trigger, bands } = result;
 
     renderSweepTable('chimil-sweepTable', {
         columns: [
