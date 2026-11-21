@@ -23,7 +23,7 @@ let selB = null;
 function exampleDeck() {
     return {
         name: 'Example — Doctor Whostoric',
-        commanderName: DEFAULT_DECK_DATA.commanderName,
+        commanders: DEFAULT_DECK_DATA.commanders,
         cardsByName: DEFAULT_DECK_DATA.cardsByName,
         actualCardCount: DEFAULT_DECK_DATA.actualCardCount,
         counts: { lands: DEFAULT_DECK_DATA.lands }

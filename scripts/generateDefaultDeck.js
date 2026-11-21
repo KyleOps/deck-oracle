@@ -5,15 +5,16 @@
  * Usage: node scripts/generateDefaultDeck.js
  *
  * Reads response.json (gitignored: save https://api2.moxfield.com/v3/decks/all/<id>
- * there) and writes the deck in the shape an import produces:
- *   - the mainboard is the list (cardsByName, cardDetails, type counts,
- *     actualCardCount) — commanders are NOT in it: they start in the command
- *     zone, never the library;
+ * there) and writes exactly what deck state (js/utils/deckConfig.js) reads
+ * from it at startup — nothing derived, since the file is parsed on every load:
+ *   - the mainboard is the list (cardsByName, type counts, actualCardCount) —
+ *     commanders are NOT in it: they start in the command zone, never the
+ *     library. cardDetails is derived from cardsByName by deck state;
  *   - every card in the command zone (partners, a Doctor and their companion,
  *     a commander and a background) is in `commanders: [{name, card}]`, where
  *     `card` is a full record in the same shape as the list's records;
- *   - `commanderName` / `commanderCard` are the first commander, for readers
- *     that know only one.
+ *   - importUrl and deckName.
+ * One card record per line keeps the file small and its diffs readable.
  *
  * Moxfield has no produced_mana, and the bundled file was enriched from
  * Scryfall (oracle text, colours, produced mana, Scryfall ids). Fields the
@@ -59,14 +60,6 @@ function getAllCardTypes(typeLine) {
     return categories;
 }
 
-/** A printed power or toughness as a number, or null for "*", "X", "1+*". */
-function parseStat(value) {
-    if (value === undefined || value === null) return null;
-    const s = String(value);
-    if (!s.includes('*') && !s.includes('X') && !isNaN(parseInt(s, 10))) return parseInt(s, 10);
-    return null;
-}
-
 /**
  * The cardsByName record for a Moxfield card (front face of double-faced
  * cards — what a card is in the library), or null without a type line.
@@ -101,7 +94,6 @@ function toRecord(cardData, count) {
 }
 
 const typeCounts = { creatures: 0, instants: 0, sorceries: 0, artifacts: 0, enchantments: 0, planeswalkers: 0, lands: 0, battles: 0 };
-const cardDetails = [];
 const cardsByName = {};
 let actualCardCount = 0;
 
@@ -109,22 +101,6 @@ function addToList(record) {
     record.allCategories.forEach(cat => { typeCounts[cat] += record.count; });
     actualCardCount += record.count;
     cardsByName[record.name] = record;
-    if (record.category === 'lands' || record.cmc === undefined) return;
-    const creature = record.allCategories.includes('creatures');
-    const power = creature ? parseStat(record.power) : null;
-    const toughness = creature ? parseStat(record.toughness) : null;
-    for (let i = 0; i < record.count; i++) {
-        cardDetails.push(JSON.parse(JSON.stringify({
-            name: record.name,
-            cmc: Math.floor(record.cmc),
-            type: record.category,
-            allTypes: record.allCategories,
-            power: record.power,
-            isPower5Plus: power !== null && power >= 5,
-            toughness: creature ? record.toughness : undefined,
-            totalPT: creature ? (power !== null && toughness !== null ? power + toughness : null) : undefined
-        })));
-    }
 }
 
 // The command zone — every commander, none of them in the list.
@@ -144,8 +120,7 @@ if (Object.keys(cardsByName).some(name => commanderKeys.has(name.toLowerCase()))
     throw new Error('A commander is also in the mainboard; the bundled list must not hold its commanders.');
 }
 
-const creaturesPower5Plus = cardDetails.filter(c => c.isPower5Plus).length;
-
+// Exactly the fields deckConfig.js reads from DEFAULT_DECK_DATA.
 const defaultDeckData = {
     creatures: typeCounts.creatures,
     instants: typeCounts.instants,
@@ -157,25 +132,30 @@ const defaultDeckData = {
     battles: typeCounts.battles,
     // Cards in the list = the library (the commanders are not in it).
     actualCardCount,
-    cardDetails,
     cardsByName,
-    creaturesPower5Plus,
-    commanderName: commanders[0]?.name ?? null,
-    commanderCard: commanders[0]?.card ?? null,
     commanders,
     importUrl: SOURCE_URL,
-    deckName: data.name,
-    importMetadata: {
-        hasSideboard: false,
-        sideboardCount: 0,
-        missingCardCount: 0,
-        missingCards: [],
-        totalCardsAttempted: actualCardCount,
-        totalCardsImported: actualCardCount,
-        source: 'Moxfield',
-        deckName: data.name
-    }
+    deckName: data.name
 };
+
+/**
+ * The data as a JS literal: one line per scalar field, one line per card
+ * record (cardsByName) and per commander — compact, but a changed card is a
+ * one-line diff.
+ */
+function literal(deck) {
+    const lines = Object.entries(deck).map(([key, value]) => {
+        if (key === 'cardsByName') {
+            const rows = Object.entries(value).map(([name, card]) => `    ${JSON.stringify(name)}: ${JSON.stringify(card)}`);
+            return `  ${JSON.stringify(key)}: {\n${rows.join(',\n')}\n  }`;
+        }
+        if (key === 'commanders') {
+            return `  ${JSON.stringify(key)}: [\n${value.map(c => `    ${JSON.stringify(c)}`).join(',\n')}\n  ]`;
+        }
+        return `  ${JSON.stringify(key)}: ${JSON.stringify(value)}`;
+    });
+    return `{\n${lines.join(',\n')}\n}`;
+}
 
 const outputContent = `/**
  * Default Deck Data
@@ -184,10 +164,11 @@ const outputContent = `/**
  * Deck: ${data.name}
  * Generated by scripts/generateDefaultDeck.js: ${new Date().toISOString()}
  * ${actualCardCount}-card list + ${commanders.length} commander${commanders.length === 1 ? '' : 's'} in \`commanders\` (never in the list).
+ * Only what deck state reads: cardDetails and the rest are derived at runtime.
  * Oracle text, colours, produced mana and Scryfall ids enriched from Scryfall.
  */
 
-export const DEFAULT_DECK_DATA = ${JSON.stringify(defaultDeckData, null, 2)};
+export const DEFAULT_DECK_DATA = ${literal(defaultDeckData)};
 `;
 
 writeFileSync(outputPath, outputContent, 'utf-8');
@@ -200,5 +181,4 @@ console.log('  Type breakdown:');
 Object.entries(typeCounts).forEach(([type, count]) => {
     if (count > 0) console.log(`    ${type}: ${count}`);
 });
-console.log(`  Creatures with power 5+: ${creaturesPower5Plus}`);
 console.log('\nOutput written to: js/utils/defaultDeckData.js');
