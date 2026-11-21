@@ -21,6 +21,7 @@ import { cardImageUrl, findCard } from '../data/images.js';
 import { curveCards, deckProfile } from '../utils/deckProfile.js';
 import { bulletList } from '../utils/viz.js';
 import { libraryOf } from '../utils/library.js';
+import { commanderLabel } from '../utils/commanders.js';
 import { pct } from '../utils/text.js';
 
 const NAME = 'overview';
@@ -62,11 +63,41 @@ function sourceLink(config) {
 
 // ── Sections ────────────────────────────────────────────────────────────────
 
+/**
+ * Who the deck is and how big, the way players say it: every commander (one,
+ * partners, a Doctor and their companion, a commander and a background), the
+ * deck size counting the command zone (98 in the library + 2 commanders = a
+ * 100-card deck) and the format Auto picks. Pure — exported for tests.
+ * @param {{deckName?:string|null, commanders?:Array<{name:string}>, total?:{total:number, detail:string|null}|null, librarySize?:number}} p
+ *   total: DeckConfig.getDeckTotal(); librarySize: the cards in the library
+ * @returns {{name:string, commanders:string[], commanderTitle:string, size:number, sizeDetail:string|null, detected:string}}
+ */
+export function deckIdentity({ deckName = null, commanders = [], total = null, librarySize = 0 } = {}) {
+    const names = (commanders ?? []).map(c => (typeof c === 'string' ? c : c?.name)).filter(Boolean);
+    return {
+        name: deckName || commanderLabel(names) || 'Your deck',
+        commanders: names,
+        commanderTitle: names.length > 1 ? 'Commanders' : 'Commander',
+        size: total?.total ?? librarySize,
+        sizeDetail: total?.detail ?? null,
+        detected: detectFormat({ deckSize: librarySize, commanders: names })
+    };
+}
+
 function renderHero(config, stats, format) {
     const featured = featuredCardName(config);
     const pref = config.format ?? 'auto';
-    const detected = FORMATS[detectFormat({ deckSize: stats.deckSize, commanderName: config.commanderName })];
-    const name = config.deckName || (config.commanderName ? `${config.commanderName}` : 'Your deck');
+    const deck = deckIdentity({
+        deckName: config.deckName,
+        commanders: DeckConfig.getCommanders(),
+        total: DeckConfig.getDeckTotal(),
+        librarySize: stats.deckSize
+    });
+    const detected = FORMATS[deck.detected];
+    const name = deck.name;
+    const size = deck.sizeDetail
+        ? `<span class="term" tabindex="0" data-tip="${escapeHtml(deck.sizeDetail)}">${deck.size}</span>`
+        : String(deck.size);
     const identity = stats.identity.length
         ? stats.identity.map(manaPip).join('')
         : '<span class="ov-muted">Colourless</span>';
@@ -82,9 +113,9 @@ function renderHero(config, stats, format) {
         <div class="ov-hero-body">
             <div class="ov-eyebrow">${escapeHtml(format.label)} deck ${sourceLink(config)}</div>
             <h2 class="ov-hero-name">${escapeHtml(name)}</h2>
-            ${config.commanderName ? `<div class="ov-hero-sub">Commander ${cardRef(config.commanderName)}</div>` : ''}
+            ${deck.commanders.length ? `<div class="ov-hero-sub">${deck.commanderTitle} ${deck.commanders.map(n => cardRef(n)).join(' + ')}</div>` : ''}
             <dl class="ov-hero-stats">
-                <div><dt>Cards</dt><dd>${stats.deckSize}</dd></div>
+                <div><dt>Cards</dt><dd>${size}</dd></div>
                 <div><dt>Lands</dt><dd>${stats.lands}</dd></div>
                 <div><dt>${term('mv', 'Avg. mana value')}</dt><dd>${stats.curve.average.toFixed(2)}</dd></div>
                 <div><dt>Colours</dt><dd class="ov-identity">${identity}</dd></div>
