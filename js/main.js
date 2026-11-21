@@ -15,13 +15,14 @@ import { findCard } from './data/images.js';
 import { FORMATS } from './utils/format.js';
 import { debounce } from './utils/simulation.js';
 import { CALCULATORS, DEFAULT_TAB } from './utils/calculatorRegistry.js';
-import { initRouter, navigate, ensureMounted, currentTab, refreshCurrent, onNavigate, onNavigated, step, tabFromUrl, mountedModule } from './shell/router.js';
+import { initRouter, navigate, ensureMounted, currentTab, onNavigate, onNavigated, step, tabFromUrl, mountedModule, afterFirstPage } from './shell/router.js';
 import { initSidebar, markRelevance, renderDeckSwitcher } from './shell/sidebar.js';
 import { initGuide, openGuide, isGuideOpen, refreshPageHeader } from './shell/pageHeader.js';
 import { initPalette, openPalette } from './shell/palette.js';
 import { initDeckDialog, openDeckDialog, renderSavedDecks } from './shell/deckDialog.js';
 import { initOverlays, toast } from './shell/overlays.js';
-import { initTheme, toggleTheme, onThemeChange } from './shell/theme.js';
+import { initTheme, toggleTheme } from './shell/theme.js';
+import { ensureLzString } from './shell/vendor.js';
 
 // ── Deck-dependent chrome ────────────────────────────────────────────────────
 
@@ -96,6 +97,10 @@ function initOpponentsBar() {
 // ── Share ────────────────────────────────────────────────────────────────────
 
 async function copyShareLink() {
+    // Share links pack mulligan requirements with LZ-String. It is normally
+    // here already (loaded once the first page is up); only a very early
+    // click waits for it.
+    await ensureLzString();
     const url = Share.getShareUrl(currentTab());
     try {
         await navigator.clipboard.writeText(url);
@@ -150,6 +155,12 @@ function initShortcuts() {
 
 // ── PWA ──────────────────────────────────────────────────────────────────────
 
+/** Run `task` once the window `load` event has fired (now, if it already has). */
+function afterLoad(task) {
+    if (document.readyState === 'complete') task();
+    else window.addEventListener('load', () => task(), { once: true });
+}
+
 function initServiceWorker() {
     // Never on localhost: stale-while-revalidate would serve the previous
     // build's CSS/JS during development and every edit would appear to do nothing.
@@ -159,23 +170,29 @@ function initServiceWorker() {
         return;
     }
     if (!('serviceWorker' in navigator)) return;
-    window.addEventListener('load', () => {
-        const swPath = new URL('sw.js', document.baseURI).pathname;
-        navigator.serviceWorker.register(swPath).then(reg => {
-            // A new version installed in the background → offer a reload.
-            reg.addEventListener('updatefound', () => {
-                const worker = reg.installing;
-                worker?.addEventListener('statechange', () => {
-                    if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-                        toast('A new version of Deck Oracle is ready.', {
-                            timeout: 12000,
-                            action: { label: 'Reload', run: () => window.location.reload() }
-                        });
-                    }
-                });
+    // The install precaches every asset (~720 KB compressed), so it waits for
+    // the landing page to finish loading, paint and go idle. The page may
+    // well have loaded already by now — a plain `load` listener added here
+    // would then never fire, which is how registration silently stopped.
+    afterFirstPage(() => afterLoad(registerServiceWorker));
+}
+
+function registerServiceWorker() {
+    const swPath = new URL('sw.js', document.baseURI).pathname;
+    navigator.serviceWorker.register(swPath).then(reg => {
+        // A new version installed in the background → offer a reload.
+        reg.addEventListener('updatefound', () => {
+            const worker = reg.installing;
+            worker?.addEventListener('statechange', () => {
+                if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                    toast('A new version of Deck Oracle is ready.', {
+                        timeout: 12000,
+                        action: { label: 'Reload', run: () => window.location.reload() }
+                    });
+                }
             });
-        }).catch(err => console.warn('Service worker registration failed (optional):', err));
-    });
+        });
+    }).catch(err => console.warn('Service worker registration failed (optional):', err));
 }
 
 // ── Startup ──────────────────────────────────────────────────────────────────
@@ -216,19 +233,22 @@ async function init() {
         syncDeckChrome();
         renderSavedDecks();
     });
-    onThemeChange(() => refreshCurrent());
     syncDeckChrome();
+    // Registers only once the first page is up (afterFirstPage), so it can be
+    // wired here, before the awaits below, and still never compete with it.
+    initServiceWorker();
+    initPWAInstall();
+    afterFirstPage(ensureLzString);
 
     // Shared links: import the deck and apply page settings before the first
-    // render, so the landing state is the shared state.
+    // render, so the landing state is the shared state. Mulligan requirements
+    // are LZ-String-packed, so a link carrying them loads it first.
     const tab = tabFromUrl();
     if (window.location.search.length > 1) {
+        if (new URLSearchParams(window.location.search).has('mullTypes')) await ensureLzString();
         await Share.applyShareUrl({ ensureMounted });
     }
     await navigate(tab, { history: 'replace' });
-
-    initServiceWorker();
-    initPWAInstall();
 
     const fmt = DeckConfig.getFormat();
     document.documentElement.dataset.format = fmt.key in FORMATS ? fmt.key : 'commander';

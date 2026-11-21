@@ -48,14 +48,20 @@ describe('service worker asset manifest', () => {
     });
 
     it('pre-caches the pinned external runtime scripts the app loads', () => {
-        const html = readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
         const vendor = readFileSync(path.join(projectRoot, 'js/shell/vendor.js'), 'utf8');
-        const chartUrl = vendor.match(/CHART_JS_URL = '([^']+)'/)?.[1];
-        assert.ok(chartUrl, 'vendor.js declares the Chart.js URL');
-        assert.match(chartUrl, /@\d+\.\d+\.\d+\//, 'Chart.js must be pinned to an exact version');
-        assert.ok(staticAssets.includes(chartUrl), 'pinned Chart.js is pre-cached');
-        const lz = html.match(/src="(https:\/\/cdn\.jsdelivr\.net\/npm\/lz-string[^"]+)"/)?.[1];
-        assert.ok(lz && staticAssets.includes(lz), 'LZ-String is pre-cached');
+        for (const [name, constant] of [['Chart.js', 'CHART_JS_URL'], ['LZ-String', 'LZ_STRING_URL']]) {
+            const url = vendor.match(new RegExp(`${constant} = '([^']+)'`))?.[1];
+            assert.ok(url, `vendor.js declares the ${name} URL`);
+            assert.match(url, /@\d+\.\d+\.\d+\//, `${name} must be pinned to an exact version`);
+            assert.ok(staticAssets.includes(url), `pinned ${name} is pre-cached`);
+        }
+    });
+
+    it('loads no third-party script before the app', () => {
+        const html = readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
+        // A classic deferred script ahead of js/main.js holds the app back
+        // until it has downloaded; vendor.js loads them on demand instead.
+        assert.deepEqual(html.match(/<script[^>]+src="https?:[^"]+"/g) ?? [], []);
     });
 
     it('preloads the whole startup import graph (npm run sw:manifest)', async () => {
@@ -68,6 +74,71 @@ describe('service worker asset manifest', () => {
     it('is regenerated from disk (npm run sw:manifest)', async () => {
         const { buildAssetList } = await import('../../scripts/update-sw-manifest.mjs');
         assert.deepEqual(staticAssets, buildAssetList());
+    });
+});
+
+describe('page module preloads', () => {
+    const html = readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
+
+    it('embeds every page’s lazy module chain (npm run sw:manifest)', async () => {
+        const { pageModulesTag } = await import('../../scripts/update-sw-manifest.mjs');
+        const block = html.match(/<!-- BEGIN PAGE MODULES -->\r?\n([\s\S]*?)\r?\n\s*<!-- END PAGE MODULES -->/)?.[1];
+        assert.equal(block, pageModulesTag());
+    });
+
+    it('lists, for every page, its calculator and view and nothing the shell already preloads', async () => {
+        const { pageModuleMap, staticImportGraph } = await import('../../scripts/update-sw-manifest.mjs');
+        const { CALCULATORS, DEFAULT_TAB } = await import('../../js/utils/calculatorRegistry.js');
+        const map = pageModuleMap();
+        const startup = new Set(['js/main.js', ...staticImportGraph('js/main.js')]);
+        assert.equal(map.default, DEFAULT_TAB);
+        assert.deepEqual(Object.keys(map.pages).sort(), Object.keys(CALCULATORS).sort());
+        for (const [key, files] of Object.entries(map.pages)) {
+            assert.ok(files.includes(`js/calculators/${key}.js`), `${key}: calculator module`);
+            assert.ok(files.includes(`js/views/${key}.js`), `${key}: view module`);
+            assert.deepEqual(files.filter(f => startup.has(f)), [], `${key}: duplicates the startup preloads`);
+            assert.deepEqual(files.filter(f => !existsSync(path.join(projectRoot, f))), [], `${key}: missing files`);
+            assert.equal(new Set(files).size, files.length, `${key}: listed twice`);
+        }
+    });
+
+    it('covers each page’s whole static import graph', async () => {
+        const { pageModuleMap, staticImportGraph } = await import('../../scripts/update-sw-manifest.mjs');
+        const startup = new Set(['js/main.js', ...staticImportGraph('js/main.js')]);
+        const { pages } = pageModuleMap();
+        for (const [key, files] of Object.entries(pages)) {
+            const needed = staticImportGraph(`js/calculators/${key}.js`).filter(f => !startup.has(f));
+            assert.deepEqual(needed.filter(f => !files.includes(f)), [], `${key}: chain is missing modules`);
+        }
+    });
+
+    it('preloads the landing page before any stylesheet can hold the script back', () => {
+        const head = html.slice(0, html.indexOf('</head>'));
+        const script = head.indexOf("getElementById('page-modules')");
+        const firstStylesheet = head.search(/<link[^>]+rel="stylesheet"|<link[^>]+stylesheet"/);
+        assert.ok(script > 0, 'inline page-module preloader');
+        assert.ok(firstStylesheet > script, 'every stylesheet comes after the preloader');
+        assert.ok(head.indexOf('id="page-modules"') < script, 'the map is parsed before the preloader runs');
+    });
+
+    it('reads static imports and re-exports, never dynamic imports', async () => {
+        const { staticImports } = await import('../../scripts/update-sw-manifest.mjs');
+        const source = [
+            "import { a } from './a.js';",
+            'import {',
+            '    b,',
+            '    c',
+            "} from '../b.js';",
+            "import './side-effect.js';",
+            "import * as ns from './ns.js';",
+            "export { d } from './d.js';",
+            "export * from './e.js';",
+            "const lazy = () => import('./lazy.js');",
+            "    import('./also-lazy.js').then(m => m);",
+            "const later = await import('./later.js');",
+            "import pkg from 'bare-package';"
+        ].join('\n');
+        assert.deepEqual(staticImports(source), ['./a.js', '../b.js', './side-effect.js', './ns.js', './d.js', './e.js']);
     });
 });
 

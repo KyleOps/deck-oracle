@@ -97,37 +97,3 @@ export function formatPercentage(value, decimals = 1) {
 export function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
-
-/**
- * Chart.js animation configuration for smooth transitions
- * @returns {Object} - Animation configuration object
- */
-export function getChartAnimationConfig() {
-    return {
-        animation: {
-            duration: 750,
-            easing: 'easeInOutQuart'
-        },
-        animations: {
-            tension: {
-                duration: 500,
-                easing: 'easeInOutCubic',
-                from: 0.4,
-                to: 0.3,
-                loop: false
-            }
-        },
-        transitions: {
-            active: {
-                animation: {
-                    duration: 300
-                }
-            },
-            resize: {
-                animation: {
-                    duration: 0
-                }
-            }
-        }
-    };
-}
