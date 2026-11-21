@@ -2,12 +2,11 @@
  * Third-party scripts, loaded on demand.
  *
  * Chart.js is ~200 KB and only calculators that draw charts need it, so it is
- * fetched the first time one of them opens instead of blocking first paint.
- * The URL pins an exact version: an unpinned CDN path silently upgrades the
- * chart engine underneath every calculator.
+ * fetched the first time one of them opens instead of blocking first paint;
+ * the page's answer does not wait for it either (chartHelpers.js builds charts
+ * once it is here). The URL pins an exact version: an unpinned CDN path
+ * silently upgrades the chart engine underneath every calculator.
  */
-
-import { applyChartTheme } from '../utils/chartHelpers.js';
 
 const CHART_JS_URL = 'https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js';
 
@@ -41,18 +40,16 @@ export function loadScript(src) {
 let chartReady = null;
 
 /**
- * Make sure Chart.js is available and themed. Safe to call repeatedly.
+ * Make sure Chart.js is available and themed, and build the charts that were
+ * waiting for it. Safe to call repeatedly.
  * @returns {Promise<boolean>} false when it could not be loaded (offline)
  */
 export function ensureChartJs() {
-    if (typeof window !== 'undefined' && window.Chart) {
-        applyChartTheme();
-        return Promise.resolve(true);
-    }
     if (!chartReady) {
-        chartReady = loadScript(CHART_JS_URL)
-            .then(() => {
-                applyChartTheme();
+        const engine = typeof window !== 'undefined' && window.Chart ? Promise.resolve() : loadScript(CHART_JS_URL);
+        chartReady = Promise.all([engine, import('../utils/chartHelpers.js')])
+            .then(([, charts]) => {
+                charts.chartEngineReady();
                 return true;
             })
             .catch(err => {

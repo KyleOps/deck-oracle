@@ -3,11 +3,11 @@
  * URL in sync (`?tab=<key>`) so reload, back/forward and shared links all land
  * on the same page.
  *
- * Mounting a calculator = fetch its module + view (in parallel with Chart.js
- * when it draws charts), inject the shared page header and its markup, run its
- * init() once. Every later visit is a visibility toggle, plus updateUI() when
- * something the page shows has changed since it last rendered (see "Revisit
- * stamps" in calculatorBase.js).
+ * Mounting a calculator = fetch its module + view (and start Chart.js when it
+ * draws charts — its charts wait for it, its answer does not), inject the
+ * shared page header and its markup, run its init() once. Every later visit is
+ * a visibility toggle, plus updateUI() when something the page shows has
+ * changed since it last rendered (see "Revisit stamps" in calculatorBase.js).
  */
 
 import { CALCULATORS, CALCULATOR_ORDER, DEFAULT_TAB, getCalculator, loadCalculator } from '../utils/calculatorRegistry.js';
@@ -154,11 +154,11 @@ export function ensureMounted(name) {
     if (mounting.has(name)) return mounting.get(name);
     const entry = getCalculator(name);
     preloadPage(name);
+    // Chart.js (~70 KB compressed) downloads alongside the page but is not
+    // waited for: createOrUpdateChart() builds each chart once it is here.
+    if (entry?.charts !== false) ensureChartJs();
     if (entry?.needsOpponents) followOpponents();
-    const job = Promise.all([
-        loadCalculator(name),
-        entry?.charts === false ? Promise.resolve(true) : ensureChartJs()
-    ]).then(([record]) => {
+    const job = loadCalculator(name).then(record => {
         const panel = panelFor(name);
         panel.innerHTML = renderPageHeader(name) + `<div class="calc-body">${record.template}</div>`;
         if (record.styles && !document.querySelector(`style[data-calc="${name}"]`)) {
