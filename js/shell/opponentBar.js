@@ -90,7 +90,6 @@ const BAR_STYLES = `
     height: 3px; border-radius: var(--radius-full);
     background: var(--tx-rule); overflow: hidden;
 }
-#opponents-config .opp-progress[hidden] { display: none; }
 #opponents-config .opp-progress-bar { height: 100%; background: var(--tx-accent); transition: width 0.2s ease; }
 #opponents-config .opp-status { font-size: var(--t-xs); color: var(--tx-mid); }
 #opponents-config .opp-status:empty { display: none; }
