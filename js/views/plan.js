@@ -109,6 +109,8 @@ export const styles = `
 }
 #plan-tab .gp-pending-bar { flex: 1; max-width: 240px; height: 6px; border-radius: 6px; background: var(--tx-rule); overflow: hidden; }
 #plan-tab .gp-pending-fill { display: block; height: 100%; background: var(--tx-flat); transition: width 0.15s linear; }
+#plan-tab .is-partial .gp-pending { padding: 10px 18px 14px; border-top: 1px solid var(--tx-rule); font-size: var(--t-xs); }
+#plan-tab .is-partial .tx-hero { opacity: 0.85; }
 
 /* ── Rail: the plan editor ───────────────────────────────────────── */
 #plan-tab .gp-rail-body { display: grid; gap: 14px; padding: 16px; }

@@ -4,7 +4,8 @@
  * The maths lives in utils/planEngine.js (goldfish games towards a plan),
  * utils/planRules.js (card rules) and utils/models/plan.js (the words). This
  * module reads the deck and the plan, runs 5,000 games without blocking the
- * page (~10 ms slices), caches the result per deck + plan + settings, keeps
+ * page (~10 ms slices) — the answer shows after the first 500 and refines to
+ * all 5,000 — caches the result per deck + plan + settings, keeps
  * each deck's plan (localStorage), renders the editor and the evidence, and
  * owns the presets (js/data/plans/) and share links.
  */
@@ -26,6 +27,8 @@ import { PLAN_PRESETS, presetEntry } from '../data/plans/index.js';
 
 const NAME = 'plan';
 const SLICE_MS = 10;
+/** Games played before the first answer shows (then refined to all of them). */
+const FIRST_ANSWER = 500;
 const CACHE_SIZE = 12;
 /** Each deck's plan: { [deck key]: { p: encoded plan, s: preset id or null } }. */
 const STORE_KEY = 'deckOracle.gamePlans.v1';
@@ -179,18 +182,27 @@ const yieldToBrowser = () => (globalThis.scheduler?.yield
     ? globalThis.scheduler.yield()
     : new Promise(resolve => setTimeout(resolve, 0)));
 
-/** Run the simulation in slices; resolves to the result, or undefined if superseded. */
-async function runSliced(inputs, key, onProgress) {
+/**
+ * Run the simulation in slices; resolves to the result, or undefined if
+ * superseded. The answer comes first: after FIRST_ANSWER games `onFirst` gets
+ * the numbers so far, and the page refines them to the full run.
+ */
+async function runSliced(inputs, key, onProgress, onFirst) {
     const token = ++runToken;
     const run = GP.createPlanRun(inputs.lib, inputs.plan, runOptions(inputs));
     const t0 = performance.now();
     let longest = 0;
+    let first = !onFirst;
     for (;;) {
         const start = performance.now();
         let done = false;
-        while (!done && performance.now() - start < SLICE_MS) done = GP.runPlanBatch(run, 25);
+        while (!done && performance.now() - start < SLICE_MS && (first || run.done < FIRST_ANSWER)) done = GP.runPlanBatch(run, 25);
         longest = Math.max(longest, performance.now() - start);
         if (done) break;
+        if (!first && run.done >= FIRST_ANSWER) {
+            first = true;
+            onFirst(GP.finishPlanRun(run));
+        }
         onProgress?.(run.done / run.games);
         await yieldToBrowser();
         if (token !== runToken) return undefined;
@@ -612,10 +624,22 @@ function heroHTML(result) {
     return renderHeroStats(GP.heroStats(result).map(s => ({ ...s, color: s.tone === 'flat' ? undefined : toneColor(s.tone) })));
 }
 
-function renderSummary(result, inputs) {
+const pendingHTML = (label, progress) => `
+    <div class="gp-pending" role="status">
+        <span class="gp-pending-label">${label}</span>
+        <span class="gp-pending-bar"><span class="gp-pending-fill" style="width:${Math.round(progress * 100)}%"></span></span>
+    </div>`;
+
+/**
+ * The answer and hero stats. `partial`: the first games' numbers, shown while
+ * the rest play (the bar under them fills; the full run replaces them).
+ */
+function renderSummary(result, inputs, { partial = false } = {}) {
     const el = $('gp-summary');
     if (!el) return;
-    el.innerHTML = renderBottomLine(GP.summarize(result, { deckName: inputs.deckName })) + (result?.steps.length ? heroHTML(result) : '');
+    el.classList.toggle('is-partial', partial);
+    el.innerHTML = renderBottomLine(GP.summarize(result, { deckName: inputs.deckName })) + (result?.steps.length ? heroHTML(result) : '')
+        + (partial ? pendingHTML(`First ${result.games.toLocaleString('en-US')} of ${GP.DEFAULT_GAMES.toLocaleString('en-US')} games — refining…`, result.games / GP.DEFAULT_GAMES) : '');
 }
 
 function renderPending(progress = 0) {
@@ -623,11 +647,8 @@ function renderPending(progress = 0) {
     if (!el) return;
     let bar = el.querySelector?.('.gp-pending-fill');
     if (!bar) {
-        el.innerHTML = `
-            <div class="gp-pending" role="status">
-                <span>Playing ${GP.DEFAULT_GAMES.toLocaleString('en-US')} games…</span>
-                <span class="gp-pending-bar"><span class="gp-pending-fill" style="width:0%"></span></span>
-            </div>`;
+        el.classList.remove('is-partial');
+        el.innerHTML = pendingHTML(`Playing ${GP.DEFAULT_GAMES.toLocaleString('en-US')} games…`, 0);
         bar = el.querySelector?.('.gp-pending-fill');
     }
     if (bar) bar.style.width = `${Math.round(progress * 100)}%`;
@@ -888,7 +909,10 @@ export function updateUI() {
         return;
     }
     renderPending(0);
-    runSliced(inputs, key, renderPending).then(result => {
+    const first = partial => {
+        if (partial && isCalculatorActive(NAME)) renderSummary(partial, inputs, { partial: true });
+    };
+    runSliced(inputs, key, renderPending, first).then(result => {
         if (result === undefined || !isCalculatorActive(NAME)) return;
         current = { key, result, inputs };
         render(result, inputs);

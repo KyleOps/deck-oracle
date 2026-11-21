@@ -26,7 +26,12 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-const answer = tab => tab.locator('.bottom-line').textContent();
+/** The bottom line once all games are in ('pending' while the first answer is still being refined). */
+const answer = async tab => ((await tab.locator('#gp-summary .gp-pending').count()) ? 'pending' : tab.locator('.bottom-line').textContent());
+const settled = async tab => {
+    await expect(tab.locator('#gp-summary .gp-pending')).toHaveCount(0);
+    return tab.locator('.bottom-line').textContent();
+};
 
 test('game plan answers for the example Commander deck with a plan built from it', async ({ page }) => {
     const errors = capturePageErrors(page);
@@ -57,12 +62,12 @@ test('editing the plan changes the answer, and the plan survives a share link', 
     await page.goto('/?tab=plan');
     const tab = page.locator('#plan-tab');
     await expect(tab.locator('.bottom-line')).toContainText('on time in');
-    const first = await answer(tab);
+    const first = await settled(tab);
 
     // The Doctor a turn earlier: a harder plan, a different answer.
     await tab.locator('#gp-steps .gp-step').nth(2).locator('[data-field="turn"]').selectOption('4');
     await expect(tab.locator('#gp-steps .gp-step').nth(2).locator('.gp-step-read')).toContainText('Turn 4: cast The Sixth Doctor');
-    await expect.poll(() => answer(tab)).not.toBe(first);
+    await expect.poll(async () => { const now = await answer(tab); return now !== 'pending' && now !== first; }).toBe(true);
     await expect(tab.locator('#gp-plan-meta')).toHaveText('your plan');
 
     // Add a mana step, then remove the last cast step.
@@ -88,7 +93,7 @@ test('editing the plan changes the answer, and the plan survives a share link', 
     await expect(freshTab.locator('#gp-steps .gp-step')).toHaveCount(4);
     await expect(freshTab.locator('#gp-steps .gp-step-read').nth(3)).toContainText('Turn 8: have 9+ mana');
     await expect(freshTab.locator('#gp-plan-meta')).toHaveText('from a shared link');
-    await expect.poll(() => answer(freshTab)).toBe(await answer(tab));
+    await expect.poll(() => answer(freshTab)).toBe(await settled(tab));
     expect(errors).toEqual([]);
 });
 
