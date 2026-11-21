@@ -407,6 +407,70 @@ function getAllCardTypes(typeLine) {
 }
 
 /**
+ * The commander's own card record, from any card source (Scryfall, Moxfield
+ * or Archidekt shapes).
+ *
+ * Every importer keeps the commander out of the library — it starts in the
+ * command zone — so without this record the deck knows only the commander's
+ * name, not its cost, colours or art. Pages that ask "when can I cast my
+ * commander?" need all three.
+ *
+ * Front face only for double-faced cards (that is the face you cast).
+ *
+ * @param {Object} cardData - a card object from an API
+ * @returns {Object|null} a cardsByName-shaped record with count 1, or null when
+ *   the data lacks a name or a type line (the caller can look it up instead)
+ */
+export function toCommanderCard(cardData) {
+    if (!cardData || typeof cardData !== 'object' || typeof cardData.name !== 'string' || !cardData.name) return null;
+    const front = cardData.card_faces?.[0] ?? {};
+    let typeLine = front.type_line || front.typeLine || cardData.type_line || cardData.typeLine || '';
+    if (!typeLine && (cardData.types || cardData.superTypes)) {
+        const main = [...(cardData.superTypes ?? []), ...(cardData.types ?? [])].join(' ');
+        const sub = (cardData.subTypes ?? []).join(' ');
+        typeLine = sub ? `${main} — ${sub}` : main;
+    }
+    if (!typeLine) return null;
+    const cmc = Number(front.cmc ?? cardData.cmc);
+    const allCategories = getAllCardTypes(typeLine);
+    const record = {
+        name: cardData.name,
+        type_line: typeLine,
+        cmc: Number.isFinite(cmc) ? cmc : 0,
+        mana_cost: front.mana_cost || front.manaCost || cardData.mana_cost || cardData.manaCost || '',
+        oracle_text: front.oracle_text || front.oracleText || cardData.oracle_text || cardData.oracleText || cardData.text || '',
+        category: allCategories[0],
+        allCategories,
+        count: 1,
+        ...colourFields(cardData)
+    };
+    const power = front.power ?? cardData.power;
+    const toughness = front.toughness ?? cardData.toughness;
+    if (power !== undefined && power !== null) record.power = power;
+    if (toughness !== undefined && toughness !== null) record.toughness = toughness;
+    return record;
+}
+
+/**
+ * The commander's record, looked up on Scryfall when the deck site's data was
+ * too thin to build one. Never throws: a failed lookup just means no record.
+ * @param {Object|null} cardData - what the deck site gave us (may be null)
+ * @param {string|null} name
+ * @returns {Promise<Object|null>}
+ */
+async function resolveCommanderCard(cardData, name) {
+    const direct = toCommanderCard(cardData);
+    if (direct?.mana_cost || !name) return direct;
+    try {
+        const [found] = await batchFetchCards([name]);
+        return toCommanderCard(found) ?? direct;
+    } catch (error) {
+        console.warn('Commander lookup failed:', error);
+        return direct;
+    }
+}
+
+/**
  * Import and analyze a decklist
  * @param {string} decklistText - Raw decklist text
  * @param {Function} progressCallback - Called with progress updates
@@ -818,6 +882,10 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
     const creaturesPower5Plus = cardDetails.filter(c => c.isPower5Plus).length;
     console.log('Creatures with power 5+:', creaturesPower5Plus);
 
+    // The commander is not in the library, so it was not fetched above.
+    const commanderName = commanders[0]?.name ?? null;
+    const commanderCard = commanderName ? await resolveCommanderCard(null, commanderName) : null;
+
     // Stage 5: Finalizing (95-100%)
     if (progressCallback) {
         progressCallback({
@@ -834,10 +902,11 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
         cardDetails,  // Full card-level data
         cardsByName,  // Card data indexed by name
         creaturesPower5Plus,
-        commanderName: commanders[0]?.name ?? null,
+        commanderName,
+        commanderCard,
         // Import metadata
         importMetadata: {
-            commanderName: commanders[0]?.name ?? null,
+            commanderName,
             hasSideboard,
             sideboardCount,
             missingCards: missingCardDetails,
@@ -1058,12 +1127,14 @@ async function importFromMoxfieldInternal(deckId, progressCallback) {
     const cardsToFetch = [];
     let actualCardCount = 0;
     let commanderName = null;
+    let commanderData = null;
 
     // Capture commander from commanders board
     if (data.boards?.commanders?.cards) {
         const commanderCards = Object.values(data.boards.commanders.cards);
         if (commanderCards.length > 0 && commanderCards[0].card) {
-            commanderName = commanderCards[0].card.name;
+            commanderData = commanderCards[0].card;
+            commanderName = commanderData.name;
         }
     }
 
@@ -1097,7 +1168,8 @@ async function importFromMoxfieldInternal(deckId, progressCallback) {
         });
     }
 
-    return { typeCounts, actualCardCount, cardDetails, cardsByName, deckName: data.name, commanderName };
+    const commanderCard = commanderName ? await resolveCommanderCard(commanderData, commanderName) : null;
+    return { typeCounts, actualCardCount, cardDetails, cardsByName, deckName: data.name, commanderName, commanderCard };
 }
 
 /**
@@ -1117,6 +1189,7 @@ async function importFromArchidektInternal(deckId, progressCallback) {
     const cardsToFetch = [];
     let actualCardCount = 0;
     let commanderName = null;
+    let commanderData = null;
 
     if (data.cards) {
         data.cards.forEach(entry => {
@@ -1127,6 +1200,8 @@ async function importFromArchidektInternal(deckId, progressCallback) {
                 const cardData = entry.card ? (entry.card.oracleCard || entry.card) : null;
                 if (cardData && !commanderName) {
                     commanderName = cardData.name;
+                    // The printing carries the Scryfall id (uid); the oracle card has the rules.
+                    commanderData = { ...cardData, scryfallId: cardData.scryfallId ?? entry.card?.uid };
                 }
                 return;
             }
@@ -1166,7 +1241,8 @@ async function importFromArchidektInternal(deckId, progressCallback) {
         });
     }
 
-    return { typeCounts, actualCardCount, cardDetails, cardsByName, deckName: data.name, commanderName };
+    const commanderCard = commanderName ? await resolveCommanderCard(commanderData, commanderName) : null;
+    return { typeCounts, actualCardCount, cardDetails, cardsByName, deckName: data.name, commanderName, commanderCard };
 }
 
 /**
@@ -1201,6 +1277,7 @@ export async function importDeckFromUrl(input, progressCallback = null) {
         cardsByName: result.cardsByName,
         creaturesPower5Plus,
         commanderName: result.commanderName,
+        commanderCard: result.commanderCard ?? null,
         importMetadata: {
             hasSideboard: false,
             sideboardCount: 0,

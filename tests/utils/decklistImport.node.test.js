@@ -5,7 +5,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { parseDecklistText } from '../../js/utils/decklistImport.js';
+import { parseDecklistText, toCommanderCard, importDeckFromUrl } from '../../js/utils/decklistImport.js';
 import { budget, medianMs } from '../helpers/timing.js';
 
 describe('Decklist Import - parseDecklistText', () => {
@@ -394,5 +394,79 @@ describe('Decklist Import - Security', () => {
 
             assert.ok(duration < budget(50), 'Should reject many lines quickly (< 50ms)');
         });
+    });
+});
+
+describe('Decklist Import - commander record', () => {
+    it('builds a record from a Scryfall card, front face for double-faced cards', () => {
+        const card = toCommanderCard({
+            object: 'card', id: 'c045ccb2-28d1-4bbe-9feb-3e86988fd24d', name: 'Esika, God of the Tree // The Prismatic Bridge',
+            cmc: 3, color_identity: ['W', 'U', 'B', 'R', 'G'],
+            card_faces: [
+                { name: 'Esika, God of the Tree', mana_cost: '{1}{G}{G}', type_line: 'Legendary Creature — God', oracle_text: 'Vigilance', power: '1', toughness: '4', colors: ['G'] },
+                { name: 'The Prismatic Bridge', mana_cost: '{W}{U}{B}{R}{G}', type_line: 'Legendary Enchantment' }
+            ]
+        });
+        assert.strictEqual(card.mana_cost, '{1}{G}{G}');
+        assert.strictEqual(card.type_line, 'Legendary Creature — God');
+        assert.strictEqual(card.cmc, 3);
+        assert.strictEqual(card.count, 1);
+        assert.strictEqual(card.category, 'creatures');
+        assert.deepStrictEqual(card.colors, ['G']);
+        assert.deepStrictEqual(card.color_identity, ['W', 'U', 'B', 'R', 'G']);
+        assert.strictEqual(card.scryfall_id, 'c045ccb2-28d1-4bbe-9feb-3e86988fd24d');
+    });
+
+    it('reads Moxfield and Archidekt shapes', () => {
+        const mox = toCommanderCard({
+            name: 'The Sixth Doctor', mana_cost: '{4}{G}{U}', cmc: 6, type_line: 'Legendary Creature — Time Lord Doctor',
+            oracle_text: 'Copy historic spells.', color_identity: ['G', 'U'], scryfall_id: 'c045ccb2-28d1-4bbe-9feb-3e86988fd24d'
+        });
+        assert.strictEqual(mox.mana_cost, '{4}{G}{U}');
+        assert.deepStrictEqual(mox.color_identity, ['G', 'U']);
+
+        const archi = toCommanderCard({
+            name: 'Azusa, Lost but Seeking', manaCost: '{2}{G}', cmc: 3, text: 'You may play two additional lands on each of your turns.',
+            superTypes: ['Legendary'], types: ['Creature'], subTypes: ['Human', 'Monk'], colorIdentity: ['Green'],
+            scryfallId: 'c045ccb2-28d1-4bbe-9feb-3e86988fd24d'
+        });
+        assert.strictEqual(archi.type_line, 'Legendary Creature — Human Monk');
+        assert.strictEqual(archi.mana_cost, '{2}{G}');
+        assert.match(archi.oracle_text, /two additional lands/);
+        assert.deepStrictEqual(archi.color_identity, ['G']);
+    });
+
+    it('returns null when there is nothing to build from', () => {
+        assert.strictEqual(toCommanderCard(null), null);
+        assert.strictEqual(toCommanderCard({ name: 'Mystery' }), null);
+        assert.strictEqual(toCommanderCard({ type_line: 'Creature' }), null);
+    });
+
+    it('keeps the commander record on a Moxfield import', async () => {
+        const deck = {
+            name: 'Doctor',
+            boards: {
+                commanders: { cards: { a: { quantity: 1, card: {
+                    name: 'The Sixth Doctor', mana_cost: '{4}{G}{U}', cmc: 6, type_line: 'Legendary Creature — Time Lord Doctor',
+                    oracle_text: 'Copy historic spells.', color_identity: ['G', 'U'], scryfall_id: 'c045ccb2-28d1-4bbe-9feb-3e86988fd24d'
+                } } } },
+                mainboard: { cards: {
+                    f: { quantity: 30, card: { name: 'Forest', cmc: 0, type_line: 'Basic Land — Forest', oracle_text: '({T}: Add {G}.)' } },
+                    s: { quantity: 1, card: { name: 'Sol Ring', cmc: 1, mana_cost: '{1}', type_line: 'Artifact', oracle_text: '{T}: Add {C}{C}.' } }
+                } }
+            }
+        };
+        const realFetch = globalThis.fetch;
+        globalThis.fetch = async () => ({ ok: true, json: async () => deck });
+        try {
+            const result = await importDeckFromUrl('https://moxfield.com/decks/abcdefgh12');
+            assert.strictEqual(result.commanderName, 'The Sixth Doctor');
+            assert.strictEqual(result.commanderCard.mana_cost, '{4}{G}{U}');
+            assert.strictEqual(result.commanderCard.cmc, 6);
+            assert.strictEqual(result.cardsByName['The Sixth Doctor'], undefined, 'the commander stays out of the library');
+            assert.strictEqual(result.actualCardCount, 31);
+        } finally {
+            globalThis.fetch = realFetch;
+        }
     });
 });
