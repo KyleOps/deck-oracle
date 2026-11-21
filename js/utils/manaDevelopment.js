@@ -435,6 +435,15 @@ export function describeRamp(r) {
 
 // ── Library ──────────────────────────────────────────────────────────────────
 
+/** When the simulator casts a card: bit 1 always (modelled ramp), bit 2 with Treasure on. */
+const USE_RAMP = 1;
+const USE_TREASURE = 2;
+
+function rampUseOf(info) {
+    if (!info) return 0;
+    return (info.modelled ? USE_RAMP : 0) | (info.treasure > 0 ? USE_TREASURE : 0);
+}
+
 /**
  * Attach land and ramp behaviour to a lab card. Every card gets every field,
  * in the same order, so the simulator's hot loops see one object shape.
@@ -452,6 +461,9 @@ function annotate(lab, card, identity, multiplayer) {
     lab.typeBits = l ? typeLineBits(lab.typeLine) : 0;
     lab.lbounce = l ? l.bounce : false;
     lab.basic = Boolean(l) && /\bbasic\b/.test(lab.types);
+    lab.pipUnion = lab.pips.reduce((m, p) => m | p, 0);
+    lab.fmatch = 0; // land searches it satisfies (set per library, see assignSearchSlots)
+    lab.rampUse = rampUseOf(lab.rampInfo);
     return lab;
 }
 
@@ -513,11 +525,14 @@ export function buildManaLibrary(deck = {}, { format, commanders, commanderCards
         for (let i = 0; i < copies; i++) cards.push({ ...proto, uid: uid++ });
     }
     const ramp = [...rampByName.values()];
+    const searches = assignSearchSlots(ramp, cards);
     return {
         cards,
         identity,
         idMask: maskOf(identity),
         ramp,
+        searchSlot: searches.slots,
+        searchMasks: searches.masks,
         landCount: cards.filter(c => c.land).length,
         target: chooseTarget({ commanderCards: zone, cards, identity }),
         placeholder: false,
@@ -531,10 +546,11 @@ export function buildCountsLibrary(counts = {}) {
     const built = buildPlaceholderLibrary(counts);
     const cards = built.cards.map(c => ({
         ...c, types: String(c.typeLine).toLowerCase(), generic: 0, rampInfo: null, rampIndex: -1,
-        lmana: c.land ? 1 : 0, ltap: TAP.UNTAPPED, lcheck: null, lcheckBits: 0, typeBits: 0, lbounce: false, basic: c.land
+        lmana: c.land ? 1 : 0, ltap: TAP.UNTAPPED, lcheck: null, lcheckBits: 0, typeBits: 0, lbounce: false, basic: c.land,
+        pipUnion: 0, fmatch: 0, rampUse: 0
     }));
     return {
-        cards, identity: [], idMask: 0, ramp: [], landCount: cards.filter(c => c.land).length,
+        cards, identity: [], idMask: 0, ramp: [], searchSlot: new Int8Array(0), searchMasks: [], landCount: cards.filter(c => c.land).length,
         target: null, placeholder: true, commanders: [], key: `counts:${libraryKey(cards)}`
     };
 }
@@ -653,6 +669,14 @@ function pay(card, extra = 0, commit = false) {
 }
 
 // ── One game ────────────────────────────────────────────────────────────────
+//
+// The engine keeps everything a game needs in one reusable Game object (typed
+// arrays and fixed-size arrays sized to the library), so playing a game
+// allocates nothing unless it is logged. The library is never copied or
+// spliced: a land search marks its position as taken, and per-search running
+// counts of the lands still in the library answer "how many can this find?"
+// without a scan. The rules are exactly those of the engine this replaced —
+// tests/utils/manaDevelopmentEngine.node.test.js plays both on the same seeds.
 
 /**
  * Deal and mulligan (London, the Opening Hands keep rule). At four cards the
@@ -680,16 +704,34 @@ export function dealOpeningHand(cards, rng, { freeMulligan = false, idx = null }
     }
 }
 
-function landEntersTapped(card, lands) {
-    switch (card.ltap) {
-        case TAP.TAPPED: return true;
-        case TAP.FAST: return lands.length > 2;
-        case TAP.SLOW: return lands.length < 2;
-        case TAP.CHECK: {
-            for (let i = 0; i < lands.length; i++) if (lands[i].card.typeBits & card.lcheckBits) return false;
-            return true;
+/**
+ * dealOpeningHand() into the run's own buffers (no allocation on a keep of
+ * seven). Same shuffles, same keep rule, same library order.
+ * @returns {number} mulligans taken
+ */
+function dealInto(run) {
+    const cards = run.cards;
+    const N = cards.length;
+    const ord = run.idx;
+    for (let i = 0; i < N; i++) ord[i] = i;
+    const free = run.freeMulligan ? 1 : 0;
+    const seven = run.seven;
+    for (let m = 0; ; m++) {
+        shuffle(ord, run.rng);
+        for (let i = 0; i < OPENING_HAND; i++) seven[i] = cards[ord[i]];
+        const owed = Math.max(0, m - free);
+        let keep = seven;
+        let bottom = null;
+        if (owed > 0) ({ keep, bottom } = chooseBottom(seven, owed, DEFAULT_RULE));
+        if (OPENING_HAND - owed <= MIN_HAND || meetsRule(keep, DEFAULT_RULE, false)) {
+            for (let i = 0; i < keep.length; i++) run.dealHand[i] = keep[i];
+            run.dealHandLen = keep.length;
+            let k = 0;
+            for (let i = OPENING_HAND; i < N; i++) run.dealLib[k++] = cards[ord[i]];
+            if (bottom) for (let i = 0; i < bottom.length; i++) run.dealLib[k++] = bottom[i];
+            run.dealLibLen = k;
+            return m;
         }
-        default: return false;
     }
 }
 
@@ -701,287 +743,662 @@ function landMatches(card, r) {
     return true;
 }
 
+/** Most distinct land searches tracked with running counts (one bit each). */
+const MAX_SEARCHES = 30;
+
 /**
- * Play one goldfish game from a dealt hand.
- * @param {Object} run - simulator settings (see createRun)
- * @param {Object[]} hand0
- * @param {Object[]} library0
- * @param {boolean} rampOn - false: every ramp card is a blank (lands only)
- * @param {Object|null} log - collects a turn-by-turn record when given
- * @returns {{mana:Uint8Array, targetTurn:number, firstCast:Int8Array|null, firstSeen:Int8Array|null}}
+ * Give each distinct land search in a library ("basic land", "Forest", any
+ * land …) a slot, and each card a bit mask of the searches it satisfies, so
+ * the engine can keep a running count per search instead of scanning. Each
+ * search also lists the colour masks of the lands it can find: the best score
+ * among them is a ceiling that lets a search stop at the first land reaching it.
+ * @param {Array<{info:Object}>} ramp - the library's ramp list
+ * @param {Object[]} cards - simulator cards (their `fmatch` is set here)
+ * @returns {{slots:Int8Array, masks:Int32Array[]}} slot per ramp entry (-1 = no
+ *   land search, or too many to track) and the land colour masks per slot
  */
-function playGame(run, hand0, library0, rampOn, log) {
-    const T = SIM_TURNS;
-    const target = run.target?.card ?? null;
-    const targetPips = target ? target.pips.reduce((m, p) => m | p, 0) : 0;
-    const hand = hand0.slice();
-    const library = library0.slice();
-    let top = 0;
-    const lands = [];   // { card, ready }  ready = first turn it can tap
-    const sources = []; // { info, ready }
-    let extraDrops = 0;
-    let fromTop = false;
-    let treasures = 0;
-    let targetTurn = 0;
-    let t = 0;
-    let drops = 0;
-    let dropsUsed = 0;
-    let floating = 0;      // a karoo's bounced land: you tap it before it leaves
-    let floatingMask = 0;
-    let entry = null;
-    const mana = new Uint8Array(T + 1);
-    const rampCount = run.rampCount;
-    const firstCast = rampOn && rampCount ? new Int8Array(rampCount) : null;
-    const firstSeen = rampCount ? new Int8Array(rampCount) : null;
-    const treasureOn = run.treasure;
-
-    const seen = c => {
-        if (firstSeen && c.rampIndex >= 0 && !firstSeen[c.rampIndex]) firstSeen[c.rampIndex] = t;
-    };
-    const usable = c => c.rampInfo !== null && (c.rampInfo.modelled || (treasureOn && c.rampInfo.treasure > 0));
-    const landMask = () => {
+function assignSearchSlots(ramp, cards) {
+    const searches = [];
+    const slots = new Int8Array(ramp.length).fill(-1);
+    ramp.forEach((r, i) => {
+        const info = r.info;
+        if (!(info.lands || info.toHand)) return;
+        let s = searches.findIndex(f => f.filterKind === info.filterKind && f.filterBits === info.filterBits);
+        if (s < 0 && searches.length < MAX_SEARCHES) {
+            s = searches.length;
+            searches.push({ filterKind: info.filterKind, filterBits: info.filterBits });
+        }
+        slots[i] = s;
+    });
+    const masks = searches.map(() => new Set());
+    for (const c of cards) {
         let m = 0;
-        for (let i = 0; i < lands.length; i++) m |= lands[i].card.mask;
-        return m;
-    };
-    const neededColours = () => {
-        let need = targetPips;
-        for (let i = 0; i < hand.length; i++) {
-            const pips = hand[i].pips;
-            for (let k = 0; k < pips.length; k++) need |= pips[k];
+        for (let s = 0; s < searches.length; s++) {
+            if (!landMatches(c, searches[s])) continue;
+            m |= 1 << s;
+            masks[s].add(c.mask);
         }
-        return need;
-    };
-    const readyMana = () => {
-        let n = treasures + floating;
-        for (let i = 0; i < lands.length; i++) if (lands[i].ready <= t) n += lands[i].card.lmana;
-        for (let i = 0; i < sources.length; i++) if (sources[i].ready <= t) n += sources[i].info.mana;
-        return n;
-    };
-    const putOntoBattlefield = (card, tapped) => {
-        const rec = { card, ready: tapped ? t + 1 : t };
-        lands.push(rec);
-        return rec;
-    };
+        c.fmatch = m;
+    }
+    return { slots, masks: masks.map(set => Int32Array.from(set)) };
+}
 
-    /** Play one land from hand (or the top of the library). Returns its record or null. */
-    const playLand = () => {
-        const topCard = fromTop && top < library.length && library[top].land ? library[top] : null;
-        let any = topCard !== null;
-        let bump = topCard && !landEntersTapped(topCard, lands) && !topCard.lbounce ? topCard.lmana : 0;
-        for (let i = 0; i < hand.length; i++) {
-            const c = hand[i];
-            if (!c.land) continue;
-            any = true;
-            if (!c.lbounce && !landEntersTapped(c, lands) && c.lmana > bump) bump = c.lmana;
-        }
-        if (!any) return null;
-        // Does an untapped land's mana let you cast something this turn? If
-        // not, a tapped land costs nothing — play it now and save the other.
-        let matters = false;
-        if (bump > 0) {
-            const cap0 = readyMana();
-            const hi = cap0 + bump;
-            if (target && !targetTurn && target.playMv > cap0 && target.playMv <= hi) matters = true;
-            for (let i = 0; i < hand.length && !matters; i++) {
-                const mv = hand[i].playMv;
-                if (!hand[i].land && mv != null && mv > cap0 && mv <= hi) matters = true;
-            }
-        }
-        const have = landMask();
-        const need = neededColours();
-        let best = null;
-        let bestScore = -Infinity;
-        const consider = c => {
-            if (c.lbounce && lands.length === 0) return; // would bounce itself
-            const tapped = c.lbounce || landEntersTapped(c, lands);
-            const fresh = c.mask & ~have;
-            const score = ((tapped ? !matters : matters) ? 100000 : 0)
-                + c.lmana * 1000 + BITS[fresh & need] * 100 + BITS[fresh] * 10 + BITS[c.mask]
-                + (c === topCard ? 1 : 0); // a free card off the top beats one from hand
-            if (score > bestScore) { best = c; bestScore = score; }
-        };
-        for (let i = 0; i < hand.length; i++) if (hand[i].land) consider(hand[i]);
-        if (topCard) consider(topCard);
-        if (!best) return null;
-        if (best === topCard) top++;
-        else hand.splice(hand.indexOf(best), 1);
-        const rec = putOntoBattlefield(best, best.lbounce || landEntersTapped(best, lands));
-        if (best.lbounce) {
-            // Return the least useful other land — after tapping it for mana.
-            let back = -1;
-            let backScore = Infinity;
-            for (let i = 0; i < lands.length - 1; i++) {
-                const s = BITS[lands[i].card.mask] * 10 + lands[i].card.lmana;
-                if (s < backScore) { back = i; backScore = s; }
-            }
-            const gone = lands.splice(back, 1)[0];
-            if (gone.ready <= t) { floating += gone.card.lmana; floatingMask |= gone.card.mask; }
-            hand.push(gone.card);
-        }
-        if (entry) entry.lands.push(best.name);
-        return rec;
+/** Index of the lowest set bit. */
+const lowBit = m => 31 - Math.clz32(m & -m);
+
+/**
+ * Everything one game changes, allocated once per run and reset per game.
+ * Zones are arrays with explicit lengths; removing from one shifts the rest
+ * down, so the order every rule iterates in is the order cards arrived.
+ */
+class Game {
+    constructor(size) {
+        const n = Math.max(0, size) + 16;
+        this.hand = new Array(n).fill(null);
+        this.handLen = 0;
+        this.useMask = USE_RAMP; // which cards the simulator casts (see rampUseOf)
+        this.rampInHand = 0;     // castable ramp cards in hand
+        this.lib = null;       // the dealt library, read-only
+        this.libLen = 0;
+        this.taken = new Uint8Array(n); // library positions a search took
+        this.top = 0;                   // next card to draw: never a taken position
+        this.found = new Int32Array(MAX_SEARCHES); // lands left in the library, per search
+        this.landCard = new Array(n).fill(null);
+        this.landReady = new Int16Array(n); // first turn each land can tap
+        this.landLen = 0;
+        this.landMask = 0;  // colours the lands in play make
+        this.landTypes = 0; // basic land types in play (check lands)
+        this.srcMana = new Int32Array(n);
+        this.srcMask = new Int32Array(n);
+        this.srcReady = new Int16Array(n);
+        this.srcLen = 0;
+        this.t = 0;
+        this.extraDrops = 0;
+        this.drops = 0;
+        this.dropsUsed = 0;
+        this.fromTop = false;
+        this.treasures = 0;
+        this.floating = 0;      // a karoo's bounced land: you tap it before it leaves
+        this.floatingMask = 0;
+        this.targetTurn = 0;
+        this.lastCard = null;   // the land playLand() just played
+        this.entry = null;
+        this.firstCast = null;
+        this.firstSeen = null;
+    }
+}
+
+/** Per-game results, reused: the run records them before the next game. */
+function newOutcome(rampCount) {
+    return {
+        mana: new Uint8Array(SIM_TURNS + 1),
+        targetTurn: 0,
+        firstCast: new Int8Array(rampCount),
+        firstSeen: new Int8Array(rampCount)
     };
+}
 
-    const checkTarget = () => {
-        if (target && !targetTurn && pay(target) >= 0) {
-            targetTurn = t;
-            if (entry) entry.target = true;
-        }
-    };
+function handPush(g, c) {
+    g.hand[g.handLen++] = c;
+    if (c.rampUse & g.useMask) g.rampInHand++;
+}
 
-    /** Fetch n lands matching the ramp card's filter, colours you need first. */
-    const fetchLands = (r, n, toBattlefield, notes) => {
-        for (let k = 0; k < n; k++) {
-            const have = landMask();
-            const need = neededColours();
-            let bi = -1;
-            let bs = -1;
-            for (let i = top; i < library.length; i++) {
-                const c = library[i];
-                if (!landMatches(c, r)) continue;
-                const fresh = c.mask & ~have;
-                const s = BITS[fresh & need] * 100 + BITS[fresh] * 10 + BITS[c.mask];
-                if (s > bs) { bs = s; bi = i; }
-            }
-            if (bi < 0) return;
-            const c = library.splice(bi, 1)[0];
-            if (toBattlefield) {
-                const tapped = r.landsTapped || c.ltap === TAP.TAPPED || c.lbounce;
-                putOntoBattlefield(c, tapped);
-                if (!tapped) poolAdd(c.mask, c.lmana);
-                notes.push(c.name);
-            } else {
-                hand.push(c);
-                notes.push(`${c.name} to hand`);
-            }
-        }
-    };
+function handRemoveAt(g, i) {
+    const hand = g.hand;
+    if (hand[i].rampUse & g.useMask) g.rampInHand--;
+    const n = --g.handLen;
+    for (let k = i; k < n; k++) hand[k] = hand[k + 1];
+    hand[n] = null;
+}
 
-    /** Cast the best ramp piece you can afford. Returns false when nothing fits. */
-    const castRamp = () => {
-        let pick = null;
-        let pickScore = -Infinity;
-        let landInHand = false;
-        for (let i = 0; i < hand.length; i++) if (hand[i].land) { landInHand = true; break; }
-        for (let i = 0; i < hand.length; i++) {
-            const c = hand[i];
-            if (c.land || !usable(c)) continue;
-            const r = c.rampInfo;
-            let value = r.mana;
-            if (r.lands || r.toHand) {
-                const want = r.lands + r.toHand;
-                let available = 0;
-                for (let j = top; j < library.length && available < want; j++) if (landMatches(library[j], r)) available++;
-                if (available === 0) continue;
-                value += Math.min(r.lands, available) + Math.max(0, Math.min(r.toHand, available - r.lands)) * 0.5;
-            }
-            if (r.extraDrops) value += 0.6 * r.extraDrops;
-            if (r.fromTop && !fromTop) value += 0.3;
-            if (r.extraDropsOnce && landInHand && dropsUsed >= drops) value += 0.8;
-            if (r.putLand && landInHand) value += 0.8;
-            if (treasureOn && r.treasure) value += 0.5 * r.treasure;
-            value -= r.sacrificeLand;
-            if (value <= 0) continue;
-            const cost = c.playMv + r.extraCost;
-            const now = (r.mana && r.ready === 'now' ? r.mana : 0) + (r.lands && !r.landsTapped ? r.lands : 0) - cost;
-            // Pieces that pay for themselves this turn first (Sol Ring), then
-            // the most mana gained, then the cheapest.
-            const score = (now >= 0 ? 1e6 : 0) + Math.round(value * 100) * 100 - cost;
-            if (score <= pickScore) continue;
-            if (pay(c, r.extraCost) < 0) continue;
-            pick = c;
-            pickScore = score;
-        }
-        if (!pick) return false;
-        const r = pick.rampInfo;
-        treasures -= pay(pick, r.extraCost, true);
-        hand.splice(hand.indexOf(pick), 1);
-        if (firstCast && pick.rampIndex >= 0 && !firstCast[pick.rampIndex]) firstCast[pick.rampIndex] = t;
-        const notes = [];
-        if (r.mana) {
-            const ready = r.ready === 'now' ? t : t + 1;
-            sources.push({ info: r, ready });
-            if (ready <= t) poolAdd(r.mask, r.mana);
-        }
-        if (r.sacrificeLand && lands.length) {
-            let worst = 0;
-            for (let i = 1; i < lands.length; i++) if (BITS[lands[i].card.mask] < BITS[lands[worst].card.mask]) worst = i;
-            lands.splice(worst, 1);
-        }
-        if (r.lands) fetchLands(r, r.lands, true, notes);
-        if (r.toHand) fetchLands(r, r.toHand, false, notes);
-        if (r.extraDrops) { extraDrops += r.extraDrops; drops += r.extraDrops; }
-        if (r.extraDropsOnce) drops += r.extraDropsOnce;
-        if (r.fromTop) fromTop = true;
-        if (r.putLand) {
-            const c = hand.find(x => x.land);
-            if (c) {
-                hand.splice(hand.indexOf(c), 1);
-                const tapped = c.lbounce || landEntersTapped(c, lands);
-                putOntoBattlefield(c, tapped);
-                if (!tapped) poolAdd(c.mask, c.lmana);
-                notes.push(c.name);
-            }
-        }
-        if (treasureOn && r.treasure) {
-            treasures += r.treasure;
-            poolAdd(run.idMask, r.treasure, 1);
-        }
-        for (let k = 0; k < r.draws && top < library.length; k++) {
-            const c = library[top++];
-            hand.push(c);
-            seen(c);
-        }
-        if (entry) entry.cast.push({ name: pick.name, notes });
-        return true;
-    };
+function seen(g, c) {
+    if (g.firstSeen && c.rampIndex >= 0 && !g.firstSeen[c.rampIndex]) g.firstSeen[c.rampIndex] = g.t;
+}
 
-    t = 1;
-    for (const c of hand) seen(c);
-    for (t = 1; t <= T; t++) {
-        entry = log ? { turn: t, drew: null, lands: [], cast: [], mana: 0, colors: 0, target: false, landsInPlay: 0 } : null;
-        floating = 0;
-        floatingMask = 0;
-        if (!(t === 1 && run.skipFirstDraw) && top < library.length) {
-            const c = library[top++];
-            hand.push(c);
-            seen(c);
-            if (entry) entry.drew = c.name;
-        }
-        drops = 1 + extraDrops;
-        dropsUsed = 0;
-        while (dropsUsed < drops && playLand()) dropsUsed++;
+/** Take a card out of the library's search counts. */
+function uncount(g, c) {
+    for (let m = c.fmatch; m; m &= m - 1) g.found[lowBit(m)]--;
+}
 
-        // The pool: everything that can tap now.
-        poolReset();
-        for (let i = 0; i < lands.length; i++) if (lands[i].ready <= t) poolAdd(lands[i].card.mask, lands[i].card.lmana);
-        for (let i = 0; i < sources.length; i++) if (sources[i].ready <= t) poolAdd(sources[i].info.mask, sources[i].info.mana);
-        if (floating) poolAdd(floatingMask, floating);
-        if (treasures) poolAdd(run.idMask, treasures, 1);
-        mana[t] = Math.min(MAX_MANA, poolSize);
-        if (entry) { entry.mana = poolSize; entry.colors = poolUnion; }
-        checkTarget();
+function nextFree(g, i) {
+    const len = g.libLen;
+    const taken = g.taken;
+    while (i < len && taken[i]) i++;
+    return i;
+}
 
-        if (rampOn) {
-            for (let guard = 0; guard < 20 && castRamp(); guard++) {
-                // Lands found or freed up by the ramp can still be played this turn.
-                while (dropsUsed < drops) {
-                    const rec = playLand();
-                    if (!rec) break;
-                    dropsUsed++;
-                    if (rec.ready <= t) poolAdd(rec.card.mask, rec.card.lmana);
-                }
-                checkTarget();
-            }
-        }
-        treasures = Math.max(0, treasures);
-        if (entry) {
-            entry.landsInPlay = lands.length;
-            log.turns.push(entry);
+/** Draw the top card of the library (callers check g.top < g.libLen). */
+function drawTop(g) {
+    const c = g.lib[g.top];
+    uncount(g, c);
+    g.top = nextFree(g, g.top + 1);
+    return c;
+}
+
+/** Take the card at library position i (a land search). */
+function takeAt(g, i) {
+    g.taken[i] = 1;
+    uncount(g, g.lib[i]);
+    if (i === g.top) g.top = nextFree(g, i + 1);
+}
+
+function putLand(g, card, tapped) {
+    const i = g.landLen++;
+    g.landCard[i] = card;
+    g.landReady[i] = tapped ? g.t + 1 : g.t;
+    g.landMask |= card.mask;
+    g.landTypes |= card.typeBits;
+}
+
+function removeLandAt(g, i) {
+    const n = --g.landLen;
+    for (let k = i; k < n; k++) {
+        g.landCard[k] = g.landCard[k + 1];
+        g.landReady[k] = g.landReady[k + 1];
+    }
+    g.landCard[n] = null;
+    let mask = 0;
+    let types = 0;
+    for (let k = 0; k < n; k++) {
+        mask |= g.landCard[k].mask;
+        types |= g.landCard[k].typeBits;
+    }
+    g.landMask = mask;
+    g.landTypes = types;
+}
+
+function entersTapped(g, card) {
+    switch (card.ltap) {
+        case TAP.TAPPED: return true;
+        case TAP.FAST: return g.landLen > 2;
+        case TAP.SLOW: return g.landLen < 2;
+        case TAP.CHECK: return (g.landTypes & card.lcheckBits) === 0;
+        default: return false;
+    }
+}
+
+function neededColours(run, g) {
+    let need = run.targetPips;
+    const hand = g.hand;
+    for (let i = 0; i < g.handLen; i++) need |= hand[i].pipUnion;
+    return need;
+}
+
+/** Mana the permanents in play (plus Treasure and floating mana) can make this turn. */
+function readyMana(g) {
+    const t = g.t;
+    let n = g.treasures + g.floating;
+    for (let i = 0; i < g.landLen; i++) if (g.landReady[i] <= t) n += g.landCard[i].lmana;
+    for (let i = 0; i < g.srcLen; i++) if (g.srcReady[i] <= t) n += g.srcMana[i];
+    return n;
+}
+
+function landScore(g, c, matters, have, need) {
+    const tapped = c.lbounce || entersTapped(g, c);
+    const fresh = c.mask & ~have;
+    return ((tapped ? !matters : matters) ? 100000 : 0)
+        + c.lmana * 1000 + BITS[fresh & need] * 100 + BITS[fresh] * 10 + BITS[c.mask];
+}
+
+/**
+ * Play one land from hand (or the top of the library).
+ * @returns {number} 0 none, 1 played (not ready this turn), 2 played and ready
+ */
+function playLand(run, g) {
+    const hand = g.hand;
+    const n = g.handLen;
+    const topCard = g.fromTop && g.top < g.libLen && g.lib[g.top].land ? g.lib[g.top] : null;
+    let any = topCard !== null;
+    let bump = topCard && !entersTapped(g, topCard) && !topCard.lbounce ? topCard.lmana : 0;
+    for (let i = 0; i < n; i++) {
+        const c = hand[i];
+        if (!c.land) continue;
+        any = true;
+        if (!c.lbounce && !entersTapped(g, c) && c.lmana > bump) bump = c.lmana;
+    }
+    if (!any) return 0;
+    // Does an untapped land's mana let you cast something this turn? If
+    // not, a tapped land costs nothing — play it now and save the other.
+    let matters = false;
+    if (bump > 0) {
+        const cap0 = readyMana(g);
+        const hi = cap0 + bump;
+        const target = run.targetCard;
+        if (target && !g.targetTurn && target.playMv > cap0 && target.playMv <= hi) matters = true;
+        for (let i = 0; i < n && !matters; i++) {
+            const mv = hand[i].playMv;
+            if (!hand[i].land && mv != null && mv > cap0 && mv <= hi) matters = true;
         }
     }
-    return { mana, targetTurn, firstCast, firstSeen };
+    const have = g.landMask;
+    const need = neededColours(run, g);
+    let best = null;
+    let bestAt = -1;
+    let bestScore = -Infinity;
+    for (let i = 0; i < n; i++) {
+        const c = hand[i];
+        if (!c.land || (c.lbounce && g.landLen === 0)) continue; // a karoo would bounce itself
+        const score = landScore(g, c, matters, have, need);
+        if (score > bestScore) { best = c; bestAt = i; bestScore = score; }
+    }
+    // A free card off the top beats one from hand.
+    if (topCard && !(topCard.lbounce && g.landLen === 0) && landScore(g, topCard, matters, have, need) + 1 > bestScore) {
+        best = topCard;
+        bestAt = -1;
+    }
+    if (!best) return 0;
+    const tapped = best.lbounce || entersTapped(g, best);
+    if (bestAt < 0) drawTop(g);
+    else handRemoveAt(g, bestAt);
+    putLand(g, best, tapped);
+    if (best.lbounce) {
+        // Return the least useful other land — after tapping it for mana.
+        let back = -1;
+        let backScore = Infinity;
+        for (let i = 0; i < g.landLen - 1; i++) {
+            const s = BITS[g.landCard[i].mask] * 10 + g.landCard[i].lmana;
+            if (s < backScore) { back = i; backScore = s; }
+        }
+        const gone = g.landCard[back];
+        if (g.landReady[back] <= g.t) { g.floating += gone.lmana; g.floatingMask |= gone.mask; }
+        removeLandAt(g, back);
+        handPush(g, gone);
+    }
+    if (g.entry) g.entry.lands.push(best.name);
+    g.lastCard = best;
+    return tapped ? 1 : 2;
+}
+
+function checkTarget(run, g) {
+    if (run.targetCard && !g.targetTurn && pay(run.targetCard) >= 0) {
+        g.targetTurn = g.t;
+        if (g.entry) g.entry.target = true;
+    }
+}
+
+/** The running-count slot of a ramp card's land search (-1: scan instead). */
+function searchSlot(run, card) {
+    return run.searchSlot && card.rampIndex >= 0 ? run.searchSlot[card.rampIndex] : -1;
+}
+
+/** How much a search wants a land of these colours: new colours you need, new colours, colours. */
+function fetchScore(mask, have, need) {
+    const fresh = mask & ~have;
+    return BITS[fresh & need] * 100 + BITS[fresh] * 10 + BITS[mask];
+}
+
+/**
+ * Fetch n lands matching the ramp card's search, colours you need first; the
+ * first (topmost) of the best-scoring lands. A tracked search stops scanning
+ * at a land that scores the ceiling: nothing further down can beat it.
+ */
+function fetchLands(run, g, r, slot, n, toBattlefield, notes) {
+    const lib = g.lib;
+    const taken = g.taken;
+    const len = g.libLen;
+    for (let k = 0; k < n; k++) {
+        if (slot >= 0 && g.found[slot] === 0) return;
+        const have = g.landMask;
+        const need = neededColours(run, g);
+        const bit = slot >= 0 ? 1 << slot : 0;
+        let ceiling = Infinity;
+        if (slot >= 0) {
+            ceiling = -1;
+            const masks = run.searchMasks[slot];
+            for (let j = 0; j < masks.length; j++) ceiling = Math.max(ceiling, fetchScore(masks[j], have, need));
+        }
+        let bi = -1;
+        let bs = -1;
+        for (let i = g.top; i < len; i++) {
+            if (taken[i]) continue;
+            const c = lib[i];
+            if (slot >= 0 ? !(c.fmatch & bit) : !landMatches(c, r)) continue;
+            const s = fetchScore(c.mask, have, need);
+            if (s > bs) {
+                bs = s;
+                bi = i;
+                if (s === ceiling) break;
+            }
+        }
+        if (bi < 0) return;
+        const c = lib[bi];
+        takeAt(g, bi);
+        if (toBattlefield) {
+            const tapped = r.landsTapped || c.ltap === TAP.TAPPED || c.lbounce;
+            putLand(g, c, tapped);
+            if (!tapped) poolAdd(c.mask, c.lmana);
+            if (notes) notes.push(c.name);
+        } else {
+            handPush(g, c);
+            if (notes) notes.push(`${c.name} to hand`);
+        }
+    }
+}
+
+/** Lands a search could still find, up to `want`. */
+function landsAvailable(g, r, slot, want) {
+    if (slot >= 0) return Math.min(want, g.found[slot]);
+    let available = 0;
+    for (let j = g.top; j < g.libLen && available < want; j++) if (!g.taken[j] && landMatches(g.lib[j], r)) available++;
+    return available;
+}
+
+/**
+ * The ramp piece to cast next: pieces that pay for themselves this turn first
+ * (Sol Ring), then the most mana gained, then the cheapest — among those the
+ * pool can pay for. Reads the game, changes nothing.
+ * @returns {number} its index in hand, or -1 when nothing fits
+ */
+function pickRamp(run, g) {
+    if (g.rampInHand === 0) return -1;
+    const hand = g.hand;
+    const n = g.handLen;
+    const treasureOn = run.treasure;
+    const use = g.useMask;
+    let pickAt = -1;
+    let pickScore = -Infinity;
+    let landInHand = false;
+    for (let i = 0; i < n; i++) if (hand[i].land) { landInHand = true; break; }
+    for (let i = 0; i < n; i++) {
+        const c = hand[i];
+        if (!(c.rampUse & use)) continue;
+        const r = c.rampInfo;
+        let value = r.mana;
+        if (r.lands || r.toHand) {
+            const available = landsAvailable(g, r, searchSlot(run, c), r.lands + r.toHand);
+            if (available === 0) continue;
+            value += Math.min(r.lands, available) + Math.max(0, Math.min(r.toHand, available - r.lands)) * 0.5;
+        }
+        if (r.extraDrops) value += 0.6 * r.extraDrops;
+        if (r.fromTop && !g.fromTop) value += 0.3;
+        if (r.extraDropsOnce && landInHand && g.dropsUsed >= g.drops) value += 0.8;
+        if (r.putLand && landInHand) value += 0.8;
+        if (treasureOn && r.treasure) value += 0.5 * r.treasure;
+        value -= r.sacrificeLand;
+        if (value <= 0) continue;
+        const cost = c.playMv + r.extraCost;
+        const now = (r.mana && r.ready === 'now' ? r.mana : 0) + (r.lands && !r.landsTapped ? r.lands : 0) - cost;
+        const score = (now >= 0 ? 1e6 : 0) + Math.round(value * 100) * 100 - cost;
+        if (score <= pickScore) continue;
+        if (pay(c, r.extraCost) < 0) continue;
+        pickAt = i;
+        pickScore = score;
+    }
+    return pickAt;
+}
+
+/** Cast the ramp piece at hand index `at` (from pickRamp) and resolve it. */
+function castRamp(run, g, at) {
+    const hand = g.hand;
+    const pick = hand[at];
+    const r = pick.rampInfo;
+    const t = g.t;
+    g.treasures -= pay(pick, r.extraCost, true);
+    handRemoveAt(g, at);
+    if (g.firstCast && pick.rampIndex >= 0 && !g.firstCast[pick.rampIndex]) g.firstCast[pick.rampIndex] = t;
+    const notes = g.entry ? [] : null;
+    if (r.mana) {
+        const ready = r.ready === 'now' ? t : t + 1;
+        const s = g.srcLen++;
+        g.srcMana[s] = r.mana;
+        g.srcMask[s] = r.mask;
+        g.srcReady[s] = ready;
+        if (ready <= t) poolAdd(r.mask, r.mana);
+    }
+    if (r.sacrificeLand && g.landLen) {
+        let worst = 0;
+        for (let i = 1; i < g.landLen; i++) if (BITS[g.landCard[i].mask] < BITS[g.landCard[worst].mask]) worst = i;
+        removeLandAt(g, worst);
+    }
+    if (r.lands || r.toHand) {
+        const slot = searchSlot(run, pick);
+        if (r.lands) fetchLands(run, g, r, slot, r.lands, true, notes);
+        if (r.toHand) fetchLands(run, g, r, slot, r.toHand, false, notes);
+    }
+    if (r.extraDrops) { g.extraDrops += r.extraDrops; g.drops += r.extraDrops; }
+    if (r.extraDropsOnce) g.drops += r.extraDropsOnce;
+    if (r.fromTop) g.fromTop = true;
+    if (r.putLand) {
+        let landAt = -1;
+        for (let i = 0; i < g.handLen; i++) if (hand[i].land) { landAt = i; break; }
+        if (landAt >= 0) {
+            const c = hand[landAt];
+            handRemoveAt(g, landAt);
+            const tapped = c.lbounce || entersTapped(g, c);
+            putLand(g, c, tapped);
+            if (!tapped) poolAdd(c.mask, c.lmana);
+            if (notes) notes.push(c.name);
+        }
+    }
+    if (run.treasure && r.treasure) {
+        g.treasures += r.treasure;
+        poolAdd(run.idMask, r.treasure, 1);
+    }
+    for (let k = 0; k < r.draws && g.top < g.libLen; k++) {
+        const c = drawTop(g);
+        handPush(g, c);
+        seen(g, c);
+    }
+    if (g.entry) g.entry.cast.push({ name: pick.name, notes });
+}
+
+/**
+ * Start a game from a dealt hand and library.
+ * @param {Int32Array|null} found0 - the whole deck's search counts when the
+ *   library is exactly the deck less the hand (a deal), else null to count it
+ */
+function resetGame(run, g, hand0, handLen, lib0, libLen, out, tracked, found0) {
+    const use = run.useMask;
+    let rampInHand = 0;
+    for (let i = 0; i < handLen; i++) {
+        g.hand[i] = hand0[i];
+        if (hand0[i].rampUse & use) rampInHand++;
+    }
+    for (let i = handLen; i < g.handLen; i++) g.hand[i] = null;
+    g.handLen = handLen;
+    g.useMask = use;
+    g.rampInHand = rampInHand;
+    g.lib = lib0;
+    g.libLen = libLen;
+    g.taken.fill(0, 0, libLen);
+    g.top = 0;
+    if (found0) {
+        g.found.set(found0);
+        for (let i = 0; i < handLen; i++) uncount(g, hand0[i]);
+    } else {
+        g.found.fill(0);
+        for (let i = 0; i < libLen; i++) for (let m = lib0[i].fmatch; m; m &= m - 1) g.found[lowBit(m)]++;
+    }
+    for (let i = 0; i < g.landLen; i++) g.landCard[i] = null;
+    g.landLen = 0;
+    g.landMask = 0;
+    g.landTypes = 0;
+    g.srcLen = 0;
+    g.extraDrops = 0;
+    g.drops = 0;
+    g.dropsUsed = 0;
+    g.fromTop = false;
+    g.treasures = 0;
+    g.floating = 0;
+    g.floatingMask = 0;
+    g.targetTurn = 0;
+    g.lastCard = null;
+    g.entry = null;
+    g.firstCast = tracked ? out.firstCast.fill(0) : null;
+    g.firstSeen = tracked ? out.firstSeen.fill(0) : null;
+    out.mana.fill(0);
+    g.t = 1;
+    for (let i = 0; i < handLen; i++) seen(g, g.hand[i]);
+}
+
+/** Copy a game mid-turn (the lands-only twin forks from the ramp game). */
+function copyGame(src, dst) {
+    const n = src.handLen;
+    for (let i = 0; i < n; i++) dst.hand[i] = src.hand[i];
+    dst.handLen = n;
+    dst.useMask = src.useMask;
+    dst.rampInHand = src.rampInHand;
+    dst.lib = src.lib;
+    dst.libLen = src.libLen;
+    dst.taken.set(src.taken); // both games are sized to the same library
+    dst.top = src.top;
+    dst.found.set(src.found);
+    const l = src.landLen;
+    for (let i = 0; i < l; i++) {
+        dst.landCard[i] = src.landCard[i];
+        dst.landReady[i] = src.landReady[i];
+    }
+    dst.landLen = l;
+    dst.landMask = src.landMask;
+    dst.landTypes = src.landTypes;
+    const s = src.srcLen;
+    for (let i = 0; i < s; i++) {
+        dst.srcMana[i] = src.srcMana[i];
+        dst.srcMask[i] = src.srcMask[i];
+        dst.srcReady[i] = src.srcReady[i];
+    }
+    dst.srcLen = s;
+    dst.t = src.t;
+    dst.extraDrops = src.extraDrops;
+    dst.drops = src.drops;
+    dst.dropsUsed = src.dropsUsed;
+    dst.fromTop = src.fromTop;
+    dst.treasures = src.treasures;
+    dst.floating = src.floating;
+    dst.floatingMask = src.floatingMask;
+    dst.targetTurn = src.targetTurn;
+    dst.lastCard = src.lastCard;
+    dst.entry = null;
+    dst.firstCast = null;
+    dst.firstSeen = null;
+}
+
+/**
+ * A turn up to its ramp: draw, land drops, then the pool (everything that
+ * can tap now), the turn's mana and the target check.
+ *
+ * The pool is only built when something will pay from it this turn (the
+ * target is not castable yet, or there is ramp to cast) or the turn is
+ * logged; otherwise the turn's mana is just the sum it would hold.
+ */
+function beginTurn(run, g, t, log, mana, rampOn) {
+    g.t = t;
+    const entry = log ? { turn: t, drew: null, lands: [], cast: [], mana: 0, colors: 0, target: false, landsInPlay: 0 } : null;
+    g.entry = entry;
+    g.floating = 0;
+    g.floatingMask = 0;
+    if (!(t === 1 && run.skipFirstDraw) && g.top < g.libLen) {
+        const c = drawTop(g);
+        handPush(g, c);
+        seen(g, c);
+        if (entry) entry.drew = c.name;
+    }
+    g.drops = 1 + g.extraDrops;
+    g.dropsUsed = 0;
+    while (g.dropsUsed < g.drops && playLand(run, g)) g.dropsUsed++;
+
+    if (!entry && g.targetTurn && !(rampOn && g.rampInHand > 0)) {
+        mana[t] = Math.min(MAX_MANA, readyMana(g));
+        return;
+    }
+    poolReset();
+    for (let i = 0; i < g.landLen; i++) if (g.landReady[i] <= t) poolAdd(g.landCard[i].mask, g.landCard[i].lmana);
+    for (let i = 0; i < g.srcLen; i++) if (g.srcReady[i] <= t) poolAdd(g.srcMask[i], g.srcMana[i]);
+    if (g.floating) poolAdd(g.floatingMask, g.floating);
+    if (g.treasures) poolAdd(run.idMask, g.treasures, 1);
+    mana[t] = Math.min(MAX_MANA, poolSize);
+    if (entry) { entry.mana = poolSize; entry.colors = poolUnion; }
+    checkTarget(run, g);
+}
+
+/**
+ * Greedy ramp: cast until nothing fits (at most 20 pieces a turn), playing
+ * any land drop the ramp found or freed up, checking the target after each.
+ * @param {number} first - a pick already made for the first cast, or -2 to choose
+ */
+function rampPhase(run, g, first) {
+    for (let guard = 0; guard < 20; guard++) {
+        const at = guard === 0 && first !== -2 ? first : pickRamp(run, g);
+        if (at < 0) return;
+        castRamp(run, g, at);
+        while (g.dropsUsed < g.drops) {
+            const played = playLand(run, g);
+            if (!played) break;
+            g.dropsUsed++;
+            if (played === 2) poolAdd(g.lastCard.mask, g.lastCard.lmana);
+        }
+        checkTarget(run, g);
+    }
+}
+
+function endTurn(g, log) {
+    g.treasures = Math.max(0, g.treasures);
+    if (g.entry) {
+        g.entry.landsInPlay = g.landLen;
+        log.turns.push(g.entry);
+        g.entry = null;
+    }
+}
+
+/**
+ * Play one goldfish game from a dealt hand into `out`.
+ * @param {Object} run - simulator settings (see createRun)
+ * @param {Game} g - reusable game state
+ * @param {Object[]} hand0 - the kept hand (first handLen entries)
+ * @param {Object[]} lib0 - the library, top first (first libLen entries; read-only)
+ * @param {boolean} rampOn - false: every ramp card is a blank (lands only)
+ * @param {Object|null} log - collects a turn-by-turn record when given
+ * @param {{mana:Uint8Array, targetTurn:number, firstCast:Int8Array, firstSeen:Int8Array}} out
+ */
+function playGame(run, g, hand0, handLen, lib0, libLen, rampOn, log, out) {
+    resetGame(run, g, hand0, handLen, lib0, libLen, out, rampOn && run.rampCount > 0, null);
+    for (let t = 1; t <= SIM_TURNS; t++) {
+        beginTurn(run, g, t, log, out.mana, rampOn);
+        if (rampOn) rampPhase(run, g, -2);
+        endTurn(g, log);
+    }
+    out.targetTurn = g.targetTurn;
+    return out;
+}
+
+/**
+ * The dealt game twice: with ramp into run.withRamp, lands only into
+ * run.landsOnly. The two are the same game until the first ramp spell, so the
+ * lands-only twin is forked from the ramp game at that moment (and is a copy
+ * of it when no ramp is ever cast) instead of being replayed from turn 1.
+ */
+function playPair(run, log) {
+    const g = run.game;
+    const a = run.withRamp;
+    const b = run.landsOnly;
+    resetGame(run, g, run.dealHand, run.dealHandLen, run.dealLib, run.dealLibLen, a, run.rampCount > 0, run.found0);
+    let fork = 0;
+    for (let t = 1; t <= SIM_TURNS; t++) {
+        beginTurn(run, g, t, log, a.mana, true);
+        let first = -2;
+        if (!fork) {
+            first = pickRamp(run, g);
+            if (first >= 0) {
+                copyGame(g, run.twin);
+                fork = t;
+            }
+        }
+        if (first !== -1) rampPhase(run, g, first);
+        endTurn(g, log);
+    }
+    a.targetTurn = g.targetTurn;
+    b.mana.set(a.mana);
+    b.targetTurn = a.targetTurn;
+    if (!fork) return;
+    // The twin stands where the ramp game cast its first ramp spell: it ends
+    // that turn without ramp and plays the rest with lands only.
+    const twin = run.twin;
+    endTurn(twin, null);
+    for (let t = fork + 1; t <= SIM_TURNS; t++) {
+        beginTurn(run, twin, t, null, b.mana, false);
+        endTurn(twin, null);
+    }
+    b.targetTurn = twin.targetTurn;
 }
 
 // ── Many games ──────────────────────────────────────────────────────────────
@@ -995,7 +1412,12 @@ function playGame(run, hand0, library0, rampOn, log) {
  */
 export function createRun(lib, { format = null, onPlay = true, treasure = false, games = DEFAULT_GAMES, seed = SEED, samples = SAMPLE_GAMES } = {}) {
     const T = SIM_TURNS;
+    const cards = lib?.cards ?? [];
     const rampCount = lib?.ramp?.length ?? 0;
+    const targetCard = lib?.target?.card ?? null;
+    // Land-search counts over the whole deck: a dealt library is the deck less the hand.
+    const found0 = new Int32Array(MAX_SEARCHES);
+    for (const c of cards) for (let m = c.fmatch; m; m &= m - 1) found0[lowBit(m)]++;
     const mk = () => ({
         hist: Array.from({ length: T + 1 }, () => new Int32Array(MAX_MANA + 1)),
         // first[t][k]: games that first had k+ mana on turn t
@@ -1004,17 +1426,32 @@ export function createRun(lib, { format = null, onPlay = true, treasure = false,
     });
     return {
         lib,
-        cards: lib?.cards ?? [],
+        cards,
         target: lib?.target ?? null,
+        targetCard,
+        targetPips: targetCard ? targetCard.pips.reduce((m, p) => m | p, 0) : 0,
+        searchSlot: lib?.searchSlot && lib?.searchMasks ? lib.searchSlot : null,
+        searchMasks: lib?.searchMasks ?? [],
         idMask: lib?.idMask ?? 0,
         rampCount,
         treasure: Boolean(treasure),
+        useMask: treasure ? USE_RAMP | USE_TREASURE : USE_RAMP,
+        found0,
         freeMulligan: Boolean(format?.freeMulligan),
         skipFirstDraw: Boolean(onPlay) && !format?.firstPlayerDraws,
         games: Math.max(0, Math.floor(games) || 0),
         samples,
         rng: mulberry32(seed),
-        idx: new Int32Array(lib?.cards?.length ?? 0),
+        idx: new Int32Array(cards.length),
+        seven: new Array(OPENING_HAND).fill(null),
+        dealHand: new Array(OPENING_HAND).fill(null),
+        dealHandLen: 0,
+        dealLib: new Array(cards.length).fill(null),
+        dealLibLen: 0,
+        game: new Game(cards.length),
+        twin: new Game(cards.length),
+        withRamp: newOutcome(rampCount),
+        landsOnly: newOutcome(rampCount),
         done: 0,
         ramp: mk(),
         lands: mk(),
@@ -1047,17 +1484,23 @@ function record(acc, res) {
 export function runBatch(run, count = run.games) {
     if (run.cards.length < OPENING_HAND) { run.done = run.games; return true; }
     const end = Math.min(run.games, run.done + Math.max(1, count));
-    for (let g = run.done; g < end; g++) {
-        const { hand, library, mulligans } = dealOpeningHand(run.cards, run.rng, { freeMulligan: run.freeMulligan, idx: run.idx });
+    const cap = SIM_TURNS + 1;
+    for (let gi = run.done; gi < end; gi++) {
+        const mulligans = dealInto(run);
         run.mulligans += mulligans > (run.freeMulligan ? 1 : 0) ? 1 : 0;
-        const log = run.sampleGames.length < run.samples ? { hand: hand.map(c => c.name), mulligans, turns: [] } : null;
-        const withRamp = playGame(run, hand, library, true, log);
-        const landsOnly = playGame(run, hand, library, false, null);
+        let log = null;
+        if (run.sampleGames.length < run.samples) {
+            const hand = [];
+            for (let i = 0; i < run.dealHandLen; i++) hand.push(run.dealHand[i].name);
+            log = { hand, mulligans, turns: [] };
+        }
+        playPair(run, log);
+        const withRamp = run.withRamp;
+        const landsOnly = run.landsOnly;
         record(run.ramp, withRamp);
         record(run.lands, landsOnly);
-        const cap = SIM_TURNS + 1;
         run.savedSum += (landsOnly.targetTurn || cap) - (withRamp.targetTurn || cap);
-        if (withRamp.firstCast) {
+        if (run.rampCount) {
             for (let i = 0; i < run.rampCount; i++) {
                 const c = withRamp.firstCast[i];
                 if (c && c <= 3) run.castBy3[i]++;
@@ -1193,7 +1636,8 @@ export function finishRun(run) {
 export function playScriptedGame(lib, { hand = [], library = [], format = null, onPlay = true, treasure = false, rampOn = true } = {}) {
     const run = createRun(lib, { format, onPlay, treasure, games: 0 });
     const log = { hand: hand.map(c => c.name), mulligans: 0, turns: [] };
-    const res = playGame(run, hand, library, rampOn, log);
+    const game = new Game(hand.length + library.length + run.cards.length);
+    const res = playGame(run, game, hand, hand.length, library, library.length, rampOn, log, newOutcome(run.rampCount));
     return { mana: Array.from(res.mana), targetTurn: res.targetTurn, log };
 }
 
