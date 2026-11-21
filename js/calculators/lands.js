@@ -72,7 +72,7 @@ function deckCounts(config, format) {
  * Deck size, land count and settings.
  * @returns {{deckSize:number, landCount:number, ramp:number, format:Object, onPlay:boolean, countRamp:boolean, keepRange:[number,number]|null, hasList:boolean}}
  */
-export function getDeckConfig() {
+export function readInputs() {
     const format = DeckConfig.getFormat();
     const config = DeckConfig.getDeckConfig();
     const deck = deckCounts(config, format);
@@ -146,7 +146,7 @@ export function calculateLandDropMiss(deckSize, landCount) {
  * Everything the page shows, cached by inputs.
  */
 export function calculate() {
-    const config = getDeckConfig();
+    const config = readInputs();
     if (config.deckSize <= HAND || config.landCount <= 0) {
         return { config, openingHands: null, landDropMiss: null, landDropByTurn: null };
     }
@@ -383,7 +383,7 @@ export function runSampleReveals() {
     }
     const details = $('lands-samples-details');
     if (details && details.open === false) return;
-    const config = getDeckConfig();
+    const config = readInputs();
     const drawsBy = drawSchedule({ format: config.format, onPlay: config.onPlay });
     const key = JSON.stringify([config.format.key, config.onPlay, config.countRamp, config.keepRange, sampleSeed]);
     if (samples.key !== key || samples.ref !== deck.ref) {

@@ -145,6 +145,17 @@ describe('analyzeDeckStats on the bundled example deck', () => {
         findings.forEach(f => assert.ok(['good', 'warn', 'bad', 'info'].includes(f.status)));
     });
 
+    it('words its chances with honest ends and its counts in agreement', () => {
+        const sure = { ...stats, odds: { ...stats.odds, keepable: 0.998 } };
+        const opener = healthChecks(sure, { format: FORMATS.commander }).find(f => f.id === 'opener');
+        assert.strictEqual(opener.value, '>99%', 'not quite certain never prints as 100%');
+        assert.match(opener.title, /^>99% of opening hands/);
+        const color = healthChecks(stats, { format: FORMATS.commander }).find(f => f.id.startsWith('color-'));
+        assert.match(color.title, /^\d+ \w+ sources?$/);
+        assert.doesNotMatch(color.title, /^1 \w+ sources$/);
+        assert.match(color.detail, /\(\d+ pips? at mana value/);
+    });
+
     it('skips Commander role guidelines for other formats', () => {
         const findings = healthChecks(stats, { format: FORMATS.constructed });
         assert.ok(!findings.some(f => f.id.startsWith('role-')));

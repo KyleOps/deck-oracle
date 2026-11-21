@@ -1,10 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { objectId, renderOpponentPlaceholder, miniBars, opponentPageStyles, injectOpponentPageStyles } from '../../js/utils/opponentPages.js';
 import {
     isHistoricType, opponentLibrary as libraryOf, deckSeed, createRevealer,
-    typicalRange, formatRange, tailAtLeast, capDistribution, objectId, renderOpponentPlaceholder,
-    miniBars, opponentPageStyles, injectOpponentPageStyles
-} from '../../js/utils/opponentPages.js';
+    typicalRange, formatRange, tailAtLeast, capDistribution
+} from '../../js/utils/models/opponentLibrary.js';
 // The multiplayer pages use the shared typing, randomness, percentile and
 // percentage helpers; the same expectations hold for them.
 import { frontTypeLine as frontFace, isLand as isLandType, isLand as isLandCard } from '../../js/utils/library.js';

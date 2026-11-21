@@ -68,7 +68,8 @@ function getLibrary(config, format) {
     return lib;
 }
 
-function context() {
+/** The deck, its library, the format and the turn order (defaults when not mounted). */
+export function readInputs() {
     const config = DeckConfig.getDeckConfig();
     const format = DeckConfig.getFormat();
     const library = getLibrary(config, format);
@@ -88,7 +89,7 @@ function fitGroups(library) {
 
 /** Recompute everything. Exported for tests and share links. */
 export function calculate() {
-    const ctx = context();
+    const ctx = readInputs();
     fitGroups(ctx.library);
     const result = O.analyzeOdds({ library: ctx.library, groups: state.groups, format: ctx.format, onPlay: ctx.onPlay });
     last = { ...ctx, result };
@@ -1065,7 +1066,7 @@ export function init() {
  */
 export function focusCard(name) {
     if (typeof name !== 'string' || !name.trim()) return;
-    const { library } = context();
+    const { library } = readInputs();
     const card = O.findCard(library, name);
     state.groups = [library.manual ? O.emptyGroup(true) : O.cardsGroup([card?.name ?? name.trim().slice(0, 160)])];
     state.active = 0;
@@ -1100,7 +1101,7 @@ export function applyShareParams(params) {
     if (draw === '1') state.onPlay = false;
     else if (draw === '0') state.onPlay = true;
 
-    const { library } = context();
+    const { library } = readInputs();
     const groups = [];
     for (const key of ['g1', 'g2', 'g3']) {
         const group = O.decodeGroup(params.get(key));

@@ -159,6 +159,28 @@ describe('Big Spell Comparison Integration', () => {
             DeckConfig.updateDeck(original);
         }
     });
+
+    it('casts every spell from its own library: its cast copy is on the stack', () => {
+        const base = [
+            { name: 'Forest', type_line: 'Basic Land — Forest', cmc: 0, count: 6 },
+            { name: 'Bear', type_line: 'Creature — Bear', cmc: 2, count: 2 }
+        ];
+        const spells = [
+            { name: 'Genesis Wave', type_line: 'Sorcery', cmc: 3, count: 1 },
+            { name: "Kamahl's Druidic Vow", type_line: 'Legendary Sorcery', cmc: 2, count: 1 },
+            { name: 'Portent of Calamity', type_line: 'Sorcery', cmc: 1, count: 1 },
+            { name: 'Primal Surge', type_line: 'Sorcery', cmc: 10, count: 1 }
+        ];
+        const options = { cards: [...base, ...spells], deck: {}, vowDoubleCast: false };
+        const by = key => compareBigSpells(8, 'generic', options).spells.find(s => s.key === key);
+        // Each library is the 8 base cards plus the other three spells: 11.
+        // Wave at X=5 reveals 5 of 11; hits are the 8 permanents.
+        assert.strictEqual(by('wave').expected, 5 * 8 / 11);
+        // The Vow at X=6 looks at 6 of 11; hits are the 6 lands (no legendary permanents).
+        assert.strictEqual(by('vow').expected, 6 * 6 / 11);
+        // Surge: 8 permanents, 3 other spells to stop it.
+        assert.strictEqual(by('surge').expected, 8 / 4);
+    });
 });
 
 describe('Big Spell Comparison is DOM-free', () => {

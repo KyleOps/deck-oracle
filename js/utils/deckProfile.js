@@ -16,6 +16,7 @@
 
 import { COMMANDER_GUIDELINES, deckCards } from './deckStats.js';
 import { isLand } from './mana.js';
+import { pct, plural } from './text.js';
 
 /** Average mana value of nonland cards most decks of each format sit within. */
 export const SPEED_GUIDE = Object.freeze({
@@ -33,7 +34,6 @@ const ROLE_GUIDE = Object.freeze({
 const GUIDELINE = ' A rough guideline, not a rule — your deck’s plan matters more.';
 const NO_GUIDE = 'There is no common guideline for this in 60- and 40-card decks: it depends on the archetype.';
 
-const pctText = p => `${Math.round(p * 100)}%`;
 
 function rangeStatus(value, [lo, hi], { below = 'below typical', above = 'above typical', inside = 'typical' } = {}) {
     if (value < lo - 1e-9) return below;
@@ -80,12 +80,12 @@ export function deckProfile(stats, format = { key: 'commander' }) {
         min: 0.4,
         max: 1,
         range: [0.72, 0.82],
-        format: pctText,
+        format: p => pct(p),
         tone: keep >= 0.72 ? 'good' : keep >= 0.62 ? 'warn' : 'bad',
         status: keep >= 0.72 ? 'keepable' : keep >= 0.62 ? 'a little low' : 'low',
         tip: 'Opening hands with two to four lands — the usual keeps.',
         rangeTip: `Well-built decks usually keep about 72–82% of their opening sevens on land count alone.${GUIDELINE}`,
-        sub: Number.isFinite(drop4) ? `${pctText(drop4)} make every land drop to turn 4` : ''
+        sub: Number.isFinite(drop4) ? `${pct(drop4)} make every land drop to turn 4` : ''
     });
 
     const colors = (stats.colors ?? []).filter(c => Number.isFinite(c.onCurve) && c.heaviest);
@@ -99,7 +99,7 @@ export function deckProfile(stats, format = { key: 'commander' }) {
             min: 0.5,
             max: 1,
             range: [0.9, 1],
-            format: pctText,
+            format: p => pct(p),
             tone: p >= 0.88 ? 'good' : p >= 0.78 ? 'warn' : 'bad',
             status: p >= 0.88 ? 'on target' : 'short',
             tip: 'The weakest colour: how often your lands can pay its most demanding card on curve, if you hit your land drops.',
@@ -133,11 +133,11 @@ export function deckProfile(stats, format = { key: 'commander' }) {
     rows.push(roleRow('ramp', 'Ramp', n('ramp'), 'Mana rocks, dorks and land-fetching spells.', ROLE_GUIDE.ramp));
     rows.push({
         ...roleRow('flow', 'Card flow', n('draw') + n('tutor'), 'Card draw plus tutors.', ROLE_GUIDE.flow),
-        sub: `${n('draw')} draw · ${n('tutor')} tutor${n('tutor') === 1 ? '' : 's'}`
+        sub: `${n('draw')} draw · ${plural(n('tutor'), 'tutor')}`
     });
     rows.push({
         ...roleRow('interaction', 'Interaction', n('removal') + n('counter') + n('wipe'), 'Targeted removal, counterspells and board wipes.', ROLE_GUIDE.interaction),
-        sub: `${n('removal')} removal · ${n('counter')} counter${n('counter') === 1 ? '' : 's'} · ${n('wipe')} wipe${n('wipe') === 1 ? '' : 's'}`
+        sub: `${n('removal')} removal · ${plural(n('counter'), 'counter')} · ${plural(n('wipe'), 'wipe')}`
     });
     return rows;
 }

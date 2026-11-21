@@ -18,17 +18,15 @@ import { renderBottomLine, renderHeroStats, toneColor } from '../utils/component
 import { escapeHtml } from '../data/glossary.js';
 import { tagDeck } from '../utils/cardTags.js';
 import { cardTypes as typesOf, isLand, landCount, libraryOf, unlistedCopies } from '../utils/library.js';
-import { shuffle } from '../utils/random.js';
 import { TX_CHART } from '../utils/chartHelpers.js';
 import { createCache, debounce } from '../utils/simulation.js';
 import { pct } from '../utils/text.js';
 import {
     HAND_SIZE, mulliganPlan, marginalGains, drawSchedule, handSuccess, keepRules,
-    chooseBottom, bottomCount, keepBar
+    bottomCount, keepBar, simulateGames, SAMPLE_GAMES
 } from '../utils/mulliganModel.js';
 
 const NAME = 'mulligan';
-const SAMPLE_DEFAULT = 500;
 const GAMES_SHOWN = 4;
 const STEP_TABS = 4;
 const PRESETS = Object.freeze({
@@ -176,7 +174,7 @@ function readPercent(id, fallback) {
  * Current inputs. Deck size and format come from the active deck.
  * @returns {{deckSize:number, penalty:number, freeMulligan:boolean, confidenceThreshold:number, types:Array, format:Object, onPlay:boolean}}
  */
-export function getDeckConfig() {
+export function readInputs() {
     const deck = syncLinkedCounts();
     const format = DeckConfig.getFormat();
     if (lastFormatKey !== null && lastFormatKey !== format.key) freeOverride = null;
@@ -215,7 +213,7 @@ function planKey(config) {
  * @returns {{config:Object, result:Object|null}}
  */
 export function calculate() {
-    const config = getDeckConfig();
+    const config = readInputs();
     if (config.types.length === 0 || config.deckSize <= HAND_SIZE) return { config, result: null };
     const key = planKey(config);
     let result = planCache.get(key);
@@ -714,111 +712,9 @@ function samplePool(config, deck) {
     return { pool, real: false };
 }
 
-/**
- * Play the keep rule out on shuffled decks.
- *
- * @param {Object} p
- * @param {Array<{name:string, group:number}>} p.pool - the library, one entry per card
- * @param {Object} p.plan - from mulliganPlan()
- * @param {(turn:number)=>number} p.drawsBy
- * @param {boolean} p.freeMulligan
- * @param {number} [p.games=500]
- * @param {number} [p.detail=40] - games to keep in full for display
- * @param {() => number} [p.rng=Math.random]
- * @returns {{stats:{games:number, keptSeven:number, success:number, avgMulligans:number, avgHandSize:number}, games:Array}}
- */
-export function simulateGames({ pool, plan, drawsBy, freeMulligan, games = SAMPLE_DEFAULT, detail = 40, rng = Math.random }) {
-    const types = plan.types;
-    const n = types.length;
-    const handIndex = new Map(plan.hands.map((h, i) => [h.counts.join(','), i]));
-    const due = types.map(t => drawsBy(t.byTurn));
-    const lastTurn = Math.max(1, ...types.filter(t => t.required > 0).map(t => t.byTurn));
-    const drawCount = Math.max(0, drawsBy(lastTurn));
-    const lastStep = freeMulligan ? HAND_SIZE : HAND_SIZE - 1;
-    const order = pool.map((_, i) => i);
-    const out = [];
-    let keptSeven = 0;
-    let success = 0;
-    let mulls = 0;
-    let handSizes = 0;
-
-    for (let g = 0; g < games; g++) {
-        const mulled = [];
-        for (let step = 0; step <= lastStep; step++) {
-            shuffle(order, rng);
-            const seven = order.slice(0, HAND_SIZE);
-            const counts = new Array(n).fill(0);
-            seven.forEach(ci => { const grp = pool[ci].group; if (grp >= 0) counts[grp]++; });
-            const others = HAND_SIZE - sum(counts);
-            const planStep = plan.steps[step];
-            const decision = planStep?.decisions[handIndex.get(counts.join(','))];
-            const keep = step === lastStep || !planStep || !!decision?.keep;
-            if (!keep) {
-                if (g < detail) mulled.push(seven.slice());
-                continue;
-            }
-
-            const bottom = bottomCount(step, freeMulligan);
-            const pick = chooseBottom(counts, others, bottom, types, decision?.cut ?? null);
-            const bottomed = new Set();
-            if (pick.legal) {
-                let needOthers = pick.bottomOthers;
-                const needType = pick.bottomByType.slice();
-                for (let k = seven.length - 1; k >= 0; k--) {
-                    const grp = pool[seven[k]].group;
-                    if (grp < 0 && needOthers > 0) { bottomed.add(k); needOthers--; }
-                    else if (grp >= 0 && needType[grp] > 0) { bottomed.add(k); needType[grp]--; }
-                }
-            }
-            const kept = new Array(n).fill(0);
-            seven.forEach((ci, k) => { const grp = pool[ci].group; if (grp >= 0 && !bottomed.has(k)) kept[grp]++; });
-            const draws = order.slice(HAND_SIZE, HAND_SIZE + drawCount);
-            const missing = [];
-            types.forEach((t, i) => {
-                if (t.required <= 0) return;
-                let have = kept[i];
-                for (let d = 0; d < Math.min(due[i], draws.length); d++) if (pool[draws[d]].group === i) have++;
-                if (have < t.required) missing.push(i);
-            });
-            const ok = pick.legal && missing.length === 0;
-
-            if (step === 0) keptSeven++;
-            if (ok) success++;
-            mulls += step;
-            handSizes += HAND_SIZE - bottom;
-            if (g < detail) {
-                out.push({
-                    mulled,
-                    seven: seven.slice(),
-                    bottomed,
-                    draws,
-                    step,
-                    handSize: HAND_SIZE - bottom,
-                    ok,
-                    legal: pick.legal,
-                    missing
-                });
-            }
-            break;
-        }
-    }
-    return {
-        stats: {
-            games,
-            keptSeven: games ? keptSeven / games : 0,
-            success: games ? success / games : 0,
-            avgMulligans: games ? mulls / games : 0,
-            avgHandSize: games ? handSizes / games : 0
-        },
-        games: out,
-        drawsBy,
-        lastTurn
-    };
-}
-
 function sampleCount() {
     const v = parseInt($('mulligan-sample-count')?.value, 10);
-    return Number.isFinite(v) ? Math.min(10000, Math.max(1, v)) : SAMPLE_DEFAULT;
+    return Number.isFinite(v) ? Math.min(10000, Math.max(1, v)) : SAMPLE_GAMES;
 }
 
 function chip(card, names, bottomed = false) {
@@ -941,7 +837,7 @@ export function setCardTypes(types) {
  * the link format requires) and the keep-rule settings.
  */
 export function getState() {
-    const config = getDeckConfig();
+    const config = readInputs();
     const fallback = isHex(TX_CHART.dim) ? TX_CHART.dim : TX_CHART.series.find(isHex);
     return {
         ...config,
@@ -1054,7 +950,7 @@ function bindEvents() {
         const input = e.target;
         if (!(input instanceof HTMLInputElement)) return;
         if (input.id === 'mull-threshold' || input.id === 'mull-penalty') {
-            refreshRule(getDeckConfig());
+            refreshRule(readInputs());
             scheduleUpdate();
             return;
         }

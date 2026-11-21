@@ -3,18 +3,18 @@
  * Genesis Wave, Kamahl's Druidic Vow, Primal Surge and Portent of Calamity.
  *
  * Everything here is DOM-free. It reads the deck from DeckConfig (or from
- * explicit options) and calls each calculator's pure entry point, so it is
- * safe to run from any page — including before the other three pages have
- * ever been opened, when their inputs don't exist.
+ * explicit options) and calls each spell's model (js/utils/models/), never a
+ * page, so it is safe to run from any page — including before the other three
+ * pages have ever been opened, when their inputs don't exist.
  */
 
 import * as DeckConfig from './deckConfig.js';
-import { simulateGenesisWave } from '../calculators/wave.js';
-import { simulateVow, commanderCopiesVow } from '../calculators/vow.js';
-import { simulatePrimalSurge } from '../calculators/surge.js';
-import { portentOutcomes } from '../calculators/portent.js';
-import { deckCardList, listSize } from './bigSpells.js';
-import { commanderNamesOf, frontTypeLine, isLand, isPermanent, sameCard } from './library.js';
+import { GENESIS_WAVE, simulateGenesisWave } from './models/wave.js';
+import { KAMAHLS_VOW, simulateVow, commanderCopiesVow } from './models/vow.js';
+import { PRIMAL_SURGE, simulatePrimalSurge } from './models/surge.js';
+import { PORTENT_OF_CALAMITY, portentOutcomes } from './models/portent.js';
+import { deckCardList, listSize, withoutCopy } from './models/cardList.js';
+import { commanderNamesOf, frontTypeLine, isLand, isPermanent } from './library.js';
 import { avg, pct } from './text.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 
@@ -56,52 +56,32 @@ export function compareBigSpells(inputX, sourceSpell = 'generic', options = {}) 
     const vowX = Math.max(0, totalMana - 2);
     const portentX = Math.max(0, totalMana - 1);
     const deckSize = listSize(cards);
+    const { permanentCount, nonPermanentCount, legendaryPermanentCount, landCount } = tally(cards, waveX);
 
-    const waveDistribution = {};
-    const vowDistribution = {};
-    let permanentCount = 0;
-    let nonPermanentCount = 0;
-    let legendaryPermanentCount = 0;
-    let landCount = 0;
-    let permanentManaValue = 0;
-    let waveManaValue = 0;
-
-    for (const card of cards) {
-        const typeLine = card.type_line;
-        const mv = Math.floor(card.cmc);
-        if (isPermanent(typeLine)) {
-            const land = isLand(typeLine);
-            const isLegendary = /\blegendary\b/.test(frontTypeLine(typeLine));
-            permanentCount += card.count;
-            permanentManaValue += card.cmc * card.count;
-            waveDistribution[mv] = (waveDistribution[mv] ?? 0) + card.count;
-            if (mv <= waveX) waveManaValue += card.cmc * card.count;
-            if (land || isLegendary) vowDistribution[mv] = (vowDistribution[mv] ?? 0) + card.count;
-            if (isLegendary) legendaryPermanentCount += card.count;
-            if (land) landCount += card.count;
-        } else {
-            nonPermanentCount += card.count;
-            waveDistribution.nonperm = (waveDistribution.nonperm ?? 0) + card.count;
-        }
-    }
+    // Each spell resolves into the library without its own cast copy (on the
+    // stack), when the list names it — the same library its page uses.
 
     // Genesis Wave
-    const wave = simulateGenesisWave(deckSize, waveDistribution, waveX);
-    const waveRevealed = Math.min(waveX, deckSize);
+    const waveCards = withoutCopy(cards, GENESIS_WAVE);
+    const waveLibrary = tally(waveCards, waveX);
+    const wave = simulateGenesisWave(waveLibrary.size, waveLibrary.waveDistribution, waveX);
+    const waveRevealed = Math.min(waveX, waveLibrary.size);
 
     // Kamahl's Druidic Vow (the copy looks at the next X cards)
-    const cardsByName = Object.fromEntries(cards.map(card => [card.name, card]));
-    const vow = simulateVow(deckSize, vowDistribution, vowX, vowCopied, { cardsByName });
+    const vowCards = withoutCopy(cards, KAMAHLS_VOW);
+    const vowLibrary = tally(vowCards, waveX);
+    const cardsByName = Object.fromEntries(vowCards.map(card => [card.name, card]));
+    const vow = simulateVow(vowLibrary.size, vowLibrary.vowDistribution, vowX, vowCopied, { cardsByName });
 
-    // Primal Surge — the cast copy is on the stack, not in the library.
-    const surgeOnStack = cards.some(card => sameCard(card.name, 'Primal Surge'));
-    const surgeLibrarySize = surgeOnStack ? deckSize - 1 : deckSize;
-    const surgeNonPerms = surgeOnStack ? nonPermanentCount - 1 : nonPermanentCount;
-    const surgePerms = surgeLibrarySize - surgeNonPerms;
-    const surge = simulatePrimalSurge(surgeLibrarySize, surgeNonPerms, surgePerms);
+    // Primal Surge
+    const surgeLibrary = tally(withoutCopy(cards, PRIMAL_SURGE), waveX);
+    const surgeNonPerms = surgeLibrary.nonPermanentCount;
+    const surgePerms = surgeLibrary.permanentCount;
+    const surge = simulatePrimalSurge(surgeLibrary.size, surgeNonPerms, surgePerms);
 
     // Portent of Calamity
-    const portent = portentX > 0 ? portentOutcomes({ cards, counts: deck, x: portentX }) : null;
+    const portentCards = withoutCopy(cards, PORTENT_OF_CALAMITY);
+    const portent = portentX > 0 ? portentOutcomes({ cards: portentCards, counts: deck, x: portentX }) : null;
 
     const spells = [
         {
@@ -112,7 +92,7 @@ export function compareBigSpells(inputX, sourceSpell = 'generic', options = {}) 
             cmc: waveX + 3,
             expected: wave?.expectedPermanents ?? 0,
             unit: 'permanents',
-            manaValue: deckSize > 0 ? waveRevealed * waveManaValue / deckSize : 0,
+            manaValue: waveLibrary.size > 0 ? waveRevealed * waveLibrary.waveManaValue / waveLibrary.size : 0,
             restriction: `Permanents with mana value ${waveX} or less`,
             metric: 'expected permanents'
         },
@@ -137,7 +117,7 @@ export function compareBigSpells(inputX, sourceSpell = 'generic', options = {}) 
             cmc: SURGE_COST,
             expected: surge?.expectedPermanents ?? 0,
             unit: 'permanents',
-            manaValue: permanentCount > 0 ? (surge?.expectedPermanents ?? 0) * permanentManaValue / permanentCount : 0,
+            manaValue: surgePerms > 0 ? (surge?.expectedPermanents ?? 0) * surgeLibrary.permanentManaValue / surgePerms : 0,
             restriction: 'Every permanent until the first instant or sorcery',
             metric: 'expected permanents'
         },
@@ -176,13 +156,55 @@ export function compareBigSpells(inputX, sourceSpell = 'generic', options = {}) 
 }
 
 /**
+ * What the four spells read from a card list, in one pass: library size,
+ * permanents and non-permanents, Genesis Wave's distribution (mana value →
+ * permanents, plus `nonperm`) and the mana value it can hit at `waveX`, and the
+ * Vow's (lands and legendary permanents by mana value).
+ */
+function tally(cards, waveX) {
+    const waveDistribution = {};
+    const vowDistribution = {};
+    let size = 0;
+    let permanentCount = 0;
+    let nonPermanentCount = 0;
+    let legendaryPermanentCount = 0;
+    let landCount = 0;
+    let permanentManaValue = 0;
+    let waveManaValue = 0;
+
+    for (const card of cards) {
+        const typeLine = card.type_line;
+        const mv = Math.floor(card.cmc);
+        size += card.count;
+        if (isPermanent(typeLine)) {
+            const land = isLand(typeLine);
+            const isLegendary = /\blegendary\b/.test(frontTypeLine(typeLine));
+            permanentCount += card.count;
+            permanentManaValue += card.cmc * card.count;
+            waveDistribution[mv] = (waveDistribution[mv] ?? 0) + card.count;
+            if (mv <= waveX) waveManaValue += card.cmc * card.count;
+            if (land || isLegendary) vowDistribution[mv] = (vowDistribution[mv] ?? 0) + card.count;
+            if (isLegendary) legendaryPermanentCount += card.count;
+            if (land) landCount += card.count;
+        } else {
+            nonPermanentCount += card.count;
+            waveDistribution.nonperm = (waveDistribution.nonperm ?? 0) + card.count;
+        }
+    }
+    return {
+        size, permanentCount, nonPermanentCount, legendaryPermanentCount, landCount,
+        permanentManaValue, waveManaValue, waveDistribution, vowDistribution
+    };
+}
+
+/**
  * One deck-building observation, based on which spell comes out ahead.
  * @returns {{text:string}|null}
  */
 function generateDeckInsight(spells, { permanentCount, legendaryPermanentCount, surgeNonPerms, surgePerms }) {
     const best = spells.find(s => s.affordable) ?? spells[0];
     const legendaryRatio = permanentCount > 0 ? legendaryPermanentCount / permanentCount : 0;
-    const share = `${Math.round(legendaryRatio * 100)}%`;
+    const share = pct(legendaryRatio);
 
     switch (best?.key) {
         case 'surge':

@@ -2,11 +2,14 @@
  * Shared building blocks for the four "big spell" pages — Portent of Calamity,
  * Genesis Wave, Kamahl's Druidic Vow and Primal Surge.
  *
- * Three kinds of thing live here, none of which touches the DOM:
- *   - deck helpers (the card list, card types, a cache key for the list)
- *   - exact maths and number formatting the four pages share
+ * Two kinds of thing live here, none of which touches the DOM:
+ *   - the sample shuffles and card-type labels the four pages share
  *   - markup and CSS strings the four views render, so the pages look and
  *     behave as one family
+ *
+ * The deck helpers (the card list, its size and cache key) live in
+ * models/cardList.js and the exact maths in the models and hypergeometric.js,
+ * so the models and the comparison never import this module.
  *
  * The exceptions are the "page helpers" (X control sync, preset chips) and
  * renderHowItCompares(); each is only ever called by the page that owns the
@@ -14,9 +17,8 @@
  * page's first paint never waits on the other three calculators.
  */
 
-import * as DeckConfig from './deckConfig.js';
-import { shuffle, hashString } from './random.js';
-import { asLibrary, cardTypes, CARD_TYPES } from './library.js';
+import { shuffle } from './random.js';
+import { CARD_TYPES } from './library.js';
 import { pct } from './text.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 
@@ -32,75 +34,7 @@ export function typeLabel(type) {
     return TYPE_LABELS[type] ?? String(type ?? '');
 }
 
-// ── The deck ─────────────────────────────────────────────────────────────────
-
-const cardLists = new WeakMap();
-
-/**
- * The library's card records, or [] when only type counts are known.
- * Commanders are never in it (see library.js); `opts.exclude` takes out the
- * spell being cast when the list names it.
- *
- * Hand-edited type counts no longer describe an imported list (DeckConfig
- * marks the deck 'manual'), so the counts win and the list is ignored —
- * otherwise a page would mix card odds from one deck with the size of another.
- *
- * @param {Object} [config] - a DeckConfig snapshot (defaults to the live deck),
- *   or a Library from libraryOf()
- * @param {Object} [opts] - libraryOf() options
- * @returns {ReadonlyArray<{name:string, type_line:string, cmc:number, count:number}>}
- *   the same (frozen) array for the same library
- */
-export function deckCardList(config = DeckConfig.getDeckConfig(), opts) {
-    if (config?.importSource === 'manual') return [];
-    const library = asLibrary(config, opts);
-    let list = cardLists.get(library);
-    if (!list) {
-        list = Object.freeze(library.cards.map(card => Object.freeze({
-            name: String(card.name ?? ''),
-            type_line: String(card.type_line ?? ''),
-            cmc: Number.isFinite(Number(card.cmc)) ? Math.max(0, Number(card.cmc)) : 0,
-            count: card.count
-        })));
-        cardLists.set(library, list);
-    }
-    return list;
-}
-
-/** Number of cards in a card list. */
-export function listSize(cards) {
-    return (cards ?? []).reduce((sum, card) => sum + (card?.count ?? 0), 0);
-}
-
-/**
- * A short, order-independent key for a card list (FNV-1a over its contents),
- * so results can be cached per deck without holding the whole list as a key.
- */
-export function cardListKey(cards) {
-    const text = (cards ?? [])
-        .map(card => `${card.name}|${card.count}|${card.cmc}|${card.type_line}`)
-        .sort()
-        .join('\n');
-    return `${(cards ?? []).length}:${hashString(text).toString(36)}`;
-}
-
-/**
- * Expand a card list into one object per physical card, with its types worked
- * out once. Copies of a card share one object.
- */
-export function expandCards(cards) {
-    const out = [];
-    for (const card of cards ?? []) {
-        const record = Object.freeze({
-            name: card.name,
-            type_line: card.type_line,
-            cmc: card.cmc ?? 0,
-            types: cardTypes(card.type_line)
-        });
-        for (let i = 0; i < (card.count ?? 0); i++) out.push(record);
-    }
-    return out;
-}
+// ── Sample shuffles ──────────────────────────────────────────────────────────
 
 /**
  * A handful of shuffled libraries that stay put until the deck changes or the
@@ -128,42 +62,6 @@ export function createSampler(size = 4) {
             key = null;
         }
     };
-}
-
-// ── Exact maths ──────────────────────────────────────────────────────────────
-
-const LOG_FACTORIAL = [0];
-
-function logFactorial(n) {
-    for (let i = LOG_FACTORIAL.length; i <= n; i++) {
-        LOG_FACTORIAL[i] = LOG_FACTORIAL[i - 1] + Math.log(i);
-    }
-    return LOG_FACTORIAL[n];
-}
-
-function logChoose(n, k) {
-    return logFactorial(n) - logFactorial(k) - logFactorial(n - k);
-}
-
-/**
- * Exact distribution of successes when drawing without replacement.
- * @param {number} population - cards in the library
- * @param {number} successes - cards that count as a hit
- * @param {number} draws - cards looked at
- * @returns {number[]} pmf, index = number of hits (length draws + 1)
- */
-export function hypergeometricPmf(population, successes, draws) {
-    const N = Math.max(0, Math.floor(Number(population) || 0));
-    const K = Math.min(N, Math.max(0, Math.floor(Number(successes) || 0)));
-    const n = Math.min(N, Math.max(0, Math.floor(Number(draws) || 0)));
-    const pmf = new Array(n + 1).fill(0);
-    const lo = Math.max(0, n - (N - K));
-    const hi = Math.min(n, K);
-    const denominator = logChoose(N, n);
-    for (let k = lo; k <= hi; k++) {
-        pmf[k] = Math.exp(logChoose(K, k) + logChoose(N - K, n - k) - denominator);
-    }
-    return pmf;
 }
 
 // ── Markup (strings only) ────────────────────────────────────────────────────
@@ -340,7 +238,7 @@ const idle = typeof requestIdleCallback === 'function'
 
 /**
  * Fill the "How it compares" panel. The comparison module (which pulls in all
- * four calculators) is fetched on demand and computed when the browser is
+ * four models) is fetched on demand and computed when the browser is
  * idle; an unchanged comparison is not recomputed.
  *
  * @param {string} containerId

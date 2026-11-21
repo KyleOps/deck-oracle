@@ -8,9 +8,48 @@ changing a calculator.
 | File | Owns |
 |------|------|
 | `js/utils/calculatorRegistry.js` | Name, group, card, the **question**, summary, method, keywords, lazy loaders. One entry per page. |
-| `js/calculators/<key>.js` | Logic + rendering. Exports `init()`, `updateUI()`, usually `calculate()`. |
+| `js/utils/models/<key>.js` | The page's maths and words: pure functions from plain inputs to results, plus `summarize()` (the bottom line). No DOM, no DeckConfig — the page passes the library and settings in. |
+| `js/calculators/<key>.js` | The page: `readInputs()`, `calculate()`, rendering, `init()` / `updateUI()`, share hooks. |
 | `js/views/<key>.js` | `export const template` (markup), optional `export const styles` (CSS string, scoped under `#<key>-tab`), and `export const guide` (the "How it works" drawer). |
-| `tests/calculators/<key>.node.test.js` | Node test runner tests for the pure logic. |
+| `tests/models/<key>.node.test.js` | The model: plain inputs, exact expectations. No DOM mocks (import `assertClose` from `tests/helpers/assert.js`, not `node-test-helper.js`). |
+| `tests/calculators/<key>.node.test.js` | The page glue: what `readInputs()` reads (defaults when not mounted, clamps, the library it builds) and that `calculate()` is the model over it. |
+
+Pages whose maths predates `models/` keep it in a named module instead:
+Land Drops (`landDrops.js`), Mulligan Planner (`mulliganModel.js`, sample
+games included), Draw Odds (`drawOdds.js`), Opening Hands (`handLab.js`),
+Mana Development (`manaDevelopment.js`), Mana Base (`castability.js`) and
+the Discover pages' shared simulation (`discover.js`). Shared by several
+models: `models/cardList.js` (the big spells' card list, `withoutCopy`) and
+`models/opponentLibrary.js` (the multiplayer pages' opponent library, seeded
+revealer and distribution helpers).
+
+### One page, one shape
+
+```js
+// js/calculators/wave.js
+export function readInputs() {               // the DOM and the deck → a plain object
+    const deck = DeckConfig.getDeckConfig();
+    const cards = deckCardList(deck, ON_STACK);
+    const library = buildWaveLibrary(cards, deck);
+    return { library, x: readX('wave', 7), settings: { … }, deckKey: … };
+}
+export function calculate() {                // the model over what was read
+    const config = readInputs();
+    return { config, results: waveSweep(config.library, config.maxX, config.settings, config.deckKey) };
+}
+export function updateUI() { const { config, results } = calculate(); /* render */ }
+```
+
+- `readInputs()` is the only function that reads the page's inputs or deck
+  state. It returns defaults when the page has never been mounted, so other
+  code (and tests) can call it any time.
+- Models never import `deckConfig.js`, `opponentState.js`, `bigSpells.js`,
+  `opponentPages.js` or a page. Code that needs another page's maths imports
+  its **model** (`bigSpellComparison.js` → the four big-spell models;
+  Head to Head → `models/wildpair.js`), never the page.
+- Caches live where the state does: a model may memoise a pure result (keyed
+  on the Library's identity or a content key); per-page state (sample
+  shuffles, the selected row) stays in the page.
 
 The shell (router) loads the module and view the first time the page opens,
 renders the **shared page header** (card art, mana cost, rules text, the
@@ -28,8 +67,8 @@ a debounced, visibility-aware `updateUI` to deck changes for you).
 1. **Bottom line** — `renderBottomLine({ html, tone })` from
    `js/utils/components.js`. One or two sentences a player could repeat at the
    table, with the key numbers in `<strong>`. Tone is what the answer MEANS:
-   `good` / `warn` / `bad` / `flat`. Build the sentence in a **pure, exported,
-   tested** function (e.g. `summarize(result)`) so it can't drift from the
+   `good` / `warn` / `bad` / `flat`. Build the sentence in the model's
+   **pure, exported, tested** `summarize(result)` so it can't drift from the
    numbers.
 2. **Hero stats** — `renderHeroStats([...])`. Plain-word labels ("Free-spell
    chance", not `P(FREE)`; "Average card types", not `E[TYPES]`). Every
@@ -78,7 +117,17 @@ const deck = expandLibrary(library, card => ({ name: card.name, cmc: card.cmc, l
 - `libraryOf()` returns the same frozen object for the same list and options,
   so cache on its identity (`if (cache.lib !== library) …`). Lists are
   immutable: a changed deck is a new `cardsByName` object.
-- `exclude: ['Primal Surge']` takes the spell on the stack out (one copy).
+- **The card a page casts is not in the library either.** Each model exports
+  its card and the options: `ON_STACK = { exclude: ['Genesis Wave'] }` for a
+  spell (Genesis Wave, the Vow, Portent, Primal Surge, Abstract Performance),
+  `ON_BATTLEFIELD` for a permanent whose ability reads the library (Chimil,
+  Rashmi, Monstrous Vortex, Lumra). `libraryOf(deck, ON_STACK)` /
+  `deckCardList(deck, ON_STACK)` take one listed copy out, only when the list
+  names it — a list without it already is a library without it. On a plain
+  card list use `withoutCopy(cards, name)` (`models/cardList.js`). If the
+  card was drawn first (Lumra is cast from your hand), count it among the
+  cards you have seen (`handFromLibrary`). Not for cards the ability can't
+  find anyway (Wild Pair finds creatures) or for opponents' libraries.
 - Commanders still set the colour identity: pass their records
   (`DeckConfig.getCommanders().map(c => c.card)`) as `commanderCards` to
   `deckColorIdentity`, `analyzeCastability`, `buildLibrary` (Opening Hands)
