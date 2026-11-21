@@ -148,6 +148,32 @@ export function getCommanderCard() {
 }
 
 /**
+ * Every card in the command zone — one commander, partners, a Doctor and
+ * their companion, a commander and a background — in deck order.
+ * `card` is the card record when known (from the import, or from the list
+ * itself when the list names the commander), else null. Commanders never
+ * belong in the library: build libraries without every name here.
+ * @returns {Array<{name:string, card:Object|null}>}
+ */
+export function getCommanders() {
+    const listed = Array.isArray(deckState.commanders) ? deckState.commanders.filter(c => c?.name) : [];
+    const entries = listed.length
+        ? listed
+        : (deckState.commanderName ? [{ name: deckState.commanderName, card: deckState.commanderCard }] : []);
+    const cards = Object.values(deckState.cardsByName ?? {});
+    return entries.map(({ name, card }) => {
+        const target = frontName(name);
+        const own = card && frontName(card.name) === target ? card : null;
+        return { name, card: own ?? cards.find(c => c && frontName(c.name) === target) ?? null };
+    });
+}
+
+/** The command zone's card names (see getCommanders). */
+export function getCommanderNames() {
+    return getCommanders().map(c => c.name);
+}
+
+/**
  * Library size.
  * @param {boolean} includeNonPermanents - false excludes instants and sorceries
  */
