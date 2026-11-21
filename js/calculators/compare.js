@@ -10,6 +10,7 @@ import { compareDecks, summarizeComparison } from '../utils/deckCompare.js';
 import { renderBottomLine } from '../utils/components.js';
 import { DEFAULT_DECK_DATA } from '../utils/defaultDeckData.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
+import { dumbbell } from '../utils/viz.js';
 
 const NAME = 'compare';
 const CURRENT = 'current';
@@ -85,24 +86,49 @@ const fmtDelta = (m) => {
     return `${sign}${Math.round(abs)}`;
 };
 
+/**
+ * The shared scale a metric's two values are drawn on. Chances use 40–100%
+ * (wider only if a value falls below), counts start at zero, the land gap is
+ * symmetric around "typical". Exported for tests.
+ * @param {{key:string, fmt:string, a:number|null, b:number|null}} m
+ * @returns {[number, number]}
+ */
+export function metricScale(m) {
+    const vals = [m.a, m.b].filter(v => typeof v === 'number' && Number.isFinite(v));
+    if (vals.length === 0) return [0, 1];
+    const lo = Math.min(...vals);
+    const hi = Math.max(...vals);
+    if (m.fmt === 'pct') return [Math.min(0.4, Math.floor(lo * 10) / 10), 1];
+    if (m.fmt === 'signed') {
+        const r = Math.max(5, Math.ceil(Math.max(Math.abs(lo), Math.abs(hi)) + 1));
+        return [-r, r];
+    }
+    if (m.fmt === 'dec2') return [1, Math.max(6, Math.ceil(hi + 0.5))];
+    return [0, Math.max(m.key === 'cards' ? 10 : 6, Math.ceil(hi * 1.2))];
+}
+
 function renderTable(result) {
-    const rows = result.metrics.map(m => `
-        <tr>
-            <td>${m.hint ? `<span class="term" data-tip="${escapeHtml(m.hint)}" tabindex="0">${escapeHtml(m.label)}</span>` : escapeHtml(m.label)}</td>
-            <td class="${m.winner === 'A' ? 'is-win' : ''}">${fmtValue(m, m.a)}</td>
-            <td class="${m.winner === 'B' ? 'is-win' : ''}">${fmtValue(m, m.b)}</td>
-            <td><span class="cmp-delta${m.winner ? ` tone-better-${m.winner.toLowerCase()}` : ''}">${fmtDelta(m)}${m.winner ? ` · ${m.winner} better` : ''}</span></td>
-        </tr>`).join('');
+    const rows = result.metrics.map(m => {
+        const both = typeof m.a === 'number' && typeof m.b === 'number';
+        const [min, max] = metricScale(m);
+        const label = m.hint ? `<span class="term" data-tip="${escapeHtml(m.hint)}" tabindex="0">${escapeHtml(m.label)}</span>` : escapeHtml(m.label);
+        return `
+            <div class="cmp-row" role="listitem">
+                <div class="cmp-row-label">${label}</div>
+                <div class="cmp-row-val${m.winner === 'A' ? ' is-win' : ''}"><span class="cmp-row-tag">A</span>${fmtValue(m, m.a)}</div>
+                <div class="cmp-row-db">${both ? dumbbell({ a: m.a, b: m.b, min, max, winner: m.better ? m.winner : null, format: v => fmtValue(m, v), label: m.label }) : ''}</div>
+                <div class="cmp-row-val${m.winner === 'B' ? ' is-win' : ''}"><span class="cmp-row-tag">B</span>${fmtValue(m, m.b)}</div>
+                <div class="cmp-row-delta"><span class="cmp-delta${m.winner ? ` tone-better-${m.winner.toLowerCase()}` : ''}">${fmtDelta(m)}${m.winner ? ` · ${m.winner} better` : ''}</span></div>
+            </div>`;
+    }).join('');
     return `
         <section class="cmp-card" aria-labelledby="cmp-table-title">
             <div class="cmp-card-head">
                 <h3 class="cmp-card-title" id="cmp-table-title">Side by side</h3>
                 <span class="cmp-card-meta">${escapeHtml(result.a.format.label)}${result.sameFormat ? '' : ` vs ${escapeHtml(result.b.format.label)}`}</span>
             </div>
-            <table class="cmp-table">
-                <thead><tr><th scope="col">Check</th><th scope="col">A</th><th scope="col">B</th><th scope="col">B − A</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
+            <p class="cmp-key"><span class="viz-db-end is-better cmp-key-dot" aria-hidden="true"></span>the better deck, where more or less is clearly better · <span class="viz-db-end cmp-key-dot" aria-hidden="true"></span>shown, not judged</p>
+            <div class="cmp-rows" role="list">${rows}</div>
         </section>`;
 }
 

@@ -83,20 +83,28 @@ export const styles = `
 #compare-tab .cmp-card-title { font-size: var(--t-body); font-weight: 650; }
 #compare-tab .cmp-card-meta { font-size: var(--t-xs); color: var(--tx-dim); }
 
-#compare-tab .cmp-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-#compare-tab .cmp-table th,
-#compare-tab .cmp-table td { padding: 9px 18px; border-top: 1px solid var(--tx-rule); text-align: right; }
-#compare-tab .cmp-table th:first-child,
-#compare-tab .cmp-table td:first-child { text-align: left; }
-#compare-tab .cmp-table thead th {
-    border-top: 0;
-    font-size: var(--t-label);
-    font-weight: 600;
-    color: var(--tx-dim);
+/* Side by side: one dumbbell per check, A and B on the same scale */
+#compare-tab .cmp-key {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+    margin: 6px 0 0; padding: 0 18px; font-size: var(--t-xs); color: var(--tx-dim);
 }
-#compare-tab .cmp-table td { font-family: var(--font-mono); font-size: var(--t-sm); color: var(--tx-text); }
-#compare-tab .cmp-table td:first-child { font-family: var(--font-body); color: var(--tx-mid); }
-#compare-tab .cmp-table td.is-win { color: var(--tx-bright); font-weight: 600; }
+#compare-tab .cmp-key-dot { position: static; display: inline-block; width: 12px; height: 12px; margin: 0; }
+#compare-tab .cmp-key-dot + * { margin-left: 0; }
+#compare-tab .cmp-rows { margin-top: 8px; }
+#compare-tab .cmp-row {
+    display: grid;
+    grid-template-columns: minmax(150px, 1.3fr) 64px minmax(120px, 2fr) 64px minmax(96px, 0.9fr);
+    gap: 4px 14px;
+    align-items: center;
+    padding: 8px 18px;
+    border-top: 1px solid var(--tx-rule);
+}
+#compare-tab .cmp-row-label { font-size: var(--t-sm); color: var(--tx-mid); }
+#compare-tab .cmp-row-val { font-family: var(--font-mono); font-size: var(--t-sm); color: var(--tx-text); text-align: right; white-space: nowrap; }
+#compare-tab .cmp-row-val:nth-child(4) { text-align: left; }
+#compare-tab .cmp-row-val.is-win { color: var(--tx-bright); font-weight: 600; }
+#compare-tab .cmp-row-tag { display: none; margin-right: 6px; font-size: var(--t-label); color: var(--tx-dim); }
+#compare-tab .cmp-row-delta { text-align: right; }
 #compare-tab .cmp-delta { font-size: var(--t-xs); color: var(--tx-dim); white-space: nowrap; }
 #compare-tab .cmp-delta.tone-better-a,
 #compare-tab .cmp-delta.tone-better-b { color: var(--tx-good); }
@@ -164,8 +172,14 @@ export const styles = `
     #compare-tab .cmp-swap { justify-self: center; transform: rotate(90deg); }
     #compare-tab .cmp-diff { grid-template-columns: minmax(0, 1fr); }
     #compare-tab .cmp-diff-col + .cmp-diff-col { border-left: 0; }
-    #compare-tab .cmp-table th,
-    #compare-tab .cmp-table td { padding: 8px 10px; }
+    #compare-tab .cmp-row {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        padding: 10px 14px;
+    }
+    #compare-tab .cmp-row-label { grid-column: 1 / 3; }
+    #compare-tab .cmp-row-delta { grid-column: 3; grid-row: 1; }
+    #compare-tab .cmp-row-val:nth-child(4) { text-align: right; }
+    #compare-tab .cmp-row-tag { display: inline; }
 }
 `;
 
@@ -173,7 +187,7 @@ export const guide = {
     intro: 'Put two decks — or two versions of the same deck — side by side. Every deck you import is saved in this browser, so you can compare a list before and after an update, or two builds of the same commander.',
     howToRead: [
         'The <strong>bottom line</strong> names the biggest real differences between the two lists.',
-        'In the table, the <strong>bold</strong> value wins that row. Neutral counts (ramp, draw, removal) are shown but not judged — more is not automatically better.',
+        '<strong>Side by side</strong> puts A and B on one scale per check, joined by a line — the longer the line, the bigger the difference. Where more (or less) is clearly better, the better deck’s dot is filled green and its number is bold. Neutral counts (ramp, draw, removal) are shown but not judged — more is not automatically better.',
         'The <strong>curve</strong> overlays both decks’ nonland cards by mana value.',
         '<strong>Card differences</strong> lists what is only in A, only in B, and what changed copy counts.'
     ],

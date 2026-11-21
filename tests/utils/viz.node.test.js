@@ -224,6 +224,11 @@ describe('dumbbell', () => {
         assert.match(html, /is-a is-better/);
     });
 
+    it('takes an explicit winner over the direction', () => {
+        assert.match(dumbbell({ a: 0, b: -8, min: -9, max: 9, winner: 'A' }), /is-a is-better/);
+        assert.doesNotMatch(dumbbell({ a: 1, b: 2, min: 0, max: 4, better: 'higher', winner: null }), /is-better/);
+    });
+
     it('stays neutral without a direction or when equal', () => {
         assert.doesNotMatch(dumbbell({ a: 1, b: 2, min: 0, max: 4 }), /is-better/);
         assert.doesNotMatch(dumbbell({ a: 2, b: 2, min: 0, max: 4, better: 'higher' }), /is-better/);

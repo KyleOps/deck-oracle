@@ -506,6 +506,7 @@ export function bulletList(rows = []) {
  * @param {number} o.min
  * @param {number} o.max
  * @param {'higher'|'lower'|null} [o.better]
+ * @param {'A'|'B'|null} [o.winner] - overrides `better` when the caller has judged it
  * @param {(v:number)=>string} [o.format]
  * @param {string} [o.label] - accessible metric name
  * @param {[string,string]} [o.names] - ['A', 'B']
@@ -520,14 +521,16 @@ export function dumbbell(o = {}) {
     const b = finite(Number(o.b), min);
     const pos = v => ((Math.min(max, Math.max(min, v)) - min) / (max - min)) * 100;
     const same = Math.abs(a - b) < 1e-9;
-    const aBetter = !same && ((o.better === 'higher' && a > b) || (o.better === 'lower' && a < b));
-    const bBetter = !same && ((o.better === 'higher' && b > a) || (o.better === 'lower' && b < a));
+    // An explicit winner (e.g. "closer to zero") overrides the direction.
+    const judged = o.winner !== undefined ? Boolean(o.winner) : Boolean(o.better);
+    const aBetter = !same && (o.winner !== undefined ? o.winner === 'A' : ((o.better === 'higher' && a > b) || (o.better === 'lower' && a < b)));
+    const bBetter = !same && (o.winner !== undefined ? o.winner === 'B' : ((o.better === 'higher' && b > a) || (o.better === 'lower' && b < a)));
     const left = Math.min(pos(a), pos(b));
     const width = Math.abs(pos(a) - pos(b));
     const verdict = same ? 'the same' : aBetter ? `${nameA} is better` : bBetter ? `${nameB} is better` : 'different';
-    const aria = `${o.label ? `${stripTags(o.label)}: ` : ''}${nameA} ${format(a)}, ${nameB} ${format(b)}${o.better ? ` — ${verdict}` : ''}`;
+    const aria = `${o.label ? `${stripTags(o.label)}: ` : ''}${nameA} ${format(a)}, ${nameB} ${format(b)}${judged ? ` — ${verdict}` : ''}`;
     const end = (v, name, isBetter, cls) =>
-        `<span class="viz-db-end ${cls}${isBetter ? ' is-better' : ''}${o.better && !isBetter && !same ? ' is-worse' : ''}" style="left:${pos(v).toFixed(2)}%" data-tip="${attr(`${name}: ${format(v)}`)}"><i>${escapeHtml(name)}</i></span>`;
+        `<span class="viz-db-end ${cls}${isBetter ? ' is-better' : ''}${judged && !isBetter && (aBetter || bBetter) ? ' is-worse' : ''}" style="left:${pos(v).toFixed(2)}%" data-tip="${attr(`${name}: ${format(v)}`)}"><i>${escapeHtml(name)}</i></span>`;
     return `
         <span class="viz-db" role="img" aria-label="${attr(aria)}">
             <span class="viz-db-line" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"></span>
