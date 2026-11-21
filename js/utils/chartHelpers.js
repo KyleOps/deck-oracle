@@ -2,7 +2,6 @@
  * Chart.js Helper Utilities
  * Standardizes chart creation and updates across all calculators.
  */
-import { getChartAnimationConfig } from './simulation.js';
 
 /**
  * Terminal chart palette.
@@ -75,7 +74,15 @@ const TYPE_KEYS = ['creature', 'instant', 'sorcery', 'artifact', 'enchantment', 
 /** Bumped on every theme application; charts built under an older theme are rebuilt. */
 let themeVersion = 0;
 
-function withAlpha(color, alpha) {
+/**
+ * A colour at the given opacity: `#rrggbb`, `rgb()` and `rgba()` become
+ * `rgba(r, g, b, alpha)`; anything else (a name, `transparent`) is returned
+ * unchanged.
+ * @param {string} color
+ * @param {number} alpha - 0..1
+ * @returns {string}
+ */
+export function withAlpha(color, alpha) {
     const hex = String(color).trim().match(/^#([0-9a-f]{6})$/i);
     if (hex) {
         const n = parseInt(hex[1], 16);
@@ -87,6 +94,24 @@ function withAlpha(color, alpha) {
         return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
     return color;
+}
+
+/**
+ * Chart.js animation options: data changes ease into place (the first draw
+ * never animates — see createOrUpdateChart).
+ * @returns {Object}
+ */
+export function getChartAnimationConfig() {
+    return {
+        animation: { duration: 750, easing: 'easeInOutQuart' },
+        animations: {
+            tension: { duration: 500, easing: 'easeInOutCubic', from: 0.4, to: 0.3, loop: false }
+        },
+        transitions: {
+            active: { animation: { duration: 300 } },
+            resize: { animation: { duration: 0 } }
+        }
+    };
 }
 
 /**
