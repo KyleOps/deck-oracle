@@ -6,7 +6,7 @@
 
 import { registerCalculator, updateCalculatorIfActive } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats } from '../utils/components.js';
-import { cardRef, escapeHtml } from '../data/glossary.js';
+import { cardRef } from '../data/glossary.js';
 import * as OpponentState from '../utils/opponentState.js';
 import { one, pct } from '../utils/text.js';
 import {

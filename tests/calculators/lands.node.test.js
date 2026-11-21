@@ -3,7 +3,7 @@ import { assert, assertClose } from '../node-test-helper.js';
 import { drawTypeMin } from '../../js/utils/hypergeometric.js';
 import * as DeckConfig from '../../js/utils/deckConfig.js';
 import {
-    calculate, getDeckConfig, calculateOpeningHands, calculateLandDropByTurn, calculateLandDropMiss,
+    calculate, readInputs, calculateOpeningHands, calculateLandDropByTurn, calculateLandDropMiss,
     getShareParams, applyShareParams, dealLandGames, runSampleReveals, updateUI
 } from '../../js/calculators/lands.js';
 import { drawSchedule } from '../../js/utils/mulliganModel.js';
@@ -13,7 +13,7 @@ const card = (name, count, type_line, cmc = 0, oracle_text = '') => ({ name, cou
 
 describe('Land Drops — Commander example deck', () => {
     it('uses the 98-card library (100 less two commanders) and everyone-draws rule', () => {
-        const config = getDeckConfig();
+        const config = readInputs();
         assert.strictEqual(config.format.key, 'commander');
         assert.strictEqual(config.deckSize, 98);
         assert.strictEqual(config.onPlay, true);
@@ -36,7 +36,7 @@ describe('Land Drops — 60-card deck', () => {
     }));
 
     it('reads lands and cheap ramp from the list', () => {
-        const config = getDeckConfig();
+        const config = readInputs();
         assert.strictEqual(config.format.key, 'constructed');
         assert.strictEqual(config.landCount, 24);
         assert.strictEqual(config.ramp, 6);
@@ -64,7 +64,7 @@ describe('Land Drops — 60-card deck', () => {
     it('share params switch to the draw, count ramp and change the keep range', () => {
         const before = calculate();
         applyShareParams(new URLSearchParams('ldDraw=1&ldRamp=1&ldKeep=3-5'));
-        const config = getDeckConfig();
+        const config = readInputs();
         assert.strictEqual(config.onPlay, false);
         assert.strictEqual(config.countRamp, true);
         assert.deepStrictEqual(config.keepRange, [3, 5]);
@@ -74,7 +74,7 @@ describe('Land Drops — 60-card deck', () => {
         assert.ok(after.landsOnly, 'keeps the lands-only odds for comparison');
         applyShareParams(new URLSearchParams('ldKeep=6-2&ldMull=0'));
         assert.deepStrictEqual(getShareParams().ldKeep, '3-5', 'reversed ranges are ignored');
-        assert.strictEqual(getDeckConfig().keepRange, null);
+        assert.strictEqual(readInputs().keepRange, null);
     });
 
     it('renders without a browser', () => {

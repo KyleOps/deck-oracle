@@ -2,11 +2,11 @@ import { describe, it } from 'node:test';
 import { assert, assertClose } from '../node-test-helper.js';
 import * as DeckConfig from '../../js/utils/deckConfig.js';
 import {
-    calculate, calcMultiTypeSuccess, runSampleReveals, getDeckConfig, getState, setCardTypes,
+    calculate, calcMultiTypeSuccess, runSampleReveals, readInputs, getState, setCardTypes,
     getShareParams, applyShareParams, summarizeMulligan, describeRequirement, assignCards,
-    simulateGames, TEMPLATES, SOURCES
+    TEMPLATES, SOURCES
 } from '../../js/calculators/mulligan.js';
-import { mulliganPlan, drawSchedule } from '../../js/utils/mulliganModel.js';
+import { mulliganPlan, drawSchedule, simulateGames } from '../../js/utils/mulliganModel.js';
 import { FORMATS } from '../../js/utils/format.js';
 
 /** Small seeded PRNG so simulation checks are repeatable. */
@@ -50,7 +50,7 @@ describe('Mulligan Planner — compatibility', () => {
 
 describe('Mulligan Planner — formats', () => {
     it('Commander: 98-card library (100 less two commanders), free first mulligan, everyone draws', () => {
-        const config = getDeckConfig();
+        const config = readInputs();
         assert.strictEqual(config.format.key, 'commander');
         assert.strictEqual(config.deckSize, 98);
         assert.strictEqual(config.freeMulligan, true);

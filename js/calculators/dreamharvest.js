@@ -9,13 +9,12 @@ import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
 import { describeDots, dotPlot } from '../utils/viz.js';
 import * as OpponentState from '../utils/opponentState.js';
-import { mulberry32 } from '../utils/random.js';
 import { one, pct } from '../utils/text.js';
 import {
     objectId, readOpponents, frameScheduler, opponentLabel, cardChip, miniBars,
     renderOpponentPlaceholder, renderLoadingNote, bindOpponentActions, renderDisclosure, hasRoom
 } from '../utils/opponentPages.js';
-import { opponentLibrary, createRevealer, deckSeed, formatRange, countWord } from '../utils/models/opponentLibrary.js';
+import { opponentLibrary, createRevealer, formatRange, countWord } from '../utils/models/opponentLibrary.js';
 import {
     BIG_SPELL_MV, DREAM_HARVEST_COST, SIM_RUNS, calculateDreamHarvestStats, harvestDots, resolveDreamHarvest,
     summarizeDreamHarvest, totalStolenDistribution

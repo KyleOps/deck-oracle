@@ -14,7 +14,7 @@ import { buildDeckFromCardData } from '../utils/sampleSimulator.js';
 import { libraryOf } from '../utils/library.js';
 import { pct } from '../utils/text.js';
 import { tailRows } from '../utils/discover.js';
-import { cardRef, term, escapeHtml } from '../data/glossary.js';
+import { cardRef, escapeHtml } from '../data/glossary.js';
 import { describeDots, dotPlot } from '../utils/viz.js';
 import {
     DEFAULT_MV, SAMPLE_BATCH, VORTEX_COST, analyzeVortex, discoverPool, drawSamples, pointAt, summarize, vortexDots

@@ -13,7 +13,7 @@ import { cardRef, escapeHtml } from '../data/glossary.js';
 import { libraryOf, withoutRemoved } from '../utils/library.js';
 import { pct, plural } from '../utils/text.js';
 import {
-    WILD_PAIR_COST, analyzeDeck, fitVerdict, groupAt, snapToTotal, summarize
+    analyzeDeck, fitVerdict, groupAt, snapToTotal, summarize
 } from '../utils/models/wildpair.js';
 
 // ==================== INPUTS ====================

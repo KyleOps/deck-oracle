@@ -44,8 +44,8 @@ import { foldTail, mergeDists } from '../utils/discover.js';
 import { quantile as percentileFromDist } from '../utils/stats.js';
 import { libraryOf } from '../utils/library.js';
 import { pct } from '../utils/text.js';
-import { cardRef, term, escapeHtml } from '../data/glossary.js';
-import { ENGINES, buildContext, compareEngines, curveSplit, outcomeDist, summarize, verdict } from '../utils/models/versus.js';
+import { cardRef, escapeHtml } from '../data/glossary.js';
+import { ENGINES, buildContext, compareEngines, curveSplit, summarize, verdict } from '../utils/models/versus.js';
 
 let curveChart = null;
 
