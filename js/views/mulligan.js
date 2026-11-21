@@ -226,7 +226,6 @@ export const styles = `
 #mulligan-tab .mull-card.is-bottom { text-decoration: line-through; color: var(--tx-dim); background: transparent; border-style: dashed; }
 #mulligan-tab .mull-card .mull-dot { width: 7px; height: 7px; }
 #mulligan-tab .mull-turn { font-size: var(--t-label); color: var(--tx-dim); font-family: var(--font-mono); }
-#mulligan-tab .mull-game-note { font-size: var(--t-xs); color: var(--tx-dim); }
 #mulligan-tab .mull-more { margin: 12px 16px 16px; }
 #mulligan-tab .mull-empty { padding: 16px; font-size: var(--t-sm); color: var(--tx-dim); }
 

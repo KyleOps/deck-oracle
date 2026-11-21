@@ -696,7 +696,6 @@ export const styles = `
 #odds-tab .odds-table tbody tr:last-child > * { border-bottom: 0; }
 #odds-tab .odds-table td { font-family: var(--font-mono); color: var(--tx-text); }
 #odds-tab .odds-table td.dim { color: var(--tx-dim); }
-#odds-tab .odds-table .gcol { color: var(--g); }
 #odds-tab .odds-table tbody tr:hover { background: var(--tx-row-hi); }
 #odds-tab .odds-table tbody tr.is-sel { background: var(--accent-soft); }
 #odds-tab .odds-table tbody tr.is-sel th { box-shadow: inset 3px 0 0 var(--tx-accent); }

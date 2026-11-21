@@ -147,10 +147,9 @@ export const styles = `
 #versus-tab .vs-peak-value { font-family: var(--font-mono); color: var(--tx-bright); }
 #versus-tab .vs-peak-sub { font-size: var(--t-label); }
 #versus-tab .tx-sim-block-title {
+    margin-bottom: 10px;
     font-size: var(--t-xs);
     font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
     color: var(--tx-mid);
 }
 #versus-tab .vs-dists {

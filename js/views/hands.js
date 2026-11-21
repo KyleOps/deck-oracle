@@ -211,11 +211,6 @@ export const styles = `
 
 #hands-tab .hl-card.is-castable { box-shadow: 0 0 0 2px var(--tx-accent), var(--shadow-md); }
 
-#hands-tab .hl-card.is-bottomed {
-    filter: grayscale(1) brightness(0.6);
-    opacity: 0.55;
-}
-
 #hands-tab .hl-tag {
     position: absolute;
     left: 50%;

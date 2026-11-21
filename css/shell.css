@@ -689,7 +689,6 @@
 
 .page-deck-badge:empty { display: none; }
 
-.page-placeholder,
 .page-error {
     padding: 48px 24px;
     text-align: center;
@@ -726,7 +725,6 @@
 }
 
 .calc-body .panel,
-.calc-body .portent-grid > div,
 .ov-card {
     background: var(--tx-panel);
     border: 1px solid var(--tx-rule);

@@ -26,26 +26,6 @@
 
 .tx-h .tx-h-r:hover { color: var(--tx-bright); }
 
-/* ==================== TERMINAL INPUTS ==================== */
-
-.tx-input {
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    padding: 8px 10px;
-    font-family: inherit;
-    font-size: var(--t-sm);
-    outline: none;
-    border-radius: 0;
-    width: 100%;
-    box-sizing: border-box;
-    transition: border-color 0.12s;
-}
-
-.tx-input:focus {
-    border-color: var(--tx-dim);
-}
-
 /* ==================== TERMINAL RANGE SLIDER ==================== */
 
 .tx-slider {
@@ -77,32 +57,6 @@
     cursor: ew-resize;
     border-radius: 0;
     border: 0;
-}
-
-/* ==================== TERMINAL PRESET CHIPS ==================== */
-
-.tx-chip {
-    padding: 4px 10px;
-    border: 1px solid var(--tx-rule);
-    font-family: inherit;
-    font-size: var(--t-xs);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--tx-mid);
-    background: transparent;
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-}
-
-.tx-chip:hover {
-    background: var(--tx-panel-alt);
-    color: var(--tx-text);
-}
-
-.tx-chip.active {
-    background: var(--tx-amber);
-    color: var(--tx-bg);
-    border-color: var(--tx-amber);
 }
 
 /* ==================== HERO STAT BLOCK ==================== */
@@ -145,16 +99,6 @@
     line-height: 1.45;
 }
 
-/* ==================== LIBRARY TYPE BAR ==================== */
-
-.tx-bar {
-    height: 14px;
-    display: flex;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    overflow: hidden;
-}
-
 /* Inline p-bar for sweep table */
 .tx-p-bar {
     display: inline-block;
@@ -173,16 +117,6 @@
     opacity: 0.7;
     transition: width 0.15s;
 }
-
-/* ==================== PORTENT 3-COL LAYOUT ==================== */
-
-/* Hero numerics 3-up */
-
-/* X sweep table */
-
-/* Live tape */
-
-/* Sample reveal */
 
 /* ==================== SHARED TERMINAL COMPONENTS (used site-wide) ==================== */
 
@@ -219,35 +153,6 @@
 
 .tx-hero .tx-stat-value { font-size: var(--t-xxl); }
 .tx-hero .tx-stat-value.medium { font-size: var(--t-xl); }
-
-/* Verdict pill */
-.tx-verdict {
-    display: inline-block;
-    padding: 1px 7px;
-    border: 1px solid currentColor;
-    font-size: var(--t-micro);
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    vertical-align: middle;
-    white-space: nowrap;
-}
-
-/* Recommendation banner */
-.tx-rec {
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel-alt);
-    font-size: var(--t-xs);
-    color: var(--tx-text);
-    line-height: 1.55;
-}
-
-.tx-rec-icon { flex-shrink: 0; }
-.tx-rec strong { color: var(--tx-bright); }
 
 /* Empty-state line */
 .tx-empty {
@@ -297,10 +202,6 @@
 .tx-sweep-table tbody tr.rec-row td:first-child {
     box-shadow: inset 2px 0 0 var(--tx-amber);
 }
-
-/* Avoid doubled hairlines where stacked terminal blocks meet */
-.tx-hero + .insight-box,
-.tx-rec + .insight-box { border-top: 0; }
 
 /* ==================== INPUT GROUPS ==================== */
 
@@ -487,42 +388,7 @@
     font-feature-settings: 'tnum' 1;
 }
 
-/* ==================== IMPORT SECTION ==================== */
-
-.import-btn {
-    padding: 6px 14px;
-    color: var(--tx-bg);
-    font-weight: 600;
-    font-family: inherit;
-    font-size: var(--t-xs);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    cursor: pointer;
-    white-space: nowrap;
-    user-select: none;
-    background: var(--tx-amber);
-    border: 1px solid var(--tx-amber);
-    border-radius: 0;
-    box-shadow: none;
-    transition: background 0.12s, color 0.12s;
-}
-
-.import-btn:hover {
-    background: transparent;
-    color: var(--tx-amber);
-    transform: none;
-    filter: none;
-    box-shadow: none;
-}
-
-.import-btn:active { transform: none; }
-
-.import-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    animation: none;
-}
+/* ==================== IMPORT STATUS ==================== */
 
 .import-status {
     margin-top: var(--spacing-sm);
@@ -560,24 +426,6 @@
 @keyframes fadeInUp { from { opacity: 0; } to { opacity: 1; } }
 @keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 
-.deck-name {
-    padding: 6px 14px;
-    font-size: var(--t-label);
-    color: var(--tx-amber);
-    background: var(--tx-panel);
-    border-bottom: 1px solid var(--tx-rule);
-    border-radius: 0;
-}
-
-.deck-name .label {
-    color: var(--tx-dim);
-    font-size: var(--t-micro);
-    letter-spacing: 0.10em;
-    text-transform: uppercase;
-    display: block;
-    margin-bottom: 2px;
-}
-
 /* ==================== CHARTS ==================== */
 
 .chart-container {
@@ -596,103 +444,12 @@
     font-size: var(--t-micro);
 }
 
-/* ==================== COMPARISON TABLE ==================== */
+/* ==================== TABLE WRAPPER ==================== */
 
 .table-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     max-width: 100%;
-}
-
-.comparison-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--t-xs);
-    min-width: 400px;
-    font-feature-settings: 'tnum' 1;
-}
-
-.comparison-table th,
-.comparison-table td {
-    padding: 6px 14px;
-    text-align: center;
-    vertical-align: middle;
-    border-bottom: 1px solid var(--tx-rule);
-    color: var(--tx-text);
-}
-
-.comparison-table th {
-    font-size: var(--t-micro);
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    background: var(--tx-panel);
-    color: var(--tx-dim);
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.comparison-table tbody tr { cursor: pointer; }
-.comparison-table tbody tr:nth-child(even) { background: var(--tx-panel); }
-.comparison-table tbody tr:hover { background: var(--tx-panel-alt) !important; transform: none; }
-
-.comparison-table .current {
-    font-weight: 700;
-    background: var(--tx-row-hi) !important;
-    border-left: 2px solid var(--tx-amber);
-    color: var(--tx-bright);
-}
-
-/* ==================== INSIGHT BOX ==================== */
-
-.insight-box {
-    padding: var(--spacing-md) 16px;
-    margin: 0;
-    border-top: 1px solid var(--tx-rule);
-    background: var(--tx-panel-alt);
-    border-radius: 0;
-    border-left: 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.insight-box h3 {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    margin-bottom: var(--spacing-sm);
-    color: var(--tx-dim);
-    border: none;
-    padding: 0;
-}
-
-.insight-box p,
-.insight-body {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-    line-height: 1.6;
-}
-
-.insight-body { margin-bottom: 8px; }
-.insight-body:last-child { margin-bottom: 0; }
-
-.insight-foot {
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--tx-rule);
-    font-size: var(--t-label);
-    color: var(--tx-dim);
-}
-
-/* ==================== STAT CARDS ==================== */
-
-/* ==================== MULLIGAN CARD TYPES ==================== */
-
-.type-header {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
 }
 
 /* ==================== COLLAPSIBLE PANELS ==================== */
@@ -787,8 +544,6 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
-
-/* ==================== BIG SPELL COMPARISON ==================== */
 
 /* ==================== GLOBAL CONTROL THEMING ====================
    Native form controls inside calculator panels used to render with the OS
@@ -926,10 +681,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     text-shadow: none;
 }
 
-/* ==================== TERMINAL FORM PATTERNS ====================
-
-/* Segmented preset selector (mulligan strategy, and reusable elsewhere) */
-
 /* Labelled slider block */
 .calculator-content .input-group > label {
     display: block;
@@ -946,8 +697,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     font-size: var(--t-label);
     color: var(--tx-dim);
 }
-
-/* Primal Surge's payoff model is deliberately written as an equation: the
 
 /* Chrome paints its own light runnable-track over an appearance:none range;
    clear it so the input's own background is the only track. */
@@ -971,137 +720,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
     line-height: 1.6;
 }
 
-/* ==================== OUTCOME MATRIX (2x2 decision quality) ==================== */
-
-.tx-matrix {
-    border: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-    margin-bottom: var(--spacing-lg);
-}
-
-.tx-mx-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-}
-
-.tx-mx-table th {
-    font-size: var(--t-micro);
-    font-weight: 500;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    padding: 8px 12px;
-    text-align: left;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.tx-mx-rowlabel {
-    width: 150px;
-    border-right: 1px solid var(--tx-rule);
-    vertical-align: middle;
-    color: var(--tx-mid) !important;
-}
-
-.tx-mx-cell {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    border-right: 1px solid var(--tx-rule);
-    vertical-align: top;
-}
-
-.tx-mx-cell:last-child { border-right: 0; }
-
-/* Diagonal (the strategy was right) reads as the resting state; off-diagonal
-   errors get a faint warning wash so mistakes are findable at a glance. */
-.tx-mx-cell.is-good { background: color-mix(in oklab, var(--tx-green) 5%, transparent); }
-.tx-mx-cell.is-bad  { background: color-mix(in oklab, var(--tx-red) 5%, transparent); }
-
-.tx-mx-mark {
-    font-size: var(--t-xs);
-    float: right;
-    line-height: 1;
-}
-
-.tx-mx-label {
-    font-size: var(--t-label);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--tx-mid);
-    margin-bottom: 4px;
-}
-
-.tx-mx-value {
-    font-size: 22px;
-    font-weight: 700;
-    line-height: 1.1;
-    font-feature-settings: 'tnum' 1;
-    margin-bottom: 6px;
-}
-
-.tx-mx-note {
-    font-size: var(--t-label);
-    color: var(--tx-dim);
-    line-height: 1.45;
-    margin-top: 6px;
-}
-
-.tx-mx-foot {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    padding: 10px 14px;
-    font-size: var(--t-micro);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
-
-.tx-mx-acc {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--tx-bright);
-    letter-spacing: 0;
-    font-feature-settings: 'tnum' 1;
-}
-
-.tx-mx-foot-note {
-    margin-left: auto;
-    text-transform: none;
-    letter-spacing: 0;
-    font-size: var(--t-label);
-}
-
 /* ==================== FOCUS ====================
    One visible, consistent focus ring in the brand accent. Keyboard users get
    the same affordance everywhere instead of the browser default in some places
    and nothing in others. */
-.calculator-content :focus-visible,
-.tx-tab:focus-visible,
-.tx-group:focus-visible,
-.tx-fetch-btn:focus-visible,
-.rdr-row:focus-visible,
-.tx-footer-btn:focus-visible {
+.calculator-content :focus-visible {
     outline: 2px solid var(--tx-accent);
     outline-offset: -2px;
-}
-
-/* Skip link — keyboard users shouldn't have to tab the whole nav every time. */
-.tx-skip {
-    position: absolute;
-    left: -9999px;
-    top: 0;
-    z-index: var(--z-modal);
-    padding: 10px 16px;
-    background: var(--tx-accent);
-    color: #0a0b0a;
-    font-size: var(--t-xs);
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.tx-skip:focus {
-    left: 0;
 }
 
 /* ==================== MEASURE CONTROL ====================
@@ -1122,17 +747,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .calculator-content .input-group {
     max-width: 720px;
 }
-
-/* A card-type name is a short label, not a paragraph. */
-
-.type-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-}
-
-/* Segmented preset control shouldn't span a metre of screen. */
 
 /* Prose measure — roughly 70 characters. */
 .calculator-content .panel > p,
@@ -1198,19 +812,11 @@ input[type="range"].tx-slider::-moz-range-thumb {
     .panel-config { position: static; max-height: none; }
 }
 
-/* Portent's bespoke three-column dashboard, made fluid: side rails scale with
-
 /* Hero rows reflow on available space, not viewport width. */
 @container shell (max-width: 720px) {
-    .tx-hero,
-    .portent-hero {
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    }
-    .tx-hero .tx-stat,
-    .portent-hero .tx-stat { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
+    .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .tx-hero .tx-stat { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
 }
-
-/* The deck radar follows the same rule. */
 
 /* A wide chart gains a little height so it does not read as a letterbox strip,
    but not so much that two stacked charts stop fitting on one screen. */
@@ -1222,7 +828,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
    Padding scales with the container so dense screens stay dense and roomy ones
    breathe, without a stack of breakpoints. */
 .tx-h,
-.rdr-col,
 .panel > .panel-content {
     padding-inline: clamp(12px, 1.4cqi, 20px);
 }
@@ -1247,9 +852,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 /* Grid and flex children default to min-width:auto, which makes wide content
    (charts, long tables) prevent their column from shrinking at all. */
-.portent-left,
-.portent-center,
-.portent-right,
 .main-grid > .panel {
     min-width: 0;
 }
@@ -1284,91 +886,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     border-color: var(--tx-rule-hi);
     color: var(--tx-dim);
     cursor: not-allowed;
-}
-
-/* ==================== SIMULATION SUMMARY ====================
-   One standard shape for every calculator's sample section: headline metrics,
-   the distribution of outcomes, then the outcome breakdown. Replaces per-file
-   inline-styled summary blocks that all looked slightly different. */
-
-.tx-sim {
-    border: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-    margin-bottom: var(--spacing-lg);
-}
-
-.tx-sim-metrics {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.tx-sim-metric {
-    padding: 12px 14px;
-    border-right: 1px solid var(--tx-rule);
-}
-
-.tx-sim-metric:last-child { border-right: 0; }
-
-.tx-sim-metric-label {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-wide);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 6px;
-}
-
-.tx-sim-metric-value {
-    font-size: var(--t-xl);
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: var(--track-tight);
-    font-feature-settings: 'tnum' 1;
-}
-
-.tx-sim-metric-sub {
-    font-size: var(--t-micro);
-    color: var(--tx-mid);
-    margin-top: 5px;
-}
-
-.tx-sim-block {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.tx-sim .tx-sim-block:last-child { border-bottom: 0; }
-
-.tx-sim-block-title {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-wide);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 10px;
-}
-
-.tx-sim-outcomes {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 4px 20px;
-}
-
-.tx-sim-outcome {
-    display: grid;
-    grid-template-columns: 12px 1fr 64px 48px;
-    align-items: center;
-    gap: 8px;
-    font-size: var(--t-xs);
-    padding: 3px 0;
-}
-
-.tx-sim-outcome-mark { text-align: center; }
-.tx-sim-outcome-label { color: var(--tx-text); }
-
-.tx-sim-outcome-value {
-    text-align: right;
-    font-feature-settings: 'tnum' 1;
-    font-weight: 600;
 }
 
 /* Distribution rows, shared by every calculator that shows one. */
@@ -1413,8 +930,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 @container shell (max-width: 620px) {
     .dist-row { grid-template-columns: 72px 1fr 44px; }
     .dist-marker { display: none; }
-    .tx-sim-outcome { grid-template-columns: 12px 1fr 44px; }
-    .tx-sim-outcome .tx-p-bar { display: none; }
 }
 
 .dist-bar.is-bad  { background: var(--tx-bad); }
@@ -1440,7 +955,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 .tx-sim-controls input[type="number"] { width: 88px; text-align: center; }
 
-.tx-sim-controls-hint,
 .sim-import-note {
     font-size: var(--t-micro);
     color: var(--tx-dim);
@@ -1499,52 +1013,12 @@ input[type="range"].tx-slider::-moz-range-thumb {
    that a full-width chart gets. */
 .panel-row .chart-container { min-height: 0; }
 
-/* ==================== CHIMIL FIT VERDICT ====================
-   The "should I run this card" answer, stated before the supporting detail. */
-
-.chimil-fit {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 14px;
-    align-items: start;
-    padding: 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel-alt);
-}
-
-/* ==================== CHIMIL SAMPLE GAMES ====================
-   One row per simulated game, showing the actual sequence of discovers. The
-   average is in the summary above; this is what a game feels like. */
-
-.chimil-game {
-    border-bottom: 1px solid var(--tx-rule);
-    padding: 10px 0;
-}
-
-/* The outcome the player is worried about: a cheap creature off a six-mana rock. */
-
-/* Honest limit of the model, stated next to the verdict rather than buried. */
-
 /* ==================== WILD PAIR ====================
    Wild Pair searches rather than reveals, so there is no probability to show —
    the product is the GROUPING. Everything here answers "which of my creatures
    find each other", with the mana consequence as a secondary line. One shape
    repeats at three scales: a fixed-width total badge on the left, the creatures
    that share it, and what an activation there is worth. */
-
-/* --- Selected group: the primary panel --- */
-
-.wp-group-detail {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 16px;
-    align-items: center;
-    padding: 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel-alt);
-}
-
-/* The search key itself, in the display band — it is the one number the whole
 
 /* --- The search pool: the full roster at the selected total --- */
 
@@ -1781,14 +1255,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 .wp-single-pt { font-feature-settings: 'tnum' 1; }
 
-/* --- Fit verdict (secondary panel) --- */
-
-/* The rules text that decides every number above it — stated, not buried. */
-
-/* Data-quality warnings: variable power/toughness boxes, missing data. */
-
-/* The total is the join key, so it gets the fixed column and a tabular figure. */
-
 /* The pair ladder carries more columns than the other sweep tables, so it is
    the one that runs out of room first. Let it scroll inside its own box rather
    than be clipped by an ancestor, and drop the P/T strip when narrow. */
@@ -2011,7 +1477,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
    sentence-case labels, mono only for numbers) in one place, so every
    calculator inherits the new look without per-page overrides. */
 
-.tx-input,
 .input-group input[type="text"],
 .input-group input[type="number"],
 .input-group textarea,
@@ -2027,7 +1492,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 .calc-body input[type="number"] { font-family: var(--font-mono); }
 
-.tx-input:focus,
 .input-group input:focus,
 .input-group textarea:focus,
 .calc-body select:focus {
@@ -2097,27 +1561,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     box-shadow: 0 0 0 1px var(--tx-accent), 0 0 0 5px var(--accent-soft);
 }
 
-/* Preset chips: pills, sentence case; selected = soft accent, not solid */
-.tx-chip {
-    height: 28px;
-    padding: 0 11px;
-    border: 1px solid var(--tx-rule-hi);
-    border-radius: var(--radius-full);
-    font-family: var(--font-mono);
-    font-size: var(--t-xs);
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--tx-mid);
-}
-
-.tx-chip:hover { color: var(--tx-bright); border-color: var(--tx-dim); background: transparent; }
-
-.tx-chip.active {
-    background: var(--accent-soft);
-    color: var(--tx-accent);
-    border-color: color-mix(in srgb, var(--tx-accent) 50%, transparent);
-}
-
 /* Hero stats */
 .tx-stat { padding: 18px 20px; }
 
@@ -2129,23 +1572,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 .tx-stat-value { font-family: var(--font-mono); font-weight: 600; }
-
-/* Verdict pill */
-.tx-verdict {
-    padding: 2px 9px;
-    border-radius: var(--radius-full);
-    font-size: var(--t-micro);
-    letter-spacing: 0.06em;
-    background: color-mix(in srgb, currentColor 12%, transparent);
-    border-color: color-mix(in srgb, currentColor 40%, transparent);
-}
-
-/* Recommendation note */
-.tx-rec {
-    font-size: var(--t-xs);
-    padding: 12px 16px;
-    background: var(--tx-panel-alt);
-}
 
 /* Collapsible detail sections */
 .tx-collapse-head {
@@ -2179,9 +1605,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .tx-collapse-head:hover { color: var(--tx-bright); background: var(--tx-panel-alt); }
 
 /* Tables */
-.tx-sweep-table thead th,
-.portent-sweep-table thead th,
-.comparison-table th {
+.tx-sweep-table thead th {
     font-size: var(--t-label);
     font-weight: 600;
     letter-spacing: 0.04em;
@@ -2189,8 +1613,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
     color: var(--tx-dim);
 }
 
-.tx-sweep-table tbody td,
-.portent-sweep-table tbody td { font-family: var(--font-mono); font-size: var(--t-xs); }
+.tx-sweep-table tbody td { font-family: var(--font-mono); font-size: var(--t-xs); }
 .tx-sweep-table tbody td.ta-l { font-family: var(--font-body); }
 
 .tx-sweep-table tbody tr.rec-row td:first-child { box-shadow: inset 3px 0 0 var(--tx-accent); }

@@ -535,7 +535,6 @@ ${s} .opp-chip.is-dim { opacity: 0.7; }
 ${s} .opp-chip-mv { flex: none; font-family: var(--font-mono); font-size: var(--t-label); color: var(--tx-mid); }
 ${s} .opp-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
 ${s} .opp-arrow { color: var(--tx-dim); padding: 0 2px; }
-${s} .opp-total { font-family: var(--font-mono); font-weight: 600; color: var(--tx-bright); white-space: nowrap; }
 ${s} .opp-miss { font-size: var(--t-xs); color: var(--tx-dim); }
 
 ${s} .opp-games { display: grid; }

@@ -244,18 +244,6 @@ export const styles = `
 }
 #vortex-tab .vx-pool-row dd { margin: 0; color: var(--tx-text); }
 #vortex-tab .vx-sep { color: var(--tx-dim); margin: 0 6px; }
-#vortex-tab .tx-sim-block-title {
-    font-size: var(--t-xs);
-    font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--tx-mid);
-}
-#vortex-tab .vx-dist-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-}
 
 @media (max-width: 560px) {
     #vortex-tab .vx-step { grid-template-columns: minmax(0, 1fr); gap: 2px; }
