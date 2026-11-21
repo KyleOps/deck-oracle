@@ -386,6 +386,7 @@ class Game {
         this.spent = 0;
         this.peak = 0;
         this.turnColors = 0;
+        this.availColors = 0;
         this.drops = 1;
         this.dropsUsed = 0;
         this.extraDrops = 0;
@@ -804,16 +805,29 @@ class Game {
         return true;
     }
 
-    /** Mana you could still make this turn: floating plus every untapped source. */
+    /**
+     * Mana you could still make this turn: floating plus every untapped
+     * source. Also sets availColors, the colours that mana can be.
+     */
     potential() {
         let n = this.poolLen;
-        for (let i = 0; i < this.poolLen; i++) this.turnColors |= this.pool[i];
+        let colors = 0;
+        for (let i = 0; i < this.poolLen; i++) colors |= this.pool[i];
         for (const p of this.perms) {
             if (!this.canTap(p) || !this.output(p)) continue;
             n += this.oN + this.oBoost;
-            this.turnColors |= this.oMask | (this.oBoost ? this.cBoostMask : 0);
+            colors |= this.oMask | (this.oBoost ? this.cBoostMask : 0);
         }
+        this.availColors = colors;
+        this.turnColors |= colors;
         return n;
+    }
+
+    /** Could the mana available now (amount, colours) possibly pay for this card? A quick filter before paying. */
+    mightAfford(card, avail) {
+        if (card.playMv + (card.ramp?.extraCost ?? 0) > avail) return false;
+        for (const pip of card.pips) if (!(pip & this.availColors)) return false;
+        return true;
     }
 
     updatePeak() {
@@ -1062,8 +1076,9 @@ class Game {
         let best = null;
         let bestCommand = false;
         let bestScore = -Infinity;
+        const avail = this.potential();
         const look = (c, fromCommand) => {
-            if (c.land || !s.match(c)) return;
+            if (c.land || !s.match(c) || !this.mightAfford(c, avail)) return;
             const score = (c.manaSource ? this.rampValue(c) * 100 : 0) - c.playMv;
             if (score <= bestScore || !this.payCard(c, false)) return;
             best = c;
@@ -1096,8 +1111,9 @@ class Game {
         let best = null;
         let bestCommand = false;
         let bestScore = -Infinity;
+        const avail = this.potential();
         const look = (c, fromCommand) => {
-            if (c.land || !c.isRamp || c.playMv == null) return;
+            if (c.land || !c.isRamp || c.playMv == null || !this.mightAfford(c, avail)) return;
             if (!fromCommand && this.held(c)) return;
             const v = this.rampValue(c);
             if (v <= 0) return;

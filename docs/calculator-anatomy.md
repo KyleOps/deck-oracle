@@ -18,7 +18,10 @@ Pages whose maths predates `models/` keep it in a named module instead:
 Land Drops (`landDrops.js`), Mulligan Planner (`mulliganModel.js`, sample
 games included), Draw Odds (`drawOdds.js`), Opening Hands (`handLab.js`),
 Mana Development (`manaDevelopment.js`), Mana Base (`castability.js`) and
-the Discover pages' shared simulation (`discover.js`). Shared by several
+the Discover pages' shared simulation (`discover.js`). Game Plan's words
+are in `models/plan.js`, over three modules of its own: the plan schema
+(`planSchema.js`), the card rules (`planRules.js`) and the engine
+(`planEngine.js`). Shared by several
 models: `models/cardList.js` (the big spells' card list, `withoutCopy`) and
 `models/opponentLibrary.js` (the multiplayer pages' opponent library, seeded
 revealer and distribution helpers).
@@ -170,6 +173,38 @@ just helpers:
   `readXSpell()` (deck → library → X), `readValueInput()`, `setXInputs()`,
   `paybackChart()`, `paybackSampleHTML()`, `renderXSweep()`,
   `valueBandsTable()`, `renderEmptyAnswer()` and `bindBigSpellControls()`.
+
+### Cards that need a rule of their own (Game Plan)
+
+Game Plan's goldfish (`js/utils/planEngine.js`) reads lands through
+`classifyLand` and ramp through `ramp.js`, like Mana Development. A card
+whose mana depends on the board, or that triggers on what you cast, gets a
+**card rule** in `js/utils/planRules.js` instead, keyed by its front-face
+`nameKey()`:
+
+```js
+defineCardRule('Fanatic of Rhonas', rule(ferocious('{G}', '{G}{G}{G}{G}')));
+defineCardRule('Selvala, Eager Trailblazer', rule(
+    distinctPowers(),
+    creatureCastToken({ name: 'Mercenary', power: 1, toughness: 1, colors: R, subtypes: 'mercenary' })
+));
+```
+
+A rule is data plus small hooks (`mana`, `tapBoost`, `onMainPhase`,
+`onEnter`, `onCast`, `creature`, `power`, `rampValue`) that act on the game
+only through its rules API (`powerOf`, `distinctPowers`, `controlsPower`,
+`countSubtype`, `addMana`, `createToken`, `fetchLand`, `copySpell`, …), so
+a new card never touches the engine loop. When a whole wording family
+shares a rule (every "Ferocious — {T}: Add …"), add a detector to
+`DETECTORS` instead; named rules win over detected ones. Test each rule with
+an exact scripted game (`playScriptedPlanGame`) in
+`tests/models/plan.node.test.js`.
+
+Presets — a plan that comes with its deck — are modules in
+`js/data/plans/<id>.js` (`id`, `title`, `deckUrl`, `commanders`, `plan`,
+`notes`, `snapshot`) listed in `js/data/plans/index.js`, imported the first
+time they are used. Plans are plain data (`js/utils/planSchema.js`), so a
+preset's plan is exactly what a share link (`gp=`) carries.
 
 ## Styling
 

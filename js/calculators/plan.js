@@ -612,7 +612,7 @@ function renderFunnel(result) {
         if (meta) meta.textContent = '';
         return;
     }
-    if (meta) meta.textContent = `${result.games.toLocaleString('en-US')} simulated games`;
+    if (meta) meta.textContent = `${result.games.toLocaleString('en-US')} games · ${pct(result.mulliganRate)} kept six cards or fewer`;
     const steps = result.steps;
     let weakest = -1;
     if (steps.length > 1) {
