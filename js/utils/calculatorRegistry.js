@@ -68,14 +68,14 @@ export const CALCULATORS = Object.freeze({
         name: 'Mulligan Planner', short: 'MUL', group: 'deck', card: 'Serum Powder',
         question: 'Which hands should I keep, and how often will I find one?',
         summary: 'Say what a keepable hand needs; see exactly which sevens to keep and how often you find one.',
-        method: 'exact + simulation', keywords: ['mulligan', 'keep', 'london', 'requirements'],
+        method: 'exact + simulation', keywords: ['mulligan', 'keep', 'london', 'requirements'], charts: false,
         load: () => import('../calculators/mulligan.js'), view: () => import('../views/mulligan.js')
     },
     lands: {
         name: 'Land Drops', short: 'LND', group: 'deck', card: 'Azusa, Lost but Seeking',
         question: 'How reliably will I hit a land drop every turn?',
         summary: 'Turn-by-turn odds of making each land drop, and what changing your land count does.',
-        method: 'exact', keywords: ['lands', 'mana screw', 'flood', 'land count'],
+        method: 'exact', keywords: ['lands', 'mana screw', 'flood', 'land count'], charts: false,
         load: () => import('../calculators/lands.js'), view: () => import('../views/lands.js')
     },
     manadev: {
