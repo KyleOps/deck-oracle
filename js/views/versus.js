@@ -114,7 +114,7 @@ export const styles = `
 #versus-tab .vs-chart { height: 300px; padding: 8px 12px 0; }
 #versus-tab .vs-note {
     margin: 0;
-    padding: 10px 16px 14px;
+    padding: 10px var(--pad-x) 14px;
     font-size: var(--t-xs);
     line-height: 1.55;
     color: var(--tx-mid);
@@ -136,7 +136,7 @@ export const styles = `
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     border-bottom: 1px solid var(--tx-rule);
 }
-#versus-tab .vs-peak { padding: 14px 16px; }
+#versus-tab .vs-peak { padding: 14px var(--pad-x); }
 #versus-tab .vs-peak-label { font-size: var(--t-label); letter-spacing: 0; text-transform: none; color: var(--tx-mid); }
 #versus-tab .vs-peak-value { font-family: var(--font-mono); color: var(--tx-bright); }
 #versus-tab .vs-peak-sub { font-size: var(--t-label); }

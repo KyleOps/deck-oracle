@@ -63,7 +63,7 @@ export const styles = `
 /* Assumptions strip */
 #lands-tab .ld-controls {
     display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
-    padding: 12px 16px; border-bottom: 1px solid var(--tx-rule); background: var(--tx-panel-alt);
+    padding: var(--pad-y) var(--pad-x); border-bottom: 1px solid var(--tx-rule); background: var(--tx-panel-alt);
 }
 #lands-tab .ld-format { font-size: var(--t-xs); color: var(--tx-mid); }
 #lands-tab .ld-format:empty { display: none; }
@@ -71,7 +71,7 @@ export const styles = `
 #lands-tab .ld-num { width: 46px; height: 26px; padding: 0 4px; text-align: center; font-family: var(--font-mono); }
 
 /* Turn-by-turn ladder */
-#lands-tab .ld-ladder { list-style: none; margin: 0; padding: 8px 16px 14px; display: grid; }
+#lands-tab .ld-ladder { list-style: none; margin: 0; padding: 8px var(--pad-x) 14px; display: grid; }
 #lands-tab .ld-row {
     display: grid; grid-template-columns: 64px minmax(80px, 1fr) 48px 150px; align-items: center; gap: 12px;
     padding: 7px 0; border-bottom: 1px solid var(--tx-rule); font-size: var(--t-sm);
@@ -98,7 +98,7 @@ export const styles = `
 #lands-tab .ld-col.is-keep .ld-col-fill { background: var(--type-land); }
 #lands-tab .ld-col-label { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-dim); }
 #lands-tab .ld-col.is-keep .ld-col-label { color: var(--tx-text); font-weight: 600; }
-#lands-tab .ld-caption { padding: 0 16px 14px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.5; }
+#lands-tab .ld-caption { padding: 0 var(--pad-x) 14px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.5; }
 
 /* Land-count comparison */
 #lands-tab .ld-table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
@@ -114,7 +114,7 @@ export const styles = `
 /* Sample games */
 #lands-tab .ld-samples .tx-collapse-body { max-height: none; padding: 0; }
 #lands-tab .ld-games { display: grid; }
-#lands-tab .ld-game { padding: 12px 16px; border-bottom: 1px solid var(--tx-rule); display: grid; gap: 8px; }
+#lands-tab .ld-game { padding: var(--pad-y) var(--pad-x); border-bottom: 1px solid var(--tx-rule); display: grid; gap: 8px; }
 #lands-tab .ld-game-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: var(--t-xs); color: var(--tx-mid); }
 #lands-tab .ld-game-head strong { color: var(--tx-bright); }
 #lands-tab .ld-result { font-weight: 600; }
@@ -138,7 +138,7 @@ export const styles = `
 #lands-tab .ld-drop { padding: 1px 6px; border-radius: var(--radius-xs); font-family: var(--font-mono); font-size: var(--t-label); }
 #lands-tab .ld-drop.is-made { color: var(--tx-good); background: var(--good-soft); }
 #lands-tab .ld-drop.is-missed { color: var(--tx-bad); background: var(--bad-soft); }
-#lands-tab .ld-samples-foot { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px 16px; }
+#lands-tab .ld-samples-foot { display: flex; gap: 8px; flex-wrap: wrap; padding: var(--pad-y) var(--pad-x) 16px; }
 #lands-tab .ld-empty { padding: 16px; font-size: var(--t-sm); color: var(--tx-dim); }
 
 #lands-tab .ld-draw { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }

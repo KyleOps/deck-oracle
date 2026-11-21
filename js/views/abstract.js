@@ -51,7 +51,7 @@ export const styles = `
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
     gap: 12px;
-    padding: 14px 16px 16px;
+    padding: 14px var(--pad-x) 16px;
 }
 #abstract-tab .ap-sample {
     display: grid;

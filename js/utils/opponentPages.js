@@ -433,7 +433,7 @@ ${s} .opp-empty-lead { font-size: var(--t-body); color: var(--tx-mid); line-heig
 ${s} .opp-steps { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; padding: 0; margin: 0; }
 ${s} .opp-step {
     display: grid; gap: 8px; align-content: start;
-    padding: 14px 16px;
+    padding: 14px var(--pad-x);
     background: var(--tx-panel-alt); border: 1px solid var(--tx-rule); border-radius: var(--radius-md);
 }
 ${s} .opp-step-kicker {
@@ -474,7 +474,7 @@ ${s} .opp-skeleton span {
 ${s} .opp-skeleton span:nth-child(2) { width: 82%; }
 ${s} .opp-skeleton span:nth-child(3) { width: 64%; }
 ${s} .opp-note {
-    display: flex; align-items: center; padding: 10px 16px;
+    display: flex; align-items: center; padding: 10px var(--pad-x);
     border-bottom: 1px solid var(--tx-rule); font-size: var(--t-xs); color: var(--tx-mid);
 }
 
@@ -489,12 +489,12 @@ ${s} .opp-section-actions { display: flex; gap: 6px; }
 ${s} .opp-table-wrap { overflow-x: auto; }
 ${s} .opp-table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
 ${s} .opp-table th {
-    padding: 8px 16px; text-align: right; white-space: nowrap;
+    padding: 8px var(--pad-x); text-align: right; white-space: nowrap;
     font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim);
     border-bottom: 1px solid var(--tx-rule);
 }
 ${s} .opp-table td {
-    padding: 12px 16px; text-align: right; white-space: nowrap; vertical-align: middle;
+    padding: var(--pad-y) var(--pad-x); text-align: right; white-space: nowrap; vertical-align: middle;
     font-family: var(--font-mono); font-feature-settings: 'tnum' 1; color: var(--tx-text);
     border-bottom: 1px solid var(--tx-rule);
 }
@@ -509,7 +509,7 @@ ${s} .opp-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; w
 ${s} .opp-name-sub { flex: none; font-size: var(--t-xs); color: var(--tx-dim); font-weight: 400; }
 
 ${s} .opp-multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); border-top: 1px solid var(--tx-rule); }
-${s} .opp-multiple { min-width: 0; padding: 14px 16px 16px; border-right: 1px solid var(--tx-rule); border-bottom: 1px solid var(--tx-rule); margin: 0 -1px -1px 0; }
+${s} .opp-multiple { min-width: 0; padding: 14px var(--pad-x) 16px; border-right: 1px solid var(--tx-rule); border-bottom: 1px solid var(--tx-rule); margin: 0 -1px -1px 0; }
 ${s} .opp-multiple-head { margin-bottom: 4px; }
 ${s} .opp-bars { display: grid; gap: 3px; margin-top: 12px; }
 ${s} .opp-bars-title { font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); margin-bottom: 4px; }
@@ -519,9 +519,9 @@ ${s} .opp-bar-track { height: 10px; border-radius: 2px; background: var(--tx-bg)
 ${s} .opp-bar-fill { display: block; height: 100%; border-radius: 2px; background: var(--bar); }
 ${s} .opp-bar-val { color: var(--tx-text); text-align: right; }
 ${s} .opp-bar-row.is-dim .opp-bar-fill { background: var(--tx-rule-hi); }
-${s} .opp-disclosure > .tx-collapse-head { padding: 12px 16px; }
+${s} .opp-disclosure > .tx-collapse-head { padding: var(--pad-y) var(--pad-x); }
 ${s} .opp-disclosure > .opp-multiples { border-top: 0; }
-${s} .opp-caption { padding: 10px 16px 14px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.55; max-width: 90ch; }
+${s} .opp-caption { padding: 10px var(--pad-x) 14px; font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.55; max-width: 90ch; }
 
 ${s} .opp-chip {
     display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
@@ -539,13 +539,13 @@ ${s} .opp-arrow { color: var(--tx-dim); padding: 0 2px; }
 ${s} .opp-miss { font-size: var(--t-xs); color: var(--tx-dim); }
 
 ${s} .opp-games { display: grid; }
-${s} .opp-game { display: grid; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--tx-rule); }
-${s} .opp-more { display: flex; justify-content: center; padding: 12px 16px 16px; border-top: 1px solid var(--tx-rule); }
+${s} .opp-game { display: grid; gap: 10px; padding: 14px var(--pad-x); border-top: 1px solid var(--tx-rule); }
+${s} .opp-more { display: flex; justify-content: center; padding: var(--pad-y) var(--pad-x) 16px; border-top: 1px solid var(--tx-rule); }
 
 @container shell (max-width: 640px) {
     ${s} .opp-table thead { display: none; }
     ${s} .opp-table, ${s} .opp-table tbody, ${s} .opp-table tfoot { display: block; }
-    ${s} .opp-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: 12px 16px; border-bottom: 1px solid var(--tx-rule); }
+    ${s} .opp-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: var(--pad-y) var(--pad-x); border-bottom: 1px solid var(--tx-rule); }
     ${s} .opp-table tfoot tr { background: var(--tx-panel-alt); }
     ${s} .opp-table td { padding: 0; border: 0; text-align: left; white-space: normal; background: none !important; }
     ${s} .opp-table td:first-child { grid-column: 1 / -1; }

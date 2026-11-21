@@ -147,7 +147,7 @@ export const styles = `
 #manadev-tab .md-key-target::before { height: 0; border-top: 1px dashed var(--tx-accent); }
 #manadev-tab .md-caption {
     margin: 0;
-    padding: 10px 16px 14px;
+    padding: 10px var(--pad-x) 14px;
     font-size: var(--t-xs);
     line-height: 1.5;
     color: var(--tx-dim);
@@ -234,7 +234,7 @@ export const styles = `
 
 /* ── Sample games ─────────────────────────────────────────────────── */
 #manadev-tab .md-games { display: grid; }
-#manadev-tab .md-game { padding: 12px 16px; border-bottom: 1px solid var(--tx-rule); }
+#manadev-tab .md-game { padding: var(--pad-y) var(--pad-x); border-bottom: 1px solid var(--tx-rule); }
 #manadev-tab .md-game:last-child { border-bottom: 0; }
 #manadev-tab .md-game-head {
     display: flex;
@@ -273,7 +273,7 @@ export const styles = `
 #manadev-tab .md-turn.is-target { background: var(--tx-row-hi); box-shadow: inset 3px 0 0 var(--tx-accent); }
 #manadev-tab .md-turn-flag { margin-left: 6px; color: var(--tx-accent); font-weight: 600; white-space: nowrap; }
 #manadev-tab .md-found, #manadev-tab .md-quiet { color: var(--tx-mid); }
-#manadev-tab .md-samples-foot { margin: 0; padding: 10px 16px 14px; font-size: var(--t-xs); color: var(--tx-dim); }
+#manadev-tab .md-samples-foot { margin: 0; padding: 10px var(--pad-x) 14px; font-size: var(--t-xs); color: var(--tx-dim); }
 
 @container shell (max-width: 560px) {
     #manadev-tab .md-chart { height: 240px; }

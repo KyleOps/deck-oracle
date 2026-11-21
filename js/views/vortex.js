@@ -119,7 +119,7 @@ export const styles = `
 #vortex-tab .vx-chart { height: 300px; padding: 8px 12px 0; }
 #vortex-tab .vx-caption {
     margin: 0;
-    padding: 8px 16px 14px;
+    padding: 8px var(--pad-x) 14px;
     font-size: var(--t-xs);
     color: var(--tx-dim);
     line-height: 1.5;
@@ -213,7 +213,7 @@ export const styles = `
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding: 12px 16px;
+    padding: var(--pad-y) var(--pad-x);
 }
 #vortex-tab .vx-sample-note { font-size: var(--t-xs); color: var(--tx-dim); }
 

@@ -105,7 +105,7 @@ export const styles = `
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding: 12px 16px;
+    padding: var(--pad-y) var(--pad-x);
     border-bottom: 1px solid var(--tx-rule);
 }
 
@@ -131,7 +131,7 @@ export const styles = `
     flex-wrap: wrap;
     align-items: center;
     gap: 8px 12px;
-    padding: 10px 16px;
+    padding: 10px var(--pad-x);
     font-size: var(--t-sm);
     color: var(--tx-mid);
     background: var(--tx-panel-alt);
@@ -317,7 +317,7 @@ export const styles = `
     flex-wrap: wrap;
     align-items: center;
     gap: 10px;
-    padding: 12px 16px 16px;
+    padding: var(--pad-y) var(--pad-x) 16px;
     min-height: calc(var(--w) * 1.394 + 28px);
 }
 #hands-tab .hl-lane:empty::before {

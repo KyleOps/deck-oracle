@@ -97,7 +97,7 @@ export const template = `
 `;
 
 export const styles = `
-#mulligan-tab .mull-block { padding: 12px 16px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+#mulligan-tab .mull-block { padding: var(--pad-y) var(--pad-x) 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 #mulligan-tab .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 #mulligan-tab .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
@@ -155,7 +155,7 @@ export const styles = `
 
 /* What to keep */
 #mulligan-tab .mull-keep-head { flex-wrap: wrap; }
-#mulligan-tab .mull-keep-body { padding: 14px 16px 16px; display: grid; gap: 14px; }
+#mulligan-tab .mull-keep-body { padding: 14px var(--pad-x) 16px; display: grid; gap: 14px; }
 #mulligan-tab .mull-keep-caption { font-size: var(--t-xs); color: var(--tx-dim); line-height: 1.5; }
 #mulligan-tab .mull-rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 #mulligan-tab .mull-rules li { display: flex; align-items: baseline; gap: 10px; font-size: var(--t-sm); color: var(--tx-text); }
@@ -203,10 +203,10 @@ export const styles = `
 #mulligan-tab .mull-gains .is-flat { color: var(--tx-dim); }
 
 /* Sample games */
-#mulligan-tab .mull-sim-stats { padding: 12px 16px; font-size: var(--t-sm); color: var(--tx-mid); line-height: 1.5; border-bottom: 1px solid var(--tx-rule); }
+#mulligan-tab .mull-sim-stats { padding: var(--pad-y) var(--pad-x); font-size: var(--t-sm); color: var(--tx-mid); line-height: 1.5; border-bottom: 1px solid var(--tx-rule); }
 #mulligan-tab .mull-sim-stats strong { color: var(--tx-bright); font-family: var(--font-mono); }
 #mulligan-tab .mull-games { display: grid; }
-#mulligan-tab .mull-game { padding: 12px 16px; border-bottom: 1px solid var(--tx-rule); display: grid; gap: 8px; }
+#mulligan-tab .mull-game { padding: var(--pad-y) var(--pad-x); border-bottom: 1px solid var(--tx-rule); display: grid; gap: 8px; }
 #mulligan-tab .mull-game-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; font-size: var(--t-xs); color: var(--tx-mid); }
 #mulligan-tab .mull-game-head strong { color: var(--tx-bright); font-weight: 600; }
 #mulligan-tab .mull-result { font-weight: 600; }

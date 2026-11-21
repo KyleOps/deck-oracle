@@ -96,7 +96,7 @@ export const styles = `
     letter-spacing: inherit;
 }
 
-#odds-tab .odds-pad { padding: 14px 16px 16px; }
+#odds-tab .odds-pad { padding: 14px var(--pad-x) 16px; }
 #odds-tab .odds-answer:focus { outline: none; }
 
 /* The typeahead list must be able to hang below its panel. */
@@ -199,7 +199,7 @@ export const styles = `
     position: relative;
     display: grid;
     gap: 10px;
-    padding: 14px 16px;
+    padding: 14px var(--pad-x);
     border-bottom: 1px solid var(--tx-rule);
     transition: background var(--transition-fast);
 }
@@ -533,7 +533,7 @@ export const styles = `
     align-items: center;
     flex-wrap: wrap;
     gap: 8px 12px;
-    padding: 14px 16px 16px;
+    padding: 14px var(--pad-x) 16px;
 }
 
 #odds-tab .odds-addrow .odds-hint { margin: 0; }

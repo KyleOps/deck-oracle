@@ -42,7 +42,7 @@ export const template = `
 
 export const styles = `
 #mindsdilation-tab .mnds-options {
-    padding: 12px 16px;
+    padding: var(--pad-y) var(--pad-x);
     border-bottom: 1px solid var(--tx-rule);
     background: var(--tx-panel-alt);
 }
@@ -88,7 +88,7 @@ export const styles = `
 #mindsdilation-tab .mnds-swatch { width: 12px; height: 12px; border-radius: 3px; }
 
 #mindsdilation-tab .mnds-samples { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); border-top: 1px solid var(--tx-rule); }
-#mindsdilation-tab .mnds-sample { min-width: 0; padding: 14px 16px; border-right: 1px solid var(--tx-rule); border-bottom: 1px solid var(--tx-rule); margin: 0 -1px -1px 0; }
+#mindsdilation-tab .mnds-sample { min-width: 0; padding: 14px var(--pad-x); border-right: 1px solid var(--tx-rule); border-bottom: 1px solid var(--tx-rule); margin: 0 -1px -1px 0; }
 #mindsdilation-tab .mnds-sample-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 12px; }
 #mindsdilation-tab .mnds-sample-sum { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-mid); white-space: nowrap; }
 #mindsdilation-tab .mnds-turns { list-style: none; display: grid; gap: 6px; padding: 0; margin: 0; }

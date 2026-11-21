@@ -86,7 +86,7 @@ export const styles = `
     grid-template-columns: auto minmax(0, 1fr);
     gap: 16px;
     align-items: center;
-    padding: 14px 16px;
+    padding: 14px var(--pad-x);
     border-bottom: 1px solid var(--tx-rule);
     background: var(--tx-panel-alt);
 }
@@ -107,7 +107,7 @@ export const styles = `
 #wildpair-tab .wp-sel-lead { margin: 0; font-size: var(--t-sm); line-height: 1.55; color: var(--tx-text); text-wrap: pretty; }
 #wildpair-tab .wp-sel-lead strong { color: var(--tx-good); }
 #wildpair-tab .wp-opt-list { list-style: none; margin: 0; padding: 0; }
-#wildpair-tab .wp-opt { padding: 8px 16px; }
+#wildpair-tab .wp-opt { padding: 8px var(--pad-x); }
 #wildpair-tab .wp-opt-name { overflow: visible; }
 #wildpair-tab .wp-opt-name .card-ref { color: var(--tx-text); }
 #wildpair-tab .wp-opt.is-high .wp-opt-name .card-ref,
@@ -127,7 +127,7 @@ export const styles = `
     background: transparent;
     border-bottom: 0;
 }
-#wildpair-tab .wp-gc { cursor: pointer; padding: 12px 16px; outline: 1px solid var(--tx-rule); }
+#wildpair-tab .wp-gc { cursor: pointer; padding: var(--pad-y) var(--pad-x); outline: 1px solid var(--tx-rule); }
 #wildpair-tab .wp-gc .wp-gc-head {
     width: 100%;
     padding: 0;
@@ -150,7 +150,7 @@ export const styles = `
 
 #wildpair-tab .wp-single-head { border-top: 0; }
 #wildpair-tab .wp-gc-grid + .wp-single-head { border-top: 1px solid var(--tx-rule); }
-#wildpair-tab .wp-single-list { padding: 12px 16px 16px; gap: 6px; }
+#wildpair-tab .wp-single-list { padding: var(--pad-y) var(--pad-x) 16px; gap: 6px; }
 #wildpair-tab button.wp-single {
     padding: 4px 9px;
     border: 1px solid var(--tx-rule);
@@ -175,7 +175,7 @@ export const styles = `
 #wildpair-tab .wp-chart { height: 260px; padding: 12px 12px 0; }
 #wildpair-tab .wp-caption {
     margin: 0;
-    padding: 8px 16px 14px;
+    padding: 8px var(--pad-x) 14px;
     font-size: var(--t-xs);
     line-height: 1.5;
     color: var(--tx-dim);

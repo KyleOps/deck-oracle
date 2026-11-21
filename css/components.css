@@ -11,7 +11,7 @@
     justify-content: space-between;
     gap: 12px;
     min-height: 42px;
-    padding: 10px 16px;
+    padding: 10px var(--pad-x);
     border-bottom: 1px solid var(--tx-rule);
     font-size: var(--t-xs);
     font-weight: 600;
@@ -31,13 +31,13 @@
 /* ==================== HERO STAT BLOCK ==================== */
 
 .tx-stat {
-    padding: 18px 20px;
+    padding: 18px var(--spacing-xl);
     border-right: 1px solid var(--tx-rule);
 }
 
 .tx-stat:last-child { border-right: none; }
 
-.tx-stat-label { margin-bottom: 4px; }
+.tx-stat-label { margin-bottom: var(--spacing-xs); }
 
 .tx-stat-value {
     margin: 6px 0 4px;
@@ -78,7 +78,7 @@
 .tx-p-fill {
     display: block;
     height: 100%;
-    background: var(--tx-green);
+    background: var(--tx-good);
     border-radius: 4px;
     opacity: 0.7;
     transition: width 0.15s;
@@ -320,7 +320,7 @@ input.x-number {
 /* One line under a chart saying how to read it. */
 .tx-caption {
     margin: 0;
-    padding: 0 16px 14px;
+    padding: 0 var(--pad-x) 14px;
     font-size: var(--t-xs);
     line-height: 1.5;
     color: var(--tx-dim);
@@ -594,7 +594,7 @@ input.x-number {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 16px;
+    padding: var(--pad-y) var(--pad-x);
     background: var(--tx-panel-alt);
     font-size: var(--t-xs);
     font-weight: 600;

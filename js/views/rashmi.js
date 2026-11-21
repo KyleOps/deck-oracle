@@ -76,7 +76,7 @@ export const styles = `
 #rashmi-tab .rs-answer .tx-hero { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 #rashmi-tab .rs-answer .bottom-line { border-bottom: 1px solid var(--tx-rule); }
 
-#rashmi-tab .rs-split { padding: 14px 16px 16px; }
+#rashmi-tab .rs-split { padding: 14px var(--pad-x) 16px; }
 #rashmi-tab .rs-band {
     display: flex;
     height: 12px;
@@ -100,7 +100,7 @@ export const styles = `
     grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
     gap: 8px;
     margin: 0;
-    padding: 14px 16px;
+    padding: 14px var(--pad-x);
     list-style: none;
 }
 #rashmi-tab .rs-reveal {

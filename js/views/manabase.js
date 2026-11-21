@@ -116,7 +116,7 @@ export const styles = `
     gap: 12px;
     align-content: start;
     min-width: 0;
-    padding: 14px 16px;
+    padding: 14px var(--pad-x);
     background: var(--tx-panel-alt);
     border: 1px solid var(--tx-rule);
     border-radius: var(--radius-md);

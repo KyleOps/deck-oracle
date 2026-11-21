@@ -88,7 +88,7 @@ export const styles = `
 #lumra-tab .lm-answer .tx-hero { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 #lumra-tab .lm-answer .bottom-line { border-bottom: 1px solid var(--tx-rule); }
 
-#lumra-tab .lm-sources { padding: 14px 16px 16px; }
+#lumra-tab .lm-sources { padding: 14px var(--pad-x) 16px; }
 #lumra-tab .lm-band {
     display: flex;
     height: 12px;
