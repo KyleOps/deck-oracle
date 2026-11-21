@@ -369,6 +369,82 @@ describe('scripted goldfish games', () => {
     });
 });
 
+describe('scripted goldfish games: mana that depends on the board, and the newer land readings', () => {
+    /** Seven-card hand of these, Colossal Dreadmaws after; then the library. */
+    const play = (counts, hand, library, opts = {}) => {
+        const lib = MD.buildManaLibrary(deckOf(counts), { multiplayer: false, ...opts.build });
+        const take = picker(lib);
+        const h = take([...hand, ...rep('Colossal Dreadmaw', 7 - hand.length)]);
+        return MD.playScriptedGame(lib, { hand: h, library: take(library), format: opts.format ?? SIXTY });
+    };
+
+    it('Fanatic of Rhonas counts as the {G} it always makes, not {G}{G}{G}{G}', () => {
+        const g = play({ Forest: 20, 'Fanatic of Rhonas': 1, 'Colossal Dreadmaw': 10 }, ['Forest', 'Forest', 'Forest', 'Fanatic of Rhonas'], rep('Colossal Dreadmaw', 3));
+        assert.deepEqual(g.log.turns[1].cast.map(c => c.name), ['Fanatic of Rhonas']);
+        assert.deepEqual(g.mana.slice(1, 5), [1, 2, 4, 4]);
+    });
+
+    it('Jadzia Dax adds 1, then 2, then 3 — from the turn after she lands', () => {
+        const g = play({ Forest: 20, 'Jadzia Dax, Living Legacy': 1, 'Colossal Dreadmaw': 10 }, ['Forest', 'Forest', 'Jadzia Dax, Living Legacy'], rep('Forest', 6));
+        assert.deepEqual(g.log.turns[1].cast.map(c => c.name), ['Jadzia Dax, Living Legacy']);
+        assert.deepEqual(g.mana.slice(1, 6), [1, 2, 4, 6, 8]);
+    });
+
+    it('Badgermole Cub adds one a turn through the land it earthbends', () => {
+        const g = play({ Forest: 20, 'Badgermole Cub': 1, 'Colossal Dreadmaw': 10 }, ['Forest', 'Forest', 'Forest', 'Badgermole Cub'], rep('Colossal Dreadmaw', 3));
+        assert.deepEqual(g.mana.slice(1, 4), [1, 2, 4]);
+    });
+
+    it('{G}{U} is one blue and one green: it can’t pay {U}{U}{U} with one Island', () => {
+        const tester = { name: 'Triple Blue', mana_cost: '{U}{U}{U}', cmc: 3, type_line: 'Legendary Creature — Test', oracle_text: '', color_identity: ['U'] };
+        const counts = { Forest: 30, Island: 1, 'Arixmethes, Slumbering Isle': 1, 'Colossal Dreadmaw': 10 };
+        const build = { format: 'commander', commanders: [tester.name], commanderCards: [tester] };
+        const hand = ['Island', 'Forest', 'Forest', 'Forest', 'Arixmethes, Slumbering Isle'];
+        const g = play(counts, hand, rep('Forest', 8), { format: EDH, build });
+        assert.deepEqual(g.log.turns[3].cast.map(c => c.name), ['Arixmethes, Slumbering Isle']);
+        assert.equal(g.mana[5], 7);
+        assert.equal(g.targetTurn, 0, 'two blue sources, three blue pips');
+        // Read as two mana of either colour (the old reading), it would have looked castable.
+        const lib = MD.buildManaLibrary(deckOf(counts), { multiplayer: false, ...build });
+        const either = { ...lib, cards: lib.cards.map(c => (c.rampInfo?.units ? { ...c, rampInfo: { ...c.rampInfo, units: null } } : c)) };
+        const take = picker(either);
+        const old = MD.playScriptedGame(either, { hand: take([...hand, 'Colossal Dreadmaw', 'Colossal Dreadmaw']), library: take(rep('Forest', 8)), format: EDH });
+        assert.equal(old.targetTurn, 5);
+    });
+
+    it('Reach the Horizon finds lands with different names', () => {
+        const forests = play({ Forest: 30, 'Reach the Horizon': 1, 'Colossal Dreadmaw': 10 }, ['Forest', 'Forest', 'Forest', 'Forest', 'Reach the Horizon'], rep('Forest', 10));
+        assert.deepEqual(forests.log.turns[3].cast[0].notes, ['Forest'], 'only Forests left: one of them');
+        const mixed = play({ Forest: 30, Island: 3, 'Reach the Horizon': 1, 'Colossal Dreadmaw': 10 }, ['Forest', 'Forest', 'Forest', 'Forest', 'Reach the Horizon'], [...rep('Forest', 6), 'Island', 'Island']);
+        assert.deepEqual([...mixed.log.turns[3].cast[0].notes].sort(), ['Forest', 'Island']);
+    });
+
+    it('U.S.S. Voyager takes the first two lands off the top, and the cards above them go to the bottom', () => {
+        const D = 'Colossal Dreadmaw';
+        const g = play({ Forest: 30, Island: 3, 'U.S.S. Voyager, Lone Wanderer': 1, [D]: 20 },
+            ['Forest', 'Forest', 'Forest', 'Forest', 'U.S.S. Voyager, Lone Wanderer'],
+            [D, D, D, D, 'Island', D, 'Forest', 'Island', ...rep('Forest', 4)]);
+        const t4 = g.log.turns[3];
+        assert.deepEqual(t4.cast.map(c => c.name), ['U.S.S. Voyager, Lone Wanderer']);
+        assert.deepEqual(t4.cast[0].notes, ['Island', 'Forest']);
+        assert.equal(g.log.turns[4].drew, 'Island', 'the revealed Dreadmaw went to the bottom');
+        assert.equal(g.mana[5], 7);
+    });
+
+    it('puts up to three lands from hand when the card says so', () => {
+        const spill = { name: 'Land Spill', mana_cost: '{1}{G}', cmc: 2, type_line: 'Sorcery', oracle_text: 'You may put up to three land cards from your hand onto the battlefield tapped.' };
+        const lib = MD.buildManaLibrary({ ...deckOf({ Forest: 20, 'Colossal Dreadmaw': 10 }), 'Land Spill': { ...spill, count: 1 } }, { multiplayer: false });
+        const take = picker(lib);
+        const g = MD.playScriptedGame(lib, {
+            hand: take(['Forest', 'Forest', 'Forest', 'Forest', 'Forest', 'Land Spill', 'Colossal Dreadmaw']),
+            library: take(rep('Colossal Dreadmaw', 6)),
+            format: SIXTY
+        });
+        assert.deepEqual(g.log.turns[1].cast[0].notes, ['Forest', 'Forest', 'Forest']);
+        assert.deepEqual(g.mana.slice(1, 4), [1, 2, 5]);
+    });
+});
+
 // ── Library and simulation ───────────────────────────────────────────────────
 
 describe('library and target', () => {

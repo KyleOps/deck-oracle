@@ -15,6 +15,15 @@
  * can't cast yet), where the reference raced the most expensive alone. So the
  * comparison uses decks with one target — the example deck is played with The
  * Sixth Doctor alone — where the rules are unchanged.
+ *
+ * Both engines read the same descriptors (the library's `rampInfo`), so a
+ * classifier change moves both alike. The live engine has since learned
+ * readings the reference never had — one mana of each colour ({G}{U}), mana
+ * that grows (Jadzia Dax), main-phase and tap-boost mana, lands with
+ * different names, revealing until lands, several lands from hand. Those are
+ * tested on their own (tests/calculators/manadev.node.test.js); here both
+ * engines get each card in the reference's words (`inReferenceTerms`), so
+ * the comparison still covers every rule the two share.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -68,9 +77,41 @@ const DOCTOR = {
     commanders: DEFAULT_DECK_DATA.commanders.filter(c => c.name === 'The Sixth Doctor')
 };
 
+/**
+ * A descriptor in the reference engine's words: the same mana, lands and
+ * drops, without the readings it never had. {G}{U} becomes two units of
+ * either colour, main-phase and tap-boost mana plain mana that doesn't grow,
+ * a reveal or a different-names search an ordinary search, and lands from
+ * hand one land.
+ */
+function referenceTerms(info) {
+    if (!info) return info;
+    const per = MD.turnMana(info);
+    const plain = !info.units && !info.phaseMana && !info.growth && !info.tapBoost?.own && !info.distinct && !info.reveal && !(info.putLand > 1);
+    if (plain) return info;
+    return Object.freeze({
+        ...info, mana: per, units: null, phaseMana: 0, growth: 0, tapBoost: info.tapBoost ? { ...info.tapBoost, own: 0 } : null,
+        distinct: false, reveal: false, putLand: Math.min(1, info.putLand)
+    });
+}
+
+/** The library with every card in the reference's words (see referenceTerms). */
+function inReferenceTerms(lib) {
+    const memo = new Map();
+    const terms = info => {
+        if (!memo.has(info)) memo.set(info, referenceTerms(info));
+        return memo.get(info);
+    };
+    return {
+        ...lib,
+        cards: lib.cards.map(c => (c.rampInfo ? { ...c, rampInfo: terms(c.rampInfo) } : c)),
+        ramp: lib.ramp.map(r => ({ ...r, info: terms(r.info) }))
+    };
+}
+
 const CASES = [
-    ['the example Commander deck (The Sixth Doctor alone)', () => MD.buildManaLibrary(DOCTOR), { format: FORMATS.commander }],
-    ['the example deck with Treasure', () => MD.buildManaLibrary(DOCTOR), { format: FORMATS.commander, treasure: true, seed: 99 }],
+    ['the example Commander deck (The Sixth Doctor alone)', () => inReferenceTerms(MD.buildManaLibrary(DOCTOR)), { format: FORMATS.commander }],
+    ['the example deck with Treasure', () => inReferenceTerms(MD.buildManaLibrary(DOCTOR)), { format: FORMATS.commander, treasure: true, seed: 99 }],
     ['a ramp-heavy 60 on the play', () => MD.buildManaLibrary(RAMPY, { multiplayer: false }), { format: FORMATS.constructed, onPlay: true }],
     ['a ramp-heavy 60 on the draw with Treasure', () => MD.buildManaLibrary(RAMPY, { multiplayer: false }), { format: FORMATS.constructed, onPlay: false, treasure: true, seed: 7 }],
     ['a 40-card dork deck', () => MD.buildManaLibrary(STOMPY, { multiplayer: false }), { format: FORMATS.limited, seed: 2024 }],
@@ -115,6 +156,19 @@ describe('Mana Development engine matches the reference engine', () => {
             assert.deepEqual(project(live), project(ref));
         });
     }
+
+    it('puts only the readings the reference never had into its words', () => {
+        const lib = MD.buildManaLibrary(DOCTOR);
+        const changed = lib.ramp.filter(r => referenceTerms(r.info) !== r.info).map(r => r.name).sort();
+        assert.deepEqual(changed, ['Arixmethes, Slumbering Isle', 'Open the Way', 'Reach the Horizon']);
+        for (const name of ['Llanowar Elves', 'Sol Ring', 'Cultivate', 'Growth Spiral']) {
+            const info = MD.buildManaLibrary(RAMPY, { multiplayer: false }).ramp.find(r => r.name === name)?.info ?? null;
+            assert.equal(referenceTerms(info), info, `${name} is read the same by both engines`);
+        }
+        const arix = referenceTerms(lib.ramp.find(r => r.name === 'Arixmethes, Slumbering Isle').info);
+        assert.equal(arix.mana, 2);
+        assert.equal(arix.units, null);
+    });
 
     it('in slices as in one go', () => {
         const lib = MD.buildManaLibrary(RAMPY, { multiplayer: false });

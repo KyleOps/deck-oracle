@@ -10,7 +10,10 @@
  *      battlefield or hand), extra land drops. Ramp it can't simulate (mana
  *      doublers, triggered Treasure …) and things that help your mana without
  *      being ramp (rituals, cost reducers) are listed but NOT counted — each
- *      says so in its label. Lands are read here (classifyLand).
+ *      says so in its label. Mana that depends on the rest of the board
+ *      (Fanatic of Rhonas with a power-4 creature, Priest of Titania per Elf)
+ *      counts what the card makes on its own: the goldfish knows only your
+ *      lands and the ramp it cast. Lands are read here (classifyLand).
  *   2. A goldfish simulator: shuffle, London mulligan with the Opening Hands
  *      keep rule, then each turn draw → play a land → greedily cast the ramp
  *      you can afford. It records the mana you can make each turn, the turn
@@ -30,7 +33,7 @@ import { asLibrary, commandersOf, isLand, isLibrary, sameCard } from './library.
 import { mulberry32, shuffle } from './random.js';
 import { quantile } from './stats.js';
 import { inflect as plural } from './text.js';
-import { BASIC_TYPES, basicTypesIn, classifyRamp, describeRamp, rampRole, stripReminder, typeBits } from './ramp.js';
+import { BASIC_TYPES, basicTypesIn, classifyRamp, describeRamp, rampRole, stripReminder, turnMana, typeBits } from './ramp.js';
 import {
     toLabCard, buildPlaceholderLibrary, identityOf, libraryKey, meetsRule, chooseBottom,
     DEFAULT_RULE, MIN_HAND, OPENING_HAND, maskOf, COLOR_BIT
@@ -109,7 +112,7 @@ export function classifyLand(card, { multiplayer = true } = {}) {
 // shared with the role tags every other page reads. Re-exported here for the
 // page and the tests.
 
-export { classifyRamp, describeRamp, rampRole, typeBits };
+export { classifyRamp, describeRamp, rampRole, turnMana, typeBits };
 
 // ── Library ──────────────────────────────────────────────────────────────────
 
@@ -402,7 +405,11 @@ function pay(card, extra = 0, commit = false) {
 // spliced: a land search marks its position as taken, and per-search running
 // counts of the lands still in the library answer "how many can this find?"
 // without a scan. The rules are exactly those of the engine this replaced —
-// tests/utils/manaDevelopmentEngine.node.test.js plays both on the same seeds.
+// tests/utils/manaDevelopmentEngine.node.test.js plays both on the same seeds —
+// plus readings it didn't know (each tested on its own): a source that makes
+// one mana of each colour ({G}{U}), mana that grows a turn at a time, main-
+// phase and tap-boost mana, lands with different names, revealing until
+// lands, and several lands from your hand.
 
 /**
  * Deal and mulligan (London, the Opening Hands keep rule). At four cards the
@@ -534,9 +541,12 @@ class Game {
         this.landLen = 0;
         this.landMask = 0;  // colours the lands in play make
         this.landTypes = 0; // basic land types in play (check lands)
-        this.srcMana = new Int32Array(n);
-        this.srcMask = new Int32Array(n);
-        this.srcReady = new Int16Array(n);
+        // Mana sources (a card can be several: {G}{U} is one green and one blue).
+        const m = n * 3;
+        this.srcMana = new Int32Array(m);
+        this.srcMask = new Int32Array(m);
+        this.srcReady = new Int16Array(m);
+        this.srcGrow = new Int16Array(m); // mana it gains each turn after its first (Jadzia Dax)
         this.srcLen = 0;
         this.t = 0;
         this.extraDrops = 0;
@@ -661,8 +671,23 @@ function readyMana(g) {
     const t = g.t;
     let n = g.treasures + g.floating;
     for (let i = 0; i < g.landLen; i++) if (g.landReady[i] <= t) n += g.landCard[i].lmana;
-    for (let i = 0; i < g.srcLen; i++) if (g.srcReady[i] <= t) n += g.srcMana[i];
+    for (let i = 0; i < g.srcLen; i++) if (g.srcReady[i] <= t) n += sourceMana(g, i, t);
     return n;
+}
+
+/** What mana source i makes on turn t (one that grows makes `grow` more each turn after its first). */
+function sourceMana(g, i, t) {
+    return g.srcMana[i] + g.srcGrow[i] * (t - g.srcReady[i]);
+}
+
+/** A mana permanent enters: it makes `mana` of `mask` from turn `ready`. */
+function addSource(g, mana, mask, ready, grow) {
+    const s = g.srcLen++;
+    g.srcMana[s] = mana;
+    g.srcMask[s] = mask;
+    g.srcReady[s] = ready;
+    g.srcGrow[s] = grow;
+    if (ready <= g.t) poolAdd(mask, mana);
 }
 
 function landScore(g, c, matters, have, need) {
@@ -770,41 +795,63 @@ function fetchScore(mask, have, need) {
     return BITS[fresh & need] * 100 + BITS[fresh] * 10 + BITS[mask];
 }
 
+/** The topmost land a reveal-until finds (U.S.S. Voyager), or -1. */
+function revealedLandAt(g, r, slot) {
+    const bit = slot >= 0 ? 1 << slot : 0;
+    for (let i = g.top; i < g.libLen; i++) {
+        if (g.taken[i]) continue;
+        const c = g.lib[i];
+        if (slot >= 0 ? (c.fmatch & bit) : landMatches(c, r)) return i;
+    }
+    return -1;
+}
+
 /**
  * Fetch n lands matching the ramp card's search, colours you need first; the
  * first (topmost) of the best-scoring lands. A tracked search stops scanning
  * at a land that scores the ceiling: nothing further down can beat it.
+ * A reveal-until (r.reveal) takes the topmost land instead, and the cards
+ * revealed above it go to the bottom — out of reach for the turns simulated.
+ * @param {string[]|null} names - lands found so far, when they need different names
  */
-function fetchLands(run, g, r, slot, n, toBattlefield, notes) {
+function fetchLands(run, g, r, slot, n, toBattlefield, notes, names = null) {
     const lib = g.lib;
     const taken = g.taken;
     const len = g.libLen;
     for (let k = 0; k < n; k++) {
         if (slot >= 0 && g.found[slot] === 0) return;
-        const have = g.landMask;
-        const need = neededColours(run, g);
-        const bit = slot >= 0 ? 1 << slot : 0;
-        let ceiling = Infinity;
-        if (slot >= 0) {
-            ceiling = -1;
-            const masks = run.searchMasks[slot];
-            for (let j = 0; j < masks.length; j++) ceiling = Math.max(ceiling, fetchScore(masks[j], have, need));
-        }
         let bi = -1;
-        let bs = -1;
-        for (let i = g.top; i < len; i++) {
-            if (taken[i]) continue;
-            const c = lib[i];
-            if (slot >= 0 ? !(c.fmatch & bit) : !landMatches(c, r)) continue;
-            const s = fetchScore(c.mask, have, need);
-            if (s > bs) {
-                bs = s;
-                bi = i;
-                if (s === ceiling) break;
+        if (r.reveal) {
+            bi = revealedLandAt(g, r, slot);
+            if (bi < 0) return;
+            for (let i = g.top; i < bi; i++) if (!taken[i]) takeAt(g, i);
+        } else {
+            const have = g.landMask;
+            const need = neededColours(run, g);
+            const bit = slot >= 0 ? 1 << slot : 0;
+            let ceiling = Infinity;
+            if (slot >= 0) {
+                ceiling = -1;
+                const masks = run.searchMasks[slot];
+                for (let j = 0; j < masks.length; j++) ceiling = Math.max(ceiling, fetchScore(masks[j], have, need));
             }
+            let bs = -1;
+            for (let i = g.top; i < len; i++) {
+                if (taken[i]) continue;
+                const c = lib[i];
+                if (slot >= 0 ? !(c.fmatch & bit) : !landMatches(c, r)) continue;
+                if (names && names.includes(c.name)) continue;
+                const s = fetchScore(c.mask, have, need);
+                if (s > bs) {
+                    bs = s;
+                    bi = i;
+                    if (s === ceiling) break;
+                }
+            }
+            if (bi < 0) return;
         }
-        if (bi < 0) return;
         const c = lib[bi];
+        if (names) names.push(c.name);
         takeAt(g, bi);
         if (toBattlefield) {
             const tapped = r.landsTapped || c.ltap === TAP.TAPPED || c.lbounce;
@@ -825,6 +872,16 @@ function landInHandAt(g, basic) {
         if (c.land && (!basic || c.basic)) return i;
     }
     return -1;
+}
+
+/** Lands (or basic lands) in hand. */
+function landsInHand(g, basic) {
+    let n = 0;
+    for (let i = 0; i < g.handLen; i++) {
+        const c = g.hand[i];
+        if (c.land && (!basic || c.basic)) n++;
+    }
+    return n;
 }
 
 /** Lands a search could still find, up to `want`. */
@@ -855,7 +912,7 @@ function pickRamp(run, g) {
         const c = hand[i];
         if (!(c.rampUse & use)) continue;
         const r = c.rampInfo;
-        let value = r.mana;
+        let value = turnMana(r);
         if (r.lands || r.toHand) {
             const available = landsAvailable(g, r, searchSlot(run, c), r.lands + r.toHand);
             if (available === 0) continue;
@@ -864,7 +921,8 @@ function pickRamp(run, g) {
         if (r.extraDrops) value += 0.6 * r.extraDrops;
         if (r.fromTop && !g.fromTop) value += 0.3;
         if (r.extraDropsOnce && landInHand && g.dropsUsed >= g.drops) value += 0.8;
-        if (r.putLand && (r.putLandBasic ? landInHandAt(g, true) >= 0 : landInHand)) value += 0.8;
+        if (r.putLand > 1) value += 0.8 * Math.min(r.putLand, landsInHand(g, r.putLandBasic));
+        else if (r.putLand && (r.putLandBasic ? landInHandAt(g, true) >= 0 : landInHand)) value += 0.8;
         if (treasureOn && r.treasure) value += 0.5 * r.treasure;
         value -= r.sacrificeLand;
         if (value <= 0) continue;
@@ -891,12 +949,14 @@ function castRamp(run, g, at) {
     const notes = g.entry ? [] : null;
     if (r.mana) {
         const ready = r.ready === 'now' ? t : t + 1;
-        const s = g.srcLen++;
-        g.srcMana[s] = r.mana;
-        g.srcMask[s] = r.mask;
-        g.srcReady[s] = ready;
-        if (ready <= t) poolAdd(r.mask, r.mana);
+        // {G}{U}: one unit of each colour, not two of either.
+        if (r.units) for (let k = 0; k < r.units.length; k++) addSource(g, 1, r.units[k], ready, 0);
+        else addSource(g, r.mana, r.mask, ready, 0);
     }
+    // Main-phase mana from the next turn, growing a turn at a time (Jadzia Dax).
+    if (r.phaseMana) addSource(g, r.phaseMana, r.mask, t + 1, r.growth);
+    // A tap boost from the creature it brings (Badgermole Cub's earthbent land).
+    if (r.tapBoost?.own) addSource(g, r.tapBoost.own * r.tapBoost.mana, r.tapBoost.mask, t + 1, 0);
     if (r.sacrificeLand && g.landLen) {
         let worst = 0;
         for (let i = 1; i < g.landLen; i++) if (BITS[g.landCard[i].mask] < BITS[g.landCard[worst].mask]) worst = i;
@@ -904,22 +964,22 @@ function castRamp(run, g, at) {
     }
     if (r.lands || r.toHand) {
         const slot = searchSlot(run, pick);
-        if (r.lands) fetchLands(run, g, r, slot, r.lands, true, notes);
-        if (r.toHand) fetchLands(run, g, r, slot, r.toHand, false, notes);
+        const names = r.distinct ? [] : null;
+        if (r.lands) fetchLands(run, g, r, slot, r.lands, true, notes, names);
+        if (r.toHand) fetchLands(run, g, r, slot, r.toHand, false, notes, names);
     }
     if (r.extraDrops) { g.extraDrops += r.extraDrops; g.drops += r.extraDrops; }
     if (r.extraDropsOnce) g.drops += r.extraDropsOnce;
     if (r.fromTop) g.fromTop = true;
-    if (r.putLand) {
+    for (let k = 0; k < r.putLand; k++) {
         const landAt = landInHandAt(g, r.putLandBasic);
-        if (landAt >= 0) {
-            const c = hand[landAt];
-            handRemoveAt(g, landAt);
-            const tapped = r.putLandTapped || c.lbounce || entersTapped(g, c);
-            putLand(g, c, tapped);
-            if (!tapped) poolAdd(c.mask, c.lmana);
-            if (notes) notes.push(c.name);
-        }
+        if (landAt < 0) break;
+        const c = hand[landAt];
+        handRemoveAt(g, landAt);
+        const tapped = r.putLandTapped || c.lbounce || entersTapped(g, c);
+        putLand(g, c, tapped);
+        if (!tapped) poolAdd(c.mask, c.lmana);
+        if (notes) notes.push(c.name);
     }
     if (run.treasure && r.treasure) {
         g.treasures += r.treasure;
@@ -1009,6 +1069,7 @@ function copyGame(src, dst) {
         dst.srcMana[i] = src.srcMana[i];
         dst.srcMask[i] = src.srcMask[i];
         dst.srcReady[i] = src.srcReady[i];
+        dst.srcGrow[i] = src.srcGrow[i];
     }
     dst.srcLen = s;
     dst.t = src.t;
@@ -1058,7 +1119,7 @@ function beginTurn(run, g, t, log, mana, rampOn) {
     }
     poolReset();
     for (let i = 0; i < g.landLen; i++) if (g.landReady[i] <= t) poolAdd(g.landCard[i].mask, g.landCard[i].lmana);
-    for (let i = 0; i < g.srcLen; i++) if (g.srcReady[i] <= t) poolAdd(g.srcMask[i], g.srcMana[i]);
+    for (let i = 0; i < g.srcLen; i++) if (g.srcReady[i] <= t) poolAdd(g.srcMask[i], sourceMana(g, i, t));
     if (g.floating) poolAdd(g.floatingMask, g.floating);
     if (g.treasures) poolAdd(run.idMask, g.treasures, 1);
     mana[t] = Math.min(MAX_MANA, poolSize);
