@@ -263,6 +263,8 @@ describe('splitDots', () => {
 describe('stackWidth', () => {
     it('keeps single stacks for many columns and wraps tall stacks in few', () => {
         assert.strictEqual(stackWidth(20, 33), 1);
+        assert.strictEqual(stackWidth(20, 21), 1);
+        assert.strictEqual(stackWidth(30, 21), 2);
         assert.strictEqual(stackWidth(46, 8), 3);
         assert.strictEqual(stackWidth(100, 1), 6);
         assert.strictEqual(stackWidth(10, 2), 1);

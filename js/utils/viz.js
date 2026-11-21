@@ -218,7 +218,8 @@ export function binDots(dots, { threshold = null, maxColumns = 30 } = {}) {
  * @returns {number}
  */
 export function stackWidth(tallest, cols) {
-    const want = Math.ceil(Math.max(1, tallest) / 16);
+    // Many columns can afford taller single stacks: the shape reads better.
+    const want = Math.ceil(Math.max(1, tallest) / (cols >= 16 ? 24 : 16));
     const room = Math.max(1, Math.floor(64 / Math.max(1, cols)));
     return Math.max(1, Math.min(want, room, 6));
 }
@@ -334,7 +335,7 @@ export function dotPlot(o = {}) {
         }
         if (bins.thresholdIndex != null && !picked.includes(bins.thresholdIndex)) picked.push(bins.thresholdIndex);
         // Drop a label that would sit right on top of the threshold's.
-        picked = picked.filter(i => i === bins.thresholdIndex || bins.thresholdIndex == null || Math.abs(i - bins.thresholdIndex) >= Math.max(1, every / 2));
+        picked = picked.filter(i => i === bins.thresholdIndex || bins.thresholdIndex == null || Math.abs(i - bins.thresholdIndex) >= Math.max(1, every));
         for (const i of picked.sort((x, y) => x - y)) {
             ticks.push({ left: (i / cols) * 100, text: format(bins.origin + i * bins.width), edge: i === 0 ? 'start' : i === cols ? 'end' : '' });
         }
