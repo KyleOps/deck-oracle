@@ -203,7 +203,7 @@ function renderDiff(result) {
 function renderEmpty() {
     return `
         <div class="cmp-empty">
-            <h3>Load a second deck to compare</h3>
+            <h3 class="cmp-empty-title">Load a second deck to compare</h3>
             <p>Every deck you import is saved in this browser. Import another list — or a newer version of this one — and it appears in the pickers above.</p>
             <button class="btn btn-primary" type="button" data-cmp-load>Load a deck</button>
         </div>`;

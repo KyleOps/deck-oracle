@@ -4,10 +4,12 @@
  * js/calculators/portent.js fills the containers.
  */
 
-import { sharedStyles, xControlHTML } from '../utils/bigSpells.js';
+import { injectSharedStyles, xControlHTML } from '../utils/bigSpells.js';
+
+injectSharedStyles();
 
 export const template = `
-<div class="main-grid single-column">
+<div class="main-grid single-column bs-page">
     <section class="panel panel-config" aria-label="Settings">
         ${xControlHTML({
             key: 'portent',
@@ -78,7 +80,6 @@ export const template = `
 `;
 
 export const styles = `
-${sharedStyles('#portent-tab')}
 #portent-tab .por-typebar { display: flex; gap: 2px; height: 8px; border-radius: var(--radius-full); overflow: hidden; background: var(--tx-rule); }
 #portent-tab .por-typebar > span { min-width: 3px; }
 #portent-tab .por-types { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 4px 18px; }

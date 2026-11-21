@@ -11,10 +11,10 @@ export const template = `
         <div class="vx-rail">
             <label class="vx-label" for="vortex-cmcSlider">Its mana value</label>
             <div class="vx-mv">
-                <span class="vx-mv-num" id="vortex-mv-display">6</span>
+                <span class="tx-display" id="vortex-mv-display">6</span>
                 <span class="vx-mv-unit">so Vortex discovers this much</span>
             </div>
-            <input class="tx-slider" type="range" id="vortex-cmcSlider" value="6" min="1" max="16" step="1">
+            <input type="range" id="vortex-cmcSlider" value="6" min="1" max="16" step="1">
             <div class="vx-scale" id="vortex-mv-scale"><span>&mdash;</span><span>&mdash;</span></div>
             <p class="field-hint vx-who" id="vortex-mv-who"></p>
         </div>
@@ -88,15 +88,6 @@ export const styles = `
     color: var(--tx-mid);
 }
 #vortex-tab .vx-mv { display: flex; align-items: baseline; gap: 10px; }
-#vortex-tab .vx-mv-num {
-    font-family: var(--font-mono);
-    font-size: var(--t-display);
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: var(--track-display);
-    color: var(--tx-bright);
-    font-feature-settings: 'tnum' 1;
-}
 #vortex-tab .vx-mv-unit { font-size: var(--t-xs); color: var(--tx-dim); }
 #vortex-tab .vx-scale {
     display: flex;
@@ -128,7 +119,7 @@ export const styles = `
 #vortex-tab .vx-chart { height: 300px; padding: 8px 12px 0; }
 #vortex-tab .vx-caption {
     margin: 0;
-    padding: 8px 16px 14px;
+    padding: 8px var(--pad-x) 14px;
     font-size: var(--t-xs);
     color: var(--tx-dim);
     line-height: 1.5;
@@ -222,7 +213,7 @@ export const styles = `
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding: 12px 16px;
+    padding: var(--pad-y) var(--pad-x);
 }
 #vortex-tab .vx-sample-note { font-size: var(--t-xs); color: var(--tx-dim); }
 
@@ -244,20 +235,8 @@ export const styles = `
 }
 #vortex-tab .vx-pool-row dd { margin: 0; color: var(--tx-text); }
 #vortex-tab .vx-sep { color: var(--tx-dim); margin: 0 6px; }
-#vortex-tab .tx-sim-block-title {
-    font-size: var(--t-xs);
-    font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--tx-mid);
-}
-#vortex-tab .vx-dist-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-}
 
-@media (max-width: 560px) {
+@container shell (max-width: 530px) {
     #vortex-tab .vx-step { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     #vortex-tab .vx-step + .vx-step,
     #vortex-tab .vx-step + .vx-step + .vx-step { padding-left: 10px; }

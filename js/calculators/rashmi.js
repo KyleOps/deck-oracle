@@ -328,7 +328,7 @@ function renderBreakdown(state, castMv) {
         <div class="rs-band" role="img" aria-label="${parts.map(p => `${p.label}: ${pct(p.value)}`).join(', ')}">
             ${parts.map(p => `<span class="rs-band-seg is-${p.key}" style="width:${(p.value * 100).toFixed(2)}%"></span>`).join('')}
         </div>
-        <ul class="rs-legend">
+        <ul class="tx-legend">
             ${parts.map(p => `<li><span class="rs-swatch is-${p.key}"></span>${p.label}<strong>${pct(p.value)}</strong></li>`).join('')}
         </ul>`;
 }
@@ -455,7 +455,7 @@ export function runSampleReveals(force = false) {
                 </li>`;
             }).join('')}
         </ol>
-        <p class="rs-caption">${hits} of these ${picks.length} reveals would be free with a ${castMv}-mana spell. Change the mana value to see the same cards re-sorted.</p>`;
+        <p class="tx-caption">${hits} of these ${picks.length} reveals would be free with a ${castMv}-mana spell. Change the mana value to see the same cards re-sorted.</p>`;
 }
 
 export function updateUI() {

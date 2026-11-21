@@ -11,7 +11,7 @@ export const template = `
             <label for="lumra-turn">Turn Lumra enters</label>
             <div class="x-slider-row">
                 <input type="range" id="lumra-turnSlider" value="6" min="1" max="20" step="1" aria-label="Turn Lumra enters">
-                <input type="number" id="lumra-turn" value="6" min="1" max="30" class="x-number" inputmode="numeric">
+                <input type="number" id="lumra-turn" value="6" min="1" max="30" class="field field-sm x-number" inputmode="numeric">
             </div>
             <small>Sets how many land drops you have made: a seven-card hand plus one draw a turn, one land a turn when you have one.</small>
         </div>
@@ -19,14 +19,14 @@ export const template = `
         <div class="tx-h"><span>Your graveyard</span></div>
         <div class="input-group lm-input">
             <label for="lumra-fetchLands">Fetch lands in your deck</label>
-            <input type="number" id="lumra-fetchLands" value="0" min="0" max="100" step="1" inputmode="numeric">
+            <input type="number" id="lumra-fetchLands" value="0" min="0" max="100" step="1" class="field field-sm x-number" inputmode="numeric">
             <small id="lumra-fetch-hint">Detected from your decklist.</small>
         </div>
         <div class="input-group lm-input">
             <label for="lumra-gyLands">Other lands already in your graveyard</label>
             <div class="x-slider-row">
                 <input type="range" id="lumra-gySlider" value="0" min="0" max="30" step="1" aria-label="Other lands already in your graveyard">
-                <input type="number" id="lumra-gyLands" value="0" min="0" max="100" class="x-number" inputmode="numeric">
+                <input type="number" id="lumra-gyLands" value="0" min="0" max="100" class="field field-sm x-number" inputmode="numeric">
             </div>
             <small>Lands discarded, destroyed or milled earlier. Leave at 0 for the deck as built.</small>
         </div>
@@ -37,7 +37,7 @@ export const template = `
                 <label for="lumra-multiplier">Times the trigger resolves</label>
                 <div class="x-slider-row">
                     <input type="range" id="lumra-multSlider" value="1" min="1" max="5" step="1" aria-label="Times Lumra’s enter trigger resolves">
-                    <input type="number" id="lumra-multiplier" value="1" min="1" max="10" class="x-number" inputmode="numeric">
+                    <input type="number" id="lumra-multiplier" value="1" min="1" max="10" class="field field-sm x-number" inputmode="numeric">
                 </div>
                 <small>Panharmonicon, Roaming Throne and the like make Lumra mill four more cards per extra trigger.</small>
             </div>
@@ -55,7 +55,7 @@ export const template = `
         <div class="chart-container lm-chart">
             <canvas id="lumra-chart" role="img" aria-label="Share of games by Lumra’s power and toughness when it enters"></canvas>
         </div>
-        <p class="lm-caption">Each bar is one size Lumra can enter as; the solid bar is the typical game. Land drops set the floor, the mill decides how far above it you land.</p>
+        <p class="tx-caption">Each bar is one size Lumra can enter as; the solid bar is the typical game. Land drops set the floor, the mill decides how far above it you land.</p>
     </section>
 
     <section class="panel" id="lumra-sample-reveals" aria-label="Sample games">
@@ -88,7 +88,7 @@ export const styles = `
 #lumra-tab .lm-answer .tx-hero { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 #lumra-tab .lm-answer .bottom-line { border-bottom: 1px solid var(--tx-rule); }
 
-#lumra-tab .lm-sources { padding: 14px 16px 16px; }
+#lumra-tab .lm-sources { padding: 14px var(--pad-x) 16px; }
 #lumra-tab .lm-band {
     display: flex;
     height: 12px;
@@ -102,30 +102,11 @@ export const styles = `
 #lumra-tab .is-gy { background: var(--series-3); }
 #lumra-tab .is-fetch { background: var(--series-6); }
 #lumra-tab .is-mill { background: var(--tx-good); }
-#lumra-tab .lm-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 20px;
-    margin: 10px 0 0;
-    padding: 0;
-    list-style: none;
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-}
-#lumra-tab .lm-legend li { display: inline-flex; align-items: center; gap: 7px; }
-#lumra-tab .lm-legend strong { font-family: var(--font-mono); font-feature-settings: 'tnum' 1; }
 #lumra-tab .lm-legend-total { margin-left: auto; color: var(--tx-text); }
 #lumra-tab .lm-swatch { width: 10px; height: 10px; border-radius: 3px; }
 
 #lumra-tab .lm-chart { height: 280px; }
-#lumra-tab .lm-caption {
-    margin: 0;
-    padding: 0 16px 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-}
-#lumra-tab .tx-collapse-body .lm-caption { padding: 0 0 10px; }
+#lumra-tab .tx-collapse-body .tx-caption { padding: 0 0 10px; }
 
 #lumra-tab .lm-games { display: grid; padding: 4px 16px 0; }
 #lumra-tab .lm-game { padding: 10px 0; border-bottom: 1px solid var(--tx-rule); }
@@ -166,7 +147,7 @@ export const styles = `
     color: var(--tx-text);
 }
 #lumra-tab .lm-game-back { margin-right: 10px; font-weight: 500; color: var(--tx-dim); }
-#lumra-tab .lm-games + .lm-caption { padding-top: 10px; }
+#lumra-tab .lm-games + .tx-caption { padding-top: 10px; }
 
 #lumra-tab .lm-details .tx-collapse:first-child { border-top: 0; }
 #lumra-tab .lm-flush { padding: 0; }

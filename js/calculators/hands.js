@@ -231,7 +231,7 @@ function renderField() {
     const head = $('hl-field-head');
     if (head) {
         head.innerHTML = `
-            <span class="hl-field-title">Battlefield</span>
+            <span class="hl-field-title tx-eyebrow">Battlefield</span>
             <span>Turn <strong>${game.turn}</strong></span>
             <span>Mana <strong>${untapped}</strong> of ${lands.length}${colors.length ? ` · ${colors.map(c => `<span class="ms ms-${c.toLowerCase()}" aria-label="${c}">${c}</span>`).join('')}` : ''}</span>
             <span>Hand <strong>${game.hand.length}</strong></span>
@@ -396,7 +396,7 @@ function verdictHtml(v, { label = 'Your rule says', extra = [] } = {}) {
         <div class="hl-verdict ${v.keep ? 'tone-keep' : 'tone-mull'}">
             <span class="hl-verdict-mark" aria-hidden="true">${v.keep ? '✓' : '↻'}</span>
             <div>
-                <div class="hl-verdict-label">${label}</div>
+                <div class="hl-verdict-label tx-eyebrow">${label}</div>
                 <div class="hl-verdict-text">${escapeHtml(v.headline)}</div>
                 ${why.length ? `<ul class="hl-verdict-why">${why.map(r => `<li>${r}</li>`).join('')}</ul>` : ''}
             </div>

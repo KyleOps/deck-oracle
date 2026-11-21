@@ -164,7 +164,7 @@ export const styles = `
     border-radius: var(--radius-lg);
     color: var(--tx-mid);
 }
-#compare-tab .cmp-empty h3 { font-size: var(--t-lg); margin-bottom: 6px; color: var(--tx-bright); }
+#compare-tab .cmp-empty-title { font-size: var(--t-lg); margin-bottom: 6px; color: var(--tx-bright); }
 #compare-tab .cmp-empty p { margin: 0 auto 16px; max-width: 52ch; }
 
 @container shell (max-width: 720px) {

@@ -1,167 +1,76 @@
-/* ==================== TERMINAL COMPONENTS ==================== */
+/* ==================== CALCULATOR COMPONENTS ====================
+   The shared pieces every calculator page is built from: panel header band,
+   hero stats, tables, controls, charts, samples, collapsibles and layout.
+   Page-specific styles live in each view's `styles` export (js/views). */
 
 /* ==================== PANEL HEADER BAND ==================== */
 
 .tx-h {
-    font-size: var(--t-label);
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--tx-rule);
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    background: var(--tx-panel);
-    font-family: inherit;
-}
-
-.tx-h .tx-h-r {
-    color: var(--tx-mid);
-    font-size: var(--t-label);
-    letter-spacing: 0.08em;
-    text-transform: none;
-    cursor: pointer;
-}
-
-.tx-h .tx-h-r:hover { color: var(--tx-bright); }
-
-/* ==================== TERMINAL INPUTS ==================== */
-
-.tx-input {
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    padding: 8px 10px;
-    font-family: inherit;
-    font-size: var(--t-sm);
-    outline: none;
-    border-radius: 0;
-    width: 100%;
-    box-sizing: border-box;
-    transition: border-color 0.12s;
-}
-
-.tx-input:focus {
-    border-color: var(--tx-dim);
-}
-
-/* ==================== TERMINAL RANGE SLIDER ==================== */
-
-.tx-slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 4px;
-    background: var(--tx-rule);
-    outline: none;
-    border-radius: 0;
-    cursor: ew-resize;
-}
-
-.tx-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    cursor: ew-resize;
-    border-radius: 0;
-    border: 0;
-}
-
-.tx-slider::-moz-range-thumb {
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    cursor: ew-resize;
-    border-radius: 0;
-    border: 0;
-}
-
-/* ==================== TERMINAL PRESET CHIPS ==================== */
-
-.tx-chip {
-    padding: 4px 10px;
-    border: 1px solid var(--tx-rule);
-    font-family: inherit;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 42px;
+    padding: 10px var(--pad-x);
+    border-bottom: 1px solid var(--tx-rule);
     font-size: var(--t-xs);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--tx-bright);
+}
+
+/* Right-hand metadata: what the panel covers ("exact odds", "2,000 shuffles"). */
+.tx-h-r {
+    font-size: var(--t-label);
+    font-weight: 500;
+    letter-spacing: var(--track-label);
     color: var(--tx-mid);
-    background: transparent;
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-}
-
-.tx-chip:hover {
-    background: var(--tx-panel-alt);
-    color: var(--tx-text);
-}
-
-.tx-chip.active {
-    background: var(--tx-amber);
-    color: var(--tx-bg);
-    border-color: var(--tx-amber);
+    text-align: right;
 }
 
 /* ==================== HERO STAT BLOCK ==================== */
 
 .tx-stat {
-    padding: 20px 24px;
+    padding: 18px var(--spacing-xl);
     border-right: 1px solid var(--tx-rule);
 }
 
 .tx-stat:last-child { border-right: none; }
 
-.tx-stat-label {
-    font-size: var(--t-micro);
-    font-weight: 500;
-    letter-spacing: var(--track-wide);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 10px;
-}
+.tx-stat-label { margin-bottom: var(--spacing-xs); }
 
 .tx-stat-value {
+    margin: 6px 0 4px;
+    font-family: var(--font-mono);
     font-size: var(--t-display);
-    font-weight: 700;
-    line-height: 0.92;
-    letter-spacing: var(--track-display);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    color: var(--tx-bright);
     font-feature-settings: 'tnum' 1;
 }
 
 .tx-stat-value.medium {
     font-size: var(--t-xl);
-    font-weight: 600;
     letter-spacing: var(--track-tight);
 }
 
 .tx-stat-sub {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
     margin-top: 10px;
-    letter-spacing: 0;
+    font-size: var(--t-xs);
     line-height: 1.45;
+    letter-spacing: 0;
+    color: var(--tx-mid);
 }
 
-/* ==================== LIBRARY TYPE BAR ==================== */
-
-.tx-bar {
-    height: 14px;
-    display: flex;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    overflow: hidden;
-}
-
-/* Inline p-bar for sweep table */
+/* Inline probability bar for sweep tables */
 .tx-p-bar {
     display: inline-block;
     width: 90px;
     height: 6px;
     background: var(--tx-bg);
     border: 1px solid var(--tx-rule);
+    border-radius: 4px;
     vertical-align: middle;
     overflow: hidden;
 }
@@ -169,20 +78,11 @@
 .tx-p-fill {
     display: block;
     height: 100%;
-    background: var(--tx-green);
+    background: var(--tx-good);
+    border-radius: 4px;
     opacity: 0.7;
     transition: width 0.15s;
 }
-
-/* ==================== PORTENT 3-COL LAYOUT ==================== */
-
-/* Hero numerics 3-up */
-
-/* X sweep table */
-
-/* Live tape */
-
-/* Sample reveal */
 
 /* ==================== SHARED TERMINAL COMPONENTS (used site-wide) ==================== */
 
@@ -197,17 +97,9 @@
     border-bottom: 1px solid var(--tx-rule);
 }
 
-.tx-hero .tx-stat {
-    padding: 16px 18px;
-    border-bottom: 1px solid var(--tx-rule);
-}
+.tx-hero .tx-stat { padding: 16px 18px; }
 
 .tx-hero .tx-stat:last-child { border-bottom: 1px solid var(--tx-rule); }
-
-/* On wide rows the border-bottom doubles with the wrapper; hide for single-row */
-@media (min-width: 700px) {
-    .tx-hero .tx-stat { border-bottom: none; }
-}
 
 /* The lead number is the answer to the calculator's question, so it gets the
    display register; supporting figures sit a full step down. */
@@ -219,35 +111,6 @@
 
 .tx-hero .tx-stat-value { font-size: var(--t-xxl); }
 .tx-hero .tx-stat-value.medium { font-size: var(--t-xl); }
-
-/* Verdict pill */
-.tx-verdict {
-    display: inline-block;
-    padding: 1px 7px;
-    border: 1px solid currentColor;
-    font-size: var(--t-micro);
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    vertical-align: middle;
-    white-space: nowrap;
-}
-
-/* Recommendation banner */
-.tx-rec {
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel-alt);
-    font-size: var(--t-xs);
-    color: var(--tx-text);
-    line-height: 1.55;
-}
-
-.tx-rec-icon { flex-shrink: 0; }
-.tx-rec strong { color: var(--tx-bright); }
 
 /* Empty-state line */
 .tx-empty {
@@ -266,10 +129,9 @@
 }
 
 .tx-sweep-table thead th {
-    font-size: var(--t-micro);
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: 0.04em;
     color: var(--tx-dim);
     padding: 8px 14px;
     border-bottom: 1px solid var(--tx-rule);
@@ -285,8 +147,12 @@
     padding: 6px 14px;
     text-align: right;
     border-bottom: 1px solid var(--tx-rule);
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
     color: var(--tx-text);
 }
+
+.tx-sweep-table tbody td.ta-l { font-family: var(--font-body); }
 
 .tx-sweep-table tbody tr { transition: background 0.1s; }
 .tx-sweep-table tbody tr:hover { background: var(--tx-panel-alt); }
@@ -294,17 +160,108 @@
 .tx-sweep-table tbody tr.active-row { background: var(--tx-row-hi); }
 .tx-sweep-table tbody tr.active-row td { color: var(--tx-bright); font-weight: 600; }
 
-.tx-sweep-table tbody tr.rec-row td:first-child {
-    box-shadow: inset 2px 0 0 var(--tx-amber);
+.tx-sweep-table tbody tr.rec-row td:first-child { box-shadow: inset 3px 0 0 var(--tx-accent); }
+
+/* ==================== CONTROLS ====================
+   Text, number and select inputs use the shell's .field / .field-sm, the same
+   control as the deck dialog. The base below has zero specificity, so it only
+   catches a control a page forgot to class and never out-ranks .field or a
+   page rule. (The terminal-era .calculator-content skin it replaces sat at
+   0,2,1 and silently beat .field on every calculator page.) */
+
+:where(.calc-body) :where(input:not([type="range"], [type="checkbox"], [type="radio"]), select, textarea) {
+    padding: 0 8px;
+    background: var(--tx-bg);
+    border: 1px solid var(--tx-rule-hi);
+    border-radius: var(--radius-sm);
 }
 
-/* Avoid doubled hairlines where stacked terminal blocks meet */
-.tx-hero + .insight-box,
-.tx-rec + .insight-box { border-top: 0; }
+/* Typed numbers read in mono, like every other number. */
+.calc-body input[type="number"] { font-family: var(--font-mono); }
 
-/* ==================== INPUT GROUPS ==================== */
+.calc-body input[type="checkbox"],
+.calc-body input[type="radio"] { accent-color: var(--tx-accent); }
+
+/* Range: a rounded track and a real, grabbable thumb. Draw Odds paints the
+   filled part of its track over this. */
+.calc-body input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: var(--tx-rule);
+    border-radius: 6px;
+    outline: none;
+    cursor: pointer;
+}
+
+/* Chrome paints its own light runnable-track over an appearance:none range;
+   clear it so the input's own background is the only track. */
+.calc-body input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    background: transparent;
+    border: 0;
+}
+
+.calc-body input[type="range"]::-moz-range-track { background: transparent; border: 0; }
+
+.calc-body input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: var(--tx-accent);
+    border: 3px solid var(--tx-panel);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--tx-accent), var(--shadow-sm);
+    cursor: grab;
+    transition: transform var(--transition-fast);
+}
+
+.calc-body input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--tx-accent);
+    border: 3px solid var(--tx-panel);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px var(--tx-accent);
+    cursor: grab;
+}
+
+.calc-body input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
+
+.calc-body input[type="range"]:focus-visible {
+    outline: 2px solid var(--tx-accent);
+    outline-offset: 6px;
+}
+
+.calc-body input[type="range"]:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 1px var(--tx-accent), 0 0 0 5px var(--accent-soft);
+}
+
+/* A slider with its exact number beside it (Lumra, Rashmi). */
+.x-slider-row {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    width: 100%;
+}
+
+.x-slider-row input[type="range"] { flex: 1; min-width: 0; }
+
+input.x-number {
+    width: 60px;
+    flex-shrink: 0;
+    padding: 0 6px;
+    text-align: center;
+    font-weight: 600;
+}
+
+/* ==================== INPUT GROUPS ====================
+   A labelled control with a one-line hint, in a calculator's settings rail. */
 
 .input-group {
+    max-width: 720px;
     margin-bottom: var(--spacing-lg);
     padding: 0 14px;
 }
@@ -313,59 +270,21 @@
 
 .input-group label {
     display: block;
-    margin-bottom: var(--spacing-xs);
-    font-size: var(--t-micro);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    margin-bottom: 6px;
+    font-size: var(--t-label);
+    font-weight: 600;
+    color: var(--tx-mid);
+}
+
+.input-group small {
+    display: block;
+    margin-top: 5px;
+    font-size: var(--t-label);
     color: var(--tx-dim);
 }
 
-.input-group input[type="text"],
-.input-group input[type="number"],
-.input-group textarea {
-    width: 100%;
-    padding: 7px 10px;
-    border-radius: 0;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    font-size: var(--t-xs);
-    font-family: inherit;
-    transition: border-color 0.12s;
-    resize: vertical;
-    min-height: 30px;
-}
-
-.input-group input:hover,
-.input-group textarea:hover {
-    border-color: var(--tx-rule-hi);
-}
-
-.input-group input:focus,
-.input-group textarea:focus {
-    outline: none;
-    border-color: var(--tx-amber);
-    box-shadow: none;
-    background: var(--tx-bg);
-}
-
-.input-group textarea {
-    font-family: var(--font-mono);
-    line-height: 1.5;
-}
-
-.input-group textarea::placeholder {
-    font-family: var(--font-body);
-    color: var(--tx-dim);
-    font-style: normal;
-}
-
-.input-group input[type="checkbox"] {
-    width: 14px;
-    height: 14px;
-    accent-color: var(--tx-amber);
-    cursor: pointer;
-}
+/* Sliders read as controls, not progress bars, when they stop short. */
+.input-group input[type="range"] { max-width: 520px; }
 
 .checkbox-label {
     display: flex;
@@ -377,322 +296,60 @@
     color: var(--tx-text);
 }
 
-/* ==================== TYPE GRID ==================== */
-
-.type-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 10px;
-    margin: 0 16px 16px;
-}
-
-.type-input {
-    display: grid;
-    gap: 5px;
-    align-content: start;
-}
-
-.type-input label {
-    font-size: var(--t-label);
-    font-weight: 600;
-    color: var(--tx-mid);
-}
-
-.type-input input {
-    width: 100%;
-    height: 36px;
-    padding: 0 10px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule-hi);
-    border-radius: var(--radius-sm);
-    color: var(--tx-bright);
-    font-family: var(--font-mono);
-    font-size: var(--t-sm);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.type-input input:focus {
-    outline: none;
-    border-color: var(--tx-accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-/* ==================== DECK TOTAL ==================== */
-
-.deck-total {
-    margin: 0;
-    font-size: var(--t-xs);
-    color: var(--tx-dim);
-}
-
-.deck-total strong,
-.deck-total span {
-    font-family: var(--font-mono);
-    font-weight: 600;
-    color: var(--tx-bright);
-}
-
-/* ==================== X SLIDER ROW ==================== */
-
-.x-slider-row {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-    width: 100%;
-}
-
-.x-slider-row input[type="range"] {
-    flex: 1;
-    -webkit-appearance: none;
-    appearance: none;
-    height: 4px;
-    background: var(--tx-rule);
-    outline: none;
-    cursor: ew-resize;
-    min-width: 0;
-    border-radius: 0;
-    box-shadow: none;
-}
-
-.x-slider-row input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    cursor: ew-resize;
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-    transition: none;
-}
-
-.x-slider-row input[type="range"]::-moz-range-thumb {
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    cursor: ew-resize;
-    border-radius: 0;
-    border: none;
-}
-
-.x-number {
-    width: 60px !important;
-    min-width: 60px;
-    max-width: 60px;
-    text-align: center;
-    flex-shrink: 0;
-    padding: 4px 6px !important;
-    font-weight: 600;
-    font-feature-settings: 'tnum' 1;
-}
-
-/* ==================== IMPORT SECTION ==================== */
-
-.import-btn {
-    padding: 6px 14px;
-    color: var(--tx-bg);
-    font-weight: 600;
-    font-family: inherit;
-    font-size: var(--t-xs);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    cursor: pointer;
-    white-space: nowrap;
-    user-select: none;
-    background: var(--tx-amber);
-    border: 1px solid var(--tx-amber);
-    border-radius: 0;
-    box-shadow: none;
-    transition: background 0.12s, color 0.12s;
-}
-
-.import-btn:hover {
-    background: transparent;
-    color: var(--tx-amber);
-    transform: none;
-    filter: none;
-    box-shadow: none;
-}
-
-.import-btn:active { transform: none; }
-
-.import-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    animation: none;
-}
-
-.import-status {
-    margin-top: var(--spacing-sm);
-    font-size: var(--t-label);
-    letter-spacing: 0.08em;
-    min-height: 16px;
-}
-
-.import-status.success { color: var(--tx-green); }
-.import-status.error   { color: var(--tx-red); }
-.import-status.loading { color: var(--tx-amber); }
-
-.import-progress {
-    margin-top: var(--spacing-xs);
-    height: 2px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    overflow: hidden;
-    opacity: 0;
-    transition: opacity 0.12s;
-}
-
-.import-progress.visible { opacity: 1; }
-
-.import-progress-bar {
-    height: 100%;
-    width: 0%;
-    background: var(--tx-amber);
-    transition: width 0.3s ease;
-}
-
-.import-progress-bar::after { display: none; }
-
-@keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.8; } }
-@keyframes fadeInUp { from { opacity: 0; } to { opacity: 1; } }
-@keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
-
-.deck-name {
-    padding: 6px 14px;
-    font-size: var(--t-label);
-    color: var(--tx-amber);
-    background: var(--tx-panel);
-    border-bottom: 1px solid var(--tx-rule);
-    border-radius: 0;
-}
-
-.deck-name .label {
-    color: var(--tx-dim);
-    font-size: var(--t-micro);
-    letter-spacing: 0.10em;
-    text-transform: uppercase;
-    display: block;
-    margin-bottom: 2px;
-}
-
 /* ==================== CHARTS ==================== */
 
+/* Chart.js reflows to its container (including on container-query changes),
+   but its ResizeObserver settles a few hundred ms later. Clip during that
+   window so the canvas can't transiently push past the shell, and clear the
+   grid min-width:auto default that would otherwise stop the column shrinking. */
 .chart-container {
     position: relative;
-    padding: 0;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.chart-container > canvas {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* Breathing room inside the card */
+.calc-body .chart-container { padding: 10px 12px 6px; }
+
+/* One line under a chart saying how to read it. */
+.tx-caption {
     margin: 0;
+    padding: 0 var(--pad-x) 14px;
+    font-size: var(--t-xs);
+    line-height: 1.5;
+    color: var(--tx-dim);
 }
 
-.legend-item {
+/* Key under a chart or band: swatch, label, value. */
+.tx-legend,
+.viz-legend {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--t-xs);
     color: var(--tx-mid);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    font-size: var(--t-micro);
 }
 
-/* ==================== COMPARISON TABLE ==================== */
+.tx-legend li,
+.viz-legend li { display: inline-flex; align-items: center; gap: 7px; }
+
+.tx-legend strong { font-family: var(--font-mono); font-feature-settings: 'tnum' 1; }
+
+/* ==================== TABLE WRAPPER ==================== */
 
 .table-wrapper {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     max-width: 100%;
-}
-
-.comparison-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--t-xs);
-    min-width: 400px;
-    font-feature-settings: 'tnum' 1;
-}
-
-.comparison-table th,
-.comparison-table td {
-    padding: 6px 14px;
-    text-align: center;
-    vertical-align: middle;
-    border-bottom: 1px solid var(--tx-rule);
-    color: var(--tx-text);
-}
-
-.comparison-table th {
-    font-size: var(--t-micro);
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    background: var(--tx-panel);
-    color: var(--tx-dim);
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.comparison-table tbody tr { cursor: pointer; }
-.comparison-table tbody tr:nth-child(even) { background: var(--tx-panel); }
-.comparison-table tbody tr:hover { background: var(--tx-panel-alt) !important; transform: none; }
-
-.comparison-table .current {
-    font-weight: 700;
-    background: var(--tx-row-hi) !important;
-    border-left: 2px solid var(--tx-amber);
-    color: var(--tx-bright);
-}
-
-/* ==================== INSIGHT BOX ==================== */
-
-.insight-box {
-    padding: var(--spacing-md) 16px;
-    margin: 0;
-    border-top: 1px solid var(--tx-rule);
-    background: var(--tx-panel-alt);
-    border-radius: 0;
-    border-left: 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.insight-box h3 {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    margin-bottom: var(--spacing-sm);
-    color: var(--tx-dim);
-    border: none;
-    padding: 0;
-}
-
-.insight-box p,
-.insight-body {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-    line-height: 1.6;
-}
-
-.insight-body { margin-bottom: 8px; }
-.insight-body:last-child { margin-bottom: 0; }
-
-.insight-foot {
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--tx-rule);
-    font-size: var(--t-label);
-    color: var(--tx-dim);
-}
-
-/* ==================== STAT CARDS ==================== */
-
-/* ==================== MULLIGAN CARD TYPES ==================== */
-
-.type-header {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-sm);
 }
 
 /* ==================== COLLAPSIBLE PANELS ==================== */
@@ -711,14 +368,11 @@
     padding: 2px 6px;
     margin: 2px;
     border: 1px solid var(--tx-rule);
+    border-radius: var(--radius-xs);
     font-size: var(--t-label);
     font-weight: 400;
     cursor: default;
-    border-radius: 0;
-    transition: none;
 }
-
-.reveal-card:hover { transform: none; }
 
 .reveal-card.creature     { background: var(--tx-panel-alt); border-color: var(--type-creature); color: var(--type-creature); }
 .reveal-card.sorcery      { background: var(--tx-panel-alt); border-color: var(--type-sorcery); color: var(--type-sorcery); }
@@ -730,378 +384,13 @@
 .reveal-card.land         { background: var(--tx-panel-alt); border-color: var(--type-land); color: var(--type-land); }
 .reveal-card.dual         { border-style: dashed; }
 
-/* ==================== DISTRIBUTION CHART ==================== */
-
-.distribution-chart {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 0.9em;
-    width: 100%;
-    padding: 0 14px;
-}
-
-.dist-row {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-}
-
-.dist-label {
-    min-width: 80px;
-    text-align: right;
-    color: var(--tx-mid);
-    white-space: nowrap;
-    font-size: var(--t-label);
-}
-
-.dist-bar-container {
-    flex: 1;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    height: 12px;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-}
-
-.dist-bar {
-    height: 100%;
-    min-width: 2px;
-    background: var(--tx-amber);
-    transition: width 0.3s ease;
-}
-
-.dist-value {
-    width: 52px;
-    text-align: right;
-    font-weight: 600;
-    color: var(--tx-bright);
-    font-feature-settings: 'tnum' 1;
-}
-
-.dist-marker {
-    font-size: var(--t-micro);
-    color: var(--tx-amber);
-    white-space: nowrap;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-/* ==================== BIG SPELL COMPARISON ==================== */
-
-/* ==================== GLOBAL CONTROL THEMING ====================
-   Native form controls inside calculator panels used to render with the OS
-   default chrome (white number spinners, blue-and-white range tracks), which
-   broke the terminal look on any tab that hadn't been hand-styled — most
-   visibly Mulligan, the landing tab. These rules make every control terminal
-   by default; .tx-* classes remain as explicit overrides. */
-
-.calculator-content input[type="number"],
-.calculator-content input[type="text"],
-.calculator-content select,
-.calculator-content textarea {
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    font-family: inherit;
-    font-size: var(--t-xs);
-    padding: 5px 8px;
-    border-radius: 0;
-    outline: none;
-    font-feature-settings: 'tnum' 1;
-    transition: border-color 0.12s;
-}
-
-.calculator-content input[type="number"]:hover,
-.calculator-content input[type="text"]:hover,
-.calculator-content select:hover {
-    border-color: var(--tx-rule-hi);
-}
-
-.calculator-content input[type="number"]:focus,
-.calculator-content input[type="text"]:focus,
-.calculator-content select:focus,
-.calculator-content textarea:focus {
-    border-color: var(--tx-amber);
-}
-
-/* Range inputs: flat terminal track with a hard-edged amber handle. Applied to
-   every range so calculators don't have to remember the .tx-slider class. */
-.calculator-content input[type="range"],
-input[type="range"].tx-slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 4px;
-    background: var(--tx-rule);
-    border: 0;
-    border-radius: 0;
-    outline: none;
-    cursor: ew-resize;
-}
-
-.calculator-content input[type="range"]::-webkit-slider-thumb,
-input[type="range"].tx-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    border: 0;
-    border-radius: 0;
-    cursor: ew-resize;
-}
-
-.calculator-content input[type="range"]::-moz-range-thumb,
-input[type="range"].tx-slider::-moz-range-thumb {
-    width: 12px;
-    height: 18px;
-    background: var(--tx-amber);
-    border: 0;
-    border-radius: 0;
-    cursor: ew-resize;
-}
-
-.calculator-content input[type="range"]::-moz-range-track {
-    height: 4px;
-    background: var(--tx-rule);
-    border: 0;
-}
-
-.calculator-content input[type="range"]:focus-visible {
-    outline: 1px solid var(--tx-amber);
-    outline-offset: 4px;
-}
-
-/* Colour swatches (mulligan card-type rows) */
-.calculator-content input[type="color"] {
-    border: 1px solid var(--tx-rule);
-    border-radius: 0;
-    background: var(--tx-bg);
-    padding: 2px;
-    cursor: pointer;
-}
-
-/* Generic action buttons: outlined, not filled. Solid amber is reserved for the
-   single primary action in the sub-bar. tx-* and viz-* components style their
-   own buttons. */
-.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn) {
-    background: transparent;
-    border: 1px solid var(--tx-rule-hi);
-    color: var(--tx-text);
-    font-family: inherit;
-    font-size: var(--t-xs);
-    font-weight: 600;
-    padding: 7px 14px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
-}
-
-.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):hover {
-    background: var(--tx-panel-alt);
-    color: var(--tx-bright);
-    border-color: var(--tx-amber);
-}
-
-.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    border-color: var(--tx-rule);
-}
-
-/* Section headings inside calculators — keep the terminal label voice rather
-   than falling back to browser-default h1/h2 sizing. */
-/* Only bare headings: anything with its own class styles itself. */
-.calc-body h2:not([class]),
-.calc-body h3:not([class]) {
-    font-family: inherit;
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-mid);
-    margin: 0 0 10px;
-    text-shadow: none;
-}
-
-/* ==================== TERMINAL FORM PATTERNS ====================
-
-/* Segmented preset selector (mulligan strategy, and reusable elsewhere) */
-
-/* Labelled slider block */
-.calculator-content .input-group > label {
-    display: block;
-    font-size: var(--t-micro);
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 6px;
-}
-
-.calculator-content .input-group small {
-    display: block;
-    margin-top: 5px;
-    font-size: var(--t-label);
-    color: var(--tx-dim);
-}
-
-/* Primal Surge's payoff model is deliberately written as an equation: the
-
-/* Chrome paints its own light runnable-track over an appearance:none range;
-   clear it so the input's own background is the only track. */
-.calculator-content input[type="range"]::-webkit-slider-runnable-track {
-    background: transparent;
-    border: 0;
-    height: 4px;
-}
-
-.calculator-content input[type="checkbox"] {
-    accent-color: var(--tx-amber);
-    width: 13px;
-    height: 13px;
-}
-
-/* Body copy inside calculators: terminal-sized, not browser-default. */
-.calculator-content .panel > p,
-.calculator-content .panel > section > p {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-    line-height: 1.6;
-}
-
-/* ==================== OUTCOME MATRIX (2x2 decision quality) ==================== */
-
-.tx-matrix {
-    border: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-    margin-bottom: var(--spacing-lg);
-}
-
-.tx-mx-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-}
-
-.tx-mx-table th {
-    font-size: var(--t-micro);
-    font-weight: 500;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    padding: 8px 12px;
-    text-align: left;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.tx-mx-rowlabel {
-    width: 150px;
-    border-right: 1px solid var(--tx-rule);
-    vertical-align: middle;
-    color: var(--tx-mid) !important;
-}
-
-.tx-mx-cell {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    border-right: 1px solid var(--tx-rule);
-    vertical-align: top;
-}
-
-.tx-mx-cell:last-child { border-right: 0; }
-
-/* Diagonal (the strategy was right) reads as the resting state; off-diagonal
-   errors get a faint warning wash so mistakes are findable at a glance. */
-.tx-mx-cell.is-good { background: color-mix(in oklab, var(--tx-green) 5%, transparent); }
-.tx-mx-cell.is-bad  { background: color-mix(in oklab, var(--tx-red) 5%, transparent); }
-
-.tx-mx-mark {
-    font-size: var(--t-xs);
-    float: right;
-    line-height: 1;
-}
-
-.tx-mx-label {
-    font-size: var(--t-label);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--tx-mid);
-    margin-bottom: 4px;
-}
-
-.tx-mx-value {
-    font-size: 22px;
-    font-weight: 700;
-    line-height: 1.1;
-    font-feature-settings: 'tnum' 1;
-    margin-bottom: 6px;
-}
-
-.tx-mx-note {
-    font-size: var(--t-label);
-    color: var(--tx-dim);
-    line-height: 1.45;
-    margin-top: 6px;
-}
-
-.tx-mx-foot {
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    padding: 10px 14px;
-    font-size: var(--t-micro);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
-
-.tx-mx-acc {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--tx-bright);
-    letter-spacing: 0;
-    font-feature-settings: 'tnum' 1;
-}
-
-.tx-mx-foot-note {
-    margin-left: auto;
-    text-transform: none;
-    letter-spacing: 0;
-    font-size: var(--t-label);
-}
-
 /* ==================== FOCUS ====================
    One visible, consistent focus ring in the brand accent. Keyboard users get
    the same affordance everywhere instead of the browser default in some places
    and nothing in others. */
-.calculator-content :focus-visible,
-.tx-tab:focus-visible,
-.tx-group:focus-visible,
-.tx-fetch-btn:focus-visible,
-.rdr-row:focus-visible,
-.tx-footer-btn:focus-visible {
+.calculator-content :focus-visible {
     outline: 2px solid var(--tx-accent);
     outline-offset: -2px;
-}
-
-/* Skip link — keyboard users shouldn't have to tab the whole nav every time. */
-.tx-skip {
-    position: absolute;
-    left: -9999px;
-    top: 0;
-    z-index: var(--z-modal);
-    padding: 10px 16px;
-    background: var(--tx-accent);
-    color: #0a0b0a;
-    font-size: var(--t-xs);
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.tx-skip:focus {
-    left: 0;
 }
 
 /* ==================== MEASURE CONTROL ====================
@@ -1114,35 +403,19 @@ input[type="range"].tx-slider::-moz-range-thumb {
 /* Config panels become a persistent left rail on wide screens (see below),
    so inputs sit beside their results instead of scrolling away above them. */
 
-/* Sliders read as controls, not progress bars, when they stop short. */
-.calculator-content .input-group input[type="range"] {
-    max-width: 520px;
-}
-
-.calculator-content .input-group {
-    max-width: 720px;
-}
-
-/* A card-type name is a short label, not a paragraph. */
-
-.type-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 14px;
-}
-
-/* Segmented preset control shouldn't span a metre of screen. */
-
-/* Prose measure — roughly 70 characters. */
-.calculator-content .panel > p,
-.calculator-content .panel > section > p {
+/* Body copy directly in a panel: dense, and a ~70-character measure. A
+   default only (one element's worth of specificity), so any class wins. */
+:where(.calculator-content .panel, .calculator-content .panel > section) > p {
     max-width: 70ch;
+    font-size: var(--t-xs);
+    line-height: 1.6;
+    color: var(--tx-mid);
     text-wrap: pretty;
 }
 
 /* ==================== ADAPTIVE LAYOUT ====================
-   Container queries, not viewport media queries.
+   Container queries, not viewport media queries. The container is
+   .calculator-content (container-name: shell, set in shell.css).
 
    The shell is capped, so viewport width is the wrong signal: at a 2560px
    viewport the calculator has less than that to work with. Querying the content
@@ -1156,11 +429,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
    single column is predictable, never leaves dead space to the right, and gives
    every chart the full width, which is the one thing charts always benefit
    from. The rail keeps inputs beside the results. */
-
-.calculator-content {
-    container-type: inline-size;
-    container-name: shell;
-}
 
 @container shell (min-width: 1040px) {
     .main-grid.single-column:has(> .panel-config) {
@@ -1198,19 +466,17 @@ input[type="range"].tx-slider::-moz-range-thumb {
     .panel-config { position: static; max-height: none; }
 }
 
-/* Portent's bespoke three-column dashboard, made fluid: side rails scale with
-
-/* Hero rows reflow on available space, not viewport width. */
+/* Hero rows reflow on available space, not viewport width: stacked stats
+   get a rule between rows instead of columns, and a phone gets two across. */
 @container shell (max-width: 720px) {
-    .tx-hero,
-    .portent-hero {
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    }
-    .tx-hero .tx-stat,
-    .portent-hero .tx-stat { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
+    .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .tx-hero .tx-stat { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
 }
 
-/* The deck radar follows the same rule. */
+@container shell (max-width: 600px) {
+    .tx-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .chart-container { overflow-x: auto; }
+}
 
 /* A wide chart gains a little height so it does not read as a letterbox strip,
    but not so much that two stacked charts stop fitting on one screen. */
@@ -1218,161 +484,22 @@ input[type="range"].tx-slider::-moz-range-thumb {
     .chart-container { min-height: 300px; }
 }
 
-/* ==================== FLUID SPACING ====================
-   Padding scales with the container so dense screens stay dense and roomy ones
-   breathe, without a stack of breakpoints. */
-.tx-h,
-.rdr-col,
-.panel > .panel-content {
-    padding-inline: clamp(12px, 1.4cqi, 20px);
-}
-
-/* Card-type inputs: intrinsically responsive — three across when the rail has
-   room, folding to two or one as it narrows, with no breakpoint. */
-.type-grid {
-    grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
-}
-
-/* Chart containers: Chart.js reflows to its container (including on container-query
-   changes), but its ResizeObserver settles a few hundred ms later. Clip during that
-   window so the canvas can't transiently push past the shell, and clear the grid
-   min-width:auto default that would otherwise stop the column ever shrinking. */
-.chart-container,
-.chart-container > canvas {
-    min-width: 0;
-    max-width: 100%;
-}
-
-.chart-container { overflow: hidden; }
-
 /* Grid and flex children default to min-width:auto, which makes wide content
    (charts, long tables) prevent their column from shrinking at all. */
-.portent-left,
-.portent-center,
-.portent-right,
 .main-grid > .panel {
     min-width: 0;
 }
 
-/* ==================== ACCENT DISCIPLINE ====================
-   Solid amber is the loudest thing in the palette, so it marks exactly one
-   thing: the single primary action of a view. The opponent panel was filling
-   two buttons and a tab with it, which spends the accent's meaning. These
-   become outlined controls and an underlined tab, matching the main nav. */
+/* ==================== DISTRIBUTION ROWS ==================== */
 
-.import-btn,
-.calculator-content .import-btn {
-    background: transparent;
-    border: 1px solid var(--tx-accent);
-    color: var(--tx-accent);
-    font-family: inherit;
-    font-size: var(--t-xs);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 7px 16px;
-    border-radius: 0;
-    cursor: pointer;
-    transition: background var(--transition-fast), color var(--transition-fast);
+.distribution-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: 0 14px;
+    font-size: 0.9em;
 }
-
-.import-btn:hover:not(:disabled) {
-    background: var(--tx-accent);
-    color: var(--tx-bg);
-}
-
-.import-btn:disabled {
-    border-color: var(--tx-rule-hi);
-    color: var(--tx-dim);
-    cursor: not-allowed;
-}
-
-/* ==================== SIMULATION SUMMARY ====================
-   One standard shape for every calculator's sample section: headline metrics,
-   the distribution of outcomes, then the outcome breakdown. Replaces per-file
-   inline-styled summary blocks that all looked slightly different. */
-
-.tx-sim {
-    border: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-    margin-bottom: var(--spacing-lg);
-}
-
-.tx-sim-metrics {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.tx-sim-metric {
-    padding: 12px 14px;
-    border-right: 1px solid var(--tx-rule);
-}
-
-.tx-sim-metric:last-child { border-right: 0; }
-
-.tx-sim-metric-label {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-wide);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 6px;
-}
-
-.tx-sim-metric-value {
-    font-size: var(--t-xl);
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: var(--track-tight);
-    font-feature-settings: 'tnum' 1;
-}
-
-.tx-sim-metric-sub {
-    font-size: var(--t-micro);
-    color: var(--tx-mid);
-    margin-top: 5px;
-}
-
-.tx-sim-block {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.tx-sim .tx-sim-block:last-child { border-bottom: 0; }
-
-.tx-sim-block-title {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-wide);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 10px;
-}
-
-.tx-sim-outcomes {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 4px 20px;
-}
-
-.tx-sim-outcome {
-    display: grid;
-    grid-template-columns: 12px 1fr 64px 48px;
-    align-items: center;
-    gap: 8px;
-    font-size: var(--t-xs);
-    padding: 3px 0;
-}
-
-.tx-sim-outcome-mark { text-align: center; }
-.tx-sim-outcome-label { color: var(--tx-text); }
-
-.tx-sim-outcome-value {
-    text-align: right;
-    font-feature-settings: 'tnum' 1;
-    font-weight: 600;
-}
-
-/* Distribution rows, shared by every calculator that shows one. */
-.distribution-chart { display: flex; flex-direction: column; gap: 2px; }
 
 .dist-row {
     display: grid;
@@ -1382,43 +509,54 @@ input[type="range"].tx-slider::-moz-range-thumb {
     font-size: var(--t-xs);
 }
 
-.dist-label { color: var(--tx-mid); white-space: nowrap; }
+.dist-label {
+    min-width: 80px;
+    text-align: right;
+    font-size: var(--t-label);
+    color: var(--tx-mid);
+    white-space: nowrap;
+}
 
 .dist-bar-container {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    height: 10px;
     background: var(--tx-bg);
     border: 1px solid var(--tx-rule);
-    height: 10px;
     overflow: hidden;
 }
 
 .dist-bar {
     height: 100%;
+    min-width: 2px;
     background: var(--tx-good);
     transition: width 0.25s ease;
 }
 
+.dist-bar.is-bad  { background: var(--tx-bad); }
+.dist-bar.is-warn { background: var(--tx-accent); }
+
 .dist-value {
+    width: 52px;
     text-align: right;
+    font-weight: 600;
     color: var(--tx-bright);
     font-feature-settings: 'tnum' 1;
 }
 
 .dist-marker {
-    color: var(--tx-accent);
     font-size: var(--t-micro);
-    letter-spacing: 0.08em;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+    color: var(--tx-accent);
     white-space: nowrap;
 }
 
 @container shell (max-width: 620px) {
     .dist-row { grid-template-columns: 72px 1fr 44px; }
     .dist-marker { display: none; }
-    .tx-sim-outcome { grid-template-columns: 12px 1fr 44px; }
-    .tx-sim-outcome .tx-p-bar { display: none; }
 }
-
-.dist-bar.is-bad  { background: var(--tx-bad); }
-.dist-bar.is-warn { background: var(--tx-accent); }
 
 /* Shared sample-simulation controls (used by every calculator via
    generateSampleRevealsHTML). */
@@ -1440,7 +578,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 .tx-sim-controls input[type="number"] { width: 88px; text-align: center; }
 
-.tx-sim-controls-hint,
 .sim-import-note {
     font-size: var(--t-micro);
     color: var(--tx-dim);
@@ -1450,21 +587,38 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .tx-collapse { border-top: 1px solid var(--tx-rule); }
 
 .tx-collapse-head {
-    cursor: pointer;
-    padding: 10px 14px;
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-mid);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: var(--pad-y) var(--pad-x);
     background: var(--tx-panel-alt);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--tx-mid);
     list-style: none;
+    cursor: pointer;
+    user-select: none;
     transition: color var(--transition-fast);
 }
 
 .tx-collapse-head::-webkit-details-marker { display: none; }
 .tx-collapse-head:hover { color: var(--tx-bright); }
-.tx-collapse-head::before { content: '▶ '; color: var(--tx-dim); }
-.tx-collapse[open] > .tx-collapse-head::before { content: '▼ '; }
+
+/* Chevron: points right when closed, down when open. */
+.tx-collapse-head::before {
+    content: '';
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    color: var(--tx-dim);
+    transform: rotate(-45deg);
+    transition: transform var(--transition-fast);
+}
+
+.tx-collapse[open] > .tx-collapse-head::before { transform: rotate(45deg); }
 
 .tx-collapse-body {
     max-height: 460px;
@@ -1498,714 +652,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 /* A paired panel has half the width, so it does not need the extra chart height
    that a full-width chart gets. */
 .panel-row .chart-container { min-height: 0; }
-
-/* ==================== CHIMIL FIT VERDICT ====================
-   The "should I run this card" answer, stated before the supporting detail. */
-
-.chimil-fit {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 14px;
-    align-items: start;
-    padding: 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel-alt);
-}
-
-/* ==================== CHIMIL SAMPLE GAMES ====================
-   One row per simulated game, showing the actual sequence of discovers. The
-   average is in the summary above; this is what a game feels like. */
-
-.chimil-game {
-    border-bottom: 1px solid var(--tx-rule);
-    padding: 10px 0;
-}
-
-/* The outcome the player is worried about: a cheap creature off a six-mana rock. */
-
-/* Honest limit of the model, stated next to the verdict rather than buried. */
-
-/* ==================== WILD PAIR ====================
-   Wild Pair searches rather than reveals, so there is no probability to show —
-   the product is the GROUPING. Everything here answers "which of my creatures
-   find each other", with the mana consequence as a secondary line. One shape
-   repeats at three scales: a fixed-width total badge on the left, the creatures
-   that share it, and what an activation there is worth. */
-
-/* --- Selected group: the primary panel --- */
-
-.wp-group-detail {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 16px;
-    align-items: center;
-    padding: 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel-alt);
-}
-
-/* The search key itself, in the display band — it is the one number the whole
-
-/* --- The search pool: the full roster at the selected total --- */
-
-/* Members of a total are interchangeable, so the roster carries printed stats
-   and nothing else. Columns are fixed width and tabular so P/T and MV line up
-   down the list; the bar makes the pool's mana spread readable at a glance,
-   which is the thing a repeated "best find" column failed to show. */
-.wp-opt-list { display: grid; }
-
-.wp-opt {
-    display: grid;
-    grid-template-columns: 46px minmax(0, 1fr) 62px minmax(60px, 130px) 26px;
-    gap: 12px;
-    align-items: center;
-    padding: 7px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    font-size: var(--t-xs);
-}
-
-.wp-opt:last-child { border-bottom: 0; }
-.wp-opt:hover { background: var(--tx-row-hi); }
-
-.wp-opt-head {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    background: var(--tx-panel-alt);
-}
-
-.wp-opt-head:hover { background: var(--tx-panel-alt); }
-
-.wp-opt-pt {
-    font-feature-settings: 'tnum' 1;
-    color: var(--tx-mid);
-}
-
-.wp-opt-head .wp-opt-pt,
-.wp-opt-head .wp-opt-mv { color: var(--tx-dim); }
-
-.wp-opt-name {
-    color: var(--tx-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* The two ends of the swing, marked so the headline above can be traced into
-   the list. Everything between them is just as castable and just as findable. */
-.wp-opt-edge {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    color: var(--tx-dim);
-    text-align: right;
-}
-
-.wp-opt.is-low .wp-opt-name,
-.wp-opt.is-high .wp-opt-name { color: var(--tx-bright); }
-.wp-opt.is-high .wp-opt-edge { color: var(--tx-good); }
-
-.wp-opt-bar {
-    display: block;
-    height: 6px;
-    background: var(--tx-rule);
-}
-
-.wp-opt-bar-fill {
-    display: block;
-    height: 100%;
-    background: var(--tx-mid);
-}
-
-.wp-opt.is-high .wp-opt-bar-fill { background: var(--tx-good); }
-.wp-opt-head .wp-opt-bar { background: transparent; }
-
-.wp-opt-mv {
-    text-align: right;
-    font-feature-settings: 'tnum' 1;
-    color: var(--tx-bright);
-    font-weight: 600;
-}
-
-.wp-opt.is-high .wp-opt-mv { color: var(--tx-good); }
-
-/* --- All groups: the at-a-glance grid --- */
-
-/* Auto-fill so the grid gains COLUMNS as the shell widens rather than just
-   stretching, which is the layout rule the rest of the app follows. */
-.wp-gc-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
-    gap: 1px;
-    background: var(--tx-rule);
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.wp-gc {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    width: 100%;
-    text-align: left;
-    background: var(--tx-panel);
-    border: 0;
-    padding: 12px 14px 10px;
-    font-family: inherit;
-    font-size: var(--t-xs);
-    color: inherit;
-    cursor: pointer;
-    transition: background 0.1s;
-}
-
-.wp-gc:hover { background: var(--tx-panel-alt); }
-
-/* The accent marks the one selected group — the same job it does on the active
-   tab and the recommended row. */
-.wp-gc.is-selected {
-    background: var(--tx-row-hi);
-    box-shadow: inset 2px 0 0 var(--tx-accent);
-}
-
-/* Header: the total badge, the count, and the swing pinned to the right edge so
-   the deltas form a straight column down the grid. */
-.wp-gc-head {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) auto;
-    gap: 10px;
-    align-items: center;
-}
-
-.wp-gc-total {
-    font-size: var(--t-lg);
-    font-weight: 700;
-    line-height: 1;
-    color: var(--tx-bright);
-    font-feature-settings: 'tnum' 1;
-    border: 1px solid var(--tx-rule-hi);
-    padding: 5px 0;
-    text-align: center;
-}
-
-.wp-gc.is-selected .wp-gc-total { border-color: var(--tx-accent); }
-
-.wp-gc-n {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-mid);
-}
-
-.wp-gc-swing {
-    font-size: var(--t-body);
-    font-weight: 700;
-    font-feature-settings: 'tnum' 1;
-    line-height: 1;
-}
-
-.wp-gc-cards {
-    list-style: none;
-    margin: 9px 0 0;
-    padding: 9px 0 0;
-    display: grid;
-    gap: 4px;
-    border-top: 1px solid var(--tx-rule);
-}
-
-/* Fixed side columns keep P/T and MV in straight lines across every card in the
-   grid, which is what stops a wall of these reading as noise. */
-.wp-gc-card {
-    display: grid;
-    grid-template-columns: 40px minmax(0, 1fr) 22px;
-    gap: 10px;
-    align-items: baseline;
-}
-
-.wp-gc-pt {
-    color: var(--tx-dim);
-    font-feature-settings: 'tnum' 1;
-}
-
-.wp-gc-name {
-    color: var(--tx-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.wp-gc-mv {
-    text-align: right;
-    color: var(--tx-mid);
-    font-feature-settings: 'tnum' 1;
-}
-
-/* --- Singletons: present, but deliberately quiet --- */
-
-.wp-single-head { border-top: 1px solid var(--tx-rule); }
-
-.wp-single-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 12px 14px;
-}
-
-.wp-single {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 6px;
-    padding: 3px 7px;
-    border: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-    font-family: inherit;
-    font-size: var(--t-xs);
-    color: var(--tx-dim);
-    max-width: 100%;
-    overflow: hidden;
-    cursor: pointer;
-}
-
-.wp-single:hover { border-color: var(--tx-rule-hi); background: var(--tx-panel-alt); }
-
-.wp-single-total {
-    color: var(--tx-bad);
-    font-weight: 600;
-    font-feature-settings: 'tnum' 1;
-}
-
-.wp-single-name {
-    color: var(--tx-mid);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.wp-single-pt { font-feature-settings: 'tnum' 1; }
-
-/* --- Fit verdict (secondary panel) --- */
-
-/* The rules text that decides every number above it — stated, not buried. */
-
-/* Data-quality warnings: variable power/toughness boxes, missing data. */
-
-/* The total is the join key, so it gets the fixed column and a tabular figure. */
-
-/* The pair ladder carries more columns than the other sweep tables, so it is
-   the one that runs out of room first. Let it scroll inside its own box rather
-   than be clipped by an ancestor, and drop the P/T strip when narrow. */
-#wildpair-sweepTable {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-@media (max-width: 760px) {
-    #wildpair-sweepTable .tx-sweep-table th:last-child,
-    #wildpair-sweepTable .tx-sweep-table td:last-child { display: none; }
-}
-
-@media (max-width: 620px) {
-    /* The spread bar is the first thing to go when the row gets tight — the
-       printed numbers beside it say the same thing. */
-    .wp-opt {
-        grid-template-columns: 46px minmax(0, 1fr) 26px;
-        gap: 10px;
-    }
-    .wp-opt-edge,
-    .wp-opt-bar { display: none; }
-
-}
-
-/* ==================== HEAD TO HEAD ====================
-   A comparison has to make the two sides genuinely comparable at a glance, so
-   both columns are identical in structure and the winner is marked by the one
-   accent rather than by being drawn differently. The centre column carries the
-   tally so the eye has a fixed pivot between them. */
-
-.vs-select {
-    width: 100%;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule-hi);
-    color: var(--tx-bright);
-    font-family: inherit;
-    font-size: var(--t-body);
-    padding: 8px 10px;
-    outline: none;
-}
-
-.vs-select:focus-visible { border-color: var(--tx-accent); }
-
-.vs-board {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    align-items: stretch;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.vs-side {
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-/* The leader is marked with the accent rail — the same device as the active tab
-   and the recommended row, so it needs no new visual language. */
-.vs-side.is-leader { background: var(--tx-panel-alt); box-shadow: inset 0 2px 0 var(--tx-accent); }
-
-.vs-side-name {
-    font-size: var(--t-body);
-    font-weight: 600;
-    color: var(--tx-bright);
-}
-
-.vs-side-value {
-    font-size: var(--t-xxl);
-    font-weight: 700;
-    line-height: 1;
-    color: var(--tx-bright);
-    letter-spacing: var(--track-display);
-    font-feature-settings: 'tnum' 1;
-}
-
-.vs-side-unit {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 10px;
-}
-
-.vs-side-rows {
-    display: grid;
-    gap: 3px;
-    border-top: 1px solid var(--tx-rule);
-    padding-top: 9px;
-    margin-top: auto;
-}
-
-.vs-side-rows > div {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    font-size: var(--t-xs);
-}
-
-.vs-side-rows span:first-child { color: var(--tx-dim); }
-.vs-side-rows span:last-child { color: var(--tx-text); font-feature-settings: 'tnum' 1; }
-
-.vs-mid {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    padding: 16px 18px;
-    border-left: 1px solid var(--tx-rule);
-    border-right: 1px solid var(--tx-rule);
-    background: var(--tx-bg);
-}
-
-.vs-mid-vs {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-wide);
-    color: var(--tx-dim);
-}
-
-.vs-mid-tally {
-    font-size: var(--t-xl);
-    font-weight: 700;
-    line-height: 1;
-    font-feature-settings: 'tnum' 1;
-    white-space: nowrap;
-}
-
-.vs-mid-sep { color: var(--tx-dim); margin: 0 3px; }
-
-.vs-mid-label {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    text-align: center;
-}
-
-.vs-peak {
-    padding: 12px 14px;
-    border-right: 1px solid var(--tx-rule);
-}
-
-.vs-peak:last-child { border-right: 0; }
-
-/* The contested win rate is the answer this panel exists for, so it gets the
-   accent rail the leader gets on the scoreboard. */
-.vs-peak.is-headline {
-    background: var(--tx-panel-alt);
-    box-shadow: inset 0 2px 0 var(--tx-accent);
-}
-
-.vs-peak-label {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 5px;
-}
-
-.vs-peak-value {
-    font-size: var(--t-xl);
-    font-weight: 700;
-    line-height: 1;
-    font-feature-settings: 'tnum' 1;
-}
-
-.vs-peak-sub {
-    font-size: var(--t-micro);
-    color: var(--tx-dim);
-    margin-top: 4px;
-}
-
-/* --- Creature table --- */
-
-.vs-pt { color: var(--tx-dim); font-feature-settings: 'tnum' 1; }
-
-.vs-detail {
-    color: var(--tx-dim);
-    font-size: var(--t-micro);
-}
-
-/* A scroll container is not enough on its own: .tx-sweep-table is width:100%,
-   so it never exceeds the container and the cells are simply clipped instead of
-   becoming scrollable. Letting the table take its natural width is what makes
-   the overflow real. */
-#versus-table {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-#versus-table .tx-sweep-table,
-#wildpair-sweepTable .tx-sweep-table {
-    min-width: max-content;
-}
-
-@media (max-width: 720px) {
-    /* Side by side stops working once each column is narrower than its own
-       headline number, so the two sides stack with the tally between them. */
-    .vs-board { grid-template-columns: minmax(0, 1fr); }
-
-    .vs-mid {
-        flex-direction: row;
-        gap: 10px;
-        padding: 10px 14px;
-        border-left: 0;
-        border-right: 0;
-        border-top: 1px solid var(--tx-rule);
-        border-bottom: 1px solid var(--tx-rule);
-    }
-
-    .vs-side.is-leader { box-shadow: inset 2px 0 0 var(--tx-accent); }
-
-}
-
-/* ==================== V3 REFRESH — SHARED PRIMITIVES ====================
-   The calculator primitives above were built for the square, all-mono
-   terminal skin. These rules restate them in the v3 language (rounded,
-   sentence-case labels, mono only for numbers) in one place, so every
-   calculator inherits the new look without per-page overrides. */
-
-.tx-input,
-.input-group input[type="text"],
-.input-group input[type="number"],
-.input-group textarea,
-.calc-body select {
-    border: 1px solid var(--tx-rule-hi);
-    border-radius: var(--radius-sm);
-    background: var(--tx-bg);
-    color: var(--tx-bright);
-    min-height: 34px;
-    padding: 6px 10px;
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-
-.calc-body input[type="number"] { font-family: var(--font-mono); }
-
-.tx-input:focus,
-.input-group input:focus,
-.input-group textarea:focus,
-.calc-body select:focus {
-    outline: none;
-    border-color: var(--tx-accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.input-group label,
-.calculator-content .input-group > label {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--tx-mid);
-}
-
-.input-group input[type="checkbox"],
-.calc-body input[type="checkbox"],
-.calc-body input[type="radio"] {
-    accent-color: var(--tx-accent);
-}
-
-/* Range slider: a rounded track and a real, grabbable thumb */
-.tx-slider,
-.calc-body input[type="range"] {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 6px;
-    border-radius: 6px;
-    background: var(--tx-rule);
-    outline: none;
-    cursor: pointer;
-}
-
-.tx-slider::-webkit-slider-thumb,
-.calc-body input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--tx-accent);
-    border: 3px solid var(--tx-panel);
-    box-shadow: 0 0 0 1px var(--tx-accent), var(--shadow-sm);
-    cursor: grab;
-    transition: transform var(--transition-fast);
-}
-
-.tx-slider::-moz-range-thumb,
-.calc-body input[type="range"]::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--tx-accent);
-    border: 3px solid var(--tx-panel);
-    box-shadow: 0 0 0 1px var(--tx-accent);
-    cursor: grab;
-}
-
-.tx-slider:active::-webkit-slider-thumb,
-.calc-body input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
-
-.tx-slider:focus-visible::-webkit-slider-thumb,
-.calc-body input[type="range"]:focus-visible::-webkit-slider-thumb {
-    box-shadow: 0 0 0 1px var(--tx-accent), 0 0 0 5px var(--accent-soft);
-}
-
-/* Preset chips: pills, sentence case; selected = soft accent, not solid */
-.tx-chip {
-    height: 28px;
-    padding: 0 11px;
-    border: 1px solid var(--tx-rule-hi);
-    border-radius: var(--radius-full);
-    font-family: var(--font-mono);
-    font-size: var(--t-xs);
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--tx-mid);
-}
-
-.tx-chip:hover { color: var(--tx-bright); border-color: var(--tx-dim); background: transparent; }
-
-.tx-chip.active {
-    background: var(--accent-soft);
-    color: var(--tx-accent);
-    border-color: color-mix(in srgb, var(--tx-accent) 50%, transparent);
-}
-
-/* Hero stats */
-.tx-stat { padding: 18px 20px; }
-
-.tx-stat-label {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    margin-bottom: 4px;
-}
-
-.tx-stat-value { font-family: var(--font-mono); font-weight: 600; }
-
-/* Verdict pill */
-.tx-verdict {
-    padding: 2px 9px;
-    border-radius: var(--radius-full);
-    font-size: var(--t-micro);
-    letter-spacing: 0.06em;
-    background: color-mix(in srgb, currentColor 12%, transparent);
-    border-color: color-mix(in srgb, currentColor 40%, transparent);
-}
-
-/* Recommendation note */
-.tx-rec {
-    font-size: var(--t-xs);
-    padding: 12px 16px;
-    background: var(--tx-panel-alt);
-}
-
-/* Collapsible detail sections */
-.tx-collapse-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 16px;
-    font-size: var(--t-xs);
-    font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--tx-mid);
-    cursor: pointer;
-    list-style: none;
-    user-select: none;
-}
-
-.tx-collapse-head::before,
-.tx-collapse[open] > .tx-collapse-head::before {
-    content: '';
-    width: 7px;
-    height: 7px;
-    border-right: 1.5px solid currentColor;
-    border-bottom: 1.5px solid currentColor;
-    transform: rotate(-45deg);
-    transition: transform var(--transition-fast);
-    flex-shrink: 0;
-}
-
-.tx-collapse[open] > .tx-collapse-head::before { transform: rotate(45deg); }
-.tx-collapse-head:hover { color: var(--tx-bright); background: var(--tx-panel-alt); }
-
-/* Tables */
-.tx-sweep-table thead th,
-.portent-sweep-table thead th,
-.comparison-table th {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: none;
-    color: var(--tx-dim);
-}
-
-.tx-sweep-table tbody td,
-.portent-sweep-table tbody td { font-family: var(--font-mono); font-size: var(--t-xs); }
-.tx-sweep-table tbody td.ta-l { font-family: var(--font-body); }
-
-.tx-sweep-table tbody tr.rec-row td:first-child { box-shadow: inset 3px 0 0 var(--tx-accent); }
-
-/* Probability bars inside tables */
-.tx-p-bar { border-radius: 4px; overflow: hidden; }
-.tx-p-fill { border-radius: 4px; }
-
-/* Sample reveal chips */
-.reveal-card {
-    border-radius: var(--radius-xs);
-}
-
-/* Chart wrapper: breathing room inside the card */
-.calc-body .chart-container { padding: 10px 12px 6px; }
 
 /* ==================== VISUALISATIONS (js/utils/viz.js) ====================
    Plain HTML charts: quantile dot plots, heat cells, bullet rows and
@@ -2304,17 +750,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .viz-dots-tick.is-end { transform: translateX(-100%); }
 .viz-dots-xlabel { margin-top: 2px; text-align: center; font-size: var(--t-label); color: var(--tx-dim); }
 
-.viz-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 18px;
-    margin: 10px 0 0;
-    padding: 0;
-    list-style: none;
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-}
-.viz-legend li { display: inline-flex; align-items: center; gap: 7px; }
+.viz-legend { gap: 6px 18px; }
 .viz-legend strong { font-family: var(--font-mono); color: var(--tx-bright); font-weight: 600; }
 .viz-legend .viz-dot { --dot: 13px; }
 
@@ -2470,81 +906,3 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .viz-db-end i { font-style: normal; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; line-height: 1; }
 .viz-db-end.is-better { border-color: var(--tx-good); background: var(--tx-good); color: var(--tx-panel); }
 .viz-db-end.is-worse { border-color: var(--tx-dim); color: var(--tx-dim); }
-
-/* ---- "Cast it": one resolution played card by card (js/utils/castAnimation.js) ---- */
-.bs-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
-.bs-cast-stage { padding: 14px 16px 4px; border-bottom: 1px solid var(--tx-rule); container-type: inline-size; }
-.cast { display: grid; gap: 12px; }
-.cast-top { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 16px; align-items: center; }
-.cast-pile { position: relative; display: grid; justify-items: center; gap: 6px; }
-.cast-back {
-    width: 64px;
-    height: 89px;
-    border-radius: 6px;
-    border: 1px solid var(--tx-rule-hi);
-    background:
-        repeating-linear-gradient(135deg, color-mix(in srgb, var(--tx-flat) 22%, transparent) 0 6px, transparent 6px 12px),
-        var(--tx-panel-alt);
-    box-shadow: 3px 3px 0 -1px var(--tx-panel-alt), 3px 3px 0 0 var(--tx-rule-hi);
-}
-.cast-left { font-family: var(--font-mono); font-size: var(--t-label); color: var(--tx-dim); white-space: nowrap; }
-.cast-slot { width: 120px; height: 167px; perspective: 700px; }
-.cast-card {
-    position: relative;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
-    border-radius: 6px;
-    border: 1px solid var(--tx-rule-hi);
-    background: var(--tx-panel-alt);
-    color: var(--tx-text);
-}
-.cast-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.cast-card-name { padding: 4px; font-size: var(--t-label); line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
-.cast-big { width: 120px; height: 167px; box-shadow: var(--shadow-md); }
-.cast-big .cast-card-name { font-size: var(--t-xs); }
-.cast-big.is-flip { animation: cast-flip 0.22s var(--ease-out) both; transform-origin: center; }
-.cast-big.is-stop { outline: 2px solid var(--tx-bad); outline-offset: 2px; }
-.cast-big.is-graveyard { filter: saturate(0.5); }
-.cast-read { display: grid; gap: 10px; min-width: 0; align-content: center; }
-.cast-status { margin: 0; min-height: 3em; font-size: var(--t-sm); line-height: 1.5; color: var(--tx-text); }
-.cast-status strong { color: var(--tx-bright); font-weight: 600; }
-.cast-totals { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 0; }
-.cast-totals dt { font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); }
-.cast-totals dd { margin: 2px 0 0; font-family: var(--font-mono); font-size: var(--t-lg); font-weight: 600; color: var(--tx-bright); }
-.cast-totals dd small { font-size: var(--t-xs); font-weight: 400; color: var(--tx-dim); }
-.cast-totals dd.tone-good { color: var(--tx-good); }
-.cast-zone { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; }
-.cast-zone-label { padding-top: 6px; font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); }
-.cast-row { display: flex; flex-wrap: wrap; gap: 4px; min-height: 61px; padding: 0; }
-.cast-mini { width: 44px; height: 61px; border-radius: 3px; }
-.cast-mini .cast-card-name { font-size: 7.5px; padding: 2px; }
-.cast-mini.is-new { animation: cast-land 0.2s var(--ease-out) both; }
-.cast-mini.is-stop { outline: 2px solid var(--tx-bad); outline-offset: 1px; }
-.cast-mini.is-graveyard { opacity: 0.55; filter: grayscale(0.6); }
-.cast-more { align-self: center; padding: 0 6px; font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-mid); }
-.cast-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px; }
-.cast[data-state="done"] .cast-status { color: var(--tx-bright); }
-
-@keyframes cast-flip {
-    from { transform: rotateY(90deg) translateX(-24px); opacity: 0.4; }
-    to { transform: none; opacity: 1; }
-}
-@keyframes cast-land {
-    from { transform: translateY(-16px) scale(1.25); opacity: 0; }
-    to { transform: none; opacity: 1; }
-}
-
-@container (max-width: 520px) {
-    .cast-top { grid-template-columns: auto minmax(0, 1fr); }
-    .cast-pile { display: none; }
-    .cast-slot, .cast-big { width: 92px; height: 128px; }
-    .cast-zone { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-    .cast-zone-label { padding-top: 0; }
-    .cast-row { min-height: 51px; }
-    .cast-mini { width: 36px; height: 50px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .cast-big.is-flip, .cast-mini.is-new { animation: none; }
-}

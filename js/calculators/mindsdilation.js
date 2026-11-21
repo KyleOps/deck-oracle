@@ -291,7 +291,7 @@ function renderSamples(state) {
             const chip = card.land
                 ? `${cardChip(card, { dim: true })}<span class="opp-miss">no spell</span>`
                 : cardChip(card, { mvText: doubled ? `${card.cmc} ×2` : String(card.cmc) });
-            return `<li class="mnds-turn"><span class="mnds-turn-n">Round ${i + 1}</span><span class="opp-flow">${chip}</span></li>`;
+            return `<li class="mnds-turn"><span class="mnds-turn-n tx-eyebrow">Round ${i + 1}</span><span class="opp-flow">${chip}</span></li>`;
         }).join('');
         return `<div class="mnds-sample">
             <div class="mnds-sample-head">${opponentLabel(opp)}<span class="mnds-sample-sum">${hits.length} of ${cards.length} hit · ${mana} mana</span></div>

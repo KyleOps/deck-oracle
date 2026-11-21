@@ -691,9 +691,9 @@ function renderSamples(games, turns) {
     }).join('');
 
     display.innerHTML = `
-        <p class="ch-caption">Each chip is one end step: the step number, the card discover cast, and its mana value. <span class="ch-key-small">Amber</span> chips are cheap hits (mana value ${SMALL_HIT_MV} or less); X spells cast free resolve with X&nbsp;=&nbsp;0.</p>
+        <p class="tx-caption">Each chip is one end step: the step number, the card discover cast, and its mana value. <span class="ch-key-small">Amber</span> chips are cheap hits (mana value ${SMALL_HIT_MV} or less); X spells cast free resolve with X&nbsp;=&nbsp;0.</p>
         <div class="ch-games">${rows}</div>
-        <p class="ch-caption ch-caption-foot"><span class="ch-shown-wide">${SHOWN_GAMES}</span><span class="ch-shown-narrow">${NARROW_GAMES}</span> of ${AUTO_SIM_GAMES.toLocaleString('en-US')} simulated games, ${plural(turns, 'end step')} each.</p>`;
+        <p class="tx-caption ch-caption-foot"><span class="ch-shown-wide">${SHOWN_GAMES}</span><span class="ch-shown-narrow">${NARROW_GAMES}</span> of ${AUTO_SIM_GAMES.toLocaleString('en-US')} simulated games, ${plural(turns, 'end step')} each.</p>`;
 }
 
 function renderDetails(result) {
@@ -722,7 +722,7 @@ function renderDetails(result) {
                 <div><dt>Skipped: mana value 6+</dt><dd>${trigger.misses}</dd></div>
                 <div><dt>Cards skipped per discover</dt><dd>${one(trigger.expectedDug)}</dd></div>
             </dl>
-            <p class="ch-caption">Mana value of the card one discover finds — every eligible card is equally likely, so this is your eligible cards by mana value.</p>
+            <p class="tx-caption">Mana value of the card one discover finds — every eligible card is equally likely, so this is your eligible cards by mana value.</p>
             ${renderDistributionChart(trigger.distribution, trigger.hits, i => `Mana value ${i}`, () => null, i => (i <= SMALL_HIT_MV ? 'warn' : null))}`
             : '<div class="tx-empty">No nonland cards with mana value 5 or less.</div>';
     }

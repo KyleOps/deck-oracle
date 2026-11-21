@@ -105,7 +105,6 @@ export const styles = `
 /* ── Rail ─────────────────────────────────────────────────────────── */
 #manadev-tab .md-rail-body { display: grid; gap: 16px; padding: 16px; }
 #manadev-tab .md-group { display: grid; gap: 8px; }
-#manadev-tab .md-group[hidden] { display: none; }
 #manadev-tab .md-format { margin: 0; font-size: var(--t-xs); line-height: 1.5; color: var(--tx-mid); }
 #manadev-tab .md-format:empty { display: none; }
 #manadev-tab .md-facts { display: grid; gap: 8px; margin: 0; }
@@ -140,7 +139,6 @@ export const styles = `
     color: var(--tx-mid);
 }
 #manadev-tab .md-key { display: inline-flex; align-items: center; gap: 6px; }
-#manadev-tab .md-key[hidden] { display: none; }
 #manadev-tab .md-key::before { content: ''; display: inline-block; width: 16px; height: 10px; border-radius: 2px; }
 #manadev-tab .md-key-line::before { height: 2px; background: var(--tx-good); }
 #manadev-tab .md-key-mid::before { background: color-mix(in srgb, var(--tx-good) 30%, transparent); }
@@ -149,7 +147,7 @@ export const styles = `
 #manadev-tab .md-key-target::before { height: 0; border-top: 1px dashed var(--tx-accent); }
 #manadev-tab .md-caption {
     margin: 0;
-    padding: 10px 16px 14px;
+    padding: 10px var(--pad-x) 14px;
     font-size: var(--t-xs);
     line-height: 1.5;
     color: var(--tx-dim);
@@ -236,7 +234,7 @@ export const styles = `
 
 /* ── Sample games ─────────────────────────────────────────────────── */
 #manadev-tab .md-games { display: grid; }
-#manadev-tab .md-game { padding: 12px 16px; border-bottom: 1px solid var(--tx-rule); }
+#manadev-tab .md-game { padding: var(--pad-y) var(--pad-x); border-bottom: 1px solid var(--tx-rule); }
 #manadev-tab .md-game:last-child { border-bottom: 0; }
 #manadev-tab .md-game-head {
     display: flex;
@@ -275,7 +273,7 @@ export const styles = `
 #manadev-tab .md-turn.is-target { background: var(--tx-row-hi); box-shadow: inset 3px 0 0 var(--tx-accent); }
 #manadev-tab .md-turn-flag { margin-left: 6px; color: var(--tx-accent); font-weight: 600; white-space: nowrap; }
 #manadev-tab .md-found, #manadev-tab .md-quiet { color: var(--tx-mid); }
-#manadev-tab .md-samples-foot { margin: 0; padding: 10px 16px 14px; font-size: var(--t-xs); color: var(--tx-dim); }
+#manadev-tab .md-samples-foot { margin: 0; padding: 10px var(--pad-x) 14px; font-size: var(--t-xs); color: var(--tx-dim); }
 
 @container shell (max-width: 560px) {
     #manadev-tab .md-chart { height: 240px; }

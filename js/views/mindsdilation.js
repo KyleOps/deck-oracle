@@ -6,10 +6,12 @@
  */
 
 import { cardRef } from '../data/glossary.js';
-import { opponentPageStyles } from '../utils/opponentPages.js';
+import { injectOpponentPageStyles } from '../utils/opponentPages.js';
+
+injectOpponentPageStyles();
 
 export const template = `
-<div class="main-grid single-column">
+<div class="main-grid single-column opp-page">
     <section class="panel" id="mnds-results" aria-label="Free spells from Mind’s Dilation">
         <div id="mnds-summary"></div>
         <div class="mnds-options" id="mnds-options" hidden>
@@ -39,9 +41,8 @@ export const template = `
 `;
 
 export const styles = `
-${opponentPageStyles('#mindsdilation-tab')}
 #mindsdilation-tab .mnds-options {
-    padding: 12px 16px;
+    padding: var(--pad-y) var(--pad-x);
     border-bottom: 1px solid var(--tx-rule);
     background: var(--tx-panel-alt);
 }
@@ -87,7 +88,7 @@ ${opponentPageStyles('#mindsdilation-tab')}
 #mindsdilation-tab .mnds-swatch { width: 12px; height: 12px; border-radius: 3px; }
 
 #mindsdilation-tab .mnds-samples { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); border-top: 1px solid var(--tx-rule); }
-#mindsdilation-tab .mnds-sample { min-width: 0; padding: 14px 16px; border-right: 1px solid var(--tx-rule); border-bottom: 1px solid var(--tx-rule); margin: 0 -1px -1px 0; }
+#mindsdilation-tab .mnds-sample { min-width: 0; padding: 14px var(--pad-x); border-right: 1px solid var(--tx-rule); border-bottom: 1px solid var(--tx-rule); margin: 0 -1px -1px 0; }
 #mindsdilation-tab .mnds-sample-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 12px; }
 #mindsdilation-tab .mnds-sample-sum { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-mid); white-space: nowrap; }
 #mindsdilation-tab .mnds-turns { list-style: none; display: grid; gap: 6px; padding: 0; margin: 0; }

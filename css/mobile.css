@@ -14,57 +14,20 @@
     textarea {
         font-size: 16px;
     }
-
-    .chart-container,
-    .table-wrapper {
-        max-width: 100%;
-        overflow-x: auto;
-    }
-
-    /* Hero stat rows wrap instead of shrinking numbers to illegibility. */
-    .tx-hero,
-    .portent-hero {
-        display: grid !important;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .tx-stat { border-right: 0 !important; }
-
-    .type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-
-    /* Outcome matrix stacks into single-column cells — a 2x2 grid of large
-       numbers plus notes does not survive a 390px viewport. */
-    .tx-mx-table,
-    .tx-mx-table thead,
-    .tx-mx-table tbody,
-    .tx-mx-table tr,
-    .tx-mx-table th,
-    .tx-mx-table td {
-        display: block;
-        width: auto;
-    }
-    .tx-mx-table thead { display: none; }
-    .tx-mx-rowlabel { width: auto; border-right: 0; background: var(--tx-panel-alt); }
-    .tx-mx-cell { border-right: 0; }
-    .tx-mx-foot { flex-wrap: wrap; }
-    .tx-mx-foot-note { margin-left: 0; flex: 1 1 100%; }
-
 }
 
 /* ---- Touch: comfortable targets ---- */
 @media (hover: none) and (pointer: coarse) {
     .nav-item { min-height: 44px; }
     .icon-btn { width: 40px; height: 40px; }
-    .calculator-content input[type="range"]::-webkit-slider-thumb {
+    .calc-body input[type="range"]::-webkit-slider-thumb {
         width: 22px;
         height: 22px;
     }
-    .calculator-content input[type="range"]::-moz-range-thumb {
+    .calc-body input[type="range"]::-moz-range-thumb {
         width: 22px;
         height: 22px;
     }
-    .tx-chip,
-    .tx-preset,
     .seg-btn { min-height: 38px; }
 }
 

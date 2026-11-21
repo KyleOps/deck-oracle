@@ -183,8 +183,8 @@ export function xControlHTML({ key, label = 'Cards revealed (X)', hint = '', val
                 <span class="bs-cost" id="${key}-cost">${costLabel}</span>
             </div>
             <div class="bs-x">
-                <input class="bs-x-num" type="number" id="${key}-xValue" value="${value}" min="1" max="50" inputmode="numeric" aria-describedby="${key}-x-hint">
-                <input class="tx-slider" type="range" id="${key}-xSlider" value="${value}" min="1" max="${max}" step="1" aria-label="${escapeHtml(label)}">
+                <input class="field bs-x-num" type="number" id="${key}-xValue" value="${value}" min="1" max="50" inputmode="numeric" aria-describedby="${key}-x-hint">
+                <input type="range" id="${key}-xSlider" value="${value}" min="1" max="${max}" step="1" aria-label="${escapeHtml(label)}">
             </div>
             ${chips ? `<div class="bs-presets" id="${key}-presets" role="group" aria-label="Common X values">${chips}</div>` : ''}
             ${hint ? `<p class="bs-hint" id="${key}-x-hint">${hint}</p>` : ''}
@@ -200,7 +200,7 @@ export function valueModelHTML({ fields = [], intro = '', footer = '' }) {
     const rows = fields.map(f => `
         <label class="bs-value-row" for="${f.id}">
             <span class="bs-value-name">${f.label}</span>
-            <input type="number" id="${f.id}" value="${f.value}" min="${f.min ?? 0}" max="${f.max ?? 20}" step="0.25" inputmode="decimal">
+            <input type="number" class="field field-sm" id="${f.id}" value="${f.value}" min="${f.min ?? 0}" max="${f.max ?? 20}" step="0.25" inputmode="decimal">
             <small>${f.hint}</small>
         </label>`).join('');
     return `
@@ -372,10 +372,25 @@ export function renderHowItCompares(containerId, { x, source, deckKey, options =
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 /**
- * CSS shared by the four big-spell views, scoped under one page.
- * @param {string} scope - e.g. '#wave-tab'
+ * Add the shared big-spell CSS to the document once, however many of those pages are opened
+ * (each view calls this when it loads). A no-op outside a browser.
+ * @param {Document} [doc]
  */
-export function sharedStyles(scope) {
+export function injectSharedStyles(doc = globalThis.document) {
+    if (!doc?.head || doc.querySelector('style[data-owner="big-spells"]')) return;
+    const style = doc.createElement('style');
+    style.dataset.owner = 'big-spells';
+    style.textContent = sharedStyles();
+    doc.head.appendChild(style);
+}
+
+/**
+ * CSS shared by the four big-spell views. Scoped under `.bs-page` (the root
+ * of each view's template) rather than a page id, so one copy serves every
+ * page: see injectSharedStyles().
+ * @param {string} [scope]
+ */
+export function sharedStyles(scope = '.bs-page') {
     const s = scope;
     return `
 ${s} .bs-h { margin: 0; font-size: var(--t-body); font-weight: 650; letter-spacing: 0; color: var(--tx-bright); }
@@ -424,7 +439,6 @@ ${s} .bs-notice.tone-flat { background: var(--tx-panel-alt); }
 ${s} .bs-chart { position: relative; height: 270px; padding: 14px 14px 4px; }
 ${s} .bs-legend { display: inline-flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 ${s} .bs-key { display: inline-flex; align-items: center; gap: 6px; }
-${s} .bs-key[hidden] { display: none; }
 ${s} .bs-key::before { content: ''; width: 10px; height: 10px; border-radius: 2px; background: var(--key, var(--tx-flat)); }
 ${s} .bs-key.is-line::before { height: 3px; border-radius: 2px; }
 ${s} .bs-key.k-accent { --key: var(--tx-accent); }
@@ -433,7 +447,7 @@ ${s} .bs-key.k-flat { --key: var(--tx-flat); }
 ${s} .bs-key.k-dim { --key: var(--tx-dim); }
 
 /* Samples */
-${s} .bs-samples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; padding: 14px 16px 16px; }
+${s} .bs-samples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; padding: 14px var(--pad-x) 16px; }
 ${s} .bs-sample { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--tx-rule); border-radius: var(--radius-md); background: var(--tx-panel-alt); overflow: hidden; }
 ${s} .bs-sample-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--tx-rule); font-size: var(--t-xs); }
 ${s} .bs-sample-title { color: var(--tx-mid); }
@@ -516,6 +530,115 @@ ${s} .bsc-value strong { font-family: var(--font-mono); font-size: var(--t-sm); 
 ${s} .bsc-note { margin: 0; padding: 10px 18px 14px; font-size: var(--t-xs); line-height: 1.5; color: var(--tx-dim); border-top: 1px solid var(--tx-rule); }
 ${s} .bsc-empty { margin: 0; padding: 16px 18px; font-size: var(--t-sm); color: var(--tx-dim); }
 
+/* "Cast it": one resolution played card by card (js/utils/castAnimation.js) */
+${s} .bs-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+${s} .bs-cast-stage { padding: 14px 16px 4px; border-bottom: 1px solid var(--tx-rule); container-type: inline-size; }
+${s} .cast { display: grid; gap: 12px; }
+${s} .cast-top { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 16px; align-items: center; }
+${s} .cast-pile { position: relative; display: grid; justify-items: center; gap: 6px; }
+${s} .cast-back {
+    width: 64px;
+    height: 89px;
+    border-radius: 6px;
+    border: 1px solid var(--tx-rule-hi);
+    background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--tx-flat) 22%, transparent) 0 6px, transparent 6px 12px),
+        var(--tx-panel-alt);
+    box-shadow: 3px 3px 0 -1px var(--tx-panel-alt), 3px 3px 0 0 var(--tx-rule-hi);
+}
+${s} .cast-left { font-family: var(--font-mono); font-size: var(--t-label); color: var(--tx-dim); white-space: nowrap; }
+${s} .cast-slot { width: 120px; height: 167px; perspective: 700px; }
+${s} .cast-card {
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 6px;
+    border: 1px solid var(--tx-rule-hi);
+    background: var(--tx-panel-alt);
+    color: var(--tx-text);
+}
+${s} .cast-card img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+${s} .cast-card-name {
+    padding: 4px;
+    font-size: var(--t-label);
+    line-height: 1.25;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+${s} .cast-big { width: 120px; height: 167px; box-shadow: var(--shadow-md); }
+${s} .cast-big .cast-card-name { font-size: var(--t-xs); }
+${s} .cast-big.is-flip { animation: cast-flip 0.22s var(--ease-out) both; transform-origin: center; }
+${s} .cast-big.is-stop { outline: 2px solid var(--tx-bad); outline-offset: 2px; }
+${s} .cast-big.is-graveyard { filter: saturate(0.5); }
+${s} .cast-read { display: grid; gap: 10px; min-width: 0; align-content: center; }
+${s} .cast-status {
+    margin: 0;
+    min-height: 3em;
+    font-size: var(--t-sm);
+    line-height: 1.5;
+    color: var(--tx-text);
+}
+${s} .cast-status strong { color: var(--tx-bright); font-weight: 600; }
+${s} .cast-totals { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 0; }
+${s} .cast-totals dd {
+    margin: 2px 0 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-lg);
+    font-weight: 600;
+    color: var(--tx-bright);
+}
+${s} .cast-totals dd small { font-size: var(--t-xs); font-weight: 400; color: var(--tx-dim); }
+${s} .cast-totals dd.tone-good { color: var(--tx-good); }
+${s} .cast-zone { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; }
+${s} .cast-zone-label { padding-top: 6px; }
+${s} .cast-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 61px;
+    padding: 0;
+}
+${s} .cast-mini { width: 44px; height: 61px; border-radius: 3px; }
+${s} .cast-mini .cast-card-name { font-size: 7.5px; padding: 2px; }
+${s} .cast-mini.is-new { animation: cast-land 0.2s var(--ease-out) both; }
+${s} .cast-mini.is-stop { outline: 2px solid var(--tx-bad); outline-offset: 1px; }
+${s} .cast-mini.is-graveyard { opacity: 0.55; filter: grayscale(0.6); }
+${s} .cast-more {
+    align-self: center;
+    padding: 0 6px;
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    color: var(--tx-mid);
+}
+${s} .cast-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px; }
+${s} .cast[data-state="done"] .cast-status { color: var(--tx-bright); }
+@keyframes cast-flip {
+    from { transform: rotateY(90deg) translateX(-24px); opacity: 0.4; }
+    to { transform: none; opacity: 1; }
+}
+@keyframes cast-land {
+    from { transform: translateY(-16px) scale(1.25); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+@container (max-width: 520px) {
+    ${s} .cast-top { grid-template-columns: auto minmax(0, 1fr); }
+    ${s} .cast-pile { display: none; }
+    ${s} .cast-slot, ${s} .cast-big { width: 92px; height: 128px; }
+    ${s} .cast-zone { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    ${s} .cast-zone-label { padding-top: 0; }
+    ${s} .cast-row { min-height: 51px; }
+    ${s} .cast-mini { width: 36px; height: 50px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    ${s} .cast-big.is-flip, ${s} .cast-mini.is-new { animation: none; }
+}
+
 /* Narrow: lead with the answer, then the controls */
 @container shell (max-width: 1039.98px) {
     ${s} .bs-answer { order: -1; }
@@ -526,7 +649,7 @@ ${s} .bsc-empty { margin: 0; padding: 16px 18px; font-size: var(--t-sm); color: 
     ${s} .bsc-result { grid-column: 1 / -1; }
     ${s} .bs-bar-row { grid-template-columns: minmax(92px, 1fr) minmax(48px, 1.4fr) 44px; gap: 10px; }
     ${s} .bs-chart { height: 230px; padding-inline: 8px; }
-    ${s} .bs-field { padding: 14px 16px; }
+    ${s} .bs-field { padding: 14px var(--pad-x); }
 }
 `;
 }
