@@ -29,7 +29,7 @@ const TYPE_VAR = {
     enchantments: 'enchantment', instants: 'instant', sorceries: 'sorcery', lands: 'land', other: 'artifact'
 };
 const STATUS_LABEL = { good: 'Looks good', warn: 'Worth a look', bad: 'Needs attention', info: 'Note' };
-const GENERIC_TOOLS = ['odds', 'manabase', 'hands', 'mulligan', 'lands', 'compare'];
+const GENERIC_TOOLS = ['odds', 'manabase', 'manadev', 'hands', 'mulligan', 'lands', 'compare'];
 
 let onPlay = true;
 let debouncedUpdate = null;
