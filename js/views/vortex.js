@@ -236,7 +236,7 @@ export const styles = `
 #vortex-tab .vx-pool-row dd { margin: 0; color: var(--tx-text); }
 #vortex-tab .vx-sep { color: var(--tx-dim); margin: 0 6px; }
 
-@media (max-width: 560px) {
+@container shell (max-width: 530px) {
     #vortex-tab .vx-step { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     #vortex-tab .vx-step + .vx-step,
     #vortex-tab .vx-step + .vx-step + .vx-step { padding-left: 10px; }

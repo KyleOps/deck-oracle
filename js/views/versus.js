@@ -51,6 +51,122 @@ export const template = `
 `;
 
 export const styles = `
+/* Both columns are identical in structure so the two sides are comparable at
+   a glance; the leader is marked by the one accent, and the centre column
+   carries the tally as a fixed pivot. (Moved here from components.css: only
+   this page uses it, and views load lazily.) */
+#versus-tab .vs-board {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: stretch;
+    border-bottom: 1px solid var(--tx-rule);
+}
+
+/* ---- Scoreboard ---- */
+#versus-tab .vs-side { display: flex; flex-direction: column; padding: 16px 18px; gap: 0; }
+#versus-tab .vs-side-name {
+    font-size: var(--t-body);
+    font-weight: 600;
+    color: var(--tx-bright);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+#versus-tab .vs-side-value {
+    font-weight: 700;
+    line-height: 1;
+    color: var(--tx-bright);
+    letter-spacing: var(--track-display);
+    font-feature-settings: 'tnum' 1;
+    font-family: var(--font-mono);
+    font-size: var(--t-xxl);
+}
+#versus-tab .vs-side-rows {
+    display: grid;
+    border-top: 1px solid var(--tx-rule);
+    padding-top: 9px;
+    margin: 0;
+    gap: 4px;
+}
+#versus-tab .vs-side-rows > div { display: flex; justify-content: space-between; gap: 10px; font-size: var(--t-sm); }
+#versus-tab .vs-side-rows span:first-child { color: var(--tx-dim); }
+#versus-tab .vs-side-rows span:last-child { color: var(--tx-text); font-feature-settings: 'tnum' 1; }
+#versus-tab .vs-mid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-left: 1px solid var(--tx-rule);
+    border-right: 1px solid var(--tx-rule);
+    background: var(--tx-bg);
+    padding: 16px 20px;
+    gap: 6px;
+}
+#versus-tab .vs-mid-tally {
+    font-size: var(--t-xl);
+    font-weight: 700;
+    line-height: 1;
+    font-feature-settings: 'tnum' 1;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    color: var(--tx-bright);
+}
+#versus-tab .vs-mid-sep { color: var(--tx-dim); margin: 0 3px; }
+#versus-tab .vs-mid-label {
+    color: var(--tx-dim);
+    text-align: center;
+    font-size: var(--t-xs);
+    letter-spacing: 0;
+    text-transform: none;
+    line-height: 1.4;
+}
+#versus-tab .vs-peak { border-right: 1px solid var(--tx-rule); padding: 14px var(--pad-x); }
+#versus-tab .vs-peak:last-child { border-right: 0; }
+
+/* The contested win rate is the answer this panel exists for, so it gets the
+   accent rail the leader gets on the scoreboard. */
+#versus-tab .vs-peak.is-headline { background: var(--tx-panel-alt); box-shadow: inset 0 2px 0 var(--tx-accent); }
+#versus-tab .vs-peak-label {
+    margin-bottom: 5px;
+    font-size: var(--t-label);
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--tx-mid);
+}
+#versus-tab .vs-peak-value {
+    font-size: var(--t-xl);
+    font-weight: 700;
+    line-height: 1;
+    font-feature-settings: 'tnum' 1;
+    font-family: var(--font-mono);
+    color: var(--tx-bright);
+}
+#versus-tab .vs-peak-sub { color: var(--tx-dim); margin-top: 4px; font-size: var(--t-label); }
+
+/* --- Creature table --- */
+#versus-tab .vs-pt { color: var(--tx-dim); font-feature-settings: 'tnum' 1; }
+#versus-tab .vs-detail { color: var(--tx-dim); font-size: var(--t-label); }
+
+/* A scroll container is not enough on its own: .tx-sweep-table is width:100%,
+   so it never exceeds the container and the cells are simply clipped instead of
+   becoming scrollable. Letting the table take its natural width is what makes
+   the overflow real. */
+#versus-tab #versus-table { overflow-x: auto; }
+#versus-tab #versus-table .tx-sweep-table { min-width: max-content; }
+@container shell (max-width: 680px) {
+
+    /* Side by side stops working once each column is narrower than its own
+       headline number, so the two sides stack with the tally between them. */
+    #versus-tab .vs-board { grid-template-columns: minmax(0, 1fr); }
+    #versus-tab .vs-mid {
+        flex-direction: row;
+        border-left: 0;
+        border-right: 0;
+        border-top: 1px solid var(--tx-rule);
+        border-bottom: 1px solid var(--tx-rule);
+    }
+}
+
 /* ---- Rail ---- */
 #versus-tab .vs-rail { padding: 16px; display: grid; gap: 8px; }
 #versus-tab .vs-label { font-size: var(--t-xs); font-weight: 600; color: var(--tx-mid); }
@@ -64,12 +180,8 @@ export const styles = `
     cursor: pointer;
 }
 #versus-tab .vs-check input { margin-top: 3px; accent-color: var(--tx-accent); }
-
-/* ---- Scoreboard ---- */
-#versus-tab .vs-side { padding: 16px 18px; gap: 0; }
 #versus-tab .vs-side.is-leader { background: var(--tx-panel-alt); box-shadow: inset 0 2px 0 var(--tx-accent); }
 #versus-tab .vs-side-top { display: flex; align-items: center; gap: 8px; min-height: 24px; }
-#versus-tab .vs-side-name { display: inline-flex; align-items: center; gap: 8px; }
 #versus-tab .vs-side-name::before {
     content: '';
     width: 10px;
@@ -87,7 +199,6 @@ export const styles = `
     background: var(--accent-soft);
 }
 #versus-tab .vs-side-kind { font-size: var(--t-xs); color: var(--tx-dim); margin: 2px 0 12px; }
-#versus-tab .vs-side-value { font-family: var(--font-mono); font-size: var(--t-xxl); }
 #versus-tab .vs-side-unit {
     margin: 4px 0 12px;
     font-size: var(--t-xs);
@@ -95,20 +206,15 @@ export const styles = `
     text-transform: none;
     color: var(--tx-mid);
 }
-#versus-tab .vs-side-rows { margin: 0; gap: 4px; }
-#versus-tab .vs-side-rows > div { font-size: var(--t-sm); }
 #versus-tab .vs-side-rows dt { color: var(--tx-dim); }
-#versus-tab .vs-side-rows dd { margin: 0; color: var(--tx-text); font-family: var(--font-mono); font-size: var(--t-xs); }
-#versus-tab .vs-mid { padding: 16px 20px; gap: 6px; }
-#versus-tab .vs-mid-vs { font-size: var(--t-xs); letter-spacing: 0; color: var(--tx-dim); }
-#versus-tab .vs-mid-tally { font-family: var(--font-mono); color: var(--tx-bright); }
-#versus-tab .vs-mid-ties { display: block; }
-#versus-tab .vs-mid-label {
+#versus-tab .vs-side-rows dd {
+    margin: 0;
+    color: var(--tx-text);
+    font-family: var(--font-mono);
     font-size: var(--t-xs);
-    letter-spacing: 0;
-    text-transform: none;
-    line-height: 1.4;
 }
+#versus-tab .vs-mid-vs { font-size: var(--t-xs); letter-spacing: 0; color: var(--tx-dim); }
+#versus-tab .vs-mid-ties { display: block; }
 
 /* ---- Chart ---- */
 #versus-tab .vs-chart { height: 300px; padding: 8px 12px 0; }
@@ -125,7 +231,6 @@ export const styles = `
 /* ---- Creature table ---- */
 #versus-tab .vs-val { color: var(--vs-engine, var(--tx-bright)); font-weight: 700; font-family: var(--font-mono); }
 #versus-tab .vs-win { color: var(--vs-engine, var(--tx-bright)); font-weight: 600; }
-#versus-tab .vs-detail { font-size: var(--t-label); }
 #versus-tab .vs-detail .card-ref { color: var(--tx-mid); }
 
 /* ---- Spread (collapsed) ---- */
@@ -136,27 +241,18 @@ export const styles = `
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     border-bottom: 1px solid var(--tx-rule);
 }
-#versus-tab .vs-peak { padding: 14px var(--pad-x); }
-#versus-tab .vs-peak-label { font-size: var(--t-label); letter-spacing: 0; text-transform: none; color: var(--tx-mid); }
-#versus-tab .vs-peak-value { font-family: var(--font-mono); color: var(--tx-bright); }
-#versus-tab .vs-peak-sub { font-size: var(--t-label); }
-#versus-tab .tx-sim-block-title {
-    margin-bottom: 10px;
-    font-size: var(--t-xs);
-    font-weight: 600;
-    color: var(--tx-mid);
-}
+#versus-tab .tx-sim-block-title { margin-bottom: 10px; font-size: var(--t-xs); font-weight: 600; color: var(--tx-mid); }
 #versus-tab .vs-dists {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 20px;
     padding: 16px;
 }
+
 /* Fixed marker column, so a row with a marker keeps the same bar length. */
 #versus-tab .dist-row { grid-template-columns: 76px minmax(0, 1fr) 48px 96px; }
 #versus-tab .dist-marker { white-space: nowrap; }
-
-@media (max-width: 720px) {
+@container shell (max-width: 680px) {
     #versus-tab .vs-mid-ties { display: inline; margin-left: 6px; }
     #versus-tab .vs-peak { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
 }
