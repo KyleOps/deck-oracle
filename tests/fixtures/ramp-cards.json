@@ -82,6 +82,21 @@
       "G"
     ]
   },
+  "Badgermole Cub": {
+    "name": "Badgermole Cub",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Badger Mole",
+    "oracle_text": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
+    "power": "2",
+    "toughness": "2",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
   "Beanstalk Giant // Fertile Footsteps": {
     "name": "Beanstalk Giant // Fertile Footsteps",
     "mana_cost": "{6}{G} // {2}{G}",
@@ -416,6 +431,21 @@
       "G"
     ]
   },
+  "Fanatic of Rhonas": {
+    "name": "Fanatic of Rhonas",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Snake Druid",
+    "oracle_text": "{T}: Add {G}.\nFerocious — {T}: Add {G}{G}{G}{G}. Activate only if you control a creature with power 4 or greater.\nEternalize {2}{G}{G} ({2}{G}{G}, Exile this card from your graveyard: Create a token that's a copy of it, except it's a 4/4 black Zombie Snake Druid with no mana cost. Eternalize only as a sorcery.)",
+    "power": "1",
+    "toughness": "4",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
   "Farseek": {
     "name": "Farseek",
     "mana_cost": "{1}{G}",
@@ -439,6 +469,19 @@
       "R",
       "U",
       "W"
+    ]
+  },
+  "Genesis Wave": {
+    "name": "Genesis Wave",
+    "mana_cost": "{X}{G}{G}{G}",
+    "cmc": 3,
+    "type_line": "Sorcery",
+    "oracle_text": "Reveal the top X cards of your library. You may put any number of permanent cards with mana value X or less from among them onto the battlefield. Then put all cards revealed this way that weren't put onto the battlefield into your graveyard.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
     ]
   },
   "Ghirapur Orrery": {
@@ -481,6 +524,21 @@
     "type_line": "Artifact",
     "oracle_text": "This artifact doesn't untap during your untap step.\n{T}: Add {C}{C}{C}.\n{4}: Untap this artifact.",
     "color_identity": []
+  },
+  "Groundchuck & Dirtbag": {
+    "name": "Groundchuck & Dirtbag",
+    "mana_cost": "{4}{G}{G}",
+    "cmc": 6,
+    "type_line": "Legendary Creature — Ox Mole Mutant",
+    "oracle_text": "Trample\nWhenever you tap a land for mana, add {G}.",
+    "power": "8",
+    "toughness": "8",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
   },
   "Growth Spiral": {
     "name": "Growth Spiral",
@@ -539,6 +597,51 @@
       "U"
     ]
   },
+  "Icetill Explorer": {
+    "name": "Icetill Explorer",
+    "mana_cost": "{2}{G}{G}",
+    "cmc": 4,
+    "type_line": "Creature — Insect Scout",
+    "oracle_text": "You may play an additional land on each of your turns.\nYou may play lands from your graveyard.\nLandfall — Whenever a land you control enters, mill a card.",
+    "power": "2",
+    "toughness": "4",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Ilysian Caryatid": {
+    "name": "Ilysian Caryatid",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Plant",
+    "oracle_text": "{T}: Add one mana of any color. If you control a creature with power 4 or greater, add two mana of any one color instead.",
+    "power": "1",
+    "toughness": "1",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Jadzia Dax, Living Legacy": {
+    "name": "Jadzia Dax, Living Legacy",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Legendary Creature — Trill Scientist",
+    "oracle_text": "At the beginning of your first main phase, put a +1/+1 counter on Jadzia Dax, then add an amount of {G} equal to the number of counters on her.\nTransfer Symbiont — {2}{G}, Discard this card: Put two +1/+1 counters on target creature.",
+    "power": "0",
+    "toughness": "1",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
   "Jeweled Lotus": {
     "name": "Jeweled Lotus",
     "mana_cost": "{0}",
@@ -546,6 +649,19 @@
     "type_line": "Artifact",
     "oracle_text": "{T}, Sacrifice this artifact: Add three mana of any one color. Spend this mana only to cast your commander.",
     "color_identity": []
+  },
+  "Kamahl's Druidic Vow": {
+    "name": "Kamahl's Druidic Vow",
+    "mana_cost": "{X}{G}{G}",
+    "cmc": 2,
+    "type_line": "Legendary Sorcery",
+    "oracle_text": "(You may cast a legendary sorcery only if you control a legendary creature or planeswalker.)\nLook at the top X cards of your library. You may put any number of land and/or legendary permanent cards with mana value X or less from among them onto the battlefield. Put the rest into your graveyard.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
   },
   "Kodama of the East Tree": {
     "name": "Kodama of the East Tree",
@@ -613,6 +729,38 @@
     "type_line": "Artifact",
     "oracle_text": "{T}, Sacrifice this artifact: Add one mana of any color.",
     "color_identity": []
+  },
+  "Lt. Arex, Ever-Adapting": {
+    "name": "Lt. Arex, Ever-Adapting",
+    "mana_cost": "{5}{G}{U}",
+    "cmc": 7,
+    "type_line": "Legendary Creature — Edosian Officer",
+    "oracle_text": "Trample\nStrange new worlds — Lt. Arex's power and toughness are each equal to the number of differently named lands you control.\nWhen Lt. Arex enters, draw three cards. You may put up to three land cards from your hand onto the battlefield tapped.",
+    "power": "*",
+    "toughness": "*",
+    "colors": [
+      "G",
+      "U"
+    ],
+    "color_identity": [
+      "G",
+      "U"
+    ]
+  },
+  "Lumra, Bellow of the Woods": {
+    "name": "Lumra, Bellow of the Woods",
+    "mana_cost": "{4}{G}{G}",
+    "cmc": 6,
+    "type_line": "Legendary Creature — Elemental Bear",
+    "oracle_text": "Reach, vigilance\nLumra's power and toughness are each equal to the number of lands you control.\nWhen Lumra enters, mill four cards. Then return all land cards from your graveyard to the battlefield tapped.",
+    "power": "*",
+    "toughness": "*",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
   },
   "Mana Reflection": {
     "name": "Mana Reflection",
@@ -685,6 +833,19 @@
     "oracle_text": "{T}: Add {C}.\n{2}, {T}: Choose a color. Add an amount of mana of that color equal to your devotion to that color. (Your devotion to a color is the number of mana symbols of that color in the mana costs of permanents you control.)",
     "color_identity": []
   },
+  "Omenpath Journey": {
+    "name": "Omenpath Journey",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Enchantment",
+    "oracle_text": "When this enchantment enters, search your library for up to five land cards that have different names, exile them, then shuffle.\nAt the beginning of your end step, choose a card at random exiled with this enchantment and put it onto the battlefield tapped.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
   "Open the Way": {
     "name": "Open the Way",
     "mana_cost": "{X}{G}{G}",
@@ -751,6 +912,34 @@
       "G"
     ]
   },
+  "Raucous Audience": {
+    "name": "Raucous Audience",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Human Citizen",
+    "oracle_text": "{T}: Add {G}. If you control a creature with power 4 or greater, add {G}{G} instead.",
+    "power": "2",
+    "toughness": "1",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Reach the Horizon": {
+    "name": "Reach the Horizon",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for up to two basic land cards and/or Town cards with different names, put them onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
   "Rejuvenating Springs": {
     "name": "Rejuvenating Springs",
     "mana_cost": "",
@@ -764,6 +953,19 @@
     "produced_mana": [
       "G",
       "U"
+    ]
+  },
+  "Reshape the Earth": {
+    "name": "Reshape the Earth",
+    "mana_cost": "{6}{G}{G}{G}",
+    "cmc": 9,
+    "type_line": "Sorcery",
+    "oracle_text": "Search your library for up to ten land cards, put them onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
     ]
   },
   "Rites of Flourishing": {
@@ -806,6 +1008,23 @@
       "R"
     ]
   },
+  "Selvala, Eager Trailblazer": {
+    "name": "Selvala, Eager Trailblazer",
+    "mana_cost": "{2}{G}{W}",
+    "cmc": 4,
+    "type_line": "Legendary Creature — Elf Scout",
+    "oracle_text": "Vigilance\nWhenever you cast a creature spell, create a 1/1 red Mercenary creature token with \"{T}: Target creature you control gets +1/+0 until end of turn. Activate only as a sorcery.\"\n{T}: Choose a color. Add one mana of that color for each different power among creatures you control.",
+    "power": "4",
+    "toughness": "5",
+    "colors": [
+      "G",
+      "W"
+    ],
+    "color_identity": [
+      "G",
+      "W"
+    ]
+  },
   "Selvala, Heart of the Wilds": {
     "name": "Selvala, Heart of the Wilds",
     "mana_cost": "{1}{G}{G}",
@@ -821,6 +1040,21 @@
       "R",
       "U",
       "W"
+    ]
+  },
+  "Silverback Elder": {
+    "name": "Silverback Elder",
+    "mana_cost": "{2}{G}{G}{G}",
+    "cmc": 5,
+    "type_line": "Creature — Ape Shaman",
+    "oracle_text": "Whenever you cast a creature spell, choose one —\n• Destroy target artifact or enchantment.\n• Look at the top five cards of your library. You may put a land card from among them onto the battlefield tapped. Put the rest on the bottom of your library in a random order.\n• You gain 4 life.",
+    "power": "5",
+    "toughness": "7",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
     ]
   },
   "Simic Growth Chamber": {
@@ -935,6 +1169,34 @@
       "G"
     ]
   },
+  "The Earth King": {
+    "name": "The Earth King",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Legendary Creature — Human Noble Ally",
+    "oracle_text": "When The Earth King enters, create a 4/4 green Bear creature token.\nWhenever one or more creatures you control with power 4 or greater attack, search your library for up to that many basic land cards, put them onto the battlefield tapped, then shuffle.",
+    "power": "2",
+    "toughness": "2",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
+  "The Great Henge": {
+    "name": "The Great Henge",
+    "mana_cost": "{7}{G}{G}",
+    "cmc": 9,
+    "type_line": "Legendary Artifact",
+    "oracle_text": "This spell costs {X} less to cast, where X is the greatest power among creatures you control.\n{T}: Add {G}{G}. You gain 2 life.\nWhenever a nontoken creature you control enters, put a +1/+1 counter on it and draw a card.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
   "Thornwood Falls": {
     "name": "Thornwood Falls",
     "mana_cost": "",
@@ -971,6 +1233,19 @@
       "G"
     ]
   },
+  "Through the Forest Gate": {
+    "name": "Through the Forest Gate",
+    "mana_cost": "{6}{G}{G}",
+    "cmc": 8,
+    "type_line": "Sorcery",
+    "oracle_text": "Look at the top twenty cards of your library, put any number of land cards from among them onto the battlefield tapped, then shuffle. You gain 8 life.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
   "Thryx, the Sudden Storm": {
     "name": "Thryx, the Sudden Storm",
     "mana_cost": "{3}{U}{U}",
@@ -996,6 +1271,21 @@
       "R",
       "U",
       "W"
+    ]
+  },
+  "U.S.S. Voyager, Lone Wanderer": {
+    "name": "U.S.S. Voyager, Lone Wanderer",
+    "mana_cost": "{3}{G}",
+    "cmc": 4,
+    "type_line": "Legendary Artifact — Spacecraft",
+    "oracle_text": "When U.S.S. Voyager enters, reveal cards from the top of your library until you reveal two land cards. Put those land cards onto the battlefield tapped and the rest on the bottom of your library in a random order.\nStation (Tap another creature you control: Put charge counters equal to its power on this Spacecraft. Station only as a sorcery. It's an artifact creature at 8+.)\n8+ | Flying, vigilance",
+    "power": "3",
+    "toughness": "3",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
     ]
   },
   "Ugin, Eye of the Storms": {
@@ -1045,6 +1335,21 @@
       "W"
     ]
   },
+  "Vorinclex, Voice of Hunger": {
+    "name": "Vorinclex, Voice of Hunger",
+    "mana_cost": "{6}{G}{G}",
+    "cmc": 8,
+    "type_line": "Legendary Creature — Phyrexian Praetor",
+    "oracle_text": "Trample\nWhenever you tap a land for mana, add one mana of any type that land produced.\nWhenever an opponent taps a land for mana, that land doesn't untap during its controller's next untap step.",
+    "power": "7",
+    "toughness": "6",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ]
+  },
   "Wayfarer's Bauble": {
     "name": "Wayfarer's Bauble",
     "mana_cost": "{1}",
@@ -1059,6 +1364,21 @@
     "cmc": 3,
     "type_line": "Creature — Dinosaur",
     "oracle_text": "Ascend (If you control ten or more permanents, you get the city's blessing for the rest of the game.)\nYou may play an additional land on each of your turns.\nThis creature can't attack or block unless you have the city's blessing.",
+    "color_identity": [
+      "G"
+    ]
+  },
+  "Whisperer of the Wilds": {
+    "name": "Whisperer of the Wilds",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Human Shaman",
+    "oracle_text": "{T}: Add {G}.\nFerocious — {T}: Add {G}{G}. Activate only if you control a creature with power 4 or greater.",
+    "power": "0",
+    "toughness": "2",
+    "colors": [
+      "G"
+    ],
     "color_identity": [
       "G"
     ]

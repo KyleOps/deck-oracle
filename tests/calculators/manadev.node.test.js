@@ -57,10 +57,14 @@ describe('ramp classifier: mana permanents', () => {
         'Elvish Mystic': { kind: 'dork', mana: 1, ready: 'sick' },
         'Birds of Paradise': { kind: 'dork', mana: 1, any: true, ready: 'sick' },
         "Avacyn's Pilgrim": { kind: 'dork', mana: 1, mask: COLOR_BIT.W },
-        'Bloom Tender': { kind: 'dork', mana: 1, variable: true },
+        'Bloom Tender': { kind: 'dork', mana: 1, variable: true, mask: COLOR_BIT.G, any: false },
         'Priest of Titania': { kind: 'dork', mana: 1, variable: true, mask: COLOR_BIT.G },
         'Selvala, Heart of the Wilds': { kind: 'dork', mana: 1, variable: true },
-        'Arixmethes, Slumbering Isle': { kind: 'dork', mana: 2, mask: GU, ready: 'tapped' },
+        'Arixmethes, Slumbering Isle': { kind: 'dork', mana: 2, mask: GU, units: [COLOR_BIT.G, COLOR_BIT.U], ready: 'tapped' },
+        'Fanatic of Rhonas': { kind: 'dork', mana: 1, mask: COLOR_BIT.G, variable: true, ready: 'sick' },
+        'Whisperer of the Wilds': { kind: 'dork', mana: 1, mask: COLOR_BIT.G, variable: true },
+        'Jadzia Dax, Living Legacy': { kind: 'dork', mana: 0, phaseMana: 1, growth: 1, mask: COLOR_BIT.G, ready: 'next' },
+        'Badgermole Cub': { kind: 'dork', mana: 0, mask: COLOR_BIT.G, ready: 'next' },
         'Ugin, Eye of the Storms': { kind: 'walker', mana: 3, mask: 0, ready: 'now' },
         'Utopia Sprawl': { kind: 'aura', mana: 1, any: true, ready: 'next' },
         'Wild Growth': { kind: 'aura', mana: 1, mask: COLOR_BIT.G },
@@ -95,7 +99,12 @@ describe('ramp classifier: land searches and land drops', () => {
         'Oracle of Mul Daya': { extraDrops: 1, fromTop: true },
         'Courser of Kruphix': { extraDrops: 0, fromTop: true },
         'Explore': { extraDropsOnce: 1, draws: 1 },
-        'Growth Spiral': { putLand: 1, draws: 1 }
+        'Growth Spiral': { putLand: 1, draws: 1 },
+        'Reshape the Earth': { lands: 10, landsTapped: true, landFilter: 'any' },
+        'Reach the Horizon': { lands: 2, landsTapped: true, landFilter: 'basic', distinct: true },
+        'U.S.S. Voyager, Lone Wanderer': { lands: 2, landsTapped: true, landFilter: 'any', reveal: true },
+        'Open the Way': { lands: 1, landsTapped: true, landFilter: 'any', reveal: true, landsVary: true },
+        'Lt. Arex, Ever-Adapting': { putLand: 3, putLandTapped: true, draws: 3 }
     };
     for (const [name, expected] of Object.entries(cases)) {
         it(name, () => like(ramp(name), { modelled: true, ...expected }, name));
@@ -120,7 +129,16 @@ describe('ramp classifier: recognised but not counted', () => {
         'Tireless Provisioner': 'treasureTrigger',
         'Emerald Medallion': 'reducer',
         'Goreclaw, Terror of Qal Sisma': 'reducer',
-        'Zendikar Resurgent': 'doubler'
+        'Zendikar Resurgent': 'doubler',
+        'Groundchuck & Dirtbag': 'doubler',
+        'Gyre Sage': 'varies',
+        'Omenpath Journey': 'trigger',
+        'The Earth King': 'trigger',
+        'Silverback Elder': 'trigger',
+        'Kodama of the East Tree': 'trigger',
+        'Through the Forest Gate': 'topLands',
+        "Kamahl's Druidic Vow": 'topLands',
+        'Lumra, Bellow of the Woods': 'graveyardLands'
     };
     for (const [name, why] of Object.entries(cases)) {
         it(`${name} (${why})`, () => {
@@ -136,7 +154,7 @@ describe('ramp classifier: recognised but not counted', () => {
     });
 
     it('ignores cards that are not ramp, including opponent-side land searches', () => {
-        for (const name of ['Lightning Greaves', 'Path to Exile', 'Open the Way']) assert.equal(ramp(name), null, name);
+        for (const name of ['Lightning Greaves', 'Path to Exile', 'Genesis Wave', "Aminatou's Augury"]) assert.equal(ramp(name), null, name);
         assert.equal(MD.classifyRamp(CARDS['Command Tower']), null, 'lands are never ramp spells');
         assert.equal(MD.classifyRamp(null), null);
     });
@@ -153,7 +171,10 @@ describe('ramp classifier: plain-word labels', () => {
         assert.equal(ramp('Farseek').label, 'Puts a Plains, Island, Swamp or Mountain onto the battlefield tapped');
         assert.equal(ramp('Burnished Hart').label, 'Puts 2 basic lands onto the battlefield tapped (plus {3} to activate)');
         assert.equal(ramp('Oracle of Mul Daya').label, 'Lets you play an extra land each turn; Lets you play lands from the top of your library');
-        assert.match(ramp('Priest of Titania').label, /varies, counted as 1/);
+        assert.equal(ramp('Priest of Titania').label, 'Adds 1 green mana a turn (1 per Elf on the battlefield), from the next turn (summoning sick) — counted as 1: the model doesn’t track your other Elves');
+        assert.equal(ramp('Fanatic of Rhonas').label, 'Adds 1 green mana a turn (4 with a power-4 creature), from the next turn (summoning sick) — counted as 1: the model doesn’t track creature power');
+        assert.equal(ramp('Arixmethes, Slumbering Isle').label, 'Adds 1 blue and 1 green mana a turn, from the next turn (enters tapped)');
+        assert.equal(ramp('Reach the Horizon').label, 'Puts 2 basic lands with different names onto the battlefield tapped');
     });
 });
 
@@ -348,6 +369,82 @@ describe('scripted goldfish games', () => {
     });
 });
 
+describe('scripted goldfish games: mana that depends on the board, and the newer land readings', () => {
+    /** Seven-card hand of these, Colossal Dreadmaws after; then the library. */
+    const play = (counts, hand, library, opts = {}) => {
+        const lib = MD.buildManaLibrary(deckOf(counts), { multiplayer: false, ...opts.build });
+        const take = picker(lib);
+        const h = take([...hand, ...rep('Colossal Dreadmaw', 7 - hand.length)]);
+        return MD.playScriptedGame(lib, { hand: h, library: take(library), format: opts.format ?? SIXTY });
+    };
+
+    it('Fanatic of Rhonas counts as the {G} it always makes, not {G}{G}{G}{G}', () => {
+        const g = play({ Forest: 20, 'Fanatic of Rhonas': 1, 'Colossal Dreadmaw': 10 }, ['Forest', 'Forest', 'Forest', 'Fanatic of Rhonas'], rep('Colossal Dreadmaw', 3));
+        assert.deepEqual(g.log.turns[1].cast.map(c => c.name), ['Fanatic of Rhonas']);
+        assert.deepEqual(g.mana.slice(1, 5), [1, 2, 4, 4]);
+    });
+
+    it('Jadzia Dax adds 1, then 2, then 3 — from the turn after she lands', () => {
+        const g = play({ Forest: 20, 'Jadzia Dax, Living Legacy': 1, 'Colossal Dreadmaw': 10 }, ['Forest', 'Forest', 'Jadzia Dax, Living Legacy'], rep('Forest', 6));
+        assert.deepEqual(g.log.turns[1].cast.map(c => c.name), ['Jadzia Dax, Living Legacy']);
+        assert.deepEqual(g.mana.slice(1, 6), [1, 2, 4, 6, 8]);
+    });
+
+    it('Badgermole Cub adds one a turn through the land it earthbends', () => {
+        const g = play({ Forest: 20, 'Badgermole Cub': 1, 'Colossal Dreadmaw': 10 }, ['Forest', 'Forest', 'Forest', 'Badgermole Cub'], rep('Colossal Dreadmaw', 3));
+        assert.deepEqual(g.mana.slice(1, 4), [1, 2, 4]);
+    });
+
+    it('{G}{U} is one blue and one green: it can’t pay {U}{U}{U} with one Island', () => {
+        const tester = { name: 'Triple Blue', mana_cost: '{U}{U}{U}', cmc: 3, type_line: 'Legendary Creature — Test', oracle_text: '', color_identity: ['U'] };
+        const counts = { Forest: 30, Island: 1, 'Arixmethes, Slumbering Isle': 1, 'Colossal Dreadmaw': 10 };
+        const build = { format: 'commander', commanders: [tester.name], commanderCards: [tester] };
+        const hand = ['Island', 'Forest', 'Forest', 'Forest', 'Arixmethes, Slumbering Isle'];
+        const g = play(counts, hand, rep('Forest', 8), { format: EDH, build });
+        assert.deepEqual(g.log.turns[3].cast.map(c => c.name), ['Arixmethes, Slumbering Isle']);
+        assert.equal(g.mana[5], 7);
+        assert.equal(g.targetTurn, 0, 'two blue sources, three blue pips');
+        // Read as two mana of either colour (the old reading), it would have looked castable.
+        const lib = MD.buildManaLibrary(deckOf(counts), { multiplayer: false, ...build });
+        const either = { ...lib, cards: lib.cards.map(c => (c.rampInfo?.units ? { ...c, rampInfo: { ...c.rampInfo, units: null } } : c)) };
+        const take = picker(either);
+        const old = MD.playScriptedGame(either, { hand: take([...hand, 'Colossal Dreadmaw', 'Colossal Dreadmaw']), library: take(rep('Forest', 8)), format: EDH });
+        assert.equal(old.targetTurn, 5);
+    });
+
+    it('Reach the Horizon finds lands with different names', () => {
+        const forests = play({ Forest: 30, 'Reach the Horizon': 1, 'Colossal Dreadmaw': 10 }, ['Forest', 'Forest', 'Forest', 'Forest', 'Reach the Horizon'], rep('Forest', 10));
+        assert.deepEqual(forests.log.turns[3].cast[0].notes, ['Forest'], 'only Forests left: one of them');
+        const mixed = play({ Forest: 30, Island: 3, 'Reach the Horizon': 1, 'Colossal Dreadmaw': 10 }, ['Forest', 'Forest', 'Forest', 'Forest', 'Reach the Horizon'], [...rep('Forest', 6), 'Island', 'Island']);
+        assert.deepEqual([...mixed.log.turns[3].cast[0].notes].sort(), ['Forest', 'Island']);
+    });
+
+    it('U.S.S. Voyager takes the first two lands off the top, and the cards above them go to the bottom', () => {
+        const D = 'Colossal Dreadmaw';
+        const g = play({ Forest: 30, Island: 3, 'U.S.S. Voyager, Lone Wanderer': 1, [D]: 20 },
+            ['Forest', 'Forest', 'Forest', 'Forest', 'U.S.S. Voyager, Lone Wanderer'],
+            [D, D, D, D, 'Island', D, 'Forest', 'Island', ...rep('Forest', 4)]);
+        const t4 = g.log.turns[3];
+        assert.deepEqual(t4.cast.map(c => c.name), ['U.S.S. Voyager, Lone Wanderer']);
+        assert.deepEqual(t4.cast[0].notes, ['Island', 'Forest']);
+        assert.equal(g.log.turns[4].drew, 'Island', 'the revealed Dreadmaw went to the bottom');
+        assert.equal(g.mana[5], 7);
+    });
+
+    it('puts up to three lands from hand when the card says so', () => {
+        const spill = { name: 'Land Spill', mana_cost: '{1}{G}', cmc: 2, type_line: 'Sorcery', oracle_text: 'You may put up to three land cards from your hand onto the battlefield tapped.' };
+        const lib = MD.buildManaLibrary({ ...deckOf({ Forest: 20, 'Colossal Dreadmaw': 10 }), 'Land Spill': { ...spill, count: 1 } }, { multiplayer: false });
+        const take = picker(lib);
+        const g = MD.playScriptedGame(lib, {
+            hand: take(['Forest', 'Forest', 'Forest', 'Forest', 'Forest', 'Land Spill', 'Colossal Dreadmaw']),
+            library: take(rep('Colossal Dreadmaw', 6)),
+            format: SIXTY
+        });
+        assert.deepEqual(g.log.turns[1].cast[0].notes, ['Forest', 'Forest', 'Forest']);
+        assert.deepEqual(g.mana.slice(1, 4), [1, 2, 5]);
+    });
+});
+
 // ── Library and simulation ───────────────────────────────────────────────────
 
 describe('library and target', () => {
@@ -369,9 +466,10 @@ describe('library and target', () => {
         const lib = MD.buildManaLibrary(DEFAULT_DECK_DATA);
         const library = libraryOf(DEFAULT_DECK_DATA, { format: 'commander' });
         assert.equal(MD.rampTotal(lib), tagDeck(library.cards).counts.ramp);
-        assert.equal(MD.rampTotal(lib), 17);
-        assert.equal(MD.countedRamp(lib), 15);
-        assert.equal(MD.countedRamp(lib, { treasure: true }), 16);
+        // Kamahl's Druidic Vow, Kodama of the East Tree and Omenpath Journey are ramp the model can't simulate; Open the Way it plays.
+        assert.equal(MD.rampTotal(lib), 21);
+        assert.equal(MD.countedRamp(lib), 16);
+        assert.equal(MD.countedRamp(lib, { treasure: true }), 17);
         const r = MD.simulateManaDevelopment(lib, { format: EDH, games: 50 });
         assert.equal(r.rampCount + r.notCounted, MD.rampTotal(lib), 'counted + not counted is the ramp count');
         assert.equal(r.notRamp, 2, 'Thryx and Ugin, the Ineffable make spells cheaper');
