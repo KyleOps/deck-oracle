@@ -63,10 +63,12 @@ mtgcalcs/
 │   └── ux-enhancements.css # Collapsibles, skeletons, small animations
 │
 ├── scripts/update-sw-manifest.mjs  # Regenerates sw.js assets + index.html modulepreloads
+├── .github/                # CI/deploy, CodeQL, "Update visual baselines" workflows; Dependabot
 └── tests/
     ├── node-test-helper.js # DOM mocks for headless tests
     ├── calculators/ utils/ performance/   # *.node.test.js (node:test)
-    └── e2e/app.spec.js     # Playwright browser tests
+    ├── e2e/                # Playwright: app.spec.js, performance.spec.js (budgets), helpers/network.js
+    └── visual/             # Playwright screenshot comparisons (Linux baselines made by CI)
 ```
 
 ---
@@ -113,10 +115,24 @@ When making code changes to this project:
    - Ensure all tests pass before completing a task
 
 3. **Run relevant tests**:
-   - For calculator changes: `npm test -- tests/calculators/[calculator-name].node.test.js`
+   - For calculator changes: `node --test tests/calculators/[calculator-name].node.test.js`
    - For full test suite: `npm test`
    - For app-shell, navigation, sharing, or deck-input changes: `npm run test:e2e`
    - For the complete CI-equivalent check: `npm run check`
+
+4. **CI gates** (a pull request can't merge until they pass):
+   - **Coverage**: `npm run test:coverage` fails if line / branch / function
+     coverage of `js/utils/**` and `js/data/**` drops below 84 / 84 / 83%.
+     Every module there must load in plain Node (`tests/utils/moduleLoad.node.test.js`),
+     so a new untested module lowers the numbers instead of hiding.
+   - **Performance budgets**: `tests/e2e/performance.spec.js` (run by
+     `npm run test:e2e`, after the functional tests). If a change really needs
+     more, re-measure as its header explains and raise the budget in the same
+     PR with a reason; lower budgets when you make things faster.
+   - **Screenshots**: once `tests/visual/__screenshots__/linux/` exists, CI
+     compares key pages against it. After a visual change, run the
+     "Update visual baselines" workflow on your branch and commit its artifact.
+     Never commit baselines made on Windows or macOS.
 
 ## Documentation Requirements
 
@@ -190,9 +206,12 @@ import assert from 'node:assert';
 
 **Commands:**
 - `npm test` - Run full test suite
+- `npm run test:coverage` - Unit tests with the coverage floor (what CI runs)
 - `npm run lint` - Run ESLint correctness checks
-- `npm run test:e2e` - Run Playwright browser smoke tests
-- `npm run check` - Run lint, unit, and browser suites
+- `npm run test:e2e` - Playwright browser tests, then the performance budgets (`PW_PORT=4201` picks another server port)
+- `npm run test:visual` / `npm run test:visual:update` - Screenshot comparisons against this OS's baselines
+- `npm run test:perf` - Node micro-benchmarks for the analysis modules
+- `npm run check` - Lint, coverage and browser suites: everything CI runs except screenshots
 - `npm run test:watch` - Watch mode
 - `npm run sw:manifest` - Regenerate sw.js assets and index.html modulepreloads
 - `npm run dev` - Local dev server
@@ -220,6 +239,10 @@ import assert from 'node:assert';
 - Chart.js 4.6.1 (pinned, loaded on demand by js/shell/vendor.js)
 - Google Fonts (Geist, Geist Mono, Crimson Pro)
 - LZ-String (share-link compression)
+- The `chart.js` and `lz-string` devDependencies are local copies of exactly
+  these CDN versions (browser tests serve them instead of the CDN). Bump the
+  CDN URL and the devDependency together; `tests/utils/cdnPins.node.test.js`
+  fails if they differ, and Dependabot skips both.
 
 **APIs:**
 - Scryfall API - Card data lookups

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Performance budgets in CI** (`tests/e2e/performance.spec.js`). A cold load of the overview must fetch at most 460 KB of JavaScript before DOMContentLoaded (351 KB today), render at most 1,150 DOM nodes (895), paint first content within 500 ms (about 210 ms locally) and never download Chart.js. Cold links to Mulligan Planner and Chimil must show their bottom line within 900 ms and 1,250 ms (about 280 ms each locally) with no main-thread task over 550 ms (78 ms). Timings come from the browser's own Performance APIs and are budgeted against a 4× slower CPU, so slow CI runners pass but a page that gets several times slower fails. The budgets run as their own Playwright project, after the functional tests, one at a time.
+- **Coverage gate**: `npm run test:coverage` runs the unit suite with Node's built-in coverage and fails if `js/utils` and `js/data` drop below 84% lines, 84% branches or 83% functions (84.4 / 85.0 / 83.1 today). CI runs it instead of plain `npm test`. A new test loads every module in those folders in plain Node, so untested modules count against the numbers instead of being invisible.
+- **Screenshot comparisons** (`npm run test:visual`, `tests/visual/`): overview, Draw Odds, Mana Base, Opening Hands, Wild Pair and Primal Surge in both themes at desktop and 390 px widths, with seeded randomness, local CDN scripts and masked sample hands and card art. A manual **Update visual baselines** workflow regenerates the Linux screenshots, checks they reproduce, and uploads them for review. CI starts comparing once baselines are committed.
+- **Dependabot**: weekly update PRs for npm and GitHub Actions, one grouped PR per ecosystem for minor and patch releases; Playwright gets its own group because a new Chromium can change screenshots.
+- **CodeQL** scans the JavaScript and the workflows on every pull request, on `main` and weekly.
+- A pull request template, and a CI status badge in the README.
+- Browser tests serve the pinned Chart.js and LZ-String from `node_modules` instead of the CDN (`tests/e2e/helpers/network.js`); `chart.js` is now a devDependency and a test keeps both copies on the exact versions the app loads.
+
+### Changed
+- `npm run check` runs lint, unit tests with coverage and the browser tests with budgets: everything CI runs except screenshots. `npm run test:perf` runs both Node benchmark files.
+- Security fixes for development-only dependencies (`follow-redirects`, `qs`; `npm audit fix`). The remaining `minimatch` advisory needs ESLint 10.15, which Dependabot's first npm PR brings.
+
+### Removed
+- `Deck Oracle.zip`, `deck-oracle-design/` (the v3 design handoff, now built) and `.interface-design/system.md` (described the retired glassmorphism design). They remain in git history.
+- The unused `claude` npm dependency and the duplicate `test:node`, `serve` and `serve:test` scripts.
+
 ## [3.0.0] - 2026-11-21
 
 Deck Oracle 3 is a ground-up overhaul: it works with any deck, every page answers one question in plain words, and the app is faster to load.

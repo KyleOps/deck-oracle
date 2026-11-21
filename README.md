@@ -1,5 +1,7 @@
 # Deck Oracle
 
+[![CI / Deploy](https://github.com/KyleOps/deck-oracle/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/KyleOps/deck-oracle/actions/workflows/deploy.yml)
+
 Exact odds for your Magic: The Gathering deck. Import a list from Moxfield,
 Archidekt or plain text and Deck Oracle tells you, in plain words, how your
 deck actually plays: how often you hit land drops, whether your lands cast
@@ -49,12 +51,37 @@ npm run dev        # http://localhost:3000
 ## Development
 
 ```bash
-npm test           # unit tests (node:test)
-npm run test:e2e   # browser tests (Playwright, Chromium)
-npm run lint       # ESLint
-npm run check      # all of the above
-npm run sw:manifest  # regenerate the offline asset list and module preloads after adding files
+npm test               # unit tests (node:test)
+npm run test:coverage  # unit tests with a coverage floor for js/utils and js/data (CI runs this)
+npm run test:e2e       # browser tests, then performance budgets (Playwright, Chromium)
+npm run lint           # ESLint
+npm run check          # lint + coverage + browser tests: what CI runs, minus screenshots
+npm run sw:manifest    # regenerate the offline asset list and module preloads after adding files
 ```
+
+Set `PW_PORT` to run the browser tests on another port (for example in a second git worktree).
+
+**Performance budgets** (`tests/e2e/performance.spec.js`) cold-load the overview and the
+heaviest calculator pages and check script weight, DOM size, first paint, time to the
+bottom line and the longest main-thread task. The file lists each budget, what it was
+set from and how to re-measure. Raise one only in the pull request that needs it, and
+say why.
+
+**Screenshot comparisons** (`tests/visual/`) cover key pages in both themes at desktop and
+phone widths. Committed baselines come from Linux in CI, never from a laptop (text
+renders differently on each OS):
+
+1. Actions → **Update visual baselines** → *Run workflow* on your branch. It regenerates
+   the screenshots and checks they reproduce.
+2. Download its `visual-baselines` artifact and unzip it into `tests/visual/__screenshots__/linux/`.
+3. Look at the images, then commit them with your pull request.
+
+CI compares every change against them once that folder exists (until then the step is
+skipped). Locally, `npm run test:visual:update` then `npm run test:visual` compare against
+baselines for your own OS, which git ignores.
+
+Pull requests must pass CI before merging. Dependabot opens grouped update PRs weekly for
+npm packages and GitHub Actions, and CodeQL scans every pull request.
 
 Architecture in one paragraph: `index.html` is only the app shell. `js/main.js`
 wires the shell (`js/shell/`): router, sidebar, command palette, deck dialog,
