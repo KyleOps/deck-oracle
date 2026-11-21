@@ -70,3 +70,17 @@ describe('service worker asset manifest', () => {
         assert.deepEqual(staticAssets, buildAssetList());
     });
 });
+
+describe('service worker cache isolation', () => {
+    it('never looks requests up across every cache', () => {
+        // A global caches.match() also searches caches left by older workers
+        // (v2 used `mtg-calc-v*`) and would serve their stale JS to v3 pages.
+        assert.doesNotMatch(serviceWorkerSource, /caches\.match\(/);
+    });
+
+    it('deletes every cache that is not current on activate', () => {
+        const activate = serviceWorkerSource.match(/addEventListener\('activate'[\s\S]*?\n\}\);/)?.[0] ?? '';
+        assert.match(activate, /name !== CACHE_NAME && name !== IMAGE_CACHE/);
+        assert.doesNotMatch(activate, /startsWith\(/, 'filtering by prefix would keep legacy caches alive');
+    });
+});

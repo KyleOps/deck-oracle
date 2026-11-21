@@ -46,7 +46,13 @@ Deck Oracle 3 is a ground-up overhaul: it works with any deck, every page answer
 - Calculators load on first visit instead of all at startup, and Chart.js loads only for pages that draw charts (the overview and seven other pages never load it). Measured cold against v2.13: first paint 480 ms (was 496), content on screen 585 ms (was 609), 39% fewer DOM nodes, and less JavaScript before the page is usable. The startup module graph is preloaded in parallel.
 - Card art, hover previews and sample-hand images load straight from Scryfall's CDN using each card's Scryfall id (one request instead of an API redirect); below-the-fold art is lazy.
 - Deck analysis for a 99-card deck takes about 1 ms; Mana Base recomputes in 2–3 ms; slider moves on the big-spell pages take about 10 ms. Performance budgets are enforced in tests (`tests/performance/deckAnalysis.node.test.js`).
-- The service worker serves pages network-first (new deploys show up on the next visit), keeps app assets stale-while-revalidate, and caches card images for offline use with a size limit. Its asset list and the preload hints are generated (`npm run sw:manifest`) and tested.
+- The service worker serves pages network-first (new deploys show up on the next visit), keeps app assets stale-while-revalidate, and caches card images for offline use with a size limit. Its asset list and the preload hints are generated (`npm run sw:manifest`) and tested. It reads only its own caches and deletes every older one on activation, including v2's `mtg-calc-v*` caches, so returning visitors never get v2 JavaScript under v3 pages.
+
+### CI / Deploy
+- Tests (lint, 1,037 unit tests, Playwright browser tests) now run on every pull request as well as on `main`; superseded pull-request runs are cancelled, and jobs have timeouts.
+- CI runs on Node.js 26 (current LTS), pinned in `.nvmrc`; the supported minimum rises from Node 20 (end of life) to 22.12. The suite passes on 20, 22 and 26.
+- GitHub Actions updated to current majors: checkout v7, setup-node v7, upload-artifact v7, configure-pages v6, upload-pages-artifact v5, deploy-pages v5.
+- GitHub Pages receives only the site (`index.html`, `manifest.json`, `sw.js`, `css/`, `js/`, `images/`) instead of the whole repository, so tests, docs, design files and archives are no longer published.
 
 ### Fixed
 - **Monstrous Vortex** overstated chained discovers: its formula let a chaining creature be found again and again (e.g. 5.0 instead of the true 4.17) and disagreed with Head to Head.

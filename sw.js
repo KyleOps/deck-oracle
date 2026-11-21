@@ -150,14 +150,22 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
+    // Delete EVERY cache that isn't current — including the v2 worker's
+    // `mtg-calc-v*` caches, which would otherwise keep serving old JS.
     event.waitUntil(
         caches.keys()
             .then(names => Promise.all(names
-                .filter(name => name.startsWith('deck-oracle-') && name !== CACHE_NAME && name !== IMAGE_CACHE)
+                .filter(name => name !== CACHE_NAME && name !== IMAGE_CACHE)
                 .map(name => caches.delete(name))))
             .then(() => self.clients.claim())
     );
 });
+
+/** Look a request up in ONE named cache — never across all of them. */
+async function matchIn(cacheName, request) {
+    const cache = await caches.open(cacheName);
+    return cache.match(request);
+}
 
 async function trimCache(name, limit) {
     const cache = await caches.open(name);
@@ -174,13 +182,13 @@ async function networkFirstPage(request) {
         }
         return response;
     } catch {
-        return (await caches.match(resolveAssetUrl('index.html'))) ?? Response.error();
+        return (await matchIn(CACHE_NAME, resolveAssetUrl('index.html'))) ?? Response.error();
     }
 }
 
 async function staleWhileRevalidate(event) {
     const { request } = event;
-    const cached = await caches.match(request);
+    const cached = await matchIn(CACHE_NAME, request);
     const network = fetch(request).then(response => {
         if (response.ok || response.type === 'opaque') {
             caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone()));
@@ -196,7 +204,7 @@ async function staleWhileRevalidate(event) {
 
 async function cacheFirstImage(event) {
     const { request } = event;
-    const cached = await caches.match(request);
+    const cached = await matchIn(IMAGE_CACHE, request);
     if (cached) return cached;
     const response = await fetch(request);
     if (response.ok || response.type === 'opaque') {
