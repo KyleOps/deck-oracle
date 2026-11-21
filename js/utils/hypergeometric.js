@@ -74,3 +74,39 @@ export function drawTypeMin(allTotal, typeTotal, allDrawn, typeDrawn) {
 
     return prob;
 }
+
+// ── Whole distributions ──────────────────────────────────────────────────────
+
+const LOG_FACTORIAL = [0];
+
+function logFactorial(n) {
+    for (let i = LOG_FACTORIAL.length; i <= n; i++) {
+        LOG_FACTORIAL[i] = LOG_FACTORIAL[i - 1] + Math.log(i);
+    }
+    return LOG_FACTORIAL[n];
+}
+
+function logChoose(n, k) {
+    return logFactorial(n) - logFactorial(k) - logFactorial(n - k);
+}
+
+/**
+ * Exact distribution of successes when drawing without replacement.
+ * @param {number} population - cards in the library
+ * @param {number} successes - cards that count as a hit
+ * @param {number} draws - cards looked at
+ * @returns {number[]} pmf, index = number of hits (length draws + 1)
+ */
+export function hypergeometricPmf(population, successes, draws) {
+    const N = Math.max(0, Math.floor(Number(population) || 0));
+    const K = Math.min(N, Math.max(0, Math.floor(Number(successes) || 0)));
+    const n = Math.min(N, Math.max(0, Math.floor(Number(draws) || 0)));
+    const pmf = new Array(n + 1).fill(0);
+    const lo = Math.max(0, n - (N - K));
+    const hi = Math.min(n, K);
+    const denominator = logChoose(N, n);
+    for (let k = lo; k <= hi; k++) {
+        pmf[k] = Math.exp(logChoose(K, k) + logChoose(N - K, n - k) - denominator);
+    }
+    return pmf;
+}

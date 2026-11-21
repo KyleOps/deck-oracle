@@ -1,183 +1,38 @@
+// The Kamahl's Druidic Vow page: readInputs() → the model. The maths is
+// tested in tests/models/vow.node.test.js.
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { assertClose } from '../node-test-helper.js';
-import { analyze, buildVowLibrary, simulateVow, summarize, vowOutcome } from '../../js/calculators/vow.js';
+import * as DeckConfig from '../../js/utils/deckConfig.js';
+import { calculate, readInputs } from '../../js/calculators/vow.js';
+import { commanderCopiesVow, vowSweep } from '../../js/utils/models/vow.js';
 
-describe('Kamahl\'s Druidic Vow Calculator', () => {
-    // Distribution contains counts of VALID HITS only
-    const distribution = {
-        0: 30, // Lands
-        3: 10, // Legendary Permanents with CMC 3
-        5: 5   // Legendary Permanents with CMC 5
-    };
-    // Deck size includes non-hits too
-    const deckSize = 60; // 30 lands + 15 legends + 15 non-hits
-
-    it('calculates mathematical EV correctly for X=4', () => {
-        // Valid hits at X=4: Lands (30) + 3-drop Legends (10) = 40 hits
-        const x = 4;
-        const result = simulateVow(deckSize, distribution, x);
-        const expected = x * (40 / deckSize); // 4 * (40/60) = 2.66...
-        assertClose(result.expectedHits, expected, 'EV calculation for X=4');
+describe('Kamahl\'s Druidic Vow page', () => {
+    it('reads the deck and the default inputs when the page is not mounted', () => {
+        const config = readInputs();
+        assert.ok(config.cards.length > 0, 'the example deck has a list');
+        assert.strictEqual(config.x, 7);
+        assert.strictEqual(config.settings.landValue, 1);
+        assert.strictEqual(config.settings.cardValue, 0.25);
     });
 
-    it('calculates EV correctly for X=6', () => {
-        // Valid hits at X=6: Lands (30) + 3-drop (10) + 5-drop (5) = 45 hits
-        const x = 6;
-        const result = simulateVow(deckSize, distribution, x);
-        const expected = x * (45 / deckSize); // 6 * (45/60) = 4.5
-        assertClose(result.expectedHits, expected, 'EV calculation for X=6');
+    it('copies the Vow when a commander copies it', () => {
+        const config = readInputs();
+        const copies = commanderCopiesVow(DeckConfig.getCommanderNames());
+        assert.strictEqual(config.doubleCast, copies);
+        assert.strictEqual(config.settings.copies, copies ? 2 : 1);
     });
 
-    it('handles edge case: X=0', () => {
-        const result0 = simulateVow(deckSize, distribution, 0);
-        assertClose(result0.expectedHits, 0, 'X=0 results in 0 hits');
-    });
-
-    it('handles edge case: X=2 (Only Lands valid)', () => {
-        // Valid hits at X=2: Lands (30) only
-        const result2 = simulateVow(deckSize, distribution, 2);
-        const expected = 2 * (30 / deckSize); // 2 * 0.5 = 1
-        assertClose(result2.expectedHits, expected, 'X=2 calculation');
-    });
-
-    it('returns detailed breakdown (lands, legends, mana value)', () => {
-        // Create mock card data for breakdown testing
-        const mockCardData = {
-            cardsByName: {
-                'Forest': { name: 'Forest', type_line: 'Basic Land — Forest', cmc: 0, count: 30 },
-                'Ragavan': { name: 'Ragavan, Nimble Pilferer', type_line: 'Legendary Creature — Monkey Pirate', cmc: 1, count: 1 },
-                'Omnath': { name: 'Omnath, Locus of Creation', type_line: 'Legendary Creature — Elemental', cmc: 4, count: 1 },
-                'Sol Ring': { name: 'Sol Ring', type_line: 'Artifact', cmc: 1, count: 1 }, // Not legendary, shouldn't count
-                'Lightning Bolt': { name: 'Lightning Bolt', type_line: 'Instant', cmc: 1, count: 1 } // Not a permanent
-            }
-        };
-
-        const result = simulateVow(34, distribution, 5, false, mockCardData);
-
-        // Verify all breakdown fields exist
-        assert.ok(result.expectedLands !== undefined, 'Should return expectedLands');
-        assert.ok(result.expectedLegends !== undefined, 'Should return expectedLegends');
-        assert.ok(result.expectedManaValue !== undefined, 'Should return expectedManaValue');
-
-        // expectedLands should be based on 30 lands out of 34 cards, revealing 5
-        assertClose(result.expectedLands, 5 * (30/34), 'Expected lands calculation');
-
-        // expectedLegends should be based on 2 legendaries (Ragavan + Omnath) out of 34 cards
-        assertClose(result.expectedLegends, 5 * (2/34), 'Expected legends calculation');
-    });
-
-    it('doubles card count when doubleCast is true', () => {
-        const mockCardData = {
-            cardsByName: {
-                'Forest': { name: 'Forest', type_line: 'Basic Land — Forest', cmc: 0, count: 30 },
-                'Gaea\'s Cradle': { name: 'Gaea\'s Cradle', type_line: 'Legendary Land', cmc: 0, count: 1 }
-            }
-        };
-
-        const normal = simulateVow(31, { 0: 31 }, 5, false, mockCardData);
-        const doubled = simulateVow(31, { 0: 31 }, 5, true, mockCardData);
-
-        // Double cast should reveal 2X cards (10 instead of 5)
-        assertClose(doubled.expectedHits, normal.expectedHits * 2, 'Should double expected hits');
-        assertClose(doubled.expectedLands, normal.expectedLands * 2, 'Should double expected lands');
-        assertClose(doubled.expectedLegends, normal.expectedLegends * 2, 'Should double expected legends');
-    });
-
-    it('handles deck with no legendaries', () => {
-        const landsOnly = { 0: 30 }; // 30 lands, 30 non-permanents
-        const mockCardData = {
-            cardsByName: {
-                'Forest': { name: 'Forest', type_line: 'Basic Land', cmc: 0, count: 30 },
-                'Lightning Bolt': { name: 'Lightning Bolt', type_line: 'Instant', cmc: 1, count: 30 }
-            }
-        };
-
-        const result = simulateVow(60, landsOnly, 10, false, mockCardData);
-
-        assert.strictEqual(result.expectedLegends, 0, 'Should have 0 expected legends');
-        assertClose(result.expectedLands, 10 * (30/60), 'Should only count lands');
-    });
-
-    it('handles deck with all legendaries', () => {
-        const allLegends = { 3: 60 }; // 60 CMC 3 legendary permanents
-        const mockCardData = {
-            cardsByName: {
-                'Ragavan': { name: 'Ragavan, Nimble Pilferer', type_line: 'Legendary Creature — Monkey', cmc: 3, count: 60 }
-            }
-        };
-
-        const result = simulateVow(60, allLegends, 5, false, mockCardData);
-
-        assert.strictEqual(result.expectedLands, 0, 'Should have 0 expected lands');
-        assertClose(result.expectedLegends, 5, 'Should expect ~5 legends from 5 reveals');
-    });
-
-    it('correctly excludes non-legendary permanents from legend count', () => {
-        const mockCardData = {
-            cardsByName: {
-                'Ragavan': { name: 'Ragavan', type_line: 'Legendary Creature', cmc: 1, count: 10 },
-                'Grizzly Bears': { name: 'Grizzly Bears', type_line: 'Creature — Bear', cmc: 2, count: 10 },
-                'Sol Ring': { name: 'Sol Ring', type_line: 'Artifact', cmc: 1, count: 10 }
-            }
-        };
-
-        const result = simulateVow(30, { 1: 20, 2: 10 }, 5, false, mockCardData);
-
-        // Only Ragavan should count as legendary
-        assertClose(result.expectedLegends, 5 * (10/30), 'Only legendary cards should count');
+    it('calculates the model over what it read', () => {
+        const { config, results } = calculate();
+        assert.deepStrictEqual(results, vowSweep(config.library, config.maxX, config.settings, config.deckKey));
     });
 });
 
-describe('Kamahl\'s Druidic Vow outcomes', () => {
-    const cards = [
-        { name: 'Forest', type_line: 'Basic Land — Forest', cmc: 0, count: 30 },
-        { name: 'Gaea\'s Cradle', type_line: 'Legendary Land', cmc: 0, count: 1 },
-        { name: 'Ragavan', type_line: 'Legendary Creature — Monkey', cmc: 1, count: 9 },
-        { name: 'Titania', type_line: 'Legendary Creature — Elemental', cmc: 6, count: 5 },
-        { name: 'Bear', type_line: 'Creature — Bear', cmc: 2, count: 10 },
-        { name: 'Opt', type_line: 'Instant', cmc: 1, count: 5 }
-    ];
-    const library = buildVowLibrary(cards);
-
-    it('counts lands and legends with mana value X or less, a legendary land as a land', () => {
-        const o = vowOutcome(library, 4, {}, 'vow-test');
-        assert.strictEqual(o.eligibleLands, 31);
-        assert.strictEqual(o.eligibleLegends, 9, 'Titania costs more than 4');
-        assertClose(o.expectedHits, 4 * 40 / 60, 'linearity of expectation');
-        assertClose(o.pmf.reduce((s, p, k) => s + p * k, 0), o.expectedHits, 'pmf mean matches');
-    });
-
-    it('looks at 2X cards when copied', () => {
-        const once = vowOutcome(library, 6, { copies: 1 }, 'vow-test');
-        const twice = vowOutcome(library, 6, { copies: 2 }, 'vow-test');
-        assert.strictEqual(twice.seen, 12);
-        assertClose(twice.expectedHits, once.expectedHits * 2, 'twice the cards, twice the hits');
-        assert.ok(twice.payback.paybackProbability > once.payback.paybackProbability);
-    });
-
-    it('counts only lands from type counts, and says so', () => {
-        const counts = buildVowLibrary([], { lands: 36, creatures: 40, instants: 23 });
-        const o = vowOutcome(counts, 8, {}, 'vow-counts');
-        assertClose(o.expectedHits, 8 * 36 / 99, 'lands only');
-        const { html, tone } = summarize(analyze({ 8: o }, 8));
-        assert.strictEqual(tone, 'flat');
-        assert.match(html, /lands only/);
-    });
-
-    it('answers the page question with lands, legends and payback', () => {
-        const sweep = {};
-        for (let x = 1; x <= 12; x++) sweep[x] = vowOutcome(library, x, { copies: 1 }, 'vow-test');
-        const { html, tone } = summarize(analyze(sweep, 5));
-        assert.match(html, /X=5/);
-        assert.match(html, /7 mana/);
-        assert.match(html, /lands and legends/);
-        assert.match(html, /legendary permanents/);
-        assert.ok(['good', 'warn', 'bad'].includes(tone));
-
-        const copied = summarize(analyze(Object.fromEntries(
-            Object.entries(sweep).map(([x]) => [x, vowOutcome(library, Number(x), { copies: 2 }, 'vow-test')])
-        ), 5));
-        assert.match(copied.html, /copied — 10 cards seen/);
+describe('commanderCopiesVow', () => {
+    it('is true when either card in the command zone copies the Vow', () => {
+        assert.strictEqual(commanderCopiesVow(['The Sixth Doctor']), true);
+        assert.strictEqual(commanderCopiesVow(['Susan Foreman', 'The Sixth Doctor']), true);
+        assert.strictEqual(commanderCopiesVow(['Susan Foreman']), false);
+        assert.strictEqual(commanderCopiesVow(null), false);
     });
 });

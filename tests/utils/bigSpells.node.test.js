@@ -1,10 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { assertClose } from '../node-test-helper.js';
-import {
-    barsHTML, cardListKey, createSampler, deckCardList, expandCards, fade,
-    hypergeometricPmf, sampleCardHTML, sharedStyles, xControlHTML
-} from '../../js/utils/bigSpells.js';
+import { barsHTML, createSampler, fade, sampleCardHTML, sharedStyles, xControlHTML } from '../../js/utils/bigSpells.js';
+import { cardListKey, deckCardList, expandCards } from '../../js/utils/models/cardList.js';
+import { hypergeometricPmf } from '../../js/utils/hypergeometric.js';
 // The helpers the four pages used to import from bigSpells.js now live in the
 // shared modules; the same expectations hold there.
 import { avg, pct, plural, points, pointsShort } from '../../js/utils/text.js';

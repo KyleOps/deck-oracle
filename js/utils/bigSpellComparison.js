@@ -3,17 +3,17 @@
  * Genesis Wave, Kamahl's Druidic Vow, Primal Surge and Portent of Calamity.
  *
  * Everything here is DOM-free. It reads the deck from DeckConfig (or from
- * explicit options) and calls each calculator's pure entry point, so it is
- * safe to run from any page — including before the other three pages have
- * ever been opened, when their inputs don't exist.
+ * explicit options) and calls each spell's model (js/utils/models/), never a
+ * page, so it is safe to run from any page — including before the other three
+ * pages have ever been opened, when their inputs don't exist.
  */
 
 import * as DeckConfig from './deckConfig.js';
-import { simulateGenesisWave } from '../calculators/wave.js';
-import { simulateVow, commanderCopiesVow } from '../calculators/vow.js';
-import { simulatePrimalSurge } from '../calculators/surge.js';
-import { portentOutcomes } from '../calculators/portent.js';
-import { deckCardList, listSize } from './bigSpells.js';
+import { simulateGenesisWave } from './models/wave.js';
+import { simulateVow, commanderCopiesVow } from './models/vow.js';
+import { simulatePrimalSurge } from './models/surge.js';
+import { portentOutcomes } from './models/portent.js';
+import { deckCardList, listSize } from './models/cardList.js';
 import { commanderNamesOf, frontTypeLine, isLand, isPermanent, sameCard } from './library.js';
 import { avg, pct } from './text.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';

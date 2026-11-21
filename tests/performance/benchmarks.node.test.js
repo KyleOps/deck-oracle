@@ -7,8 +7,8 @@ import { describe, it } from 'node:test';
 import { assert } from '../node-test-helper.js';
 import { choose, drawTypeMin } from '../../js/utils/hypergeometric.js';
 import { calcMultiTypeSuccess } from '../../js/calculators/mulligan.js';
-import { simulatePrimalSurge } from '../../js/calculators/surge.js';
-import { simulateGenesisWave } from '../../js/calculators/wave.js';
+import { simulatePrimalSurge } from '../../js/utils/models/surge.js';
+import { simulateGenesisWave } from '../../js/utils/models/wave.js';
 import { budget } from '../helpers/timing.js';
 
 // Performance thresholds (in milliseconds)
