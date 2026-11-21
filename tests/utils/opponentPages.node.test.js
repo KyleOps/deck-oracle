@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import {
     frontFace, isLandType, isHistoricType, isLandCard, libraryOf, hashString, seededRandom, deckSeed, createRevealer,
     quantile, typicalRange, formatRange, formatPct, tailAtLeast, capDistribution, objectId, renderOpponentPlaceholder,
-    miniBars
+    miniBars, opponentPageStyles, injectOpponentPageStyles
 } from '../../js/utils/opponentPages.js';
 
 describe('opponentPages — card model', () => {
@@ -151,5 +151,30 @@ describe('opponentPages — markup', () => {
         const html = miniBars({ title: 'T', probs: [0.25, 0.5], label: i => String(i), scaleMax: 1 });
         assert.match(html, /width:25\.0%/);
         assert.match(html, /width:50\.0%/);
+    });
+});
+
+describe('opponentPages — shared styles', () => {
+    it('scopes every rule to the multiplayer page root, tokens only', () => {
+        const css = opponentPageStyles();
+        const selectors = css.replace(/\/\*[\s\S]*?\*\//g, '').split('}').map(r => r.split('{')[0].trim()).filter(s => s && !s.startsWith('@'));
+        assert.ok(selectors.length > 40);
+        selectors.forEach(sel => sel.split(',').forEach(part => assert.match(part.trim(), /^\.opp-page /, `unscoped selector: ${part}`)));
+        assert.doesNotMatch(css, /#[0-9a-f]{3,6}\b/i, 'no hard-coded hex colours');
+    });
+
+    it('injects them once, and does nothing without a document', () => {
+        const added = [];
+        const doc = {
+            head: { appendChild: el => added.push(el) },
+            createElement: () => ({ dataset: {} }),
+            querySelector: sel => added.find(el => sel === `style[data-owner="${el.dataset.owner}"]`) ?? null
+        };
+        injectOpponentPageStyles(doc);
+        injectOpponentPageStyles(doc);
+        assert.equal(added.length, 1);
+        assert.equal(added[0].dataset.owner, 'opponent-pages');
+        assert.equal(added[0].textContent, opponentPageStyles());
+        assert.doesNotThrow(() => injectOpponentPageStyles(undefined));
     });
 });

@@ -6,10 +6,12 @@
  */
 
 import { cardRef } from '../data/glossary.js';
-import { opponentPageStyles } from '../utils/opponentPages.js';
+import { injectOpponentPageStyles } from '../utils/opponentPages.js';
+
+injectOpponentPageStyles();
 
 export const template = `
-<div class="main-grid single-column">
+<div class="main-grid single-column opp-page">
     <section class="panel" id="mnds-results" aria-label="Free spells from Mind’s Dilation">
         <div id="mnds-summary"></div>
         <div class="mnds-options" id="mnds-options" hidden>
@@ -39,7 +41,6 @@ export const template = `
 `;
 
 export const styles = `
-${opponentPageStyles('#mindsdilation-tab')}
 #mindsdilation-tab .mnds-options {
     padding: 12px 16px;
     border-bottom: 1px solid var(--tx-rule);

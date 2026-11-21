@@ -4,10 +4,12 @@
  * js/calculators/surge.js fills the containers.
  */
 
-import { sharedStyles, valueModelHTML } from '../utils/bigSpells.js';
+import { injectSharedStyles, valueModelHTML } from '../utils/bigSpells.js';
+
+injectSharedStyles();
 
 export const template = `
-<div class="main-grid single-column">
+<div class="main-grid single-column bs-page">
     <section class="panel panel-config" aria-label="Settings">
         <div class="bs-field">
             <div class="bs-field-head">
@@ -76,10 +78,6 @@ export const template = `
         <div id="big-spell-comparison-surge"><p class="bsc-empty">Comparing with the other big spells…</p></div>
     </section>
 </div>
-`;
-
-export const styles = `
-${sharedStyles('#surge-tab')}
 `;
 
 export const guide = {

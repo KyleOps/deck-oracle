@@ -4,7 +4,7 @@ import { assertClose } from '../node-test-helper.js';
 import {
     avg, barsHTML, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList, expandCards, fade,
     hypergeometricPmf, isPermanentTypeLine, pct, plural, points, pointsShort, quantileOf, sampleCardHTML,
-    sharedStyles, xControlHTML
+    injectSharedStyles, sharedStyles, xControlHTML
 } from '../../js/utils/bigSpells.js';
 
 describe('Big spell helpers — maths', () => {
@@ -118,15 +118,31 @@ describe('Big spell helpers — markup', () => {
         assert.match(barsHTML([{ label: 'x', value: 0.5 }], { scale: 0.5 }), /width:100\.0%/);
     });
 
-    it('scopes every shared style rule to one page', () => {
-        const css = sharedStyles('#wave-tab');
+    it('scopes every shared style rule to the big-spell page root', () => {
+        const css = sharedStyles();
         const selectors = css.split('}').map(rule => rule.split('{')[0].trim()).filter(s => s && !s.startsWith('@') && !s.startsWith('/*'));
         selectors.forEach(selector => {
             selector.split(',').forEach(part => {
                 const s = part.trim().replace(/^\/\*.*?\*\/\s*/s, '');
-                if (s) assert.match(s, /^#wave-tab /, `unscoped selector: ${s}`);
+                if (s) assert.match(s, /^\.bs-page /, `unscoped selector: ${s}`);
             });
         });
         assert.doesNotMatch(css, /#[0-9a-f]{3,6}\b(?!-tab)/i, 'no hard-coded hex colours');
+    });
+
+    it('injects the shared styles once, and does nothing without a document', () => {
+        const added = [];
+        const doc = {
+            head: { appendChild: el => added.push(el) },
+            createElement: () => ({ dataset: {} }),
+            querySelector: sel => added.find(el => sel === `style[data-owner="${el.dataset.owner}"]`) ?? null
+        };
+        injectSharedStyles(doc);
+        injectSharedStyles(doc);
+        assert.equal(added.length, 1);
+        assert.equal(added[0].dataset.owner, 'big-spells');
+        assert.match(added[0].textContent, /^\s*\.bs-page \.bs-h /m);
+        assert.doesNotThrow(() => injectSharedStyles(undefined));
+        assert.doesNotThrow(() => injectSharedStyles({}));
     });
 });

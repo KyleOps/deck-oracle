@@ -4,10 +4,12 @@
  * js/calculators/vow.js fills the containers.
  */
 
-import { sharedStyles, valueModelHTML, xControlHTML } from '../utils/bigSpells.js';
+import { injectSharedStyles, valueModelHTML, xControlHTML } from '../utils/bigSpells.js';
+
+injectSharedStyles();
 
 export const template = `
-<div class="main-grid single-column">
+<div class="main-grid single-column bs-page">
     <section class="panel panel-config" aria-label="Settings">
         ${xControlHTML({
             key: 'vow',
@@ -84,8 +86,6 @@ export const template = `
     </section>
 </div>
 `;
-
-export const styles = sharedStyles('#vow-tab');
 
 export const guide = {
     intro: 'Kamahl’s Druidic Vow looks at the top X cards and puts every land and legendary permanent with mana value X or less onto the battlefield; the rest go to the graveyard. This page shows how many it hits with your list at each X, and how often that is worth the X + 2 mana.',

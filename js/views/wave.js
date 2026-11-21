@@ -4,10 +4,12 @@
  * js/calculators/wave.js fills the containers.
  */
 
-import { sharedStyles, valueModelHTML, xControlHTML } from '../utils/bigSpells.js';
+import { injectSharedStyles, valueModelHTML, xControlHTML } from '../utils/bigSpells.js';
+
+injectSharedStyles();
 
 export const template = `
-<div class="main-grid single-column">
+<div class="main-grid single-column bs-page">
     <section class="panel panel-config" aria-label="Settings">
         ${xControlHTML({
             key: 'wave',
@@ -86,8 +88,6 @@ export const template = `
     </section>
 </div>
 `;
-
-export const styles = sharedStyles('#wave-tab');
 
 export const guide = {
     intro: 'Genesis Wave reveals the top X cards and puts every permanent with mana value X or less onto the battlefield; the rest go to the graveyard. This page shows how much a cast puts into play with your list at each X, and how often that is worth the X + 3 mana you paid.',

@@ -461,10 +461,25 @@ export function renderHowItCompares(containerId, { x, source, deckKey, options =
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 /**
- * CSS shared by the four big-spell views, scoped under one page.
- * @param {string} scope - e.g. '#wave-tab'
+ * Add the shared big-spell CSS to the document once, however many of those pages are opened
+ * (each view calls this when it loads). A no-op outside a browser.
+ * @param {Document} [doc]
  */
-export function sharedStyles(scope) {
+export function injectSharedStyles(doc = globalThis.document) {
+    if (!doc?.head || doc.querySelector('style[data-owner="big-spells"]')) return;
+    const style = doc.createElement('style');
+    style.dataset.owner = 'big-spells';
+    style.textContent = sharedStyles();
+    doc.head.appendChild(style);
+}
+
+/**
+ * CSS shared by the four big-spell views. Scoped under `.bs-page` (the root
+ * of each view's template) rather than a page id, so one copy serves every
+ * page: see injectSharedStyles().
+ * @param {string} [scope]
+ */
+export function sharedStyles(scope = '.bs-page') {
     const s = scope;
     return `
 ${s} .bs-h { margin: 0; font-size: var(--t-body); font-weight: 650; letter-spacing: 0; color: var(--tx-bright); }

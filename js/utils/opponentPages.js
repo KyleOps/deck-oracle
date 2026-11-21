@@ -419,11 +419,12 @@ export function bindOpponentActions(root) {
 }
 
 /**
- * CSS shared by the three multiplayer pages, scoped to one page root. Each
- * view's `styles` export includes it.
- * @param {string} s - scope selector, e.g. '#mara-tab'
+ * CSS shared by the three multiplayer pages. Scoped under `.opp-page` (the
+ * root of each view's template) so one copy serves all three: see
+ * injectOpponentPageStyles().
+ * @param {string} [s]
  */
-export function opponentPageStyles(s) {
+export function opponentPageStyles(s = '.opp-page') {
     return `
 ${s} .opp-empty { display: grid; gap: 20px; padding: clamp(20px, 3cqi, 36px); }
 ${s} .opp-empty-intro { display: grid; gap: 8px; }
@@ -560,4 +561,17 @@ ${s} .opp-more { display: flex; justify-content: center; padding: 12px 16px 16px
     ${s} .opp-skeleton span { animation: none; }
 }
 `;
+}
+
+/**
+ * Add the shared multiplayer-page CSS to the document once, however many of those pages are opened
+ * (each view calls this when it loads). A no-op outside a browser.
+ * @param {Document} [doc]
+ */
+export function injectOpponentPageStyles(doc = globalThis.document) {
+    if (!doc?.head || doc.querySelector('style[data-owner="opponent-pages"]')) return;
+    const style = doc.createElement('style');
+    style.dataset.owner = 'opponent-pages';
+    style.textContent = opponentPageStyles();
+    doc.head.appendChild(style);
 }

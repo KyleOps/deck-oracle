@@ -4,17 +4,18 @@
  * renders into the two panels.
  */
 
-import { opponentPageStyles } from '../utils/opponentPages.js';
+import { injectOpponentPageStyles } from '../utils/opponentPages.js';
+
+injectOpponentPageStyles();
 
 export const template = `
-<div class="main-grid single-column">
+<div class="main-grid single-column opp-page">
     <section class="panel" id="dreamharvest-results" aria-label="What Dream Harvest steals"></section>
     <section class="panel" id="dreamharvest-sample-reveals" aria-label="Sample casts" hidden></section>
 </div>
 `;
 
 export const styles = `
-${opponentPageStyles('#dreamharvest-tab')}
 #dreamharvest-tab .dh-game-row {
     display: grid;
     grid-template-columns: minmax(150px, 0.8fr) 150px minmax(0, 2.4fr);

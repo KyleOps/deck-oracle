@@ -4,17 +4,18 @@
  * two panels.
  */
 
-import { opponentPageStyles } from '../utils/opponentPages.js';
+import { injectOpponentPageStyles } from '../utils/opponentPages.js';
+
+injectOpponentPageStyles();
 
 export const template = `
-<div class="main-grid single-column">
+<div class="main-grid single-column opp-page">
     <section class="panel" id="mara-results" aria-label="What each choice is worth"></section>
     <section class="panel" id="mara-sample-reveals" aria-label="Sample casts" hidden></section>
 </div>
 `;
 
 export const styles = `
-${opponentPageStyles('#mara-tab')}
 #mara-tab .mara-game-cols,
 #mara-tab .mara-game-row {
     display: grid;
