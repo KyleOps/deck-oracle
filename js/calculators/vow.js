@@ -19,6 +19,13 @@ import {
 import { expandCards } from '../utils/models/cardList.js';
 import { ON_STACK, VOW, analyze, buildVowLibrary, classifyForVow, commanderCopiesVow, summarize, vowSweep } from '../utils/models/vow.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'vowX', id: 'vow-xSlider', min: 0, max: 30 },
+    { param: 'vowLand', id: 'vow-land-value', min: 0, max: 20, float: true },
+    { param: 'vowCard', id: 'vow-card-value', min: 0, max: 20, float: true }
+]);
+
 const CONFIG = Object.freeze({
     MAX_X: 30,
     DEFAULT_X: 7,

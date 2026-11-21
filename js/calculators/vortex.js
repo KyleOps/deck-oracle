@@ -20,6 +20,11 @@ import {
     DEFAULT_MV, ON_BATTLEFIELD, SAMPLE_BATCH, VORTEX_COST, analyzeVortex, discoverPool, drawSamples, pointAt, summarize, vortexDots
 } from '../utils/models/vortex.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'vortexCMC', id: 'vortex-cmcSlider', min: 5, max: 15 }
+]);
+
 const SAMPLE_MAX = 30;
 
 // ==================== INPUTS ====================

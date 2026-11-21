@@ -241,11 +241,12 @@ async function init() {
     afterFirstPage(ensureLzString);
 
     // Shared links: import the deck and apply page settings before the first
-    // render, so the landing state is the shared state. Mulligan requirements
-    // are LZ-String-packed, so a link carrying them loads it first.
+    // render, so the landing state is the shared state. Some parameters are
+    // LZ-String-packed, so a link carrying one loads it first.
     const tab = tabFromUrl();
     if (window.location.search.length > 1) {
-        if (new URLSearchParams(window.location.search).has('mullTypes')) await ensureLzString();
+        const query = new URLSearchParams(window.location.search);
+        if (Share.PACKED_PARAMS.some(param => query.has(param))) await ensureLzString();
         await Share.applyShareUrl({ ensureMounted });
     }
     await navigate(tab, { history: 'replace' });

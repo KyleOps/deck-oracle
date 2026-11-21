@@ -17,6 +17,11 @@ import {
     oddsAround, oddsByCastMv, reliableFrom, revealBreakdown, summarize
 } from '../utils/models/rashmi.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'rashmiCMC', id: 'rashmi-cmcSlider', min: 0, max: 15 }
+]);
+
 /** Sample reveals shown. */
 export const SAMPLE_REVEALS = 12;
 

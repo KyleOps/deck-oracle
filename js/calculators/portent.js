@@ -20,6 +20,11 @@ import {
     ON_STACK, PORTENT, analyze, buildTypeMasks, masksKey, portentResults, resolvePortent, summarize, typeCounts
 } from '../utils/models/portent.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'portentX', id: 'portent-xSlider', min: 0, max: 20 }
+]);
+
 const CONFIG = Object.freeze({
     TABLE_MAX_X: 20,
     DEFAULT_X: 7,

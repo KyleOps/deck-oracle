@@ -23,6 +23,13 @@ import {
     surgeFromCounts, surgeFromList, surgePaybackFor, surgeResult, surgeRunPmf, surgeSettings, valueText
 } from '../utils/models/surge.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'surgeThreshold', id: 'surge-payback-threshold', min: 0.25, max: 100, float: true },
+    { param: 'surgeLand', id: 'surge-land-value', min: 0, max: 20, float: true },
+    { param: 'surgeCard', id: 'surge-card-value', min: 0, max: 20, float: true }
+]);
+
 const CONFIG = Object.freeze({
     SAMPLE_COUNT: 4,
     SAMPLE_ROWS: 10

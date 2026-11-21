@@ -16,6 +16,11 @@ import {
     analyzeDeck, fitVerdict, groupAt, snapToTotal, summarize
 } from '../utils/models/wildpair.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'wpTotal', id: 'wildpair-totalSlider', min: 0, max: 40 }
+]);
+
 // ==================== INPUTS ====================
 
 /**

@@ -17,6 +17,14 @@ import {
     countFetchLands, expectedLandDrops, handFromLibrary, ON_BATTLEFIELD, playToLumra, pt, returnTone, summariseSizes, summarize
 } from '../utils/models/lumra.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'lumraGY', id: 'lumra-gySlider', min: 0, max: 30 },
+    { param: 'lumraMult', id: 'lumra-multSlider', min: 1, max: 10 },
+    { param: 'lumraFetch', id: 'lumra-fetchLands', min: 0, max: 100 },
+    { param: 'lumraTurn', id: 'lumra-turnSlider', min: 1, max: 20 }
+]);
+
 /** Sample games listed on the page. */
 const SHOWN_GAMES = 5;
 

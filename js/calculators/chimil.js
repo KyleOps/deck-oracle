@@ -20,6 +20,11 @@ import {
     truncateGames, turnBands
 } from '../utils/models/chimil.js';
 
+/** Inputs share links carry as they are (js/utils/share.js). Names and ids are in links already shared: never rename them. */
+export const shareInputs = Object.freeze([
+    { param: 'chimilTurns', id: 'chimil-turnsSlider', min: 1, max: 20 }
+]);
+
 /** Sample games listed on the page (fewer on a phone, where each one wraps tall). */
 const SHOWN_GAMES = 6;
 const NARROW_GAMES = 3;
