@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { CHART_URL, isolateNetwork } from './helpers/network.js';
 
 /**
- * Performance budgets: the overview's cold load and the two heaviest
+ * Performance budgets: the overview's cold load and the three heaviest
  * calculator pages.
  *
  * Every number comes from the browser's own Performance APIs (Navigation,
@@ -20,17 +20,18 @@ import { CHART_URL, isolateNetwork } from './helpers/network.js';
  * callback itself, as this file once did, misses all three: 160–390 ms of
  * real work on a 4× slower CPU.
  *
- * Measured 2026-11-21 (v3.1.0, Chromium headless, desktop viewport, median
- * of 7 runs with --workers=1):
+ * Measured 2026-11-21 (v3.2.0, Chromium headless, desktop viewport, median
+ * of 7 runs with --workers=1; 5 unthrottled):
  *
  *                                   measured   4× slower CPU   budget
- *   overview: JS before DCL         412 KB     —               530 KB
- *   overview: DOM nodes             998        —               1,150
- *   overview: first contentful      224 ms     344 ms          450 ms
- *   overview: answer painted        346 ms     1,117 ms        1,450 ms
- *   ?tab=mulligan: answer painted   244 ms     1,064 ms        1,400 ms
- *   ?tab=chimil: answer painted     256 ms     1,164 ms        1,500 ms
- *   any of them: longest task        57 ms     330 ms          450 ms
+ *   overview: JS before DCL         384 KB     —               500 KB
+ *   overview: DOM nodes             988        —               1,150
+ *   overview: first contentful      196 ms     324 ms          450 ms
+ *   overview: answer painted        323 ms     1,102 ms        1,450 ms
+ *   ?tab=mulligan: answer painted   260 ms     936 ms          1,250 ms
+ *   ?tab=chimil: answer painted     256 ms     960 ms          1,250 ms
+ *   ?tab=manadev: answer painted    272 ms     1,160 ms        1,500 ms
+ *   any of them: longest task        59 ms     329 ms          450 ms
  *
  * "JS before DCL" includes the landing page's own modules, which index.html
  * preloads so they arrive alongside the shell instead of after it.
@@ -52,8 +53,8 @@ import { CHART_URL, isolateNetwork } from './helpers/network.js';
  * faster. Keep the table above in step.
  */
 
-const OVERVIEW = { scriptKB: 530, domNodes: 1150, fcpMs: 450, answerMs: 1450 };
-const PAGES = { mulligan: { answerMs: 1400 }, chimil: { answerMs: 1500 } };
+const OVERVIEW = { scriptKB: 500, domNodes: 1150, fcpMs: 450, answerMs: 1450 };
+const PAGES = { mulligan: { answerMs: 1250 }, chimil: { answerMs: 1250 }, manadev: { answerMs: 1500 } };
 const LONGEST_TASK_MS = 450;
 
 /** Attach a measurement to the report (and print it with PERF_LOG=1). */
