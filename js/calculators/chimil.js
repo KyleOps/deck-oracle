@@ -255,7 +255,7 @@ function renderSamples(games, turns) {
 }
 
 function renderDetails(result) {
-    const { config, trigger, bands, games } = result;
+    const { config, trigger, bands } = result;
 
     renderSweepTable('chimil-sweepTable', {
         columns: [

@@ -5,7 +5,7 @@
  * Note: These tests mock DOM functionality to run in Node.js
  */
 
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import LZString from 'lz-string';
 

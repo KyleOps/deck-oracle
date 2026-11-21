@@ -2,7 +2,6 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 
 import {
-    WILD_PAIR_COST,
     parsePT,
     cardTotalPT,
     isCreatureEntry,
@@ -39,11 +38,6 @@ function creature(name, cmc, power, toughness) {
 /** A non-creature card detail entry. */
 function spell(name, cmc, type = 'sorceries') {
     return { name, cmc, type, allTypes: [type] };
-}
-
-/** A simulation-deck card (the `buildDeckFromCardData` shape). */
-function simCard(name, cmc, types, power, toughness) {
-    return { name, cmc, types, type_line: types.join(' '), power, toughness };
 }
 
 // ==================== parsePT ====================
