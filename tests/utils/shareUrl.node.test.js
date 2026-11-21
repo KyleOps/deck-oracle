@@ -150,6 +150,31 @@ describe('legacy share inputs: every old parameter still restores its input', ()
     });
 });
 
+/**
+ * Parameters pages carry through getShareParams() / applyShareParams() rather
+ * than as inputs. Game Plan: the plan itself (gp, planSchema.js's compact
+ * codec), turn order (gpdraw) and the keep rule (gpkeep).
+ */
+describe('game plan links (gp, gpdraw, gpkeep)', () => {
+    it('carry the plan compactly and restore it on the page', async () => {
+        const Page = await import('../../js/calculators/plan.js');
+        const { encodePlan, decodePlan } = await import('../../js/utils/planSchema.js');
+        const plan = { steps: [
+            { turn: 2, require: { kind: 'cast', group: { is: 'mana', mv: [0, 2] } } },
+            { turn: 4, require: { kind: 'package', options: [{ count: 2, group: { is: 'any', mv: [4, 4] } }, { count: 1, group: { is: 'any', mv: [7, 9] } }] } }
+        ] };
+        const gp = encodePlan(plan);
+        assert.equal(gp, '2cm.v0w2_4p2xa.v4w4-1xa.v7w9');
+        const query = new URLSearchParams({ tab: 'plan', gp, gpdraw: '1', gpkeep: 'p25' });
+        assert.ok(!query.toString().includes('%'), 'nothing to escape');
+        applyPageParams(query, Page, 'plan');
+        const params = Object.fromEntries(pageShareParams(Page, 'plan'));
+        assert.deepEqual(params, { gp, gpdraw: '1', gpkeep: 'p25' });
+        assert.deepEqual(decodePlan(params.gp), decodePlan(gp));
+        assert.ok(!PACKED_PARAMS.includes('gp'), 'no LZ-String needed');
+    });
+});
+
 describe('page parameters', () => {
     it('add the page’s own settings after its inputs, skipping empty ones', () => {
         fakeInputs();

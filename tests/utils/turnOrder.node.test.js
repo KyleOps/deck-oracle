@@ -100,7 +100,7 @@ describe('turnOrderClicked', () => {
 });
 
 describe('every page uses the one control', () => {
-    const PAGES = ['overview', 'odds', 'manabase', 'hands', 'mulligan', 'lands', 'manadev'];
+    const PAGES = ['overview', 'odds', 'manabase', 'hands', 'mulligan', 'lands', 'manadev', 'plan'];
     const read = file => readFileSync(new URL(`../../js/${file}`, import.meta.url), 'utf8');
 
     for (const page of PAGES) {
