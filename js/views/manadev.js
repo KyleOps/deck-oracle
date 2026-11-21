@@ -6,6 +6,8 @@
  * on wide screens the settings rail moves into the left column.
  */
 
+import { turnOrderHTML } from '../utils/turnOrder.js';
+
 export const template = `
 <div class="main-grid single-column md">
     <section class="panel md-answer" aria-label="Answer">
@@ -30,14 +32,7 @@ export const template = `
     <section class="panel panel-config md-rail" aria-label="Settings and deck">
         <div class="tx-h"><span>Settings</span><span class="tx-h-r">only what changes the answer</span></div>
         <div class="md-rail-body">
-            <div class="md-group" id="md-order-group" hidden>
-                <span class="field-label" id="md-order-label">Turn order</span>
-                <div class="seg seg-sm" role="group" aria-labelledby="md-order-label">
-                    <button class="seg-btn active" type="button" data-md-play="1" aria-pressed="true">On the play</button>
-                    <button class="seg-btn" type="button" data-md-play="0" aria-pressed="false">On the draw</button>
-                </div>
-                <p class="field-hint">On the play you skip your first draw, so you see one card fewer each turn.</p>
-            </div>
+            ${turnOrderHTML({ id: 'md-order-group', className: 'md-group', label: 'Turn order', hint: 'On the play you skip your first draw, so you see one card fewer each turn.', hidden: true })}
             <div class="md-group" id="md-treasure-group" hidden>
                 <label class="checkbox-label" for="md-treasure">
                     <input type="checkbox" id="md-treasure">

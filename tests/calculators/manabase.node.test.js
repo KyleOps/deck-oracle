@@ -11,6 +11,7 @@ import {
     deckKey,
     getShareParams,
     applyShareParams,
+    readInputs,
     stripCells,
     reliableFrom,
     STRIP_TURNS
@@ -174,6 +175,13 @@ describe('manabase - caching and sharing', () => {
         assert.deepStrictEqual(getShareParams(), { draw: 1 });
         applyShareParams(new URLSearchParams('draw=nope'));
         assert.deepStrictEqual(getShareParams(), { draw: 1 });
+    });
+
+    it('reads the deck and the turn order its maths uses', () => {
+        const inputs = readInputs();
+        assert.strictEqual(inputs.format.key, 'commander');
+        assert.strictEqual(inputs.hasList, true);
+        assert.strictEqual(inputs.onPlay, true, 'on the draw was chosen, but everyone draws in Commander');
     });
 });
 

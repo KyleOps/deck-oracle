@@ -65,8 +65,8 @@ test('mana development offers turn order for a 60-card deck and shares it', asyn
     await expect(tab.locator('#md-order-group')).toBeVisible();
 
     const onPlay = await tab.locator('#md-grid').textContent();
-    await tab.locator('[data-md-play="0"]').click();
-    await expect(tab.locator('[data-md-play="0"]')).toHaveAttribute('aria-pressed', 'true');
+    await tab.locator('[data-turn-order] [data-play="0"]').click();
+    await expect(tab.locator('[data-turn-order] [data-play="0"]')).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => tab.locator('#md-grid').textContent()).not.toBe(onPlay);
 
     const share = await page.evaluate(async () => (await import('/js/utils/share.js')).getShareUrl('manadev'));

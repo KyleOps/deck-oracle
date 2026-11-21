@@ -21,6 +21,7 @@ import { cardTypes as typesOf, isLand, landCount, libraryOf, unlistedCopies } fr
 import { TX_CHART } from '../utils/chartHelpers.js';
 import { createCache, debounce } from '../utils/simulation.js';
 import { pct } from '../utils/text.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked, turnOrderMatters } from '../utils/turnOrder.js';
 import {
     HAND_SIZE, mulliganPlan, marginalGains, drawSchedule, handSuccess, keepRules,
     bottomCount, keepBar, simulateGames, SAMPLE_GAMES
@@ -186,7 +187,7 @@ export function readInputs() {
         confidenceThreshold: readPercent('mull-threshold', 75),
         types: cardTypes,
         format,
-        onPlay: format.firstPlayerDraws ? true : onPlay
+        onPlay: effectiveOnPlay(onPlay, format)
     };
 }
 
@@ -458,15 +459,7 @@ function refreshGame(config) {
     const { format } = config;
     const label = $('mull-format-label');
     if (label) label.textContent = format.label;
-    const order = $('mull-turn-order');
-    if (order) {
-        order.hidden = !!format.firstPlayerDraws;
-        (order.querySelectorAll?.('[data-play]') ?? []).forEach(btn => {
-            const on = (btn.dataset.play === '1') === config.onPlay;
-            btn.classList.toggle('active', on);
-            btn.setAttribute('aria-pressed', String(on));
-        });
-    }
+    syncTurnOrder($('mull-turn-order'), config.onPlay, format);
     const free = $('mull-free');
     if (free) free.checked = config.freeMulligan;
     const note = $('mull-format-note');
@@ -852,7 +845,7 @@ export function getState() {
 export function getShareParams() {
     const format = DeckConfig.getFormat();
     const params = {};
-    if (!format.firstPlayerDraws && !onPlay) params.mullDraw = 1;
+    if (turnOrderMatters(format) && !onPlay) params.mullDraw = 1;
     if (freeOverride !== null && freeOverride !== format.freeMulligan) params.mullFree = freeOverride ? 1 : 0;
     if (cardTypes.some(t => t.max !== null)) params.mullMax = cardTypes.map(t => t.max ?? '').join(',');
     if (cardTypes.some(t => t.source)) params.mullSrc = cardTypes.map(t => t.source ?? '').join(',');
@@ -921,9 +914,9 @@ function bindEvents() {
             updateUI();
             return;
         }
-        const play = target.closest('[data-play]');
-        if (play) {
-            onPlay = play.dataset.play === '1';
+        const order = turnOrderClicked(e);
+        if (order !== null) {
+            onPlay = order;
             updateUI();
             return;
         }

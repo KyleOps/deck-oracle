@@ -20,6 +20,7 @@ import { libraryOf } from '../utils/library.js';
 import { pct } from '../utils/text.js';
 import * as Lab from '../utils/handLab.js';
 import { cardImageUrl, findCard } from '../data/images.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked } from '../utils/turnOrder.js';
 
 const NAME = 'hands';
 const GAMES = 10000;
@@ -49,22 +50,32 @@ const $ = id => document.getElementById(id);
 
 // ── Library & numbers ────────────────────────────────────────────────────────
 
-function readLibrary() {
+/**
+ * The deck and the page's settings: the format, the library hands are dealt
+ * from (stand-in cards for bare type counts), the keep rule and the turn order.
+ * @returns {{format:Object, library:Object, rule:Object, onPlay:boolean}}
+ */
+export function readInputs() {
     const config = DeckConfig.getDeckConfig();
-    format = DeckConfig.getFormat();
+    const deckFormat = DeckConfig.getFormat();
+    let library;
     if (DeckConfig.hasCardList()) {
-        const library = libraryOf(config, { format });
-        const commanderCards = library.commanders.length ? DeckConfig.getCommanders().map(c => c.card) : [];
-        const built = Lab.buildLibrary(library, { commanderCards });
-        return { ...built, key: `${Lab.libraryKey(built.cards)}|${built.identity.join('')}` };
+        const source = libraryOf(config, { format: deckFormat });
+        const commanderCards = source.commanders.length ? DeckConfig.getCommanders().map(c => c.card) : [];
+        const built = Lab.buildLibrary(source, { commanderCards });
+        library = { ...built, key: `${Lab.libraryKey(built.cards)}|${built.identity.join('')}` };
+    } else {
+        const built = Lab.buildPlaceholderLibrary(config);
+        library = { ...built, key: `counts:${Lab.libraryKey(built.cards)}` };
     }
-    const built = Lab.buildPlaceholderLibrary(config);
-    return { ...built, key: `counts:${Lab.libraryKey(built.cards)}` };
+    return { format: deckFormat, library, rule: { ...rule }, onPlay: effectiveOnPlay(onPlay, deckFormat) };
 }
 
 /** Rebuild the library when the deck changed; deal a fresh hand if so. */
 function ensureLibrary() {
-    const next = readLibrary();
+    const inputs = readInputs();
+    format = inputs.format;
+    const next = inputs.library;
     const formatChanged = game.freeMulligan !== format.freeMulligan || game.firstPlayerDraws !== format.firstPlayerDraws;
     if (lib && next.key === lib.key && !formatChanged) return;
     lib = next;
@@ -488,18 +499,12 @@ function renderRail() {
         b.classList.toggle('active', on);
         b.setAttribute('aria-pressed', String(on));
     });
-    document.querySelectorAll('#hands-tab [data-hl-play-first]').forEach(b => {
-        const on = (b.dataset.hlPlayFirst === '1') === onPlay;
-        b.classList.toggle('active', on);
-        b.setAttribute('aria-pressed', String(on));
-    });
     document.querySelectorAll('#hands-tab [data-hl-mode]').forEach(b => {
         const on = b.dataset.hlMode === mode;
         b.classList.toggle('active', on);
         b.setAttribute('aria-pressed', String(on));
     });
-    const order = $('hl-order-group');
-    if (order) order.hidden = Boolean(format?.firstPlayerDraws);
+    syncTurnOrder($('hl-order-group'), onPlay, format);
     const hint = $('hl-play-hint');
     if (hint) {
         hint.textContent = lib?.placeholder
@@ -707,9 +712,9 @@ function onClick(e) {
     if (modeBtn) { setMode(modeBtn.dataset.hlMode); return; }
     const playBtn = e.target.closest('[data-hl-play]');
     if (playBtn) { setRule({ playBy: Number(playBtn.dataset.hlPlay) }); return; }
-    const orderBtn = e.target.closest('[data-hl-play-first]');
-    if (orderBtn) {
-        onPlay = orderBtn.dataset.hlPlayFirst === '1';
+    const order = turnOrderClicked(e);
+    if (order !== null) {
+        onPlay = order;
         game.onPlay = onPlay;
         renderRail();
         return;

@@ -10,6 +10,8 @@
  * the rule panel moves into the left rail.
  */
 
+import { turnOrderHTML } from '../utils/turnOrder.js';
+
 export const template = `
 <div class="main-grid single-column hl">
     <section class="panel hl-summary" id="hl-summary" aria-label="Opening hands at a glance"></section>
@@ -62,14 +64,7 @@ export const template = `
                 <p class="field-hint" id="hl-play-hint">A spell or ramp piece the lands in the hand can cast by then, colours included.</p>
             </div>
 
-            <div class="hl-group" id="hl-order-group">
-                <span class="field-label" id="hl-order-label">Turn order</span>
-                <div class="seg seg-sm" role="group" aria-labelledby="hl-order-label">
-                    <button class="seg-btn active" type="button" data-hl-play-first="1" aria-pressed="true">On the play</button>
-                    <button class="seg-btn" type="button" data-hl-play-first="0" aria-pressed="false">On the draw</button>
-                </div>
-                <p class="field-hint">Only changes the goldfish: the starting player skips their first draw.</p>
-            </div>
+            ${turnOrderHTML({ id: 'hl-order-group', className: 'hl-group', label: 'Turn order', hint: 'Only changes the goldfish: the starting player skips their first draw.' })}
 
             <p class="hl-format" id="hl-format"></p>
 

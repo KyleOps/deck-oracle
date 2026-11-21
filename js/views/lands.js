@@ -6,6 +6,8 @@
  * side rail.
  */
 
+import { turnOrderHTML } from '../utils/turnOrder.js';
+
 export const template = `
 <div class="main-grid single-column">
     <section class="panel" aria-label="Land drop odds">
@@ -13,10 +15,7 @@ export const template = `
         <div id="lands-hero"></div>
 
         <div class="ld-controls" role="group" aria-label="Assumptions">
-            <div class="seg seg-sm" id="lands-turn-order" role="group" aria-label="Turn order" hidden>
-                <button class="seg-btn active" type="button" data-play="1" aria-pressed="true">On the play</button>
-                <button class="seg-btn" type="button" data-play="0" aria-pressed="false">On the draw</button>
-            </div>
+            ${turnOrderHTML({ id: 'lands-turn-order', hidden: true })}
             <span class="ld-format" id="lands-format-note"></span>
             <label class="checkbox-label ld-check">
                 <input type="checkbox" id="lands-mull" checked>

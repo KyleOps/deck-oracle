@@ -14,6 +14,7 @@ import { renderBottomLine, renderHeroStats, toneFor } from '../utils/components.
 import { createOrUpdateChart, TX_CHART, withAlpha } from '../utils/chartHelpers.js';
 import { debounce } from '../utils/simulation.js';
 import { cardsSeenByTurn } from '../utils/format.js';
+import { effectiveOnPlay, syncTurnOrder, turnOrderClicked, turnOrderHTML, turnOrderMatters } from '../utils/turnOrder.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
 import { libraryOf, sameCard } from '../utils/library.js';
 import { pct, plural } from '../utils/text.js';
@@ -73,8 +74,7 @@ export function readInputs() {
     const config = DeckConfig.getDeckConfig();
     const format = DeckConfig.getFormat();
     const library = getLibrary(config, format);
-    const onPlay = format.firstPlayerDraws ? true : state.onPlay;
-    return { config, format, library, onPlay };
+    return { config, format, library, onPlay: effectiveOnPlay(state.onPlay, format) };
 }
 
 /** Keep the groups valid for the current library (card list vs bare counts). */
@@ -159,11 +159,7 @@ function renderTurnBox(ctx) {
             <input type="range" class="odds-range" id="odds-turn" min="0" max="${O.MAX_TURN}" step="1"
                 value="${state.turn}" aria-labelledby="odds-turn-title">
             <div class="odds-ticks" aria-hidden="true">${ticks}</div>
-            ${format.firstPlayerDraws ? '' : `
-            <div class="seg seg-sm odds-order" role="group" aria-label="Turn order">
-                <button class="seg-btn" type="button" id="odds-play" data-play="1">On the play</button>
-                <button class="seg-btn" type="button" id="odds-draw" data-play="0">On the draw</button>
-            </div>`}
+            ${turnOrderMatters(format) ? turnOrderHTML({ onPlay: ctx.onPlay, className: 'odds-order' }) : ''}
             <p class="odds-hint" id="odds-turn-hint"></p>`);
     }
     syncTurn(ctx);
@@ -186,14 +182,7 @@ function syncTurn(ctx = last) {
     document.querySelectorAll('#odds-turn-box [data-tick]').forEach(t => {
         t.classList.toggle('is-on', Number(t.dataset.tick) === state.turn);
     });
-    const play = document.getElementById('odds-play');
-    const draw = document.getElementById('odds-draw');
-    if (play && draw) {
-        play.classList.toggle('active', ctx.onPlay);
-        draw.classList.toggle('active', !ctx.onPlay);
-        play.setAttribute('aria-pressed', String(ctx.onPlay));
-        draw.setAttribute('aria-pressed', String(!ctx.onPlay));
-    }
+    syncTurnOrder(document.getElementById('odds-turn-box'), ctx.onPlay, ctx.format);
     const hint = document.getElementById('odds-turn-hint');
     if (hint) {
         hint.textContent = ctx.format.firstPlayerDraws
@@ -887,9 +876,9 @@ function onClick(e) {
         return;
     }
 
-    const play = target.closest('[data-play]');
-    if (play) {
-        state.onPlay = play.dataset.play === '1';
+    const order = turnOrderClicked(e);
+    if (order !== null) {
+        state.onPlay = order;
         refresh();
         return;
     }

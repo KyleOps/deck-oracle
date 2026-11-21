@@ -6,6 +6,8 @@
  * Ids kept for share links: mull-penalty, mull-threshold, mulligan-sample-count.
  */
 
+import { turnOrderHTML } from '../utils/turnOrder.js';
+
 export const template = `
 <div class="main-grid single-column mull-layout">
     <section class="panel panel-config" aria-label="What a keepable hand needs">
@@ -55,10 +57,7 @@ export const template = `
 
         <div class="tx-h"><span>Game</span><span class="tx-h-r" id="mull-format-label"></span></div>
         <div class="mull-block">
-            <div class="seg seg-sm" id="mull-turn-order" role="group" aria-label="Turn order" hidden>
-                <button class="seg-btn active" type="button" data-play="1" aria-pressed="true">On the play</button>
-                <button class="seg-btn" type="button" data-play="0" aria-pressed="false">On the draw</button>
-            </div>
+            ${turnOrderHTML({ id: 'mull-turn-order', hidden: true })}
             <label class="checkbox-label mull-check">
                 <input type="checkbox" id="mull-free">
                 <span>First mulligan is free</span>

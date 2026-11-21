@@ -17,6 +17,7 @@ import { renderBottomLine, renderHeroStats, toneColor } from '../utils/component
 import { commanderNamesOf, libraryOf, unlistedCopies } from '../utils/library.js';
 import { inflect as plural } from '../utils/text.js';
 import { debounce } from '../utils/simulation.js';
+import { effectiveOnPlay, turnOrderClicked, turnOrderHTML, turnOrderMatters } from '../utils/turnOrder.js';
 import { escapeHtml, cardRef, term } from '../data/glossary.js';
 
 const NAME = 'manabase';
@@ -178,16 +179,16 @@ export function deckKey(config, format, play) {
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-function effectiveOnPlay(format) {
-    return format.firstPlayerDraws ? true : onPlay;
+/** The active deck, its format and the turn order the maths uses. */
+export function readInputs() {
+    const config = DeckConfig.getDeckConfig();
+    const format = DeckConfig.getFormat();
+    return { config, format, onPlay: effectiveOnPlay(onPlay, format), hasList: DeckConfig.hasCardList() };
 }
 
 /** Analyse the active deck (cached per deck and turn order). */
 export function calculate() {
-    const config = DeckConfig.getDeckConfig();
-    const format = DeckConfig.getFormat();
-    const play = effectiveOnPlay(format);
-    const hasList = DeckConfig.hasCardList();
+    const { config, format, onPlay: play, hasList } = readInputs();
     if (!hasList) return { config, format, onPlay: play, hasList, result: null };
     const key = deckKey(config, format, play);
     if (cache.key !== key) {
@@ -240,9 +241,9 @@ export function init() {
         if (e.target.id === 'mb-search') onSearch(e.target.value);
     });
     root?.addEventListener('click', e => {
-        const play = e.target.closest('[data-mb-play]');
-        if (play) {
-            onPlay = play.dataset.mbPlay === '1';
+        const order = turnOrderClicked(e);
+        if (order !== null) {
+            onPlay = order;
             updateUI();
             return;
         }
@@ -326,12 +327,9 @@ function renderControls(result, format, play) {
             <span><strong>${colored}</strong> make coloured mana</span>
             <span>${escapeHtml(format.label)}</span>
         </span>`;
-    const order = format.firstPlayerDraws
-        ? `<span>Everyone draws on turn one — ${term('play', 'turn order')} doesn’t matter here.</span>`
-        : `<div class="seg seg-sm" role="group" aria-label="Turn order">
-                <button class="seg-btn${play ? ' active' : ''}" type="button" data-mb-play="1" aria-pressed="${play}">On the play</button>
-                <button class="seg-btn${!play ? ' active' : ''}" type="button" data-mb-play="0" aria-pressed="${!play}">On the draw</button>
-            </div>`;
+    const order = turnOrderMatters(format)
+        ? turnOrderHTML({ onPlay: play })
+        : `<span>Everyone draws on turn one — ${term('play', 'turn order')} doesn’t matter here.</span>`;
     return facts + order;
 }
 
