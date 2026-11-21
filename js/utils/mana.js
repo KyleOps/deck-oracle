@@ -66,18 +66,6 @@ export function parseManaCost(cost) {
 }
 
 /**
- * Strict per-colour requirements of a cost (hybrid and phyrexian excluded).
- * @param {string} cost
- * @returns {Record<string, number>} only colours with at least one pip
- */
-export function colorRequirements(cost) {
-    const { pips } = parseManaCost(cost);
-    const out = {};
-    for (const c of COLORS) if (pips[c] > 0) out[c] = pips[c];
-    return out;
-}
-
-/**
  * Is this card record a land? Uses the front face's type line.
  * @param {{type_line?:string, category?:string}} card
  */

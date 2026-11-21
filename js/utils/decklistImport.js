@@ -209,14 +209,6 @@ const requestTracker = {
 };
 
 /**
- * Clear the card cache (useful for testing or if data becomes stale)
- */
-export function clearCardCache() {
-    cardCache.clear();
-    console.log('Card cache cleared');
-}
-
-/**
  * Parse decklist text into card entries
  * Supports various formats:
  * - "4 Lightning Bolt"
@@ -468,64 +460,6 @@ async function resolveCommanderCard(cardData, name) {
         console.warn('Commander lookup failed:', error);
         return direct;
     }
-}
-
-/**
- * Import and analyze a decklist
- * @param {string} decklistText - Raw decklist text
- * @param {Function} progressCallback - Called with progress updates
- * @returns {Promise<Object>} - Card type counts
- */
-export async function importDecklist(decklistText, progressCallback = null) {
-    const cards = parseDecklistText(decklistText);
-
-    if (cards.length === 0) {
-        throw new Error('No cards found in decklist');
-    }
-
-    const typeCounts = {
-        creatures: 0,
-        instants: 0,
-        sorceries: 0,
-        artifacts: 0,
-        enchantments: 0,
-        planeswalkers: 0,
-        lands: 0,
-        battles: 0
-    };
-
-    const totalCards = cards.length;
-    let processed = 0;
-
-    for (const { count, name } of cards) {
-        // Fetch card data with rate limiting
-        const cardData = await fetchCardData(name);
-
-        if (cardData && cardData.type_line) {
-            const category = getCardTypeCategory(cardData.type_line);
-            typeCounts[category] += count;
-        } else {
-            // If card not found, try to guess from name
-            console.warn(`Could not fetch ${name}, skipping`);
-        }
-
-        processed++;
-        if (progressCallback) {
-            progressCallback({
-                processed,
-                total: totalCards,
-                currentCard: name,
-                percentage: Math.round((processed / totalCards) * 100)
-            });
-        }
-
-        // Rate limiting - wait between requests
-        if (processed < totalCards) {
-            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-        }
-    }
-
-    return typeCounts;
 }
 
 /**
@@ -1289,6 +1223,3 @@ export async function importDeckFromUrl(input, progressCallback = null) {
         }
     };
 }
-
-// Legacy export alias for backward compatibility (if needed)
-export const importFromMoxfield = importDeckFromUrl;

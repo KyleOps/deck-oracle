@@ -80,11 +80,6 @@ function notifyChange() {
     queueBarRender();
 }
 
-/** @returns {Object} all three seats' deck data (inactive seats are empty). */
-export function getOpponentDecks() {
-    return opponentDecks;
-}
-
 /** @returns {string[]} the active seat keys, in seat order */
 export function getActiveOpponents() {
     return [...activeOpponents];
@@ -444,9 +439,6 @@ const BAR_STYLES = `
     #opponents-config .opp-loaded-actions .btn { flex: 1; }
 }
 `;
-
-/** CSS for the opponent bar; injected once (index.html has no stylesheet for it). */
-export const OPPONENT_BAR_STYLES = BAR_STYLES;
 
 function ensureStyles() {
     if (typeof document === 'undefined' || document.querySelector('style[data-owner="opponents"]')) return;

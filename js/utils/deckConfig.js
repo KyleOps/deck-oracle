@@ -453,24 +453,6 @@ export function initDeckConfig({ restore = true } = {}) {
     syncManualInputs();
 }
 
-/**
- * Apply a preset of type counts (legacy API).
- * @param {{config: Object}} preset
- */
-export function applyPreset(preset) {
-    if (!preset?.config) return;
-    const mapping = {
-        creature: 'creatures', instant: 'instants', sorcery: 'sorceries', artifact: 'artifacts',
-        enchantment: 'enchantments', planeswalker: 'planeswalkers', land: 'lands', battle: 'battles'
-    };
-    Object.keys(preset.config).forEach(key => {
-        const mappedKey = mapping[key] || key;
-        if (mappedKey in deckState && !STRING_FIELDS.has(mappedKey)) deckState[mappedKey] = preset.config[key];
-    });
-    syncManualInputs();
-    notifyUpdates();
-}
-
 /** Test hook: reset to the built-in example without touching storage. */
 export function resetForTests() {
     deckState = initialState();

@@ -5,7 +5,7 @@
 
 import { describe, it } from 'node:test';
 import { assert } from '../node-test-helper.js';
-import { choose, drawTypeMin, drawTwoTypeMin, drawThreeTypeMin } from '../../js/utils/hypergeometric.js';
+import { choose, drawTypeMin } from '../../js/utils/hypergeometric.js';
 import { calcMultiTypeSuccess } from '../../js/calculators/mulligan.js';
 import { simulatePrimalSurge } from '../../js/calculators/surge.js';
 import { simulateGenesisWave } from '../../js/calculators/wave.js';
@@ -46,25 +46,6 @@ describe('Performance Benchmarks', () => {
             }, THRESHOLDS.FAST);
         });
 
-        it('drawTwoTypeMin() is acceptable for typical use', () => {
-            benchmark(() => {
-                drawTwoTypeMin(60, 24, 8, 7, 2, 1);
-                drawTwoTypeMin(99, 36, 10, 7, 3, 1);
-            }, THRESHOLDS.ACCEPTABLE);
-        });
-
-        it('drawThreeTypeMin() completes in reasonable time', () => {
-            benchmark(() => {
-                drawThreeTypeMin(60, 24, 10, 8, 7, 2, 1, 1);
-                drawThreeTypeMin(99, 36, 14, 10, 7, 3, 1, 1);
-            }, THRESHOLDS.ACCEPTABLE);
-        });
-
-        it('handles stress test with large deck', () => {
-            benchmark(() => {
-                drawThreeTypeMin(250, 90, 30, 20, 10, 4, 2, 1);
-            }, THRESHOLDS.SLOW);
-        });
     });
 
     describe('Mulligan Calculator', () => {

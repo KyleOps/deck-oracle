@@ -102,7 +102,6 @@ const STATIC_ASSETS = [
     'js/utils/sampleSimulator.js',
     'js/utils/share.js',
     'js/utils/simulation.js',
-    'js/utils/tableUtils.js',
     'js/utils/ui.js',
     'js/utils/viz.js',
     'js/views/abstract.js',

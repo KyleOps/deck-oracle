@@ -33,10 +33,6 @@ export function onNavigate(cb) {
     listeners.push(cb);
 }
 
-export function isMounted(name) {
-    return mounted.has(name);
-}
-
 /** The loaded module of a mounted calculator, or null. */
 export function mountedModule(name) {
     return mounted.get(name)?.module ?? null;

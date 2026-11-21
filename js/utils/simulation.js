@@ -4,15 +4,6 @@
  */
 
 /**
- * Create a hash from deck configuration for cache invalidation
- * @param {Object} config - Deck configuration object
- * @returns {string} - Hash string
- */
-export function hashDeck(config) {
-    return JSON.stringify(config);
-}
-
-/**
  * Debounce function to limit calculation frequency
  * @param {Function} func - Function to debounce
  * @param {number} wait - Wait time in milliseconds
@@ -98,43 +89,6 @@ export function createCache(maxSize = 100) {
             return cache.has(key);
         }
     };
-}
-
-/**
- * Request animation frame wrapper for non-blocking updates
- * @param {Function} callback - Callback to execute
- */
-export function scheduleUpdate(callback) {
-    if (typeof requestAnimationFrame !== 'undefined') {
-        requestAnimationFrame(callback);
-    } else {
-        setTimeout(callback, 0);
-    }
-}
-
-/**
- * Batch process iterations to prevent UI blocking
- * @param {number} totalIterations - Total iterations to run
- * @param {number} batchSize - Size of each batch
- * @param {Function} batchCallback - Called for each batch with (startIdx, endIdx)
- * @param {Function} completeCallback - Called when complete
- */
-export async function batchProcess(totalIterations, batchSize, batchCallback, completeCallback) {
-    let currentIdx = 0;
-
-    const processBatch = () => {
-        const endIdx = Math.min(currentIdx + batchSize, totalIterations);
-        batchCallback(currentIdx, endIdx);
-        currentIdx = endIdx;
-
-        if (currentIdx < totalIterations) {
-            scheduleUpdate(processBatch);
-        } else {
-            completeCallback();
-        }
-    };
-
-    scheduleUpdate(processBatch);
 }
 
 /**

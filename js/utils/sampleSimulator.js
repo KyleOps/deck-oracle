@@ -6,20 +6,6 @@ import { shuffle } from './simulation.js';
  */
 
 /**
- * Type color mapping (consistent across all calculators)
- */
-export const TYPE_COLORS = {
-    creature: '#55c97f',
-    sorcery: '#e8635c',
-    instant: '#5b8db8',
-    artifact: '#939c97',
-    enchantment: '#9878b8',
-    planeswalker: '#f0a92c',
-    battle: '#b8738f',
-    land: '#808b85'
-};
-
-/**
  * Extract card types from a card's type_line
  * @param {Object} card - Card object with type_line property
  * @returns {Array<string>} - Array of type names
@@ -74,32 +60,6 @@ export function buildDeckFromCardData(cardData) {
 export function shuffleDeck(array) {
     shuffle(array);
     return array;
-}
-
-/**
- * Render a card badge with color coding
- * @param {Object} card - Card object
- * @param {string} primaryType - Primary type for coloring
- * @returns {string} - HTML string
- */
-export function renderCardBadge(card, primaryType = null) {
-    if (!primaryType) {
-        primaryType = card.types[0] || 'land';
-    }
-    const isDual = card.types.length > 1;
-    return `<span class="reveal-card ${primaryType} ${isDual ? 'dual' : ''}" title="${card.type_line}">${card.name}</span>`;
-}
-
-/**
- * Render colored type names
- * @param {Array<string>} types - Array of type names
- * @returns {string} - HTML string with colored type names
- */
-export function renderColoredTypes(types) {
-    return types.map(type => {
-        const color = TYPE_COLORS[type] || '#9878b8';
-        return `<span style="color: ${color}; font-weight: 600;">${type}</span>`;
-    }).join(', ');
 }
 
 /**
@@ -184,20 +144,4 @@ export function renderDistributionChart(distribution, totalSims, labelFn, marker
 
     html += '</div>';
     return html;
-}
-
-/**
- * Create collapsible section for individual samples
- * @param {string} title - Section title
- * @param {string} content - Inner HTML content
- * @param {boolean} openByDefault - Whether section should be open initially
- * @returns {string} - HTML string
- */
-export function createCollapsibleSection(title, content, openByDefault = true) {
-    return `
-        <details class="tx-collapse" ${openByDefault ? 'open' : ''}>
-            <summary class="tx-collapse-head">${title}</summary>
-            <div class="tx-collapse-body">${content}</div>
-        </details>
-    `;
 }

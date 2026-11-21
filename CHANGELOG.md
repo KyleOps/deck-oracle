@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Screenshot comparisons allow 300 px of glyph noise on every platform** (`playwright.visual.config.js`), replacing a 50 px budget on Linux that was never tested there. Chromium draws a few letters slightly differently from run to run. Across 192 Linux captures every page flipped between fixed states of 19–187 px, so the old budget would have failed most CI runs. A single raster thread and waiting for idle didn't help. 300 px still fails a misplaced bar (1,306 px) or any layout or colour change.
 - **Development dependencies:** Playwright 1.65.1 (newer Chromium) and ESLint 10.15, which clears the remaining `npm audit` advisory.
 
+### Removed
+- **About 930 lines of dead code**, found by a scan that resolves every static and dynamic import:
+  - `js/utils/tableUtils.js`.
+  - Pre-v3 renderers in `components.js`: verdict badge, recommendation banner, outcome matrix, simulation summary, insight box, sample-reveal controls.
+  - Card badge, coloured type names (and their hard-coded hex `TYPE_COLORS`) and collapsible section in `sampleSimulator.js`.
+  - `hashDeck`, `batchProcess` and `scheduleUpdate` in `simulation.js`.
+  - `factorial` and the two- and three-type multivariate hypergeometric functions in `hypergeometric.js`.
+  - `applyPreset` in `deckConfig.js`.
+  - The legacy one-card-at-a-time `importDecklist`, `clearCardCache` and the `importFromMoxfield` alias in `decklistImport.js`.
+  - `getOpponentDecks` and `OPPONENT_BAR_STYLES` in `opponentState.js`; `isMounted` in `router.js`.
+  - All of `analysis.js` except `recommendThresholdX`; `colorRequirements` in `mana.js`.
+- Tests and benchmarks of the removed functions went with them. Coverage stays at 88% of lines.
+
 ## [3.1.0] - 2026-11-21
 
 A new Mana Development page, answer-first visuals across eight pages, and CI gates that keep it fast and correct.
