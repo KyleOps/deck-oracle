@@ -460,6 +460,41 @@ describe('castability - analyzeCastability', () => {
         assert.strictEqual(empty.worst, null);
         assert.strictEqual(empty.average, null);
         assert.strictEqual(empty.bottleneck, null);
+        assert.deepStrictEqual(empty.commanders, []);
+    });
+
+    describe('commanders', () => {
+        const sphinx = { name: 'Big Sphinx', type_line: 'Legendary Creature — Sphinx', mana_cost: '{U}{U}{U}', cmc: 3, color_identity: ['U'] };
+        const elf = { name: 'Little Elf', type_line: 'Legendary Creature — Elf', mana_cost: '{G}', cmc: 1, color_identity: ['G'] };
+        const golem = { name: 'Golem Lord', type_line: 'Legendary Artifact Creature — Golem', mana_cost: '{5}', cmc: 5, color_identity: [] };
+        const blank = { name: 'No Cost', type_line: 'Legendary Creature', mana_cost: '', cmc: 3, color_identity: ['G'] };
+        const withZone = analyzeCastability(deck, { deckSize: 60, format: FORMATS.constructed, onPlay: true, commanderCards: [sphinx, elf, golem, blank, null] });
+
+        it('checks each commander on its mana-value turn, with the same exact odds as a spell', () => {
+            assert.deepStrictEqual(withZone.commanders.map(c => [c.name, c.turn, c.commander]), [['Big Sphinx', 3, true], ['Little Elf', 1, true]]);
+            const s = withZone.commanders[0];
+            const expected = colorCastProbability({ deckSize: 60, lands: 22, sources: 11, pips: 3, landsNeeded: 3, seen: cardsSeenByTurn(3, { format: FORMATS.constructed, onPlay: true }) });
+            close(s.chance, expected.conditional, 'Big Sphinx');
+            close(s.overall, expected.joint, 'Big Sphinx overall');
+            assert.deepStrictEqual(withZone.commandersUnchecked, [{ name: 'Golem Lord', why: 'colourless' }, { name: 'No Cost', why: 'cost' }]);
+        });
+
+        it('keeps the library counts about the library', () => {
+            for (const key of ['total', 'under', 'average']) assert.strictEqual(withZone[key], result[key], key);
+            assert.strictEqual(withZone.worst.name, result.worst.name);
+            const blue = withZone.colors.find(c => c.color === 'U');
+            assert.strictEqual(blue.pips, 12);
+            assert.strictEqual(blue.cards, 2);
+        });
+
+        it('lets a commander be a colour’s hardest card', () => {
+            const blue = withZone.colors.find(c => c.color === 'U');
+            assert.strictEqual(blue.hardest.name, 'Big Sphinx');
+            assert.strictEqual(blue.hardest.commander, true);
+            assert.strictEqual(blue.want, sourcesNeeded({ deckSize: 60, lands: 22, pips: 3, landsNeeded: 3, seen: cardsSeenByTurn(3, { format: FORMATS.constructed, onPlay: true }) }));
+            assert.strictEqual(withZone.colors.find(c => c.color === 'G').hardest.commander, false, 'Llanowar Elves ties the Elf and was there first');
+            assert.ok(withZone.commandersUnder >= 0);
+        });
     });
 });
 

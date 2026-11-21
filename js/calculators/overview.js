@@ -272,7 +272,7 @@ function renderColors(stats) {
                     <span class="meter"><span class="meter-fill tone-${tone}" style="width:${(p ?? 0) * 100}%"></span></span>
                     <span class="num">${p == null ? '—' : pct(p)}</span>
                 </div>
-                <p class="ov-note">Hardest: ${cardRef(c.heaviest.name)} — ${c.heaviest.pips} pip${c.heaviest.pips === 1 ? '' : 's'} on turn ${Math.max(1, c.heaviest.mv)}${c.needed != null && c.needed > c.sources ? `. About <strong>${c.needed}</strong> sources reach 90%.` : '.'}</p>` : ''}
+                <p class="ov-note">Hardest: ${cardRef(c.heaviest.name)}${c.heaviest.commander ? ' (your commander)' : ''} — ${c.heaviest.pips} pip${c.heaviest.pips === 1 ? '' : 's'} on turn ${Math.max(1, c.heaviest.mv)}${c.needed != null && c.needed > c.sources ? `. About <strong>${c.needed}</strong> sources reach 90%.` : '.'}</p>` : ''}
             </div>`;
     }).join('');
     const colorless = stats.colorlessLands > 0
