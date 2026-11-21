@@ -267,7 +267,9 @@ export function classifyRamp(card, { identity = COLORS } = {}) {
             if (at < 0) continue;
             const prefix = sentence.slice(0, at);
             const linePrefix = line.slice(0, line.indexOf(sentence) + at);
-            const m = sentence.slice(at).match(/^search your library for (a|an|one|two|three|four|up to (?:one|two|three|four)) ((?:[a-z]+(?:,| or|,? and\/or)? )*?)(?:land )?cards?\b(.*)$/);
+            // The words before "card" are space-separated tokens ("forest," "or" "and/or"):
+            // one way to split them, so text that never says "card" can't backtrack exponentially.
+            const m = sentence.slice(at).match(/^search your library for (a|an|one|two|three|four|up to (?:one|two|three|four)) ((?:[a-z/,]+ )*?)(?:land )?cards?\b(.*)$/);
             if (!m) continue;
             const what = m[2];
             const isLandSearch = /\bland\b/.test(sentence.slice(at, at + 80)) && !/\bnonland\b/.test(what)

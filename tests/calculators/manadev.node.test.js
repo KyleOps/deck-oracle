@@ -98,6 +98,15 @@ describe('ramp classifier: land searches and land drops', () => {
     for (const [name, expected] of Object.entries(cases)) {
         it(name, () => like(ramp(name), { modelled: true, ...expected }, name));
     }
+
+    it('reads a long search sentence that never says "card" in linear time', () => {
+        // The earlier pattern backtracked exponentially on "a or a or a …" (CodeQL js/redos).
+        const oracle = `Search your library for a ${'a or '.repeat(40)}thing.`;
+        const card = { name: 'Odd Text', mana_cost: '{1}{G}', cmc: 2, type_line: 'Sorcery', oracle_text: oracle, color_identity: ['G'] };
+        const start = performance.now();
+        MD.classifyRamp(card, { identity: ['G'] });
+        assert.ok(performance.now() - start < budget(50));
+    });
 });
 
 describe('ramp classifier: recognised but not counted', () => {
