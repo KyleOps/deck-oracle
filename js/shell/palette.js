@@ -71,11 +71,13 @@ function buildItems() {
     );
 
     for (const d of Library.listDecks()) {
+        const commanders = d.commanderNames ?? [];
+        const led = commanders.join(' + ');
         out.push({
             kind: 'Saved deck',
             label: d.name,
-            sub: `${d.cardCount} cards`,
-            search: `${d.name} ${d.commanderName ?? ''} deck saved switch`,
+            sub: `${d.cardCount} cards${led && led !== d.name ? ` · ${led}` : ''}`,
+            search: `${d.name} ${commanders.join(' ')} deck saved switch`,
             run: () => actions.loadDeck?.(d.id)
         });
     }

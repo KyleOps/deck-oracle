@@ -11,6 +11,7 @@ import * as OpponentState from './utils/opponentState.js';
 import * as Share from './utils/share.js';
 import { analyzeDeck } from './utils/deckRadar.js';
 import { featuredCardName } from './utils/deckStats.js';
+import { commanderLabel } from './utils/commanders.js';
 import { findCard } from './data/images.js';
 import { FORMATS } from './utils/format.js';
 import { debounce } from './utils/simulation.js';
@@ -32,15 +33,24 @@ const EXAMPLE_OPPONENTS = [
 // ── Deck-dependent chrome ────────────────────────────────────────────────────
 
 function deckSummary(config) {
-    const size = DeckConfig.getDeckSize(true);
+    const size = DeckConfig.getDeckTotal();
     const format = DeckConfig.getFormat();
+    const commanders = commanderLabel(DeckConfig.getCommanderNames());
     const name = config.deckName
-        || (config.commanderName ? `${config.commanderName}` : null)
+        || commanders
         || (config.importSource === 'manual' ? 'Custom counts' : 'Untitled deck');
-    const parts = [`${size} cards`, format.label.replace(/ \(\d+\)/, '')];
+    // "100 cards" for 98 + 2 commanders: a deck is counted the way players count it.
+    const parts = [size.label, format.label.replace(/ \(\d+\)/, '')];
     if (config.importSource === 'manual') parts.push('counts only');
     const artName = featuredCardName(config);
-    return { name, meta: parts.join(' · '), artName, artCard: findCard(config.cardsByName, artName) };
+    return {
+        name,
+        nameTitle: commanders && commanders !== name ? `${name} — ${commanders}` : name,
+        meta: parts.join(' · '),
+        metaTitle: size.detail,
+        artName,
+        artCard: findCard(config.cardsByName, artName) ?? DeckConfig.getCommanders()[0]?.card ?? null
+    };
 }
 
 function syncDeckChrome() {
