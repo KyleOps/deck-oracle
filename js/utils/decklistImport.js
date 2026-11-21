@@ -1,1225 +1,245 @@
 /**
- * Decklist Import and Card Type Detection
- * Uses Scryfall API to fetch card types
+ * Deck import: a pasted list or a Moxfield / Archidekt link in, one deck out.
+ *
+ * Every path ends in the same place: entries (name, count, the source's own
+ * card data) become card records through `toCardRecord`, anything too thin is
+ * looked up on Scryfall in one batch, and `assemble` builds the result. The
+ * pieces live next door:
+ *   decklistParse.js  text → entries (pure)
+ *   deckSites.js      links → entries (proxy fetch + each site's JSON shape)
+ *   scryfall.js       name lookups (batched, cached, rate limited)
+ *
+ * Loaded on first import (deckConfig and opponentState `import()` it), so none
+ * of this is on the startup path.
  */
 
-const SCRYFALL_API = 'https://api.scryfall.com';
-const RATE_LIMIT_DELAY = 100; // Scryfall requests 50-100ms between requests
+import { parseDecklistText, correctCardName } from './decklistParse.js';
+import { fetchDeck } from './deckSites.js';
+import { lookupCards } from './scryfall.js';
 
-// Cache configuration
-const CACHE_MAX_SIZE = 1000;
-const CACHE_TTL_MS = 3600000; // 1 hour
+export { parseDecklistText } from './decklistParse.js';
 
-// Decklist parsing limits
-const MAX_DECKLIST_LENGTH = 50000; // ~50KB
-const MAX_DECKLIST_LINES = 500;
-const MAX_CARD_COUNT = 100;
-const MIN_CARD_COUNT = 1;
-const MAX_CARD_NAME_LENGTH = 100;
+const TYPE_ORDER = ['creatures', 'planeswalkers', 'battles', 'lands', 'instants', 'sorceries', 'artifacts', 'enchantments'];
 
-// Batch processing configuration
-const SCRYFALL_BATCH_SIZE = 50;
-const FUZZY_SEARCH_BATCH_SIZE = 5;
+/**
+ * Every type bucket a type line belongs to, primary first ("Artifact Creature"
+ * is a creature first). Unknown types count as artifacts.
+ * @param {string} typeLine
+ * @returns {string[]}
+ */
+export function typeCategories(typeLine) {
+    const types = String(typeLine ?? '').toLowerCase();
+    const singular = { creatures: 'creature', planeswalkers: 'planeswalker', battles: 'battle', lands: 'land', instants: 'instant', sorceries: 'sorcery', artifacts: 'artifact', enchantments: 'enchantment' };
+    const found = TYPE_ORDER.filter(t => types.includes(singular[t]));
+    return found.length ? found : ['artifacts'];
+}
 
-// URL validation
-const MAX_URL_INPUT_LENGTH = 200;
+const COLOUR_LETTERS = { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G', colorless: 'C' };
+/** Archidekt spells colours out ("Green"); everyone else uses letters. */
+const colourLetter = c => (String(c).length === 1 ? String(c).toUpperCase() : COLOUR_LETTERS[String(c).toLowerCase()] ?? String(c));
 
-// Card name corrections for common issues (typos, ambiguous names, etc.)
-// Note: Don't add full double-faced names here - they're handled automatically
-const CARD_NAME_CORRECTIONS = {
-    'Vorinclex': 'Vorinclex, Monstrous Raider', // Disambiguate multiple printings
+const first = (obj, ...keys) => {
+    for (const key of keys) {
+        const value = obj?.[key];
+        if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return undefined;
 };
 
-/**
- * Normalize card name for cache keys and matching
- * Extracts front face of double-faced cards and converts to lowercase
- * @param {string} cardName - Card name (may include // for double-faced cards)
- * @returns {string} - Normalized name for cache/matching
- */
-function normalizeCardName(cardName) {
-    if (!cardName || typeof cardName !== 'string') return '';
-    return cardName.split('//')[0].trim().toLowerCase();
+/** A type line from snake_case, camelCase, or Archidekt's type arrays. */
+function typeLineOf(card) {
+    const line = first(card, 'type_line', 'typeLine');
+    if (line) return String(line);
+    const main = [...(card?.superTypes ?? []), ...(card?.types ?? [])].join(' ');
+    if (!main) return '';
+    const sub = (card?.subTypes ?? []).join(' ');
+    return sub ? `${main} — ${sub}` : main;
 }
 
-
-/**
- * Colour and identity fields worth keeping from any card source. Scryfall uses
- * snake_case, Archidekt camelCase; Moxfield has no produced_mana, so land
- * colours fall back to rules text and identity (see utils/mana.js).
- */
-function colourFields(cardData = {}) {
-    const front = cardData.card_faces?.[0] ?? {};
-    const out = {};
-    const colors = front.colors ?? cardData.colors;
-    const identity = cardData.color_identity ?? cardData.colorIdentity;
-    const produced = cardData.produced_mana ?? cardData.producedMana;
-    const id = cardData.scryfall_id ?? cardData.scryfallId ?? (cardData.object === 'card' ? cardData.id : undefined);
-    // Archidekt spells colours out ("Green"); everyone else uses letters.
-    const letter = c => (String(c).length === 1 ? String(c).toUpperCase() : colourLetter(c));
-    if (Array.isArray(colors)) out.colors = colors.map(letter);
-    if (Array.isArray(identity)) out.color_identity = identity.map(letter);
-    if (Array.isArray(produced)) out.produced_mana = produced;
-    if (typeof id === 'string') out.scryfall_id = id;
-    return out;
-}
-
-function colourLetter(name) {
-    return { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G', colorless: 'C' }[String(name).toLowerCase()] ?? String(name);
+/** Archidekt's { W: 1, U: null, … } → ['W']. */
+function producedFromMap(map) {
+    if (!map || typeof map !== 'object') return undefined;
+    const colours = Object.entries(map).filter(([, v]) => Number(v) > 0).map(([k]) => k.toUpperCase());
+    return colours;
 }
 
 /**
- * Parse creature power value to integer
- * Handles special cases like *, X, 1+*, etc.
- * @param {string|number} power - Power value from card data
- * @returns {number|null} - Parsed power as integer, or null if not parseable
- */
-function parsePowerValue(power) {
-    if (power === undefined || power === null) return null;
-    const pStr = String(power);
-    if (!pStr.includes('*') && !pStr.includes('X') && !isNaN(parseInt(pStr, 10))) {
-        return parseInt(pStr, 10);
-    }
-    return null;
-}
-
-/**
- * LRU Cache with TTL for card data
- * Uses an access order array for O(1) eviction instead of sorting
- */
-class CardCache {
-    constructor(maxSize = CACHE_MAX_SIZE, ttlMs = CACHE_TTL_MS) {
-        this.cache = new Map();
-        this.accessOrder = []; // Track access order for O(1) LRU eviction
-        this.maxSize = maxSize;
-        this.ttlMs = ttlMs;
-    }
-
-    get(key) {
-        const normalizedKey = normalizeCardName(key);
-        const entry = this.cache.get(normalizedKey);
-        if (!entry) return null;
-
-        // Check TTL
-        if (Date.now() - entry.timestamp > this.ttlMs) {
-            this.cache.delete(normalizedKey);
-            // Remove from access order
-            const index = this.accessOrder.indexOf(normalizedKey);
-            if (index !== -1) {
-                this.accessOrder.splice(index, 1);
-            }
-            return null;
-        }
-
-        // Update access order - move to end (most recent)
-        const index = this.accessOrder.indexOf(normalizedKey);
-        if (index !== -1) {
-            this.accessOrder.splice(index, 1);
-        }
-        this.accessOrder.push(normalizedKey);
-
-        return entry.data;
-    }
-
-    set(key, data) {
-        const normalizedKey = normalizeCardName(key);
-
-        // If key already exists, remove from old position in access order
-        if (this.cache.has(normalizedKey)) {
-            const index = this.accessOrder.indexOf(normalizedKey);
-            if (index !== -1) {
-                this.accessOrder.splice(index, 1);
-            }
-        }
-
-        // Evict oldest (first in access order) if at capacity
-        if (this.cache.size >= this.maxSize && !this.cache.has(normalizedKey)) {
-            const oldestKey = this.accessOrder.shift(); // O(1) removal from front
-            if (oldestKey) {
-                this.cache.delete(oldestKey);
-            }
-        }
-
-        this.cache.set(normalizedKey, {
-            data,
-            timestamp: Date.now()
-        });
-
-        // Add to end of access order (most recent)
-        this.accessOrder.push(normalizedKey);
-    }
-
-    has(key) {
-        const entry = this.get(key);
-        return entry !== null;
-    }
-
-    clear() {
-        this.cache.clear();
-        this.accessOrder = [];
-    }
-}
-
-// Simple in-memory cache for card data (persists during session)
-const cardCache = new CardCache();
-
-/**
- * Rate Limiter for API requests
- * Scryfall allows ~10 requests/second, we'll be conservative with bursts
- * Batch API calls use batches of 50, so burst limit must accommodate
- */
-const requestTracker = {
-    requests: [],
-    maxRequestsPerMinute: 200, // Allow ~3.3 requests/sec average
-    maxBurstRequests: 60, // Allow bursts of 60 requests (> batch size of 50)
-    burstWindowMs: 10000, // Within 10 second window
-
-    canMakeRequest() {
-        const now = Date.now();
-
-        // Check burst limit (short term)
-        const recentRequests = this.requests.filter(t => now - t < this.burstWindowMs);
-        if (recentRequests.length >= this.maxBurstRequests) {
-            return false;
-        }
-
-        // Check sustained limit (long term)
-        this.requests = this.requests.filter(t => now - t < 60000);
-        return this.requests.length < this.maxRequestsPerMinute;
-    },
-
-    recordRequest() {
-        this.requests.push(Date.now());
-    },
-
-    waitTime() {
-        if (this.canMakeRequest()) return 0;
-        const now = Date.now();
-
-        // Check if burst limited
-        const recentRequests = this.requests.filter(t => now - t < this.burstWindowMs);
-        if (recentRequests.length >= this.maxBurstRequests) {
-            const oldest = Math.min(...recentRequests);
-            return Math.max(0, this.burstWindowMs - (now - oldest));
-        }
-
-        // Otherwise minute limit
-        const oldest = Math.min(...this.requests);
-        return Math.max(0, 60000 - (now - oldest));
-    }
-};
-
-/**
- * Parse decklist text into card entries
- * Supports various formats:
- * - "4 Lightning Bolt"
- * - "4x Lightning Bolt"
- * - "Lightning Bolt" (assumes 1)
- * - "1 Jace, the Mind Sculptor"
+ * One card record from any source's card object: Scryfall and Moxfield
+ * (snake_case, `card_faces`) or Archidekt (camelCase `manaCost` / `text` /
+ * `faces`, type arrays, colour names, a `manaProduction` map).
  *
- * @param {string} decklistText - Raw decklist text
- * @returns {Object} - {cards: Array, hasSideboard: boolean, sideboardCount: number}
- */
-export function parseDecklistText(decklistText) {
-    // Input validation - limit size to prevent DoS
-    if (!decklistText || typeof decklistText !== 'string') {
-        throw new Error('Invalid decklist: must be a string');
-    }
-
-    if (decklistText.length > MAX_DECKLIST_LENGTH) {
-        throw new Error(`Decklist too large. Maximum ${MAX_DECKLIST_LENGTH} characters.`);
-    }
-
-    const allLines = decklistText.split('\n');
-    if (allLines.length > MAX_DECKLIST_LINES) {
-        throw new Error(`Decklist has too many lines. Maximum ${MAX_DECKLIST_LINES} lines.`);
-    }
-
-    // Pre-compile regex patterns outside loops for performance
-    const SIDEBOARD_REGEX = /^SIDEBOARD:?$/i;
-    // Section headers from Moxfield, Archidekt, MTGO and Arena exports. The
-    // section decides where the following cards go.
-    const SECTION_HEADER_REGEX = /^(creatures?|lands?|spells?|instants?|sorcer(y|ies)|artifacts?|enchantments?|planeswalkers?|battles?|commanders?|companions?|deck|main ?(deck|board)|sideboard|maybeboard|considering|tokens?|about)(\s*\(\d+\))?:?$/i;
-    const EXCLUDED_SECTIONS = /^(sideboard|maybeboard|considering|tokens?|about|companions?)/i;
-    const CARD_COUNT_REGEX = /^(\d+)x?\s+(.+)$/;
-    const CARD_COUNT_ONLY_REGEX = /^(\d+)x?\s+/;
-    // Trailing printing / marker noise: "(C21) 263", "[C21]", "*F*", "*CMDR*", "#tag", "^Have,#37d67a^"
-    const CMDR_MARKER = /\*CMDR\*/i;
-    const cleanName = raw => raw
-        .replace(/\^[^^]*\^/g, '')
-        .replace(/\s+\*[A-Z]+\*/gi, '')
-        .replace(/\s+\[[^\]]*\]/g, '')
-        .replace(/\s+#\S+/g, '')
-        .replace(/\s+\([A-Z0-9]{2,6}\)(\s+[\w★-]+)?\s*$/i, '')
-        .trim();
-
-    // Detect sideboard marker
-    const sideboardIndex = decklistText.search(/^SIDEBOARD:?$/im);
-    const hasSideboard = sideboardIndex >= 0;
-    const maindeckText = hasSideboard ? decklistText.substring(0, sideboardIndex) : decklistText;
-    const sideboardText = hasSideboard ? decklistText.substring(sideboardIndex) : '';
-
-    // Count sideboard cards
-    let sideboardCount = 0;
-    if (hasSideboard) {
-        const sideboardLines = sideboardText.split(/\r?\n/);
-        for (const line of sideboardLines) {
-            const match = line.match(CARD_COUNT_ONLY_REGEX);
-            if (match) {
-                sideboardCount += parseInt(match[1], 10);
-            } else if (line.trim().length > 0 && !SIDEBOARD_REGEX.test(line.trim())) {
-                sideboardCount += 1;
-            }
-        }
-    }
-
-    const lines = maindeckText.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
-    const cards = [];
-    const commanders = [];
-    let section = 'main';
-
-    for (const line of lines) {
-        // Section headers like "Creatures:", "Commander", "Deck", "Maybeboard (3)"
-        if (SECTION_HEADER_REGEX.test(line)) {
-            const header = line.toLowerCase();
-            section = /^commander/.test(header) ? 'commander'
-                : EXCLUDED_SECTIONS.test(header) ? 'excluded'
-                    : 'main';
-            continue;
-        }
-
-        // Skip comment lines
-        if (line.startsWith('//') || line.startsWith('#')) {
-            continue;
-        }
-        if (section === 'excluded') continue;
-
-        // Match formats: "4 Card Name" or "4x Card Name"
-        const match = line.match(CARD_COUNT_REGEX);
-        const count = match ? parseInt(match[1], 10) : 1;
-        const rawName = match ? match[2].trim() : line;
-        const isCommander = section === 'commander' || CMDR_MARKER.test(rawName);
-        const name = cleanName(rawName);
-
-        if (match && (isNaN(count) || count < MIN_CARD_COUNT || count > MAX_CARD_COUNT)) {
-            console.warn(`Invalid card count: ${count} for ${name} (skipping)`);
-            continue;
-        }
-        if (name.length === 0 || name.length > MAX_CARD_NAME_LENGTH) {
-            console.warn(`Invalid card name length: "${name.substring(0, 50)}" (skipping)`);
-            continue;
-        }
-
-        // The commander lives in the command zone, not the library — the same
-        // rule the Moxfield and Archidekt importers follow.
-        if (isCommander) commanders.push({ count, name });
-        else cards.push({ count, name });
-    }
-
-    return { cards, hasSideboard, sideboardCount, commanders };
-}
-
-/**
- * Fetch card data from Scryfall API with rate limiting
- * @param {string} cardName - Card name to search
- * @returns {Promise<Object|null>} - Card data or null if not found
- */
-async function fetchCardData(cardName) {
-    // Check rate limit
-    if (!requestTracker.canMakeRequest()) {
-        const waitMs = requestTracker.waitTime();
-        throw new Error(`Rate limit exceeded. Please wait ${Math.ceil(waitMs / 1000)} seconds.`);
-    }
-
-    try {
-        requestTracker.recordRequest();
-
-        // Use fuzzy search endpoint for better matching
-        const url = `${SCRYFALL_API}/cards/named?fuzzy=${encodeURIComponent(cardName)}`;
-        const response = await fetch(url);
-
-        if (!response.ok) {
-            console.warn(`Card not found: ${cardName}`);
-            return null;
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error(`Error fetching ${cardName}:`, error);
-        return null;
-    }
-}
-
-/**
- * Determine card type category from type line
- * @param {string} typeLine - Card type line (e.g., "Legendary Creature — Human Wizard")
- * @returns {string} - Primary card type category (for backward compatibility)
- */
-function getCardTypeCategory(typeLine) {
-    const types = typeLine.toLowerCase();
-
-    // Check types in order of precedence
-    if (types.includes('creature')) return 'creatures';
-    if (types.includes('planeswalker')) return 'planeswalkers';
-    if (types.includes('battle')) return 'battles';
-    if (types.includes('land')) return 'lands';
-    if (types.includes('instant')) return 'instants';
-    if (types.includes('sorcery')) return 'sorceries';
-    if (types.includes('artifact')) return 'artifacts';
-    if (types.includes('enchantment')) return 'enchantments';
-
-    // Default to artifacts for unknown types
-    return 'artifacts';
-}
-
-/**
- * Get all type categories from type line (for dual-typed cards)
- * @param {string} typeLine - Card type line (e.g., "Artifact Creature — Soldier")
- * @returns {Array<string>} - Array of all matching type categories
- */
-function getAllCardTypes(typeLine) {
-    const types = typeLine.toLowerCase();
-    const categories = [];
-
-    // Check all types (order matters for primary type)
-    if (types.includes('creature')) categories.push('creatures');
-    if (types.includes('planeswalker')) categories.push('planeswalkers');
-    if (types.includes('battle')) categories.push('battles');
-    if (types.includes('land')) categories.push('lands');
-    if (types.includes('instant')) categories.push('instants');
-    if (types.includes('sorcery')) categories.push('sorceries');
-    if (types.includes('artifact')) categories.push('artifacts');
-    if (types.includes('enchantment')) categories.push('enchantments');
-
-    // If no types matched, default to artifacts
-    if (categories.length === 0) {
-        categories.push('artifacts');
-    }
-
-    return categories;
-}
-
-/**
- * The commander's own card record, from any card source (Scryfall, Moxfield
- * or Archidekt shapes).
+ * Double-faced cards use their front face: that is the card in your library
+ * and the one you cast. The record has the `cardsByName` shape every page
+ * reads, with the given count.
  *
- * Every importer keeps the commander out of the library — it starts in the
- * command zone — so without this record the deck knows only the commander's
- * name, not its cost, colours or art. Pages that ask "when can I cast my
- * commander?" need all three.
- *
- * Front face only for double-faced cards (that is the face you cast).
- *
- * @param {Object} cardData - a card object from an API
- * @returns {Object|null} a cardsByName-shaped record with count 1, or null when
- *   the data lacks a name or a type line (the caller can look it up instead)
+ * @param {Object|null} raw - a card object from an API
+ * @param {number} [count=1]
+ * @returns {Object|null} null when the data has no name or no type line (look
+ *   it up on Scryfall instead)
  */
-export function toCommanderCard(cardData) {
-    if (!cardData || typeof cardData !== 'object' || typeof cardData.name !== 'string' || !cardData.name) return null;
-    const front = cardData.card_faces?.[0] ?? {};
-    let typeLine = front.type_line || front.typeLine || cardData.type_line || cardData.typeLine || '';
-    if (!typeLine && (cardData.types || cardData.superTypes)) {
-        const main = [...(cardData.superTypes ?? []), ...(cardData.types ?? [])].join(' ');
-        const sub = (cardData.subTypes ?? []).join(' ');
-        typeLine = sub ? `${main} — ${sub}` : main;
-    }
+export function toCardRecord(raw, count = 1) {
+    if (!raw || typeof raw !== 'object' || typeof raw.name !== 'string' || !raw.name) return null;
+    const faces = Array.isArray(raw.card_faces) && raw.card_faces.length ? raw.card_faces
+        : Array.isArray(raw.faces) && raw.faces.length ? raw.faces : null;
+    const front = faces?.[0] ?? {};
+    const typeLine = typeLineOf(front) || typeLineOf(raw);
     if (!typeLine) return null;
-    const cmc = Number(front.cmc ?? cardData.cmc);
-    const allCategories = getAllCardTypes(typeLine);
+
+    const allCategories = typeCategories(typeLine);
+    const cmc = Number(first(front, 'cmc') ?? raw.cmc);
     const record = {
-        name: cardData.name,
+        name: raw.name,
         type_line: typeLine,
         cmc: Number.isFinite(cmc) ? cmc : 0,
-        mana_cost: front.mana_cost || front.manaCost || cardData.mana_cost || cardData.manaCost || '',
-        oracle_text: front.oracle_text || front.oracleText || cardData.oracle_text || cardData.oracleText || cardData.text || '',
+        mana_cost: String(first(front, 'mana_cost', 'manaCost') ?? first(raw, 'mana_cost', 'manaCost') ?? ''),
+        oracle_text: String(first(front, 'oracle_text', 'oracleText', 'text') ?? first(raw, 'oracle_text', 'oracleText', 'text') ?? ''),
         category: allCategories[0],
         allCategories,
-        count: 1,
-        ...colourFields(cardData)
+        count: Math.max(1, Math.floor(Number(count) || 1))
     };
-    const power = front.power ?? cardData.power;
-    const toughness = front.toughness ?? cardData.toughness;
-    if (power !== undefined && power !== null) record.power = power;
-    if (toughness !== undefined && toughness !== null) record.toughness = toughness;
+    const power = first(front, 'power') ?? first(raw, 'power');
+    const toughness = first(front, 'toughness') ?? first(raw, 'toughness');
+    if (power !== undefined) record.power = power;
+    if (toughness !== undefined) record.toughness = toughness;
+
+    const colors = first(front, 'colors') ?? raw.colors;
+    const identity = first(raw, 'color_identity', 'colorIdentity');
+    const produced = first(raw, 'produced_mana', 'producedMana') ?? producedFromMap(raw.manaProduction);
+    const id = first(raw, 'scryfall_id', 'scryfallId') ?? (raw.object === 'card' ? raw.id : undefined);
+    if (Array.isArray(colors)) record.colors = colors.map(colourLetter);
+    if (Array.isArray(identity)) record.color_identity = identity.map(colourLetter);
+    if (Array.isArray(produced)) record.produced_mana = produced.map(colourLetter);
+    if (typeof id === 'string') record.scryfall_id = id;
     return record;
 }
 
 /**
- * The commander's record, looked up on Scryfall when the deck site's data was
- * too thin to build one. Never throws: a failed lookup just means no record.
- * @param {Object|null} cardData - what the deck site gave us (may be null)
- * @param {string|null} name
- * @returns {Promise<Object|null>}
+ * Build the import result from entries.
+ *
+ * Records come from the source's own data where it is complete; library
+ * cards without a type line, and commanders without a mana cost, are looked up
+ * on Scryfall in one batch. The same card listed twice (two printings) is one
+ * record with the summed count. Commanders stay out of `cardsByName`.
+ *
+ * @param {{cards:Array<{name:string,count:number,raw?:Object|null}>, commanders:Array<{name:string,raw?:Object|null}>,
+ *   deckName?:string|null, source:string, sideboardCount?:number, skipped?:string[]}} deck
+ * @param {{signal?:AbortSignal, onLookup?:(done:number,total:number)=>void}} [opts]
  */
-async function resolveCommanderCard(cardData, name) {
-    const direct = toCommanderCard(cardData);
-    if (direct?.mana_cost || !name) return direct;
-    try {
-        const [found] = await batchFetchCards([name]);
-        return toCommanderCard(found) ?? direct;
-    } catch (error) {
-        console.warn('Commander lookup failed:', error);
-        return direct;
-    }
-}
+async function assemble(deck, { signal, onLookup } = {}) {
+    const library = deck.cards.map(entry => ({ entry, record: toCardRecord(entry.raw, entry.count) }));
+    const commanders = deck.commanders.map(entry => ({ entry, record: toCardRecord(entry.raw, 1) }));
+    const wanted = new Set();
+    library.forEach(({ entry, record }) => { if (!record) wanted.add(correctCardName(entry.name)); });
+    commanders.forEach(({ entry, record }) => { if (!record?.mana_cost) wanted.add(correctCardName(entry.name)); });
+    const looked = wanted.size ? await lookupCards([...wanted], { signal, onBatch: onLookup }) : new Map();
+    const lookedUp = (entry, count) => toCardRecord(looked.get(correctCardName(entry.name)), count);
 
-/**
- * Batch fetch cards using Scryfall collection endpoint (more efficient)
- * Uses cache to avoid re-fetching previously loaded cards
- * @param {Array<string>} cardNames - Array of card names
- * @returns {Promise<Array<Object>>} - Array of card data
- */
-export async function batchFetchCards(cardNames) {
-    const foundCards = [];
-    const cardsToFetch = [];
-
-    // Check cache first - use single get() instead of has() + get()
-    for (const name of cardNames) {
-        const cached = cardCache.get(name);
-        if (cached !== null) {
-            foundCards.push(cached);
-        } else {
-            cardsToFetch.push(name);
-        }
-    }
-
-    if (cardsToFetch.length === 0) {
-        // All cards were in cache!
-        return foundCards;
-    }
-
-    // For double-faced cards, use fuzzy search instead of exact name
-    // Extract just the front face name (before //)
-    const identifiers = cardsToFetch.map(name => {
-        // If it's a double-faced card (contains //), use front face only
-        const frontFace = name.split('//')[0].trim();
-        return { name: frontFace };
-    });
-
-    try {
-        const response = await fetch(`${SCRYFALL_API}/cards/collection`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ identifiers })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.warn('Batch fetch failed:', errorData);
-            throw new Error(errorData.details || 'Batch fetch failed');
-        }
-
-        const data = await response.json();
-
-        // Validate response structure
-        if (!data || typeof data !== 'object') {
-            console.warn('Invalid batch response format');
-            return foundCards;
-        }
-
-        // Cache and add found cards
-        const fetchedCards = data.data || [];
-        for (const card of fetchedCards) {
-            if (card && card.name) {
-                cardCache.set(card.name, card);
-                foundCards.push(card);
-            }
-        }
-
-        // Handle not_found cards - retry with fuzzy search in parallel batches
-        const notFoundIdentifiers = data.not_found || [];
-
-        if (notFoundIdentifiers.length > 0) {
-            console.log(`Retrying ${notFoundIdentifiers.length} cards with fuzzy search...`);
-
-            // Process in batches for parallel fetching (faster than sequential)
-            for (let i = 0; i < notFoundIdentifiers.length; i += FUZZY_SEARCH_BATCH_SIZE) {
-                const batch = notFoundIdentifiers.slice(i, i + FUZZY_SEARCH_BATCH_SIZE);
-
-                // Fetch batch in parallel
-                const batchPromises = batch.map(identifier => fetchCardData(identifier.name));
-                const batchResults = await Promise.all(batchPromises);
-
-                // Cache and add successful results
-                batchResults.forEach(fuzzyCard => {
-                    if (fuzzyCard) {
-                        cardCache.set(fuzzyCard.name, fuzzyCard);
-                        foundCards.push(fuzzyCard);
-                    }
-                });
-
-                // Rate limit between batches (not between individual cards in batch)
-                if (i + FUZZY_SEARCH_BATCH_SIZE < notFoundIdentifiers.length) {
-                    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-                }
-            }
-        }
-
-        return foundCards;
-    } catch (error) {
-        console.error('Batch fetch error:', error);
-        return foundCards; // Return what we have from cache
-    }
-}
-
-/**
- * Import decklist using batch API (faster for large lists)
- * @param {string} decklistText - Raw decklist text
- * @param {Function} progressCallback - Called with progress updates
- * @returns {Promise<Object>} - Card type counts with import metadata
- */
-export async function importDecklistBatch(decklistText, progressCallback = null) {
-    // Stage 1: Parsing (0-10%)
-    if (progressCallback) {
-        progressCallback({
-            processed: 0,
-            total: 100,
-            currentCard: 'Parsing decklist...',
-            percentage: 0
-        });
-    }
-
-    const parseResult = parseDecklistText(decklistText);
-    const { cards, hasSideboard, sideboardCount, commanders = [] } = parseResult;
-
-    if (cards.length === 0) {
-        throw new Error('No cards found in decklist');
-    }
-
-    // Create map of card names to counts (with corrections applied)
-    const cardMap = new Map();
-    cards.forEach(({ count, name }) => {
-        // Apply name corrections if available
-        const correctedName = CARD_NAME_CORRECTIONS[name] || name;
-
-        if (cardMap.has(correctedName)) {
-            cardMap.set(correctedName, cardMap.get(correctedName) + count);
-        } else {
-            cardMap.set(correctedName, count);
-        }
-    });
-
-    const uniqueCards = Array.from(cardMap.keys());
-
-    if (progressCallback) {
-        progressCallback({
-            processed: 10,
-            total: 100,
-            currentCard: `Found ${uniqueCards.length} unique cards`,
-            percentage: 10
-        });
-    }
-
-    // Stage 2: Fetching from Scryfall (10-80%)
-    const allCardData = [];
-    const totalBatches = Math.ceil(uniqueCards.length / SCRYFALL_BATCH_SIZE);
-
-    for (let i = 0; i < uniqueCards.length; i += SCRYFALL_BATCH_SIZE) {
-        const batchNum = Math.floor(i / SCRYFALL_BATCH_SIZE) + 1;
-        const chunk = uniqueCards.slice(i, Math.min(i + SCRYFALL_BATCH_SIZE, uniqueCards.length));
-
-        const chunkData = await batchFetchCards(chunk);
-        allCardData.push(...chunkData);
-
-        // Update progress: 10% to 80% range for fetching
-        if (progressCallback) {
-            const processedCount = Math.min(i + SCRYFALL_BATCH_SIZE, uniqueCards.length);
-            const fetchProgress = (processedCount / uniqueCards.length) * 70; // 70% of total progress
-            const totalProgress = 10 + fetchProgress; // Start at 10%
-
-            progressCallback({
-                processed: processedCount,
-                total: uniqueCards.length,
-                currentCard: `Fetching batch ${batchNum}/${totalBatches} from Scryfall...`,
-                percentage: Math.round(totalProgress)
-            });
-        }
-
-        // Rate limiting between batches (only if there are more batches)
-        if (i + SCRYFALL_BATCH_SIZE < uniqueCards.length) {
-            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-        }
-    }
-
-    // Stage 3: Analyzing cards (80-90%)
-    if (progressCallback) {
-        progressCallback({
-            processed: 80,
-            total: 100,
-            currentCard: 'Analyzing card types and attributes...',
-            percentage: 80
-        });
-    }
-
-    // Count types
-    const typeCounts = {
-        creatures: 0,
-        instants: 0,
-        sorceries: 0,
-        artifacts: 0,
-        enchantments: 0,
-        planeswalkers: 0,
-        lands: 0,
-        battles: 0
-    };
-
-    // Store detailed card information for each non-land card
-    const cardDetails = [];
-
-    // Store card data by name (for Rashmi and other calculators)
     const cardsByName = {};
-
-    // Track found cards
-    const foundCards = new Set();
-
-    // Track actual card count (for deck size calculation with dual-typed cards)
-    let actualCardCount = 0;
-
-    // Pre-compute normalized lookup map for O(1) matching instead of O(n²)
-    const normalizedCardMap = new Map();
-    for (const [key, value] of cardMap.entries()) {
-        const normalizedKey = normalizeCardName(key);
-        normalizedCardMap.set(normalizedKey, { originalKey: key, count: value });
-        // Also store the original key directly for exact matches
-        normalizedCardMap.set(key, { originalKey: key, count: value });
+    const missing = new Map();
+    for (const { entry, record } of library) {
+        const card = record ?? lookedUp(entry, entry.count);
+        if (!card) {
+            missing.set(entry.name, (missing.get(entry.name) ?? 0) + entry.count);
+            continue;
+        }
+        if (cardsByName[card.name]) cardsByName[card.name].count += card.count;
+        else cardsByName[card.name] = card;
     }
 
-    allCardData.forEach(cardData => {
-        if (cardData && cardData.name && cardData.type_line) {
-            // Try to match the card using normalized name for O(1) lookup
-            let count = 0;
-            let matchedKey = null;
-
-            // Try exact match first
-            const exactMatch = normalizedCardMap.get(cardData.name);
-            if (exactMatch) {
-                count = exactMatch.count;
-                matchedKey = exactMatch.originalKey;
-            } else {
-                // Try normalized front face match
-                const normalizedName = normalizeCardName(cardData.name);
-                const normalizedMatch = normalizedCardMap.get(normalizedName);
-                if (normalizedMatch) {
-                    count = normalizedMatch.count;
-                    matchedKey = normalizedMatch.originalKey;
-                }
-            }
-
-            if (count > 0 && matchedKey) {
-                // For dual-faced cards, use front face data only
-                let typeLine, cmc, power, toughness, oracleText;
-
-                if (cardData.card_faces && cardData.card_faces.length > 0) {
-                    // Dual-faced card - use front face (index 0)
-                    const frontFace = cardData.card_faces[0];
-                    typeLine = frontFace.type_line;
-                    cmc = frontFace.cmc !== undefined ? frontFace.cmc : cardData.cmc;
-                    power = frontFace.power;
-                    toughness = frontFace.toughness;
-                    oracleText = frontFace.oracle_text || cardData.oracle_text || '';
-                } else {
-                    // Normal single-faced card
-                    typeLine = cardData.type_line;
-                    cmc = cardData.cmc;
-                    power = cardData.power;
-                    toughness = cardData.toughness;
-                    oracleText = cardData.oracle_text || '';
-                }
-
-                // Get all type categories for dual-typed cards (e.g., "Artifact Creature")
-                const allCategories = getAllCardTypes(typeLine);
-                const primaryCategory = allCategories[0]; // First category is primary
-
-                // Add count to ALL applicable categories
-                allCategories.forEach(category => {
-                    typeCounts[category] += count;
-                });
-
-                // Track actual card count (only count each card once for deck size)
-                actualCardCount += count;
-
-                foundCards.add(matchedKey);
-
-                // Store card data by name for detailed lookups
-                cardsByName[cardData.name] = {
-                    name: cardData.name,
-                    type_line: typeLine,
-                    cmc: cmc,
-                    mana_cost: cardData.mana_cost || '',
-                    oracle_text: oracleText,
-                    power: power,
-                    toughness: toughness,
-                    category: primaryCategory,
-                    allCategories: allCategories, // Store all categories
-                    count: count,
-                    ...colourFields(cardData)
-                };
-
-                // Store detailed card info for non-lands
-                if (primaryCategory !== 'lands' && cmc !== undefined) {
-                    // Parse power using helper function
-                    const powerNum = allCategories.includes('creatures') ? parsePowerValue(power) : null;
-                    const toughnessNum = allCategories.includes('creatures') ? parsePowerValue(toughness) : null;
-
-                    // Add one entry for each copy of the card
-                    for (let i = 0; i < count; i++) {
-                        cardDetails.push({
-                            name: cardData.name,
-                            cmc: cmc,
-                            type: primaryCategory,
-                            allTypes: allCategories,
-                            power: power, // Store raw power (e.g. "*", "5")
-                            toughness: toughness, // Store raw toughness (e.g. "*", "5")
-                            // Total power + toughness — what Wild Pair matches on.
-                            // null when either half is variable (*/X), because such
-                            // a creature has no fixed total to pair against.
-                            totalPT: (powerNum !== null && toughnessNum !== null) ? powerNum + toughnessNum : null,
-                            isPower5Plus: powerNum !== null && powerNum >= 5
-                        });
-                    }
-                }
-            }
-        }
+    const commanderList = commanders.map(({ entry, record }) => {
+        const card = record?.mana_cost ? record : (lookedUp(entry, 1) ?? record);
+        return { name: card?.name ?? entry.name, card: card ?? null };
     });
 
-    // Track missing cards with details
-    const missingCards = uniqueCards.filter(name => !foundCards.has(name));
-    const missingCardDetails = missingCards.map(name => ({
-        name,
-        count: cardMap.get(name) || 0
-    }));
-    const missingCardCount = missingCardDetails.reduce((sum, card) => sum + card.count, 0);
-
-    if (missingCards.length > 0) {
-        console.warn('Cards not found in Scryfall:', missingCards);
-        console.warn(`Missing ${missingCards.length} unique cards totaling ${missingCardCount} cards`);
+    const counts = Object.fromEntries(TYPE_ORDER.map(t => [t, 0]));
+    let actualCardCount = 0;
+    for (const card of Object.values(cardsByName)) {
+        card.allCategories.forEach(c => { counts[c] += card.count; });
+        actualCardCount += card.count;
+    }
+    if (actualCardCount === 0) {
+        throw new Error(deck.source === 'paste'
+            ? 'None of those cards were recognised. Check the spelling, one card per line.'
+            : 'That deck has no cards in its main deck.');
     }
 
-    // Log summary
-    const totalFound = Object.values(typeCounts).reduce((sum, count) => sum + count, 0);
-    const totalExpected = Array.from(cardMap.values()).reduce((sum, count) => sum + count, 0);
-    console.log(`Found ${totalFound}/${totalExpected} cards (${foundCards.size}/${uniqueCards.length} unique)`);
-    console.log(`Card details: ${cardDetails.length} non-land cards with full CMC/power data`);
-
-    // Stage 4: Calculating statistics (90-95%)
-    if (progressCallback) {
-        progressCallback({
-            processed: 90,
-            total: 100,
-            currentCard: 'Calculating deck statistics...',
-            percentage: 90
-        });
-    }
-
-    // Calculate summary stats from card details
-    const creaturesPower5Plus = cardDetails.filter(c => c.isPower5Plus).length;
-    console.log('Creatures with power 5+:', creaturesPower5Plus);
-
-    // The commander is not in the library, so it was not fetched above.
-    const commanderName = commanders[0]?.name ?? null;
-    const commanderCard = commanderName ? await resolveCommanderCard(null, commanderName) : null;
-
-    // Stage 5: Finalizing (95-100%)
-    if (progressCallback) {
-        progressCallback({
-            processed: 95,
-            total: 100,
-            currentCard: 'Finalizing import...',
-            percentage: 95
-        });
-    }
-
+    const missingCards = [...missing].map(([name, count]) => ({ name, count }));
+    const missingCardCount = missingCards.reduce((s, c) => s + c.count, 0);
+    const deckName = deck.deckName ?? null;
     return {
-        ...typeCounts,
-        actualCardCount,  // Actual deck size (for dual-typed cards)
-        cardDetails,  // Full card-level data
-        cardsByName,  // Card data indexed by name
-        creaturesPower5Plus,
-        commanderName,
-        commanderCard,
-        // Import metadata
+        ...counts,
+        actualCardCount,
+        cardsByName,
+        commanders: commanderList,
+        // The first commander, for callers that only know about one.
+        commanderName: commanderList[0]?.name ?? null,
+        commanderCard: commanderList[0]?.card ?? null,
+        deckName,
         importMetadata: {
-            commanderName,
-            hasSideboard,
-            sideboardCount,
-            missingCards: missingCardDetails,
+            source: deck.source,
+            deckName,
+            commanderNames: commanderList.map(c => c.name),
+            hasSideboard: (deck.sideboardCount ?? 0) > 0,
+            sideboardCount: deck.sideboardCount ?? 0,
+            skippedLines: deck.skipped ?? [],
+            missingCards,
             missingCardCount,
-            totalCardsAttempted: totalExpected,
-            totalCardsImported: actualCardCount  // Use actual count
+            totalCardsAttempted: actualCardCount + missingCardCount,
+            totalCardsImported: actualCardCount
         }
     };
 }
 
-// ==================== WEB IMPORT (Moxfield & Archidekt) ====================
-
-// TODO: Deploy the Cloudflare Worker in the /serverless folder and add its URL here.
-// Example: 'https://deck-oracle-proxy.yourname.workers.dev'
-const CUSTOM_PROXY_URL = 'https://hidden-river-b602.kylepettigrew.workers.dev';
-
-// SECURITY: Public CORS proxies removed - only use trusted custom proxy
-// Public proxies can log data, inject malicious content, or MITM attacks
-const USE_PUBLIC_PROXIES = false; // Set to true only for development/testing
-
-const CORS_PROXIES = USE_PUBLIC_PROXIES ? [
-    'https://corsproxy.io/?',
-    'https://api.allorigins.win/raw?url=',
-    'https://api.codetabs.com/v1/proxy?quest='
-] : [];
+const report = (onProgress, percentage, currentCard) => {
+    if (typeof onProgress === 'function') onProgress({ processed: percentage, total: 100, percentage, currentCard });
+};
 
 /**
- * Identify URL type and extract ID with strict validation
- * @param {string} input - URL or ID
- * @returns {Object} - { type: 'moxfield'|'archidekt'|null, id: string }
+ * Import a pasted decklist.
+ * @param {string} text
+ * @param {Function|null} [onProgress] - ({percentage, currentCard, processed, total})
+ * @param {{signal?:AbortSignal}} [opts]
+ * @returns {Promise<Object>} the deck (see `assemble`)
  */
-function parseImportInput(input) {
-    if (!input || typeof input !== 'string') {
-        return { type: null, id: null };
-    }
-
-    const trimmed = input.trim();
-
-    // Limit input length to prevent abuse
-    if (trimmed.length > MAX_URL_INPUT_LENGTH) {
-        console.warn('Input too long');
-        return { type: null, id: null };
-    }
-
-    // Moxfield - stricter pattern matching
-    // Full URL: https://www.moxfield.com/decks/ABC123xyz_-
-    const moxfieldUrlMatch = trimmed.match(/^(?:https?:\/\/)?(?:www\.)?moxfield\.com\/decks\/([a-zA-Z0-9_-]{8,32})(?:\/|$)/);
-    if (moxfieldUrlMatch) {
-        return { type: 'moxfield', id: moxfieldUrlMatch[1] };
-    }
-
-    // Archidekt - only numeric IDs, limit to reasonable length
-    // Full URL: https://archidekt.com/decks/123456
-    const archidektUrlMatch = trimmed.match(/^(?:https?:\/\/)?(?:www\.)?archidekt\.com\/decks\/(\d{1,10})(?:\/|$)/);
-    if (archidektUrlMatch) {
-        return { type: 'archidekt', id: archidektUrlMatch[1] };
-    }
-
-    // Direct ID input - be conservative (only for Moxfield)
-    if (/^[a-zA-Z0-9_-]{8,32}$/.test(trimmed)) {
-        return { type: 'moxfield', id: trimmed };
-    }
-
-    return { type: null, id: null };
-}
-
-/**
- * Fetch URL using secure custom proxy only
- */
-async function fetchWithProxy(url, proxyIndex = 0) {
-    // SECURITY: Only use custom proxy - public proxies are security risks
-    if (!CUSTOM_PROXY_URL) {
-        throw new Error('Proxy not configured. Deck import is currently unavailable.');
-    }
-
-    // Use secure custom proxy
-    try {
-        const proxyUrl = `${CUSTOM_PROXY_URL}?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl);
-
-        if (!response.ok) {
-            throw new Error(`Proxy error: HTTP ${response.status}`);
+export async function importDecklistBatch(text, onProgress = null, { signal } = {}) {
+    report(onProgress, 0, 'Reading the list…');
+    const parsed = parseDecklistText(text);
+    if (parsed.cards.length === 0) throw new Error('No cards found in decklist');
+    report(onProgress, 10, `Looking up ${parsed.cards.length + parsed.commanders.length} cards…`);
+    const result = await assemble({
+        cards: parsed.cards,
+        commanders: parsed.commanders,
+        source: 'paste',
+        sideboardCount: parsed.sideboardCount,
+        skipped: parsed.skipped
+    }, {
+        signal,
+        onLookup: (done, total) => {
+            if (typeof onProgress !== 'function') return;
+            const percentage = Math.round(10 + (done / Math.max(1, total)) * 80);
+            onProgress({ processed: done, total, percentage, currentCard: `Looking up cards… ${done}/${total}` });
         }
-
-        return await response.json();
-    } catch (error) {
-        console.error('Proxy error:', error);
-
-        // Only fall back to public proxies if explicitly enabled (dev/test only)
-        if (USE_PUBLIC_PROXIES && CORS_PROXIES.length > 0) {
-            console.warn('Falling back to public proxy (INSECURE - dev mode only)');
-
-            if (proxyIndex >= CORS_PROXIES.length) {
-                throw new Error('All CORS proxies failed. Please try again later.', { cause: error });
-            }
-
-            const proxyBase = CORS_PROXIES[proxyIndex];
-            const fallbackProxyUrl = proxyBase + encodeURIComponent(url);
-
-            try {
-                const response = await fetch(fallbackProxyUrl);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`, { cause: error });
-                }
-                return await response.json();
-            } catch (fallbackError) {
-                console.warn(`Proxy ${proxyIndex} (${proxyBase}) failed:`, fallbackError);
-                return fetchWithProxy(url, proxyIndex + 1);
-            }
-        }
-
-        throw new Error('Failed to fetch deck data. Please try again later.', { cause: error });
-    }
-}
-
-/**
- * Process a generic card entry (from API) into our deck format
- */
-function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName) {
-    // Robustly get type_line, checking for snake_case, camelCase, and DFCs
-    let typeLine = cardData.type_line || cardData.typeLine;
-    let cmc = cardData.cmc;
-    let power = cardData.power;
-    let toughness = cardData.toughness;
-    let oracleText = cardData.oracle_text || cardData.oracleText || '';
-    const name = cardData.name;
-
-    // DFC handling
-    if (cardData.card_faces && cardData.card_faces.length > 0) {
-        const face = cardData.card_faces[0];
-        typeLine = face.type_line || face.typeLine || typeLine;
-        cmc = face.cmc !== undefined ? face.cmc : cmc;
-        power = face.power;
-        toughness = face.toughness;
-        oracleText = face.oracle_text || face.oracleText || oracleText;
-    }
-    
-    // Fallback: Construct type_line from component arrays (Archidekt style)
-    if (!typeLine && (cardData.types || cardData.superTypes)) {
-        const supers = cardData.superTypes || [];
-        const types = cardData.types || [];
-        const subs = cardData.subTypes || [];
-        
-        const main = [...supers, ...types].join(' ');
-        const sub = subs.join(' ');
-        
-        if (main) {
-            typeLine = sub ? `${main} — ${sub}` : main;
-        }
-    }
-
-    if (!typeLine) {
-        // Return false to indicate failure -> trigger Scryfall fetch
-        return false;
-    }
-
-    const safeTypeLine = typeLine || '';
-    const allCategories = getAllCardTypes(safeTypeLine);
-    const primaryCategory = allCategories[0];
-
-    // Add counts
-    allCategories.forEach(cat => {
-        typeCounts[cat] = (typeCounts[cat] || 0) + count;
     });
-
-    // Store data
-    cardsByName[name] = {
-        name: name,
-        type_line: safeTypeLine,
-        cmc: cmc,
-        mana_cost: cardData.mana_cost,
-        oracle_text: oracleText,
-        power: power,
-        toughness: toughness,
-        category: primaryCategory,
-        allCategories: allCategories,
-        count: count,
-        ...colourFields(cardData)
-    };
-
-    // Detailed info for non-lands
-    if (primaryCategory !== 'lands' && cmc !== undefined) {
-        // Parse power using helper function
-        const powerNum = allCategories.includes('creatures') ? parsePowerValue(power) : null;
-        const toughnessNum = allCategories.includes('creatures') ? parsePowerValue(toughness) : null;
-
-        for (let i = 0; i < count; i++) {
-            cardDetails.push({
-                name: name,
-                cmc: Math.floor(cmc), // Floor for consistency with Scryfall data
-                type: primaryCategory,
-                allTypes: allCategories,
-                power: power, // Store raw power
-                toughness: toughness, // Store raw toughness
-                totalPT: (powerNum !== null && toughnessNum !== null) ? powerNum + toughnessNum : null,
-                isPower5Plus: powerNum !== null && powerNum >= 5
-            });
-        }
-    }
-    
-    return true;
+    report(onProgress, 100, 'Done');
+    return result;
 }
 
 /**
- * Import from Moxfield
+ * Import a deck from a Moxfield or Archidekt link.
+ * @param {string} input - a deck link or a bare Moxfield id
+ * @param {Function|null} [onProgress]
+ * @param {{signal?:AbortSignal}} [opts]
+ * @returns {Promise<Object>} the deck (see `assemble`)
  */
-async function importFromMoxfieldInternal(deckId, progressCallback) {
-    if (progressCallback) progressCallback({ processed: 10, total: 100, percentage: 10, currentCard: 'Fetching from Moxfield...' });
-
-    const apiUrl = `https://api2.moxfield.com/v3/decks/all/${deckId}`;
-    const data = await fetchWithProxy(apiUrl);
-
-    if (progressCallback) progressCallback({ processed: 50, total: 100, percentage: 50, currentCard: 'Processing card data...' });
-
-    const typeCounts = { creatures: 0, instants: 0, sorceries: 0, artifacts: 0, enchantments: 0, planeswalkers: 0, lands: 0, battles: 0 };
-    const cardDetails = [];
-    const cardsByName = {};
-    const cardsToFetch = [];
-    let actualCardCount = 0;
-    let commanderName = null;
-    let commanderData = null;
-
-    // Capture commander from commanders board
-    if (data.boards?.commanders?.cards) {
-        const commanderCards = Object.values(data.boards.commanders.cards);
-        if (commanderCards.length > 0 && commanderCards[0].card) {
-            commanderData = commanderCards[0].card;
-            commanderName = commanderData.name;
-        }
-    }
-
-    // Process mainboard
-    if (data.boards?.mainboard?.cards) {
-        Object.values(data.boards.mainboard.cards).forEach(entry => {
-            if (entry.card) {
-                const count = entry.quantity || 1;
-                actualCardCount += count;
-                const success = processCardEntry(entry.card, count, typeCounts, cardDetails, cardsByName);
-                if (!success) {
-                    cardsToFetch.push({ name: entry.card.name, count });
-                }
-            }
-        });
-    }
-    
-    // Retry failed cards via Scryfall
-    if (cardsToFetch.length > 0) {
-        console.log(`Fetching ${cardsToFetch.length} incomplete cards from Scryfall...`);
-        const names = cardsToFetch.map(c => c.name);
-        const fetchedCards = await batchFetchCards(names);
-        
-        // Map fetched cards back to counts (since batchFetch returns unique cards)
-        fetchedCards.forEach(cardData => {
-            // Find count(s) for this card
-            const entries = cardsToFetch.filter(c => c.name === cardData.name); // Simple match
-            entries.forEach(entry => {
-                processCardEntry(cardData, entry.count, typeCounts, cardDetails, cardsByName);
-            });
-        });
-    }
-
-    const commanderCard = commanderName ? await resolveCommanderCard(commanderData, commanderName) : null;
-    return { typeCounts, actualCardCount, cardDetails, cardsByName, deckName: data.name, commanderName, commanderCard };
-}
-
-/**
- * Import from Archidekt
- */
-async function importFromArchidektInternal(deckId, progressCallback) {
-    if (progressCallback) progressCallback({ processed: 10, total: 100, percentage: 10, currentCard: 'Fetching from Archidekt...' });
-
-    const apiUrl = `https://archidekt.com/api/decks/${deckId}/`;
-    const data = await fetchWithProxy(apiUrl);
-
-    if (progressCallback) progressCallback({ processed: 50, total: 100, percentage: 50, currentCard: 'Processing card data...' });
-
-    const typeCounts = { creatures: 0, instants: 0, sorceries: 0, artifacts: 0, enchantments: 0, planeswalkers: 0, lands: 0, battles: 0 };
-    const cardDetails = [];
-    const cardsByName = {};
-    const cardsToFetch = [];
-    let actualCardCount = 0;
-    let commanderName = null;
-    let commanderData = null;
-
-    if (data.cards) {
-        data.cards.forEach(entry => {
-            const categories = entry.categories || [];
-
-            // Capture commander name before skipping
-            if (categories.includes('Commander')) {
-                const cardData = entry.card ? (entry.card.oracleCard || entry.card) : null;
-                if (cardData && !commanderName) {
-                    commanderName = cardData.name;
-                    // The printing carries the Scryfall id (uid); the oracle card has the rules.
-                    commanderData = { ...cardData, scryfallId: cardData.scryfallId ?? entry.card?.uid };
-                }
-                return;
-            }
-
-            if (categories.includes('Sideboard') || categories.includes('Maybeboard')) {
-                return;
-            }
-
-            const cardData = entry.card ? (entry.card.oracleCard || entry.card) : null;
-            if (cardData) {
-                const count = entry.quantity || 1;
-                actualCardCount += count;
-                const success = processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName);
-                if (!success) {
-                    cardsToFetch.push({ name: cardData.name, count });
-                }
-            }
-        });
-    }
-    
-    // Retry failed cards via Scryfall
-    if (cardsToFetch.length > 0) {
-        if (progressCallback) progressCallback({ processed: 70, total: 100, percentage: 70, currentCard: `Fetching ${cardsToFetch.length} missing cards from Scryfall...` });
-        
-        // Batch fetch in chunks if needed (batchFetch handles some, but let's just pass all)
-        // Note: batchFetchCards takes array of strings (names)
-        const uniqueNames = [...new Set(cardsToFetch.map(c => c.name))];
-        const fetchedCards = await batchFetchCards(uniqueNames);
-        
-        // Process fetched cards
-        fetchedCards.forEach(cardData => {
-            // Find all entries matching this card name
-            const matchingEntries = cardsToFetch.filter(c => c.name === cardData.name); // Exact match logic from batchFetch
-            matchingEntries.forEach(entry => {
-                processCardEntry(cardData, entry.count, typeCounts, cardDetails, cardsByName);
-            });
-        });
-    }
-
-    const commanderCard = commanderName ? await resolveCommanderCard(commanderData, commanderName) : null;
-    return { typeCounts, actualCardCount, cardDetails, cardsByName, deckName: data.name, commanderName, commanderCard };
-}
-
-/**
- * Main Import Function (Dispatcher)
- * @param {string} input - URL or ID
- * @param {Function} progressCallback - Callback
- */
-export async function importDeckFromUrl(input, progressCallback = null) {
-    if (progressCallback) progressCallback({ processed: 0, total: 100, percentage: 0, currentCard: 'Initializing...' });
-
-    const { type, id } = parseImportInput(input);
-
-    if (!type) {
-        throw new Error('Invalid URL or ID. Supports Moxfield and Archidekt.');
-    }
-
-    let result;
-    if (type === 'moxfield') {
-        result = await importFromMoxfieldInternal(id, progressCallback);
-    } else if (type === 'archidekt') {
-        result = await importFromArchidektInternal(id, progressCallback);
-    }
-
-    if (progressCallback) progressCallback({ processed: 100, total: 100, percentage: 100, currentCard: 'Done!' });
-
-    const creaturesPower5Plus = result.cardDetails.filter(c => c.isPower5Plus).length;
-
-    return {
-        ...result.typeCounts,
-        actualCardCount: result.actualCardCount,
-        cardDetails: result.cardDetails,
-        cardsByName: result.cardsByName,
-        creaturesPower5Plus,
-        commanderName: result.commanderName,
-        commanderCard: result.commanderCard ?? null,
-        importMetadata: {
-            hasSideboard: false,
-            sideboardCount: 0,
-            missingCardCount: 0,
-            totalCardsAttempted: result.actualCardCount,
-            totalCardsImported: result.actualCardCount,
-            source: type.charAt(0).toUpperCase() + type.slice(1),
-            deckName: result.deckName
-        }
-    };
+export async function importDeckFromUrl(input, onProgress = null, { signal } = {}) {
+    report(onProgress, 5, 'Fetching the deck…');
+    const deck = await fetchDeck(input, { signal });
+    const site = deck.site === 'archidekt' ? 'Archidekt' : 'Moxfield';
+    report(onProgress, 50, `Reading ${deck.cards.length} cards from ${site}…`);
+    const result = await assemble({ ...deck, source: site }, {
+        signal,
+        onLookup: (done, total) => report(onProgress, Math.round(60 + (done / Math.max(1, total)) * 35), `Looking up ${total} cards on Scryfall…`)
+    });
+    report(onProgress, 100, 'Done');
+    return result;
 }
