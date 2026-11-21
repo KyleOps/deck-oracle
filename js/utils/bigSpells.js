@@ -507,7 +507,7 @@ ${s} .bs-chip {
     background: transparent; color: var(--tx-mid); font: 500 var(--t-xs)/1.4 var(--font-mono);
     cursor: pointer; transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
-${s} .bs-chip:hover { color: var(--tx-bright); border-color: var(--tx-dim); background: var(--tx-panel-alt); }
+${s} .bs-chip:hover { color: var(--tx-bright); border-color: var(--tx-dim); }
 ${s} .bs-chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--tx-accent); color: var(--tx-accent); }
 ${s} .bs-check { display: flex; gap: 10px; align-items: flex-start; font-size: var(--t-sm); color: var(--tx-text); cursor: pointer; }
 ${s} .bs-check input { margin-top: 3px; flex-shrink: 0; }

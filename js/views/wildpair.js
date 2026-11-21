@@ -301,7 +301,7 @@ export const styles = `
     text-align: left;
     cursor: pointer;
 }
-#wildpair-tab .wp-gc .wp-gc-head:hover { background: none; color: var(--tx-bright); }
+#wildpair-tab .wp-gc .wp-gc-head:hover { background: none; }
 #wildpair-tab .wp-gc .wp-gc-head:focus-visible { outline: 2px solid var(--tx-accent); outline-offset: 4px; }
 #wildpair-tab .wp-gc-n { font-size: var(--t-xs); letter-spacing: 0; text-transform: none; color: var(--tx-mid); }
 #wildpair-tab .wp-gc-name .card-ref { color: var(--tx-text); }
