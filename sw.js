@@ -13,7 +13,7 @@
  * Bump CACHE_VERSION whenever shipped assets change.
  */
 
-const CACHE_VERSION = 'v33';
+const CACHE_VERSION = 'v34';
 const CACHE_NAME = `deck-oracle-${CACHE_VERSION}`;
 const IMAGE_CACHE = 'deck-oracle-images-v1';
 const IMAGE_CACHE_LIMIT = 160;
