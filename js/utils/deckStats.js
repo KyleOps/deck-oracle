@@ -10,6 +10,7 @@ import { choose, drawType, drawTypeMin } from './hypergeometric.js';
 import { COLORS, parseManaCost, isLand, landColors, deckColorIdentity } from './mana.js';
 import { tagDeck } from './cardTags.js';
 import { FORMATS, cardsSeenByTurn } from './format.js';
+import { readCommanders, commanderLabel } from './commanders.js';
 
 const TYPE_ORDER = ['creatures', 'planeswalkers', 'battles', 'artifacts', 'enchantments', 'instants', 'sorceries', 'lands'];
 
@@ -22,13 +23,14 @@ export function deckCards(cardsByName = {}) {
 }
 
 /**
- * The card that best represents a deck visually: its commander, else its most
- * expensive legendary creature, else its most expensive nonland card.
- * @param {{commanderName?:string, cardsByName?:Object}} deck
+ * The card that best represents a deck visually: its (first) commander, else
+ * its most expensive legendary creature, else its most expensive nonland card.
+ * @param {{commanders?:Array, commanderName?:string, cardsByName?:Object}} deck
  * @returns {string|null}
  */
 export function featuredCardName(deck = {}) {
-    if (deck.commanderName) return deck.commanderName;
+    const commander = readCommanders(deck)[0]?.name;
+    if (commander) return commander;
     const cards = deckCards(deck.cardsByName).filter(c => !isLand(c));
     const byCost = (a, b) => (Number(b.cmc) || 0) - (Number(a.cmc) || 0) || a.name.localeCompare(b.name);
     const legend = cards.filter(c => /legendary creature/i.test(c.type_line ?? '')).sort(byCost)[0];
@@ -377,9 +379,10 @@ export function colorComboName(identity = []) {
 
 /**
  * A readable default name for a deck that arrived without one (pasted lists):
- * the commander's name, else its colours ("Mono-Red deck").
+ * its commanders ("Tymna the Weaver + Kraum, Ludevic's Opus"), else its
+ * colours ("Mono-Red deck").
+ * @param {{cardsByName?:Object, commanders?:Array, commanderName?:string|null}} deck
  */
-export function suggestDeckName({ cardsByName = {}, commanderName = null } = {}) {
-    if (commanderName) return commanderName;
-    return `${colorComboName(deckColorIdentity(cardsByName))} deck`;
+export function suggestDeckName(deck = {}) {
+    return commanderLabel(readCommanders(deck)) ?? `${colorComboName(deckColorIdentity(deck.cardsByName ?? {}))} deck`;
 }

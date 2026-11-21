@@ -35,7 +35,9 @@ test('opens on the deck overview with the example deck', async ({ page }) => {
     await expect(page.locator('.nav-item[data-tab="overview"]')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.ov-hero-name')).toContainText('Doctor Whostoric');
     await expect(page.locator('.finding').first()).toBeVisible();
-    await expect(page.locator('#deck-switcher-meta')).toContainText('99 cards');
+    // A Commander deck is counted with its command zone: the bundled example
+    // is 99 with its commander in the list, or 98 + 2 commanders = 100.
+    await expect(page.locator('#deck-switcher-meta')).toContainText(/\b(99|100) cards · Commander/);
     expect(errors).toEqual([]);
 });
 

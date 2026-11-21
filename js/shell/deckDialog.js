@@ -1,7 +1,7 @@
 /**
  * The deck dialog: import from a link, paste a list, switch between saved
- * decks, or enter type counts by hand. All imports go through DeckConfig; this
- * module only owns the UI.
+ * decks, or enter type counts by hand (the `#deck-*` inputs). All imports and
+ * edits go through DeckConfig; this module only owns the UI.
  */
 
 import * as DeckConfig from '../utils/deckConfig.js';
@@ -76,7 +76,8 @@ export const EXAMPLE_DECKS = Object.freeze([
 ]);
 
 let dialog;
-let busy = false;
+/** Which kind of import is running ('link' | 'list'), or null. */
+let busyKind = null;
 
 function relativeTime(ts) {
     if (!ts) return '';
@@ -113,11 +114,13 @@ export function renderSavedDecks() {
     list.innerHTML = decks.map(d => {
         const active = d.id === activeId;
         const fmt = d.format && d.format !== 'auto' ? FORMATS[d.format]?.label : null;
+        const commanders = (d.commanderNames ?? []).join(' + ');
+        const led = commanders && commanders !== d.name ? ` · ${commanders}` : '';
         return `
             <li class="saved-deck${active ? ' active' : ''}">
                 <button class="saved-deck-main" type="button" data-load-deck="${escapeHtml(d.id)}" ${active ? 'aria-current="true"' : ''}>
                     <span class="saved-deck-name">${escapeHtml(d.name)}</span>
-                    <span class="saved-deck-meta">${d.cardCount} cards · ${sourceLabel(d.importSource)}${fmt ? ` · ${fmt}` : ''} · ${relativeTime(d.savedAt)}</span>
+                    <span class="saved-deck-meta">${d.cardCount} cards${escapeHtml(led)} · ${sourceLabel(d.importSource)}${fmt ? ` · ${fmt}` : ''} · ${relativeTime(d.savedAt)}</span>
                 </button>
                 ${active ? '<span class="chip chip-accent">Active</span>' : ''}
                 <button class="icon-btn icon-btn-sm" type="button" data-rename-deck="${escapeHtml(d.id)}" aria-label="Rename ${escapeHtml(d.name)}" data-tip="Rename">
@@ -153,6 +156,37 @@ function selectPane(pane) {
         p.classList.toggle('active', on);
     });
     if (pane === 'saved') renderSavedDecks();
+    if (pane === 'manual') syncManualInputs();
+}
+
+// ── Manual counts ("By the numbers") ─────────────────────────────────────────
+
+/** Show the active deck's type counts and library size in the manual pane. */
+export function syncManualInputs() {
+    const config = DeckConfig.getDeckConfig();
+    DeckConfig.TYPE_FIELDS.forEach(field => {
+        const input = document.getElementById(`deck-${field}`);
+        // Never rewrite the field being typed in: it would move the caret.
+        if (input && input !== document.activeElement) input.value = config[field] ?? 0;
+    });
+    const totalEl = document.getElementById('deck-total');
+    if (totalEl) totalEl.textContent = DeckConfig.getDeckSize(true);
+}
+
+function bindManualInputs() {
+    DeckConfig.TYPE_FIELDS.forEach(field => {
+        const input = document.getElementById(`deck-${field}`);
+        if (!input) return;
+        input.addEventListener('input', e => {
+            // Editing counts turns the deck into a counts-only deck (DeckConfig).
+            DeckConfig.updateField(field, e.target.value);
+            const totalEl = document.getElementById('deck-total');
+            if (totalEl) totalEl.textContent = DeckConfig.getDeckSize(true);
+        });
+    });
+    // A newly loaded deck (import, saved deck, example) brings its own counts.
+    DeckConfig.onDeckImport(syncManualInputs);
+    syncManualInputs();
 }
 
 /**
@@ -186,7 +220,10 @@ function clearStatus() {
     progress?.classList.remove('visible');
 }
 
-function onStatus({ state, message, percentage, warnings = [] }) {
+/** Buttons that start each kind of import (examples are pasted lists). */
+const IMPORT_BUTTONS = { link: '#moxfield-import-btn', list: '#import-btn, [data-example]' };
+
+function onStatus({ state, message, percentage, warnings = [], kind = null }) {
     const statusEl = document.getElementById('import-status');
     const progress = document.getElementById('import-progress');
     const bar = document.getElementById('import-progress-bar');
@@ -199,9 +236,13 @@ function onStatus({ state, message, percentage, warnings = [] }) {
         progress.classList.toggle('visible', state === 'loading');
         if (typeof percentage === 'number') bar.style.width = `${Math.max(2, Math.min(100, percentage))}%`;
     }
-    busy = state === 'loading';
-    dialog?.querySelectorAll('#moxfield-import-btn, #import-btn, [data-example]').forEach(b => { b.disabled = busy; });
-    dialog?.classList.toggle('is-busy', busy);
+    // Only the running kind is locked (no double submits); starting the other
+    // kind replaces the running import, so a slow link never blocks a list.
+    busyKind = state === 'loading' ? (kind ?? 'link') : null;
+    for (const [k, selector] of Object.entries(IMPORT_BUTTONS)) {
+        dialog?.querySelectorAll(selector).forEach(b => { b.disabled = busyKind === k; });
+    }
+    dialog?.classList.toggle('is-busy', busyKind !== null);
 
     if (state === 'success') {
         renderSavedDecks();
@@ -292,13 +333,13 @@ export function initDeckDialog() {
 
     // Link import
     const urlInput = document.getElementById('moxfield-input');
-    const runUrl = () => { if (!busy) DeckConfig.loadDeckFromUrl(urlInput.value).catch(() => {}); };
+    const runUrl = () => { if (busyKind !== 'link') DeckConfig.loadDeckFromUrl(urlInput.value).catch(() => {}); };
     document.getElementById('moxfield-import-btn')?.addEventListener('click', runUrl);
     urlInput?.addEventListener('keydown', e => { if (e.key === 'Enter') runUrl(); });
 
     // Paste import (Ctrl/Cmd+Enter submits)
     const textArea = document.getElementById('decklist-input');
-    const runPaste = () => { if (!busy) DeckConfig.importDeckText(textArea.value).catch(() => {}); };
+    const runPaste = () => { if (busyKind !== 'list') DeckConfig.importDeckText(textArea.value).catch(() => {}); };
     document.getElementById('import-btn')?.addEventListener('click', runPaste);
     textArea?.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runPaste(); });
 
@@ -339,7 +380,7 @@ export function initDeckDialog() {
         }
     });
 
-    // Keep the manual tab honest: editing counts there marks the deck manual.
+    bindManualInputs();
     document.getElementById('deck-switcher')?.addEventListener('click', () => openDeckDialog());
     document.getElementById('deck-btn')?.addEventListener('click', () => openDeckDialog());
 }

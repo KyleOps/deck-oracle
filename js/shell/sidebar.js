@@ -69,16 +69,24 @@ export function markRelevance(ranked = []) {
     });
 }
 
-/** Deck switcher button in the sidebar: name, size, format, commander art. */
-export function renderDeckSwitcher({ name, meta, artName, artCard }) {
+/**
+ * Deck switcher button in the sidebar: name, size, format, commander art.
+ * `nameTitle` / `metaTitle` are the hover text (the commanders, and how the
+ * card count splits between library and command zone).
+ */
+export function renderDeckSwitcher({ name, meta, artName, artCard, nameTitle, metaTitle }) {
     const nameEl = document.getElementById('deck-switcher-name');
     const metaEl = document.getElementById('deck-switcher-meta');
     const artEl = document.getElementById('deck-switcher-art');
     if (nameEl) {
         nameEl.textContent = name;
-        nameEl.title = name;
+        nameEl.title = nameTitle || name;
     }
-    if (metaEl) metaEl.textContent = meta;
+    if (metaEl) {
+        metaEl.textContent = meta;
+        if (metaTitle) metaEl.title = metaTitle;
+        else metaEl.removeAttribute('title');
+    }
     if (artEl) {
         const known = artName && CARD_META[artName]?.art;
         const url = known || (artName ? cardImageUrl(artCard ?? artName, 'art_crop') : '');

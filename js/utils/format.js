@@ -44,13 +44,14 @@ export const FORMATS = Object.freeze({
 });
 
 /**
- * Infer the format from what the deck looks like.
- * @param {{deckSize?:number, commanderName?:string|null}} deck
+ * Infer the format from what the deck looks like: any commander (one, or a
+ * pair) means Commander; otherwise the library size decides.
+ * @param {{deckSize?:number, commanderName?:string|null, commanders?:Array}} deck
  * @returns {'commander'|'constructed'|'limited'}
  */
-export function detectFormat({ deckSize = 0, commanderName = null } = {}) {
+export function detectFormat({ deckSize = 0, commanderName = null, commanders = null } = {}) {
     const n = Number(deckSize) || 0;
-    if (commanderName) return 'commander';
+    if (commanderName || (Array.isArray(commanders) && commanders.some(c => (typeof c === 'string' ? c : c?.name)))) return 'commander';
     if (n >= 90) return 'commander';
     if (n > 0 && n <= 45) return 'limited';
     return 'constructed';
@@ -59,7 +60,7 @@ export function detectFormat({ deckSize = 0, commanderName = null } = {}) {
 /**
  * Resolve a stored preference ('auto' or a format key) to a format object.
  * @param {string|null|undefined} preference
- * @param {{deckSize?:number, commanderName?:string|null}} deck
+ * @param {{deckSize?:number, commanderName?:string|null, commanders?:Array}} deck
  */
 export function resolveFormat(preference, deck) {
     if (preference && preference !== 'auto' && FORMATS[preference]) return FORMATS[preference];

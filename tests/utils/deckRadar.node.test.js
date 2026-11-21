@@ -120,8 +120,8 @@ describe('deriveDeckFacts', () => {
         assert.strictEqual(deriveDeckFacts(deck).power5Plus, 1);
     });
 
-    it('falls back to the manual creaturesPower5Plus field with no card data', () => {
-        assert.strictEqual(deriveDeckFacts({ creaturesPower5Plus: 14 }).power5Plus, 14);
+    it('counts no power 5+ creatures without card data (no stored fallback)', () => {
+        assert.strictEqual(deriveDeckFacts({ creaturesPower5Plus: 14 }).power5Plus, 0);
     });
 
     it('builds a curve and average MV that excludes lands', () => {
@@ -180,6 +180,33 @@ describe('analyzeDeck — named card detection', () => {
         const r = analyzeDeck(deck).find(x => x.tab === 'mindsdilation');
         assert.strictEqual(r.reasons.filter(t => t.toLowerCase().includes('dilation')).length, 1);
     });
+
+    it('treats every commander as the commander (partners, a Doctor and companion)', () => {
+        const deck = {
+            ...makeDeck({ cards: [['Forest', 'Basic Land — Forest', 0, null, 30]] }),
+            commanders: [
+                { name: 'Tymna the Weaver', card: null },
+                { name: 'Rashmi, Eternities Crafter', card: null }
+            ]
+        };
+        const r = analyzeDeck(deck).find(x => x.tab === 'rashmi');
+        assert.strictEqual(r.hasCard, true);
+        assert.strictEqual(r.reasons[0], 'Rashmi, Eternities Crafter is your commander');
+        const facts = deriveDeckFacts(deck);
+        assert.deepStrictEqual(facts.commanderNames, ['Tymna the Weaver', 'Rashmi, Eternities Crafter']);
+        assert.strictEqual(facts.commanderName, 'Tymna the Weaver', 'the first commander stays the lead');
+    });
+
+    it('derives its trigger cards from the registry, plus aliases', () => {
+        assert.ok(TRIGGER_CARDS.wave.includes('Genesis Wave'));
+        assert.ok(TRIGGER_CARDS.abstract.includes('Fact or Fiction'));
+        assert.ok(TRIGGER_CARDS.rashmi.includes('Rashmi and Ragavan'));
+    });
+
+    it('colours tiers with v3 meaning tokens only', () => {
+        const colours = analyzeDeck(makeDeck({ cards: [['Genesis Wave', 'Sorcery', 6]] })).map(r => r.color);
+        assert.ok(colours.every(c => /^var\(--tx-(accent|good|mid|dim)\)$/.test(c)), colours.join(', '));
+    });
 });
 
 describe('analyzeDeck — structural signals', () => {
@@ -221,8 +248,9 @@ describe('analyzeDeck — structural signals', () => {
     });
 
     it('flags Vortex only when there are enough power 5+ creatures', () => {
-        assert.strictEqual(analyzeDeck({ creaturesPower5Plus: 4 }).find(r => r.tab === 'vortex').score, 0);
-        assert.ok(analyzeDeck({ creaturesPower5Plus: 20 }).find(r => r.tab === 'vortex').score > 0);
+        const fatties = n => makeDeck({ cards: [['Craw Wurm', 'Creature — Wurm', 6, '6', n]] });
+        assert.strictEqual(analyzeDeck(fatties(4)).find(r => r.tab === 'vortex').score, 0);
+        assert.ok(analyzeDeck(fatties(20)).find(r => r.tab === 'vortex').score > 0);
     });
 
     it('always surfaces mulligan and land drops as baseline tools', () => {

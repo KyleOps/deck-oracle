@@ -7,6 +7,8 @@
  * storage and quota errors degrade to "nothing saved", never to a crash.
  */
 
+import { readCommanders, commandZoneExtras } from './commanders.js';
+
 const KEY = 'deckOracle.library.v1';
 const ACTIVE_KEY = 'deckOracle.activeDeck.v1';
 export const MAX_DECKS = 24;
@@ -44,12 +46,15 @@ function write(storage, key, value) {
 /**
  * Stable id for a deck: its import URL when it has one (re-importing the same
  * Moxfield deck updates the entry instead of duplicating it), otherwise a hash
- * of its card list.
+ * of its card list and commanders (the same 99 under another commander is
+ * another deck).
  */
 export function deckId(deck = {}) {
     if (deck.importUrl) return `url:${String(deck.importUrl).trim().toLowerCase().replace(/\/+$/, '')}`;
-    const names = Object.values(deck.cardsByName ?? {})
-        .map(c => `${c?.count ?? 0}x${c?.name ?? ''}`).sort().join('|');
+    const cards = Object.values(deck.cardsByName ?? {}).map(c => `${c?.count ?? 0}x${c?.name ?? ''}`).sort();
+    // Decks without commanders keep the ids they were saved under.
+    const commanders = readCommanders(deck).map(c => `cmdr:${c.name}`);
+    const names = [...cards, ...commanders].join('|');
     let h = 2166136261;
     for (let i = 0; i < names.length; i++) {
         h ^= names.charCodeAt(i);
@@ -58,30 +63,35 @@ export function deckId(deck = {}) {
     return `list:${(h >>> 0).toString(36)}`;
 }
 
-/**
- * Reduce a DeckConfig snapshot to what needs persisting.
- * @param {Object} deck - DeckConfig.getDeckConfig() output
- */
+/** A card record without the fields that are re-derivable or unused. */
 function slimCard(card) {
     const slim = {};
     CARD_FIELDS.forEach(f => { if (card[f] !== undefined && card[f] !== null && card[f] !== '') slim[f] = card[f]; });
     return slim;
 }
 
+/**
+ * Reduce a DeckConfig snapshot to what needs persisting. Derived data
+ * (`cardDetails`, `commanderCard`) is not stored: deckConfig rebuilds it.
+ * @param {Object} deck - DeckConfig.getDeckConfig() output
+ */
 export function snapshotDeck(deck = {}) {
     const cardsByName = {};
     for (const [key, card] of Object.entries(deck.cardsByName ?? {})) {
         if (!card) continue;
         cardsByName[key] = slimCard(card);
     }
-    const commander = deck.commanderName && deck.commanderCard && typeof deck.commanderCard === 'object'
-        ? slimCard(deck.commanderCard) : null;
+    // The commanders' own records (cost, colours, art): they are never in cardsByName.
+    const commanders = readCommanders(deck).map(({ name, card }) => {
+        const slim = card ? slimCard(card) : null;
+        return { name, card: slim?.name ? slim : null };
+    });
     return {
         id: deckId(deck),
-        name: deck.deckName || deck.commanderName || 'Untitled deck',
-        commanderName: deck.commanderName ?? null,
-        // The commander's own record (cost, colours, art) — it is never in cardsByName.
-        commanderCard: commander?.name ? commander : null,
+        name: deck.deckName || commanders.map(c => c.name).join(' + ') || 'Untitled deck',
+        commanders,
+        // The first commander's name, for older versions of the app.
+        commanderName: commanders[0]?.name ?? null,
         importUrl: deck.importUrl ?? null,
         importSource: deck.importSource ?? null,
         format: deck.format ?? 'auto',
@@ -91,30 +101,36 @@ export function snapshotDeck(deck = {}) {
             lands: deck.lands, battles: deck.battles
         },
         actualCardCount: deck.actualCardCount ?? null,
-        creaturesPower5Plus: deck.creaturesPower5Plus ?? 0,
-        cardDetails: deck.cardDetails ?? [],
         cardsByName,
         savedAt: Date.now()
     };
 }
 
-/** List saved decks, most recent first (summaries only — cheap to render). */
+/**
+ * List saved decks, most recent first (summaries only — cheap to render).
+ * `cardCount` is the deck as players count it: library plus commanders.
+ */
 export function listDecks(storage = defaultStorage()) {
     const decks = read(storage, KEY, []);
     if (!Array.isArray(decks)) return [];
     return decks
         .filter(d => d && d.id)
         .sort((a, b) => (b.savedAt ?? 0) - (a.savedAt ?? 0))
-        .map(d => ({
-            id: d.id,
-            name: d.name,
-            commanderName: d.commanderName,
-            importSource: d.importSource,
-            importUrl: d.importUrl,
-            format: d.format,
-            cardCount: d.actualCardCount ?? Object.values(d.cardsByName ?? {}).reduce((s, c) => s + (Number(c.count) || 0), 0),
-            savedAt: d.savedAt
-        }));
+        .map(d => {
+            const commanders = readCommanders(d);
+            const library = d.actualCardCount ?? Object.values(d.cardsByName ?? {}).reduce((s, c) => s + (Number(c?.count) || 0), 0);
+            return {
+                id: d.id,
+                name: d.name,
+                commanderName: commanders[0]?.name ?? null,
+                commanderNames: commanders.map(c => c.name),
+                importSource: d.importSource,
+                importUrl: d.importUrl,
+                format: d.format,
+                cardCount: library + commandZoneExtras(commanders, d.cardsByName),
+                savedAt: d.savedAt
+            };
+        });
 }
 
 /** Full saved deck by id, or null. */
