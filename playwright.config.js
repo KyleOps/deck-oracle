@@ -1,5 +1,10 @@
 import { defineConfig } from '@playwright/test';
 
+// PW_PORT lets several checkouts (git worktrees) run the browser suite at the
+// same time without one checkout's server answering another's tests.
+const port = Number(process.env.PW_PORT) || 4173;
+const baseURL = `http://127.0.0.1:${port}`;
+
 export default defineConfig({
     testDir: './tests/e2e',
     fullyParallel: true,
@@ -10,13 +15,13 @@ export default defineConfig({
         ? [['github'], ['html', { open: 'never' }]]
         : 'list',
     use: {
-        baseURL: 'http://127.0.0.1:4173',
+        baseURL,
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure'
     },
     webServer: {
-        command: 'npm run serve:test',
-        url: 'http://127.0.0.1:4173',
+        command: `npx http-server . -p ${port} -c-1 -s`,
+        url: baseURL,
         reuseExistingServer: !process.env.CI,
         stdout: 'ignore',
         stderr: 'pipe'
