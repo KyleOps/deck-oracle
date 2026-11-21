@@ -336,7 +336,7 @@ export function summarize(a) {
     } else if (a.reliableX > a.x) {
         follow = `It becomes a near-lock (9 in 10) at <strong>X=${a.reliableX}</strong>.`;
     } else if (a.reliableX < a.x) {
-        follow = `X=${a.reliableX} is already 9 in 10 — ${plural(a.x - a.reliableX, 'mana')} cheaper.`;
+        follow = `X=${a.reliableX} is already 9 in 10 — ${plural(a.x - a.reliableX, 'mana', 'mana')} cheaper.`;
     } else {
         follow = 'This is the cheapest X that makes it 9 in 10.';
     }
