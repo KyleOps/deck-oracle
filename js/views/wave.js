@@ -57,8 +57,12 @@ export const template = `
     <section class="panel" aria-labelledby="wave-samples-title">
         <div class="tx-h">
             <h2 class="bs-h" id="wave-samples-title">Sample casts</h2>
-            <button class="btn btn-ghost btn-sm" type="button" id="wave-reshuffle-btn">Reshuffle</button>
+            <span class="bs-actions">
+                <button class="btn btn-sm bs-cast-btn" type="button" id="wave-cast-btn" aria-controls="wave-cast">Cast it</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="wave-reshuffle-btn">Reshuffle</button>
+            </span>
         </div>
+        <div class="bs-cast-stage" id="wave-cast" hidden></div>
         <div class="bs-samples" id="wave-samples"></div>
         <p class="bs-caption">Real shuffles of your list. Bright cards go onto the battlefield; dimmed ones cost more than X or aren’t permanents, and go to the graveyard.</p>
     </section>
@@ -92,7 +96,7 @@ export const guide = {
         '<strong>Permanents</strong> is the average number put onto the battlefield, with the range 8 casts in 10 fall inside.',
         '<strong>Out of 100 casts</strong> shows the whole spread at your X: each dot is one cast in a hundred, stacked by the value it puts into play (or by permanents). Solid dots paid for themselves, rings fell short — count them. Hover a column, or open “Exact chances”, for the numbers.',
         'The <strong>chart</strong> shows both at every X: bars for permanents, the line for payback. Click a bar to try that X.',
-        '<strong>Sample casts</strong> are real shuffles of your list resolved at your X.',
+        '<strong>Sample casts</strong> are real shuffles of your list resolved at your X. <strong>Cast it</strong> plays a fresh one card by card: each of the X revealed cards goes to the battlefield if it is a permanent with mana value X or less, otherwise to the graveyard. Skip jumps to the end; with reduced motion it shows the result at once.',
         '<strong>How it compares</strong> puts Genesis Wave beside Kamahl’s Druidic Vow, Primal Surge and Portent of Calamity at the same total mana.'
     ],
     method: 'Exact, no simulation. The number of hits among X cards is hypergeometric — drawing without replacement from your real counts of permanents at each mana value. The payback chance is an exact count over every possible set of X cards, scoring each with the value model in quarter-mana steps; the dot plot uses the same count over every total. Results are cached per deck and setting, so the slider is instant.',

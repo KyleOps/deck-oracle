@@ -8,6 +8,7 @@ import {
     getDeckConfig,
     simulatePrimalSurge,
     summarize,
+    surgeCastPlan,
     surgeDots,
     surgeRunOdds,
     surgeRunPmf,
@@ -297,5 +298,32 @@ describe('Primal Surge bottom line', () => {
         } finally {
             DeckConfig.updateDeck(original);
         }
+    });
+});
+
+describe('Primal Surge cast animation plan', () => {
+    const card = (name, type_line, cmc, types) => ({ name, type_line, cmc, types });
+    const forest = card('Forest', 'Basic Land — Forest', 0, ['land']);
+    const bear = card('Bear', 'Creature — Bear', 2, ['creature']);
+    const bolt = card('Bolt', 'Instant', 1, ['instant']);
+    const settings = { threshold: 4, landValue: 1, cardValue: 0.25 };
+
+    it('puts permanents onto the battlefield until the first instant or sorcery', () => {
+        const plan = surgeCastPlan([forest, bear, bolt, bear], settings);
+        assert.deepStrictEqual(plan.steps.map(s => s.fate), ['battlefield', 'battlefield', 'stop']);
+        assert.strictEqual(plan.permanents, 2);
+        assert.strictEqual(plan.value, 0 + 1 + 0.25 + 2 + 0.25);
+        assert.strictEqual(plan.paidBack, false);
+        assert.match(plan.steps[2].note, /stops here/);
+        assert.match(plan.summary, /Bolt stopped it/);
+    });
+
+    it('runs the whole library when nothing stops it', () => {
+        const plan = surgeCastPlan([forest, bear, bear], settings);
+        assert.strictEqual(plan.stopped, false);
+        assert.strictEqual(plan.paidBack, true);
+        assert.match(plan.summary, /whole library/);
+        assert.match(plan.steps.at(-1).totals[1].value, /^5\.8 /);
+        assert.strictEqual(plan.steps.at(-1).totals[1].tone, 'good');
     });
 });

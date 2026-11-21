@@ -19,6 +19,9 @@ import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell } from '.
 import { calculateFixedDrawPayback, fixedDrawValuePmf, paybackShareByHits, scoreBattlefieldValue } from '../utils/payback.js';
 import { describeDots, dotPlot, pmfQuantiles, splitDots } from '../utils/viz.js';
 import { escapeHtml } from '../data/glossary.js';
+import { cardImageUrl, findCard } from '../data/images.js';
+import { playCast } from '../utils/castAnimation.js';
+import { shuffle } from '../utils/simulation.js';
 import {
     avg, bindXPresets, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList,
     expandCards, fade, hypergeometricPmf, isPermanentTypeLine, listSize, noticeHTML, pct, plural,
@@ -474,11 +477,80 @@ function renderChart(config, results) {
     document.querySelectorAll('#wave-tab [data-payback-key]').forEach(key => { key.hidden = !hasPayback; });
 }
 
+/**
+ * One Genesis Wave resolution, card by card, for the "Cast it" animation:
+ * the top X cards are revealed; permanents with mana value X or less go to
+ * the battlefield, everything else to the graveyard. Pure.
+ *
+ * @param {Array<{name:string, cmc:number, types:string[]}>} library - shuffled
+ * @param {number} x
+ * @param {{landValue:number, cardValue:number}} settings
+ */
+export function waveCastPlan(library, x, settings = {}) {
+    const threshold = x + CONFIG.EXTRA_MANA;
+    const revealed = (library ?? []).slice(0, Math.max(0, x));
+    let permanents = 0;
+    let manaValue = 0;
+    let lands = 0;
+    const totals = () => {
+        const scored = scoreBattlefieldValue({ manaValue, lands, cards: permanents }, { ...settings, threshold });
+        return {
+            scored,
+            list: [
+                { label: 'Permanents', value: String(permanents) },
+                { label: 'Value', value: `${avg(scored.effectiveValue)} <small>of ${threshold}</small>`, tone: scored.paidForItself ? 'good' : undefined }
+            ]
+        };
+    };
+    const steps = revealed.map((card, i) => {
+        const types = card.types ?? [];
+        const permanent = types.some(t => t !== 'instant' && t !== 'sorcery');
+        const mv = card.cmc || 0;
+        const hit = permanent && mv <= x;
+        if (hit) {
+            permanents += 1;
+            manaValue += mv;
+            if (types.includes('land')) lands += 1;
+        }
+        const count = `${i + 1} of ${x}: `;
+        const note = hit
+            ? `${count}${types.includes('land') ? 'a land' : `a permanent with mana value ${mv}`} — X is ${x}, so onto the battlefield.`
+            : permanent
+                ? `${count}mana value ${mv} is more than X (${x}) — to the graveyard.`
+                : `${count}${types.includes('instant') ? 'an instant' : 'a sorcery'}, not a permanent — to the graveyard.`;
+        return { name: card.name, fate: hit ? 'battlefield' : 'graveyard', note, totals: totals().list };
+    });
+    const end = totals().scored;
+    const summary = `${plural(revealed.length, 'card')} revealed, ${plural(permanents, 'permanent')} onto the battlefield worth ${avg(end.effectiveValue)} — ${end.paidForItself ? '<strong>pays for itself</strong>' : '<strong>falls short</strong>'} of the ${threshold} mana spent.`;
+    return {
+        steps, permanents, value: end.effectiveValue, paidBack: end.paidForItself, summary,
+        startTotals: [{ label: 'Permanents', value: '0' }, { label: 'Value', value: `0 <small>of ${threshold}</small>` }]
+    };
+}
+
+function imageFor(name) {
+    const record = findCard(DeckConfig.getImportedCardData()?.cardsByName ?? {}, name);
+    return cardImageUrl(record ?? name, 'small');
+}
+
+/** "Cast it": a fresh shuffle resolved at the chosen X, card by card. */
+function castIt() {
+    const config = getDeckConfig();
+    const stage = document.getElementById('wave-cast');
+    if (!stage || !config.cards.length) return;
+    const library = expandCards(config.cards);
+    shuffle(library);
+    const plan = waveCastPlan(library, config.x, config.settings);
+    playCast(stage, { ...plan, outLabel: 'Graveyard', librarySize: library.length, imageFor }, castIt);
+}
+
 function renderSamples(config) {
     const el = document.getElementById('wave-samples');
     const header = document.getElementById('wave-samples-title');
     if (header) header.textContent = `Sample casts at X=${config.x}`;
     if (!el) return;
+    const castBtn = document.getElementById('wave-cast-btn');
+    if (castBtn) castBtn.hidden = !config.cards.length;
     if (!config.cards.length) {
         el.innerHTML = noticeHTML('Sample casts need a decklist with card names — import one from the deck menu.', 'flat');
         return;
@@ -586,6 +658,10 @@ export function init() {
             document.getElementById('wave-reshuffle-btn')?.addEventListener('click', () => {
                 sampler.reshuffle();
                 renderSamples(getDeckConfig());
+            });
+            document.getElementById('wave-cast-btn')?.addEventListener('click', castIt);
+            document.getElementById('wave-cast')?.addEventListener('cast-closed', () => {
+                document.getElementById('wave-cast-btn')?.focus({ preventScroll: true });
             });
             document.getElementById('wave-dots-view')?.addEventListener('click', e => {
                 const view = e.target.closest('[data-wave-view]')?.dataset.waveView;

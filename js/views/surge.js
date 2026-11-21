@@ -58,8 +58,12 @@ export const template = `
     <section class="panel" aria-labelledby="surge-samples-title">
         <div class="tx-h">
             <h2 class="bs-h" id="surge-samples-title">Sample casts</h2>
-            <button class="btn btn-ghost btn-sm" type="button" id="surge-reshuffle-btn">Reshuffle</button>
+            <span class="bs-actions">
+                <button class="btn btn-sm bs-cast-btn" type="button" id="surge-cast-btn" aria-controls="surge-cast">Cast it</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="surge-reshuffle-btn">Reshuffle</button>
+            </span>
         </div>
+        <div class="bs-cast-stage" id="surge-cast" hidden></div>
         <div class="bs-samples" id="surge-samples"></div>
         <p class="bs-caption">Real shuffles of your list, without the Primal Surge being cast. Each run ends at the dimmed card that stops it.</p>
     </section>
@@ -84,6 +88,7 @@ export const guide = {
         '<strong>Pays for itself</strong> is the chance a run’s value reaches your target. Value is each permanent’s mana value plus the land and per-permanent credits on the left.',
         '<strong>Permanents</strong> is the average run length; the median under it (“half the time … or fewer”) is the more honest typical cast, because a few huge runs pull the average up.',
         '<strong>Out of 100 casts</strong> shows every outcome at once: each dot is one cast in a hundred, stacked by how many permanents it put into play (or, switched to <strong>Value</strong>, by what they were worth). Solid dots paid for themselves; rings fell short. Hover a column, or open “Exact chances”, for the numbers.',
+        '<strong>Cast it</strong> plays one fresh shuffle card by card: each permanent goes to the battlefield and Surge exiles the next, until an instant or sorcery stops it. Skip jumps to the end; with reduced motion it shows the result at once.',
         'The <strong>chart</strong> is a deck-building what-if: the same permanents with more or fewer instants and sorceries.',
         '<strong>How it compares</strong> puts Primal Surge beside the other big spells at 10 mana.'
     ],

@@ -74,6 +74,7 @@ const STATIC_ASSETS = [
     'js/utils/calculatorBase.js',
     'js/utils/calculatorRegistry.js',
     'js/utils/cardTags.js',
+    'js/utils/castAnimation.js',
     'js/utils/castability.js',
     'js/utils/chartHelpers.js',
     'js/utils/components.js',

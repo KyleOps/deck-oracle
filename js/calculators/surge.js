@@ -19,6 +19,9 @@ import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { buildDeckFromCardData } from '../utils/sampleSimulator.js';
 import { describeDots, dotPlot, pmfQuantiles, splitDots } from '../utils/viz.js';
 import { escapeHtml } from '../data/glossary.js';
+import { cardImageUrl, findCard } from '../data/images.js';
+import { playCast } from '../utils/castAnimation.js';
+import { shuffle } from '../utils/simulation.js';
 import {
     avg, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList, expandCards, fade,
     isPermanentTypeLine, noticeHTML, pct, plural, renderHowItCompares, sampleCardHTML, toneColor
@@ -649,6 +652,8 @@ function renderChart(config, result) {
 function renderSamples(config) {
     const el = document.getElementById('surge-samples');
     if (!el) return;
+    const castBtn = document.getElementById('surge-cast-btn');
+    if (castBtn) castBtn.hidden = !config.cards.length;
     if (!config.cards.length) {
         el.innerHTML = noticeHTML('Sample casts need a decklist with card names — import one from the deck menu.', 'flat');
         return;
@@ -693,12 +698,79 @@ function renderSamples(config) {
     }).join('');
 }
 
+/**
+ * One Primal Surge resolution, card by card, for the "Cast it" animation:
+ * permanents go to the battlefield and it repeats; the first instant or
+ * sorcery stops it. Pure — the library is a shuffled list of card records.
+ *
+ * @param {Array<{name:string, type_line:string, cmc:number, types:string[]}>} library
+ * @param {{threshold:number, landValue:number, cardValue:number}} settings
+ */
+export function surgeCastPlan(library, settings) {
+    const threshold = settings?.threshold ?? CONFIG.DEFAULT_PAYBACK_THRESHOLD;
+    const steps = [];
+    let permanents = 0;
+    let manaValue = 0;
+    let lands = 0;
+    let stopper = null;
+    const totalsAt = () => {
+        const { effectiveValue, paidBack } = calculateSurgeRunValue({ manaValue, lands, permanents }, settings);
+        return {
+            value: effectiveValue,
+            paidBack,
+            totals: [
+                { label: 'Permanents', value: String(permanents) },
+                { label: 'Value', value: `${avg(effectiveValue)} <small>of ${valueText(threshold)}</small>`, tone: paidBack ? 'good' : undefined }
+            ]
+        };
+    };
+    for (const card of library ?? []) {
+        if (!isPermanentTypeLine(card.type_line)) {
+            stopper = card;
+            const kind = (card.types ?? []).includes('instant') ? 'an instant' : 'a sorcery';
+            steps.push({ name: card.name, fate: 'stop', note: `${kind}, not a permanent — Primal Surge stops here.`, totals: totalsAt().totals });
+            break;
+        }
+        permanents += 1;
+        manaValue += card.cmc || 0;
+        const isLandCard = (card.types ?? []).includes('land');
+        if (isLandCard) lands += 1;
+        const kind = isLandCard ? 'a land' : `a permanent (mana value ${card.cmc || 0})`;
+        steps.push({ name: card.name, fate: 'battlefield', note: `${kind} — onto the battlefield, and Surge exiles the next card.`, totals: totalsAt().totals });
+    }
+    const end = totalsAt();
+    const run = `${plural(permanents, 'permanent')} onto the battlefield, worth ${avg(end.value)}`;
+    const summary = stopper
+        ? `${run} — ${end.paidBack ? '<strong>pays for itself</strong>' : '<strong>falls short</strong>'} of ${valueText(threshold)}. ${escapeHtml(stopper.name)} stopped it.`
+        : `Every card was a permanent: ${run}. The whole library!`;
+    return { steps, permanents, value: end.value, paidBack: end.paidBack, stopped: Boolean(stopper), summary, startTotals: [
+        { label: 'Permanents', value: '0' },
+        { label: 'Value', value: `0 <small>of ${valueText(threshold)}</small>` }
+    ] };
+}
+
 /** The library with the cast Surge removed, one object per card. */
 function libraryCards(cards) {
     const library = expandCards(cards);
     const at = library.findIndex(card => isPrimalSurge(card.name));
     if (at !== -1) library.splice(at, 1);
     return library;
+}
+
+function imageFor(name) {
+    const record = findCard(DeckConfig.getImportedCardData()?.cardsByName ?? {}, name);
+    return cardImageUrl(record ?? name, 'small');
+}
+
+/** "Cast it": a fresh shuffle resolved card by card. */
+function castIt() {
+    const config = getDeckConfig();
+    const stage = document.getElementById('surge-cast');
+    if (!stage || !config.cards.length) return;
+    const library = libraryCards(config.cards);
+    shuffle(library);
+    const plan = surgeCastPlan(library, config.settings);
+    playCast(stage, { ...plan, outLabel: 'Stopped by', librarySize: library.length, imageFor }, castIt);
 }
 
 export function updateUI() {
@@ -729,6 +801,10 @@ export function init() {
             document.getElementById('surge-reshuffle-btn')?.addEventListener('click', () => {
                 sampler.reshuffle();
                 renderSamples(getDeckConfig());
+            });
+            document.getElementById('surge-cast-btn')?.addEventListener('click', castIt);
+            document.getElementById('surge-cast')?.addEventListener('cast-closed', () => {
+                document.getElementById('surge-cast-btn')?.focus({ preventScroll: true });
             });
             document.getElementById('surge-dots-view')?.addEventListener('click', e => {
                 const view = e.target.closest('[data-surge-view]')?.dataset.surgeView;
