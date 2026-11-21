@@ -16,20 +16,32 @@
  * Requirements
  *   cast     Cast a card from the group by the step's turn (from your hand, or
  *            a commander from the command zone). With `after`, a permanent
- *            matching `after` must be on the battlefield when you cast it.
+ *            matching `after` must be on the battlefield when you cast it;
+ *            with `paid: n` you pay n or more for it (X included); with
+ *            `copied: true` a copy effect (The Sixth Doctor) copies it.
  *            Each cast counts towards one step only.
  *   mana     Have `atLeast` mana available on some turn by the step's turn
  *            (lands, mana creatures, rocks and triggers, counting what you
  *            cast that turn).
  *   package  Cast every card of one option in the same turn, from your hand
  *            — "two 4-drops or one 7–9-drop".
+ *   spend    Spend `atLeast` mana in one turn on spells from your hand that
+ *            match `group` (default: any spell) — "8+ mana of threats on
+ *            turn 4". X spells count the X you pay.
+ *   ramp     End a turn able to make `atLeast` mana next turn: every mana
+ *            source you control plus a land drop from your hand — the
+ *            outcome of ramp, whichever card did it.
+ *
+ * A step with `info: true` is measured but is not part of the plan: it
+ * never changes what the games do, and the plan succeeds without it.
  *
  * Groups ({ is, mv?: [lo, hi], names?: [...], lands?: n }) pick nonland cards:
  *   any · mana (a mana source) · ramp (anything ramp.js counts) · landRamp
  *   (fetches `lands` or more lands) · historic (artifact, legendary or Saga)
  *   · commander (any, or the named ones) · named · creature · artifact ·
  *   enchantment · planeswalker · instant · sorcery · permanent.
- *   `mv` bounds the mana value (X counts as 0).
+ *   `mv` bounds the mana value: in your hand X counts as 0, on the stack (a
+ *   spend step) as the X you pay.
  *
  * Everything here is plain data in, plain data out: plans are serialisable
  * for share links, saved plans and the preset modules (js/data/plans/).
@@ -52,7 +64,7 @@ export const GROUP_KINDS = Object.freeze([
     'mana', 'ramp', 'landRamp', 'commander', 'named', 'historic',
     'creature', 'artifact', 'enchantment', 'planeswalker', 'instant', 'sorcery', 'permanent', 'any'
 ]);
-export const REQUIREMENT_KINDS = Object.freeze(['cast', 'mana', 'package']);
+export const REQUIREMENT_KINDS = Object.freeze(['cast', 'mana', 'package', 'spend', 'ramp']);
 const TYPE_KINDS = new Set(['creature', 'artifact', 'enchantment', 'planeswalker', 'instant', 'sorcery']);
 
 // ── Validation ───────────────────────────────────────────────────────────────
@@ -107,15 +119,26 @@ export function normalizeGroup(group) {
  */
 export function normalizeRequirement(require) {
     if (!require || typeof require !== 'object') return null;
-    if (require.kind === 'mana') {
+    if (require.kind === 'mana' || require.kind === 'ramp') {
         const atLeast = int(require.atLeast, 1, MAX_MANA_TARGET, null);
-        return atLeast ? { kind: 'mana', atLeast } : null;
+        return atLeast ? { kind: require.kind, atLeast } : null;
+    }
+    if (require.kind === 'spend') {
+        const atLeast = int(require.atLeast, 1, MAX_MANA_TARGET, null);
+        if (!atLeast) return null;
+        const group = require.group ? normalizeGroup(require.group) : null;
+        return group && (group.is !== 'any' || group.mv) ? { kind: 'spend', atLeast, group } : { kind: 'spend', atLeast };
     }
     if (require.kind === 'cast') {
         const group = normalizeGroup(require.group);
         if (!group) return null;
+        const out = { kind: 'cast', group };
         const after = require.after ? normalizeGroup(require.after) : null;
-        return after ? { kind: 'cast', group, after } : { kind: 'cast', group };
+        if (after) out.after = after;
+        const paid = require.paid == null ? null : int(require.paid, 1, MAX_MANA_TARGET, null);
+        if (paid) out.paid = paid;
+        if (require.copied === true) out.copied = true;
+        return out;
     }
     if (require.kind === 'package') {
         const options = (Array.isArray(require.options) ? require.options : [])
@@ -141,7 +164,10 @@ export function normalizePlan(plan) {
     const steps = (Array.isArray(plan?.steps) ? plan.steps : [])
         .map(s => {
             const require = normalizeRequirement(s?.require);
-            return require ? { turn: int(s.turn, 1, MAX_TURN, 1), require } : null;
+            if (!require) return null;
+            const step = { turn: int(s.turn, 1, MAX_TURN, 1), require };
+            if (s.info === true) step.info = true;
+            return step;
         })
         .filter(Boolean)
         .slice(0, MAX_STEPS);
@@ -151,14 +177,17 @@ export function normalizePlan(plan) {
 // ── Share-link codec ─────────────────────────────────────────────────────────
 //
 // Compact and URL-safe: only letters, digits and `*-._`, the characters a
-// query string carries unescaped. Steps are joined by `_`; a step is its
-// turn, a kind letter and a body:
-//   c<group>[-<after group>]      cast
-//   m<n>                           mana
+// query string carries unescaped. Steps are joined by `_`; a step is an
+// optional `i` (information only), its turn, a kind letter and a body:
+//   c[P<n>][Y]<group>[-<after group>]     cast (P: paid n+, Y: copied)
+//   m<n>                                  mana
 //   p<count>x<group>(-<count>x<group>)*   package
+//   s<n>[-<group>]                        spend
+//   r<n>                                  ramp
 // A group is a kind letter, then `.`-fields: v<lo>w<hi> (mana value),
 // l<n> (lands), n<name> (each name escaped so it holds no `-._`).
-// "Selvala on turn 3" is `3ck.nSelvala*2C*20Eager*20Trailblazer`.
+// "Selvala on turn 3" is `3ck.nSelvala*2C*20Eager*20Trailblazer`. Links made
+// before spend, ramp, P, Y and i existed read exactly as they did.
 
 const GROUP_CODE = Object.freeze({
     any: 'a', mana: 'm', ramp: 'r', landRamp: 'l', historic: 'h', commander: 'k', named: 'n',
@@ -214,10 +243,16 @@ function decodeGroup(text) {
  * @returns {string}
  */
 export function encodePlan(plan) {
-    return normalizePlan(plan).steps.map(({ turn, require: r }) => {
-        if (r.kind === 'mana') return `${turn}m${r.atLeast}`;
-        if (r.kind === 'cast') return `${turn}c${encodeGroup(r.group)}${r.after ? `-${encodeGroup(r.after)}` : ''}`;
-        return `${turn}p${r.options.map(o => `${o.count}x${encodeGroup(o.group)}`).join('-')}`;
+    return normalizePlan(plan).steps.map(({ turn, require: r, info }) => {
+        const head = `${info ? 'i' : ''}${turn}`;
+        if (r.kind === 'mana') return `${head}m${r.atLeast}`;
+        if (r.kind === 'ramp') return `${head}r${r.atLeast}`;
+        if (r.kind === 'spend') return `${head}s${r.atLeast}${r.group ? `-${encodeGroup(r.group)}` : ''}`;
+        if (r.kind === 'cast') {
+            const flags = `${r.paid ? `P${r.paid}` : ''}${r.copied ? 'Y' : ''}`;
+            return `${head}c${flags}${encodeGroup(r.group)}${r.after ? `-${encodeGroup(r.after)}` : ''}`;
+        }
+        return `${head}p${r.options.map(o => `${o.count}x${encodeGroup(o.group)}`).join('-')}`;
     }).join('_');
 }
 
@@ -230,25 +265,45 @@ export function encodePlan(plan) {
 export function decodePlan(text) {
     if (typeof text !== 'string' || !text || text.length > 2000 || !/^[A-Za-z0-9*._-]+$/.test(text)) return null;
     const steps = [];
+    const target = body => (/^\d{1,2}$/.test(body) && Number(body) >= 1 && Number(body) <= MAX_MANA_TARGET ? Number(body) : null);
     for (const part of text.split('_')) {
-        const m = part.match(/^(\d{1,2})([cmp])(.+)$/);
+        const m = part.match(/^(i?)(\d{1,2})([cmpsr])(.+)$/);
         if (!m) return null;
-        const turn = Number(m[1]);
+        const info = m[1] === 'i';
+        const turn = Number(m[2]);
         if (turn < 1 || turn > MAX_TURN) return null;
+        const kind = m[3];
+        const body = m[4];
         let require;
-        if (m[2] === 'm') {
-            if (!/^\d{1,2}$/.test(m[3]) || Number(m[3]) < 1 || Number(m[3]) > MAX_MANA_TARGET) return null;
-            require = { kind: 'mana', atLeast: Number(m[3]) };
-        } else if (m[2] === 'c') {
-            const [g, after, extra] = m[3].split('-');
+        if (kind === 'm' || kind === 'r') {
+            const atLeast = target(body);
+            if (!atLeast) return null;
+            require = { kind: kind === 'm' ? 'mana' : 'ramp', atLeast };
+        } else if (kind === 's') {
+            const [n, g, extra] = body.split('-');
+            const atLeast = target(n);
+            if (!atLeast || extra !== undefined) return null;
+            const group = g === undefined ? null : decodeGroup(g);
+            if (g !== undefined && !group) return null;
+            require = group ? { kind: 'spend', atLeast, group } : { kind: 'spend', atLeast };
+        } else if (kind === 'c') {
+            const flags = body.match(/^((?:P\d{1,2}|Y)*)(.*)$/);
+            const [g, after, extra] = flags[2].split('-');
             if (extra !== undefined) return null;
             const group = decodeGroup(g);
             const afterGroup = after === undefined ? null : decodeGroup(after);
             if (!group || (after !== undefined && !afterGroup)) return null;
-            require = afterGroup ? { kind: 'cast', group, after: afterGroup } : { kind: 'cast', group };
+            require = { kind: 'cast', group };
+            if (afterGroup) require.after = afterGroup;
+            const paid = flags[1].match(/P(\d{1,2})/);
+            if (paid) {
+                if (!target(paid[1])) return null;
+                require.paid = Number(paid[1]);
+            }
+            if (flags[1].includes('Y')) require.copied = true;
         } else {
             const options = [];
-            for (const o of m[3].split('-')) {
+            for (const o of body.split('-')) {
                 const om = o.match(new RegExp(`^([1-${MAX_COUNT}])x(.+)$`));
                 const group = om ? decodeGroup(om[2]) : null;
                 if (!group) return null;
@@ -258,7 +313,7 @@ export function decodePlan(text) {
         }
         const valid = normalizeRequirement(require);
         if (!valid) return null;
-        steps.push({ turn, require: valid });
+        steps.push(info ? { turn, require: valid, info: true } : { turn, require: valid });
     }
     if (steps.length > MAX_STEPS) return null;
     return normalizePlan({ steps });
@@ -275,9 +330,11 @@ export function planKey(plan) {
  * A predicate for a group over the engine's cards (planEngine.js
  * `toPlanCard`): `land`, `placeholder`, `mv`, `manaSource`, `isRamp`,
  * `landsFetched`, `historic`, `commander`, `key`, `permanent` and the type
- * flags. Groups only ever match nonland cards with a known cost.
+ * flags. Groups only ever match nonland cards with a known cost. The mana
+ * value tested is the card's, or `mv` when given (a spell on the stack, X
+ * included).
  * @param {Object} group - normalizeGroup() output
- * @returns {(card:Object) => boolean}
+ * @returns {(card:Object, mv?:number) => boolean}
  */
 export function compileGroup(group) {
     const g = normalizeGroup(group);
@@ -298,7 +355,7 @@ export function compileGroup(group) {
         case 'permanent': test = c => c.permanent === true; break;
         default: test = TYPE_KINDS.has(g.is) ? c => c[g.is] === true : () => false;
     }
-    return card => Boolean(card) && !card.land && !card.placeholder && card.mv >= lo && card.mv <= hi && test(card);
+    return (card, mv = card?.mv) => Boolean(card) && !card.land && !card.placeholder && mv >= lo && mv <= hi && test(card);
 }
 
 /** Does a card belong to a group? (One-off checks; compile once for loops.) */
@@ -400,7 +457,14 @@ export function describeRequirement(step, { name = n => n } = {}) {
         return `${article(noun.one)} ${noun.one}`;
     };
     if (r.kind === 'mana') return `Have ${r.atLeast}+ mana`;
-    if (r.kind === 'cast') return `Cast ${phrase(r.group)}${r.after ? ` after ${phrase(r.after)} is out` : ''}`;
+    if (r.kind === 'ramp') return `Ramp to ${r.atLeast}+ mana for next turn`;
+    if (r.kind === 'spend') return `Spend ${r.atLeast}+ mana on ${groupNoun(r.group ?? { is: 'any' }).many} from your hand`;
+    if (r.kind === 'cast') {
+        const what = `${phrase(r.group)}${r.paid ? ` costing ${r.paid}+` : ''}`;
+        const after = r.after ? phrase(r.after) : '';
+        if (r.copied) return `Copy ${what}${after ? ` with ${after}` : ''}`;
+        return `Cast ${what}${after ? ` after ${after} is out` : ''}`;
+    }
     const options = r.options.map(o => {
         const noun = groupNoun(o.group);
         if (noun.names.length && (o.group.is === 'named' || o.group.is === 'commander')) return `${numberWord(o.count)} of ${noun.names.map(name).join(', ')}`;
@@ -418,5 +482,7 @@ export function stepSubject(step) {
         return noun.names.length ? noun.names.join(' or ') : noun.one;
     }
     if (r.kind === 'package') return 'payoff';
+    if (r.kind === 'spend') return groupNoun(r.group ?? { is: 'any' }).many;
+    if (r.kind === 'ramp') return 'ramp';
     return 'mana';
 }

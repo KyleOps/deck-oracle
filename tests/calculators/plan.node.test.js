@@ -13,7 +13,7 @@ import * as DeckConfig from '../../js/utils/deckConfig.js';
 import * as GP from '../../js/utils/models/plan.js';
 import { GLOSSARY } from '../../js/data/glossary.js';
 import { CALCULATORS } from '../../js/utils/calculatorRegistry.js';
-import * as Sample from '../../js/data/plans/sample-green.js';
+import * as Splendor from '../../js/data/plans/wild-splendor.js';
 
 const CUSTOM = {
     steps: [
@@ -60,10 +60,10 @@ describe('Game Plan page', () => {
         assert.deepEqual(Page.readInputs().plan, GP.normalizePlan(CUSTOM));
         assert.equal(Page.getSettings().source.kind, 'custom');
 
-        DeckConfig.loadSnapshot(Sample.snapshot, { persistActive: false });
+        DeckConfig.loadSnapshot(Splendor.snapshot, { persistActive: false });
         const other = Page.readInputs();
         assert.deepEqual(other.plan, GP.starterPlan(other.lib), 'another deck: its own starter plan');
-        assert.equal(other.preset?.id, 'sample-green', 'and the preset made for it is suggested');
+        assert.equal(other.preset?.id, 'wild-splendor', 'and the preset made for it is suggested');
 
         DeckConfig.resetForTests();
         assert.deepEqual(Page.readInputs().plan, GP.normalizePlan(CUSTOM), 'back again: the plan is still there');
@@ -91,30 +91,31 @@ describe('Game Plan page', () => {
     });
 
     it('tries a preset: its deck becomes the current deck, saved like an import, with its plan', async () => {
-        assert.equal(await Page.tryPreset('sample-green'), true);
+        assert.equal(await Page.tryPreset('wild-splendor'), true);
         const deck = DeckConfig.getDeckConfig();
-        assert.equal(deck.deckName, 'Sample green ramp');
+        assert.equal(deck.deckName, 'Wild Splendor');
         assert.equal(deck.importSource, 'preset');
         assert.ok(deck.deckId, 'it has a library id');
-        assert.equal(DeckConfig.getFormat().key, 'limited');
+        assert.equal(DeckConfig.getFormat().key, 'commander');
         const inputs = Page.readInputs();
-        assert.deepEqual(inputs.plan, GP.normalizePlan(Sample.plan));
-        assert.deepEqual(Page.getSettings().source, { kind: 'preset', id: 'sample-green' });
-        assert.equal(inputs.lib.cards.length, 40);
+        assert.deepEqual(inputs.plan, GP.normalizePlan(Splendor.plan));
+        assert.deepEqual(Page.getSettings().source, { kind: 'preset', id: 'wild-splendor' });
+        assert.equal(inputs.lib.cards.length, 99);
+        assert.deepEqual(inputs.lib.commanders.map(c => c.name), ['Selvala, Eager Trailblazer']);
         assert.equal(await Page.tryPreset('no-such-preset'), false);
-        assert.equal(await Page.loadPreset('sample-green'), await Page.loadPreset('sample-green'), 'loaded once');
+        assert.equal(await Page.loadPreset('wild-splendor'), await Page.loadPreset('wild-splendor'), 'loaded once');
     });
 
     it('uses a preset’s plan on the current deck', async () => {
-        assert.equal(await Page.usePreset('sample-green'), true);
-        assert.deepEqual(Page.readInputs().plan, GP.normalizePlan(Sample.plan));
-        assert.deepEqual(Page.getSettings().source, { kind: 'preset', id: 'sample-green' });
+        assert.equal(await Page.usePreset('wild-splendor'), true);
+        assert.deepEqual(Page.readInputs().plan, GP.normalizePlan(Splendor.plan));
+        assert.deepEqual(Page.getSettings().source, { kind: 'preset', id: 'wild-splendor' });
         assert.equal(await Page.usePreset('nope'), false);
     });
 
     it('has the containers the module renders into, scoped styles and a complete guide', () => {
         for (const id of ['gp-summary', 'gp-steps', 'gp-preset', 'gp-add-step', 'gp-reset', 'gp-keep', 'gp-keep-min', 'gp-keep-max',
-            'gp-order-group', 'gp-funnel', 'gp-reasons', 'gp-mana', 'gp-samples', 'gp-reshuffle', 'gp-rules', 'gp-card-names']) {
+            'gp-order-group', 'gp-funnel', 'gp-reasons', 'gp-mana', 'gp-samples', 'gp-reshuffle', 'gp-rules', 'gp-card-names', 'gp-about', 'gp-measures']) {
             assert.ok(template.includes(`id="${id}"`), id);
         }
         assert.ok(!/<h1/i.test(template), 'the shared header owns the title');

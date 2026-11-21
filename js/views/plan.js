@@ -51,6 +51,11 @@ export const template = `
         </div>
     </section>
 
+    <section class="panel gp-about-panel" id="gp-about-panel" aria-labelledby="gp-about-title" hidden>
+        <div class="tx-h"><span id="gp-about-title">About this plan</span><span class="tx-h-r" id="gp-about-meta"></span></div>
+        <div class="gp-about" id="gp-about"></div>
+    </section>
+
     <section class="panel" aria-labelledby="gp-funnel-title">
         <div class="tx-h"><span id="gp-funnel-title">Step by step</span><span class="tx-h-r" id="gp-funnel-meta"></span></div>
         <div id="gp-funnel"></div>
@@ -67,6 +72,11 @@ export const template = `
         <div class="tx-h"><span id="gp-mana-title">Mana on the key turn</span><span class="tx-h-r" id="gp-mana-meta"></span></div>
         <div id="gp-mana"></div>
         <p class="tx-caption is-below" id="gp-mana-caption"></p>
+    </section>
+
+    <section class="panel" id="gp-measures-panel" aria-labelledby="gp-measures-title" hidden>
+        <div class="tx-h"><span id="gp-measures-title">What the steps measured</span><span class="tx-h-r" id="gp-measures-meta"></span></div>
+        <div id="gp-measures"></div>
     </section>
 
     <section class="panel" aria-labelledby="gp-samples-title">
@@ -99,6 +109,8 @@ export const styles = `
 }
 #plan-tab .gp-pending-bar { flex: 1; max-width: 240px; height: 6px; border-radius: 6px; background: var(--tx-rule); overflow: hidden; }
 #plan-tab .gp-pending-fill { display: block; height: 100%; background: var(--tx-flat); transition: width 0.15s linear; }
+#plan-tab .is-partial .gp-pending { padding: 10px 18px 14px; border-top: 1px solid var(--tx-rule); font-size: var(--t-xs); }
+#plan-tab .is-partial .tx-hero { opacity: 0.85; }
 
 /* ── Rail: the plan editor ───────────────────────────────────────── */
 #plan-tab .gp-rail-body { display: grid; gap: 14px; padding: 16px; }
@@ -174,6 +186,20 @@ export const styles = `
 #plan-tab .gp-step-read { margin: 0; font-size: var(--t-xs); line-height: 1.45; color: var(--tx-mid); }
 #plan-tab .gp-step-read strong { color: var(--tx-bright); font-weight: 600; }
 #plan-tab .gp-plan-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#plan-tab .gp-check { display: inline-flex; align-items: center; gap: 5px; font-size: var(--t-xs); color: var(--tx-mid); cursor: pointer; }
+#plan-tab .gp-check input { accent-color: var(--tx-accent); margin: 0; }
+
+/* ── About this plan (a preset's notes) ──────────────────────────── */
+#plan-tab .gp-about { display: grid; gap: 10px; padding: var(--pad-y) var(--pad-x); max-width: 72ch; }
+#plan-tab .gp-about p { margin: 0; font-size: var(--t-sm); line-height: 1.6; color: var(--tx-text); }
+#plan-tab .gp-about p:first-child { color: var(--tx-bright); }
+
+/* ── What the steps measured ─────────────────────────────────────── */
+#plan-tab .gp-measure { display: grid; gap: 8px; padding: var(--pad-y) var(--pad-x); border-bottom: 1px solid var(--tx-rule); }
+#plan-tab .gp-measure:last-child { border-bottom: 0; }
+#plan-tab .gp-measure-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: var(--t-sm); color: var(--tx-text); }
+#plan-tab .gp-measure-head strong { font-family: var(--font-mono); color: var(--tx-bright); font-feature-settings: 'tnum' 1; }
+#plan-tab .gp-measure-sub { font-size: var(--t-xs); color: var(--tx-mid); }
 
 /* ── Step funnel ─────────────────────────────────────────────────── */
 #plan-tab .gp-funnel { display: grid; margin: 0; padding: 4px 0; list-style: none; }
@@ -273,20 +299,22 @@ export const styles = `
 `;
 
 export const guide = {
-    intro: 'Write down what your deck is built to do, turn by turn — a mana creature on turn 2, the commander on turn 3, eight mana and two big spells on turn 4 — and the page plays thousands of goldfish games to see how often it happens on time, how often a turn late, and what stops it when it doesn’t.',
+    intro: 'Write down what your deck is built to do, turn by turn — a mana creature on turn 2, the commander on turn 3, eight mana spent on threats on turn 4 — and the page plays thousands of goldfish games to see how often it happens on time, how often a turn late, and what stops it when it doesn’t. A step can cast a card, have mana, cast a package of cards, spend mana on spells, ramp for next turn, or have a spell copied.',
     howToRead: [
         '<strong>Plan on time</strong> is the share of games where every step happens by its turn. <strong>Within one turn</strong> allows each step one turn more.',
         '<strong>Step by step</strong> follows the games through the plan: the bar is how many are still on time after each step, and under it how many of those that got there make the step — the lowest of these is the weakest link.',
         '<strong>Why it misses</strong> counts each missed game once, at the first step it missed, with what stopped it on that turn: the card wasn’t there, a land drop was missed, the mana or the colour wasn’t there, or the card it had to follow wasn’t out.',
         '<strong>Mana on the key turn</strong> shows 100 games as 100 dots — each the mana that game made on the turn the plan needs it (filled when it was enough, rings when it fell short). The far end is a percentile, never the single best game.',
+        '<strong>What the steps measured</strong> shows the numbers behind some steps as 100 dots — mana spent on a spend step’s turn, mana ready after a ramp step, the mana value of the spell a copy step copied — and steps marked “measure only”, which are counted but are not part of the plan.',
         '<strong>Sample games</strong> show real shuffles turn by turn: the mana made, the land played, what was cast and what it did, and which step each turn finished.'
     ],
-    method: '5,000 simulated games from a fixed seed, so the same deck and plan always give the same numbers. Each game: shuffle, London mulligan (keep 2–4 lands that can start the plan by default; free first mulligan in Commander), then each turn untap, draw, main-phase triggers and land drops — the land that best serves the colours the next step needs — then the plan’s steps in order whenever they can be done, then the best ramp the mana allows. Everything else stays in hand. Mana is worked out from the board at the moment you pay, pip by pip, so creatures cast earlier in the turn count for cards like Selvala, Eager Trailblazer and Fanatic of Rhonas.',
+    method: '5,000 simulated games from a fixed seed, so the same deck and plan always give the same numbers. Each game: shuffle, London mulligan, then each turn untap, draw, main-phase triggers and land drops — the land that best serves the colours the next step needs, and a tapped land on a turn its mana wouldn’t be used — then the plan’s steps in order whenever they can be done, then the best ramp the mana allows; combat and end-step triggers last. Everything else stays in hand. Mana is worked out from the board at the moment you pay, pip by pip, so creatures cast earlier in the turn count for cards like Selvala, Eager Trailblazer and Fanatic of Rhonas, and the sources that grow as you cast are tapped last. The keep rule (“the plan’s first card”): a seven-card hand needs 2–4 lands (your setting) and a card for the plan’s first step that those lands can cast, so Commander’s free mulligan digs for the plan; a six-card or smaller hand is kept on its lands alone, down to four cards.',
     assumptions: [
-        'Goldfish: no opponents, no removal, no counterspells, no combat. Real games are slower.',
+        'Goldfish: no opponents, no removal, no counterspells. Attack triggers assume every creature that could attack does. Real games are slower.',
         '“Mana on a turn” is everything you made that turn — what you spent plus what you could still make after your land drop — so ramp cast that turn counts.',
-        'The casting policy is simple and greedy: it does the earliest step it can, then casts ramp, and holds the rest. It never plays around the next turn, and it never sandbags a land.',
-        'Card rules: mana that depends on the board (power 4 or greater, different powers, Elves, colours among permanents), extra mana when you tap a creature, start-of-main-phase mana, triggers on casting a creature (tokens, lands), earthbend and copying historic spells are modelled for the cards listed at the bottom of the page. Other cards are read the way Mana Development reads them.',
+        'The casting policy is simple and greedy: it does the earliest step it can, then casts ramp, and holds the rest. A spend step casts the best single spell or pair of spells (creatures first) when it reaches its target; a copy step casts its biggest spell first so the copy goes to it.',
+        'Shock lands and modal lands pay life only when their mana is used that turn; fetchlands crack at once (1 life) and take the land the next step needs — a tapped one when the mana doesn’t matter yet. A search takes any copy of a card, never one you were about to draw.',
+        'Card rules: mana that depends on the board, extra mana when you tap a creature or a land, start-of-main-phase mana, cast and enter triggers (tokens, lands, explore), X spells (the largest X you can pay), cost reductions, hideaway, modal land faces and copying historic spells are modelled for the cards listed at the bottom of the page. Other cards are read the way Mana Development reads them.',
         'Commanders are cast from the command zone, never drawn, and never die. Treasure is spent like any other mana.'
     ],
     tips: [

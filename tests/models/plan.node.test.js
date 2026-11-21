@@ -151,6 +151,53 @@ describe('plan schema', () => {
         assert.equal(Schema.encodePlan({ steps: [] }), '');
     });
 
+    it('carries spend, ramp, copied and measure-only steps, and old links read as before', () => {
+        const p = plan(
+            [3, { kind: 'ramp', atLeast: 6 }],
+            [4, { kind: 'spend', atLeast: 8, group: { is: 'any', mv: [4, Schema.MAX_MV] } }],
+            [4, { kind: 'spend', atLeast: 9 }],
+            [5, { kind: 'cast', group: { is: 'historic' }, paid: 4, copied: true, after: { is: 'commander', names: ['The Sixth Doctor'] } }]
+        );
+        p.steps.push({ turn: 5, info: true, require: cast({ is: 'commander', names: ['The Sixth Doctor'] }) });
+        const code = Schema.encodePlan(p);
+        assert.equal(code, '3r6_4s8-a.v4w20_4s9_5cP4Yh-k.nThe*20Sixth*20Doctor_i5ck.nThe*20Sixth*20Doctor');
+        assert.deepEqual(Schema.decodePlan(code), Schema.normalizePlan(p));
+        assert.equal(Schema.normalizePlan(p).steps[4].info, true);
+        assert.deepEqual(Schema.normalizeRequirement({ kind: 'spend', atLeast: 8, group: { is: 'any' } }), { kind: 'spend', atLeast: 8 }, 'any spell is the default');
+        assert.equal(Schema.normalizeRequirement({ kind: 'ramp' }), null);
+        assert.deepEqual(Schema.normalizeRequirement({ kind: 'cast', group: { is: 'any' }, paid: 'x', copied: 'yes' }), { kind: 'cast', group: { is: 'any' } });
+        for (const bad of ['3r0', '3r99', '4s8-zz', '4s8-a-a', '5cP99h', '5cPh', 'x5m3', 'ii5m3']) assert.equal(Schema.decodePlan(bad), null, bad);
+        assert.deepEqual(p.steps.map(s => Schema.describeRequirement(s)), [
+            'Ramp to 6+ mana for next turn', 'Spend 8+ mana on spells with MV 4+ from your hand', 'Spend 9+ mana on spells from your hand',
+            'Copy a historic spell costing 4+ with The Sixth Doctor', 'Cast The Sixth Doctor'
+        ]);
+        assert.equal(Schema.describeRequirement({ require: { kind: 'cast', group: { is: 'any', mv: [4, 4] }, paid: 5 } }), 'Cast a 4-drop costing 5+');
+        assert.deepEqual([Schema.stepSubject(p.steps[0]), Schema.stepSubject(p.steps[1])], ['ramp', 'spells with MV 4+']);
+        assert.deepEqual(Schema.decodePlan(Schema.encodePlan(DOCTOR)), Schema.normalizePlan(DOCTOR), 'a plan without the new kinds encodes as it always did');
+        assert.equal(GP.valueLabel(p.steps[1]), 'Mana spent on spells with MV 4+ on turn 4');
+        assert.equal(GP.valueLabel(p.steps[0]), 'Mana ready for turn 4 at the end of turn 3');
+        assert.equal(GP.valueLabel({ turn: 2, require: cast({ is: 'any' }) }), 'Mana value of the spell cast by turn 2');
+        assert.equal(GP.valueLabel({ turn: 2, require: mana(3) }), '');
+        assert.equal(GP.valueLabel(null), '');
+    });
+
+    it('says why a spend, ramp or copy step missed', () => {
+        const p = plan([3, { kind: 'ramp', atLeast: 6 }], [4, { kind: 'spend', atLeast: 8, group: { is: 'any', mv: [4, 20] } }],
+            [5, { kind: 'cast', group: { is: 'historic' }, paid: 4, copied: true }]);
+        const text = (step, code, colour = 0) => GP.reasonText({ step, code, colour }, p);
+        assert.equal(text(0, Engine.REASON.NO_CARD), 'no ramp by turn 3');
+        assert.equal(text(0, Engine.REASON.LAND), 'a missed land drop by turn 3');
+        assert.equal(text(0, Engine.REASON.MANA), 'too little mana to cast ramp on turn 3');
+        assert.equal(text(0, Engine.REASON.COLOUR, G), 'no way to make {G} for ramp on turn 3');
+        assert.equal(text(0, Engine.REASON.SHORT), 'ramp that left less than 6 mana for turn 4');
+        assert.equal(text(1, Engine.REASON.NO_PACKAGE), 'too few spells with MV 4+ in hand to spend 8 on turn 4');
+        assert.equal(text(1, Engine.REASON.FIT), '8+ mana on turn 4, but no spells with MV 4+ in hand that add up to 8');
+        assert.equal(text(1, Engine.REASON.LAND), 'a missed land drop by turn 4');
+        assert.equal(text(1, Engine.REASON.MANA), 'too little mana to spend 8 on turn 4');
+        assert.equal(text(2, Engine.REASON.NO_CARD), 'no historic spell costing 4+ by turn 5');
+        assert.equal(text(2, Engine.REASON.NO_COPY), 'nothing to copy a historic spell on turn 5');
+    });
+
     it('rejects a damaged link whole', () => {
         for (const bad of ['', 'x', '2q8', '0m8', '11m8', '2cz', '2cm.v0w2-', '2cm.q1', '2pxa', '2p9xa', '2cn', '2cm_', '2cn.n*ZZ', '<script>', 'a'.repeat(2001),
             Array.from({ length: Schema.MAX_STEPS + 1 }, () => '2m3').join('_')]) {
@@ -276,7 +323,7 @@ describe('scripted games: Wild Splendor', () => {
         // Five lands, two land drops and the one Karametra found.
         assert.equal(r.board.filter(p => p.name === 'Forest' || p.name === 'Plains').length, 8);
         assert.match(r.log.turns[0].cast[0].notes.join(' '), /Karametra, God of Harvests: Forest \(tapped\)/);
-        assert.equal(r.log.turns[1].drew, 'Plains', 'the found Forest left the library');
+        assert.equal(r.log.turns[1].drew, 'Forest', 'a search takes the deepest copy, so the next draw stays put');
         assert.equal(named(r.board, 'Karametra, God of Harvests')[0].creature, false, 'devotion 3 of 7');
     });
 
@@ -340,7 +387,8 @@ describe('scripted games: Doctor Whostoric', () => {
         const r = play(lib, plan([2, cast({ is: 'commander', names: ['Susan Foreman'] })]), {
             hand: ['Misty Rainforest', 'Forest'], library: ['Grizzly Bears', 'Breeding Pool', 'Island', 'Forest', 'Forest']
         });
-        assert.deepEqual(r.log.turns[0].lands, ['Misty Rainforest → Breeding Pool']);
+        assert.deepEqual(r.log.turns[0].lands, ['Misty Rainforest → Breeding Pool (tapped)'], 'nothing to cast on turn 1: no life paid');
+        assert.equal(r.life[1], 40 - 1, 'the fetchland’s 1 life only');
         assert.equal(r.log.turns[1].drew, 'Island', 'the fetched land left the library');
         assert.deepEqual(r.stepTurns, [2]);
         assert.equal(r.mana[3], 3 + 1, 'Susan taps for {G} the turn after');

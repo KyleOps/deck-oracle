@@ -26,7 +26,12 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-const answer = tab => tab.locator('.bottom-line').textContent();
+/** The bottom line once all games are in ('pending' while the first answer is still being refined). */
+const answer = async tab => ((await tab.locator('#gp-summary .gp-pending').count()) ? 'pending' : tab.locator('.bottom-line').textContent());
+const settled = async tab => {
+    await expect(tab.locator('#gp-summary .gp-pending')).toHaveCount(0);
+    return tab.locator('.bottom-line').textContent();
+};
 
 test('game plan answers for the example Commander deck with a plan built from it', async ({ page }) => {
     const errors = capturePageErrors(page);
@@ -57,12 +62,12 @@ test('editing the plan changes the answer, and the plan survives a share link', 
     await page.goto('/?tab=plan');
     const tab = page.locator('#plan-tab');
     await expect(tab.locator('.bottom-line')).toContainText('on time in');
-    const first = await answer(tab);
+    const first = await settled(tab);
 
     // The Doctor a turn earlier: a harder plan, a different answer.
     await tab.locator('#gp-steps .gp-step').nth(2).locator('[data-field="turn"]').selectOption('4');
     await expect(tab.locator('#gp-steps .gp-step').nth(2).locator('.gp-step-read')).toContainText('Turn 4: cast The Sixth Doctor');
-    await expect.poll(() => answer(tab)).not.toBe(first);
+    await expect.poll(async () => { const now = await answer(tab); return now !== 'pending' && now !== first; }).toBe(true);
     await expect(tab.locator('#gp-plan-meta')).toHaveText('your plan');
 
     // Add a mana step, then remove the last cast step.
@@ -88,7 +93,39 @@ test('editing the plan changes the answer, and the plan survives a share link', 
     await expect(freshTab.locator('#gp-steps .gp-step')).toHaveCount(4);
     await expect(freshTab.locator('#gp-steps .gp-step-read').nth(3)).toContainText('Turn 8: have 9+ mana');
     await expect(freshTab.locator('#gp-plan-meta')).toHaveText('from a shared link');
-    await expect.poll(() => answer(freshTab)).toBe(await answer(tab));
+    await expect.poll(() => answer(freshTab)).toBe(await settled(tab));
+    expect(errors).toEqual([]);
+});
+
+test('spend, ramp, copy and measure-only steps can be built by hand', async ({ page }) => {
+    const errors = capturePageErrors(page);
+    await page.goto('/?tab=plan');
+    const tab = page.locator('#plan-tab');
+    await settled(tab);
+    const steps = tab.locator('#gp-steps .gp-step');
+
+    // Step 2 (ramp by turn 4) becomes "ramp to 6+ for next turn" by turn 3.
+    await steps.nth(1).locator('[data-field="kind"]').selectOption('ramp');
+    await steps.nth(1).locator('[data-field="turn"]').selectOption('3');
+    await steps.nth(1).locator('[data-field="atLeast"]').fill('6');
+    await expect(steps.nth(1).locator('.gp-step-read')).toContainText('Turn 3: ramp to 6+ mana for next turn');
+
+    // The last step: a historic spell costing 4+ that gets copied.
+    await steps.nth(3).locator('[data-field="is"]').selectOption('historic');
+    await steps.nth(3).locator('[data-field="paid"]').fill('4');
+    await steps.nth(3).locator('[data-field="copied"]').check();
+    await expect(steps.nth(3).locator('.gp-step-read')).toContainText('copy a historic spell with MV 8+ costing 4+');
+
+    // A spend step, measured only.
+    await tab.locator('#gp-add-step').click();
+    await steps.nth(4).locator('[data-field="kind"]').selectOption('spend');
+    await steps.nth(4).locator('[data-field="info"]').check();
+    await expect(steps.nth(4).locator('.gp-step-read')).toContainText('Measures:');
+    await expect(steps.nth(4).locator('.gp-step-read')).toContainText('spend');
+    await settled(tab);
+    await expect(tab.locator('#gp-funnel .gp-funnel-row')).toHaveCount(4);
+    await expect(tab.locator('#gp-measures')).toContainText('measure only');
+    await expect(tab.locator('#gp-measures')).toContainText('Mana ready for turn 4');
     expect(errors).toEqual([]);
 });
 
@@ -98,20 +135,26 @@ test('a preset loads its deck and plan, and a matching deck is offered its plan'
     const tab = page.locator('#plan-tab');
     await expect(tab.locator('.bottom-line')).toContainText('on time in');
 
-    await tab.locator('#gp-preset-select').selectOption('sample-green');
-    await expect(tab.locator('#gp-preset')).toContainText('Loads its 40-card deck');
+    // The example deck is Doctor Whostoric: its tuned plan is offered.
+    await expect(tab.locator('#gp-preset')).toContainText('This deck looks like Doctor Whostoric');
+
+    await tab.locator('#gp-preset-select').selectOption('wild-splendor');
+    await expect(tab.locator('#gp-preset')).toContainText('Loads its 100-card deck');
     await tab.locator('#gp-preset-try').click();
-    await expect(page.locator('#deck-switcher-name')).toHaveText('Sample green ramp');
+    await expect(page.locator('#deck-switcher-name')).toHaveText('Wild Splendor');
     await expect(tab.locator('#gp-plan-meta')).toHaveText('a tuned plan');
-    await expect(tab.locator('.bottom-line')).toContainText('Sample green ramp pulls off its plan');
-    await expect(tab.locator('#gp-steps .gp-step')).toHaveCount(3);
-    // Limited: turn order matters, so the choice shows and changes the answer.
-    await expect(tab.locator('#gp-order-group')).toBeVisible();
-    const onPlay = await answer(tab);
-    await tab.locator('[data-turn-order] [data-play="0"]').click();
-    await expect.poll(() => answer(tab)).not.toBe(onPlay);
+    await expect(tab.locator('.bottom-line')).toContainText('Wild Splendor pulls off its plan');
+    await expect(tab.locator('#gp-steps .gp-step')).toHaveCount(4);
+    await expect(tab.locator('#gp-steps .gp-step-read').nth(2)).toContainText('spend 8+ mana');
+    await expect(tab.locator('#gp-funnel .gp-funnel-row')).toHaveCount(3);
+    // The notes, the measured distributions and the literal "two 4-drops or one 7–9-drop", measured beside the plan.
+    await expect(tab.locator('#gp-about-panel')).toBeVisible();
+    await expect(tab.locator('#gp-about p')).not.toHaveCount(0);
+    await expect(tab.locator('#gp-measures')).toContainText('measure only');
+    await expect(tab.locator('#gp-measures .viz-dot')).not.toHaveCount(0);
+    await expect(tab.locator('#gp-rules')).toContainText('Selvala, Eager Trailblazer');
     const saved = await page.evaluate(async () => (await import('/js/utils/deckLibrary.js')).listDecks().map(d => d.name));
-    expect(saved).toContain('Sample green ramp');
+    expect(saved).toContain('Wild Splendor');
 
     // Start over: the starter plan built from this deck; the preset is offered back.
     await tab.locator('#gp-reset').click();

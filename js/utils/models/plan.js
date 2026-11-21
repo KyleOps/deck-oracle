@@ -120,12 +120,34 @@ export function reasonText(reason, plan, { html = false } = {}) {
     if (!step) return '';
     const T = step.turn;
     const r = step.require;
+    if (r.kind === 'ramp') {
+        switch (reason.code) {
+            case REASON.NO_CARD: return `no ramp by turn ${T}`;
+            case REASON.LAND: return `a missed land drop by turn ${T}`;
+            case REASON.MANA: return `too little mana to cast ramp on turn ${T}`;
+            case REASON.COLOUR: {
+                const symbol = `{${COLOUR_SYMBOL[reason.colour] ?? 'C'}}`;
+                return `no way to make ${html ? renderManaCost(symbol) : symbol} for ramp on turn ${T}`;
+            }
+            default: return `ramp that left less than ${r.atLeast} mana for turn ${T + 1}`;
+        }
+    }
+    if (r.kind === 'spend') {
+        const many = groupNoun(r.group ?? { is: 'any' }).many;
+        switch (reason.code) {
+            case REASON.NO_PACKAGE: return `too few ${many} in hand to spend ${r.atLeast} on turn ${T}`;
+            case REASON.LAND: return `a missed land drop by turn ${T}`;
+            case REASON.FIT: return `${r.atLeast}+ mana on turn ${T}, but no ${many} in hand that add up to ${r.atLeast}`;
+            default: return `too little mana to spend ${r.atLeast} on turn ${T}`;
+        }
+    }
     switch (reason.code) {
         case REASON.NO_CARD: {
             const noun = r.kind === 'cast' ? groupNoun(r.group) : null;
             const what = noun?.names.length ? noun.names.map(n => (html ? cardRef(n) : n)).join(' or ') : noun?.one ?? 'card';
-            return `no ${what} by turn ${T}`;
+            return `no ${what}${r.paid ? ` costing ${r.paid}+` : ''} by turn ${T}`;
         }
+        case REASON.NO_COPY: return `nothing to copy ${subjectPhrase(step, html)} on turn ${T}`;
         case REASON.LAND: return `a missed land drop by turn ${T}`;
         case REASON.MANA: return `too little mana for ${subjectPhrase(step, html)} on turn ${T}`;
         case REASON.COLOUR: {
@@ -306,13 +328,52 @@ export function readPreset(mod) {
     if (!mod || typeof mod.id !== 'string' || typeof mod.title !== 'string') return null;
     const plan = normalizePlan(mod.plan);
     if (!plan.steps.length || !mod.snapshot?.cardsByName || typeof mod.snapshot.cardsByName !== 'object') return null;
+    const notes = (Array.isArray(mod.notes) ? mod.notes : [mod.notes]).filter(n => typeof n === 'string' && n.trim());
     return {
         id: mod.id,
         title: mod.title,
         deckUrl: typeof mod.deckUrl === 'string' ? mod.deckUrl : null,
         commanders: Array.isArray(mod.commanders) ? mod.commanders.filter(n => typeof n === 'string') : [],
         plan,
-        notes: typeof mod.notes === 'string' ? mod.notes : '',
+        notes,
         snapshot: mod.snapshot
     };
+}
+
+// ── Measures beside the plan ─────────────────────────────────────────────────
+
+/** What a step's `values` measure, in words ("mana spent on …", "the copied spell's mana value"). */
+export function valueLabel(step) {
+    const r = step?.require;
+    if (!r) return '';
+    if (r.kind === 'spend') return `Mana spent on ${groupNoun(r.group ?? { is: 'any' }).many} on turn ${step.turn}`;
+    if (r.kind === 'ramp') return `Mana ready for turn ${step.turn + 1} at the end of turn ${step.turn}`;
+    if (r.kind === 'cast' && r.copied) return `Mana value of the spell copied by turn ${step.turn}`;
+    if (r.kind === 'cast') return `Mana value of the spell cast by turn ${step.turn}`;
+    return '';
+}
+
+/**
+ * A step's values as rows (value, share of the games measured, at least
+ * this), the top 1% folded into "N+" so a row never is the sampled maximum.
+ * @param {{hist:number[], games:number}|null} values
+ */
+export function valueRows(values) {
+    return values ? manaRows(values.hist, values.games) : [];
+}
+
+/**
+ * Information-only steps, in words: "Cast The Sixth Doctor by turn 5 — 92%
+ * (95% within a turn)".
+ * @param {Object} result - finishPlanRun() output
+ * @returns {Array<{title:string, onTime:number, late:number, values:Object|null, label:string}>}
+ */
+export function infoRows(result, { html = false } = {}) {
+    return (result?.info ?? []).map(s => ({
+        title: stepTitle(s.step, { html }),
+        onTime: s.onTime,
+        late: s.late,
+        values: s.values,
+        label: valueLabel(s.step)
+    }));
 }
