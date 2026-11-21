@@ -88,7 +88,6 @@ export const styles = `
     min-width: 0;
 }
 
-#odds-tab .odds-filled[hidden] { display: none; }
 
 #odds-tab .odds-h {
     margin: 0;
@@ -475,8 +474,6 @@ export const styles = `
     box-shadow: var(--shadow-lg);
 }
 
-#odds-tab .og-list[hidden] { display: none; }
-
 #odds-tab .og-opt {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
@@ -544,14 +541,6 @@ export const styles = `
 /* ---------- Empty state ---------- */
 #odds-tab .odds-empty {
     padding: clamp(24px, 4cqi, 44px) clamp(18px, 3.4cqi, 40px);
-}
-
-#odds-tab .odds-eyebrow {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
 }
 
 #odds-tab .odds-empty-title {

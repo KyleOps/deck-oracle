@@ -11,7 +11,7 @@ export const template = `
         <div class="vx-rail">
             <label class="vx-label" for="vortex-cmcSlider">Its mana value</label>
             <div class="vx-mv">
-                <span class="vx-mv-num" id="vortex-mv-display">6</span>
+                <span class="tx-display" id="vortex-mv-display">6</span>
                 <span class="vx-mv-unit">so Vortex discovers this much</span>
             </div>
             <input type="range" id="vortex-cmcSlider" value="6" min="1" max="16" step="1">
@@ -88,15 +88,6 @@ export const styles = `
     color: var(--tx-mid);
 }
 #vortex-tab .vx-mv { display: flex; align-items: baseline; gap: 10px; }
-#vortex-tab .vx-mv-num {
-    font-family: var(--font-mono);
-    font-size: var(--t-display);
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: var(--track-display);
-    color: var(--tx-bright);
-    font-feature-settings: 'tnum' 1;
-}
 #vortex-tab .vx-mv-unit { font-size: var(--t-xs); color: var(--tx-dim); }
 #vortex-tab .vx-scale {
     display: flex;

@@ -301,7 +301,6 @@ export const styles = `
 
 /* ── Battlefield ──────────────────────────────────────────────────── */
 #hands-tab .hl-field { border-top: 1px dashed var(--tx-rule-hi); }
-#hands-tab .hl-field[hidden] { display: none; }
 #hands-tab .hl-field-head {
     display: flex;
     flex-wrap: wrap;
@@ -310,13 +309,6 @@ export const styles = `
     padding: 10px 16px 0;
     font-size: var(--t-xs);
     color: var(--tx-mid);
-}
-#hands-tab .hl-field-title {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
 }
 #hands-tab .hl-field-head strong { font-family: var(--font-mono); color: var(--tx-bright); font-weight: 600; }
 #hands-tab .hl-lane {
@@ -363,13 +355,6 @@ export const styles = `
 }
 #hands-tab .hl-verdict.tone-keep .hl-verdict-mark { background: var(--good-soft); color: var(--tx-good); }
 #hands-tab .hl-verdict.tone-mull .hl-verdict-mark { background: var(--bad-soft); color: var(--tx-bad); }
-#hands-tab .hl-verdict-label {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
 #hands-tab .hl-verdict-text {
     margin-top: 2px;
     font-size: var(--t-lg);

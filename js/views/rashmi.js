@@ -35,7 +35,7 @@ export const template = `
         <div class="chart-container rs-chart">
             <canvas id="rashmi-chart" role="img" aria-label="Chance Rashmi flips a free spell for each mana value of the spell you cast"></canvas>
         </div>
-        <p class="rs-caption">Each bar is one mana value for your first spell of the turn; the highlighted bar is the one you picked. Bars past the dashed line hit at least 7 times in 10.</p>
+        <p class="tx-caption">Each bar is one mana value for your first spell of the turn; the highlighted bar is the one you picked. Bars past the dashed line hit at least 7 times in 10.</p>
     </section>
 
     <section class="panel" id="rashmi-sample-reveals" aria-label="Sample reveals" data-needs-deck>
@@ -51,7 +51,7 @@ export const template = `
             <summary class="tx-collapse-head">Your spells by mana value</summary>
             <div class="tx-collapse-body rs-flush">
                 <div class="table-wrapper" id="rashmi-comparisonTable"></div>
-                <p class="rs-caption rs-caption-pad" id="rashmi-curve-note"></p>
+                <p class="tx-caption rs-caption-pad" id="rashmi-curve-note"></p>
             </div>
         </details>
     </section>
@@ -59,7 +59,6 @@ export const template = `
 `;
 
 export const styles = `
-#rashmi-tab [hidden] { display: none !important; }
 #rashmi-tab .rs-input { padding-top: 14px; }
 #rashmi-tab .rs-input small { line-height: 1.5; }
 #rashmi-tab .rs-check {
@@ -91,28 +90,9 @@ export const styles = `
 #rashmi-tab .is-big { background: var(--tx-flat); }
 #rashmi-tab .is-x { background: var(--tx-warn); }
 #rashmi-tab .is-land { background: var(--type-land); }
-#rashmi-tab .rs-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 20px;
-    margin: 10px 0 0;
-    padding: 0;
-    list-style: none;
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-}
-#rashmi-tab .rs-legend li { display: inline-flex; align-items: center; gap: 7px; }
-#rashmi-tab .rs-legend strong { font-family: var(--font-mono); font-feature-settings: 'tnum' 1; }
 #rashmi-tab .rs-swatch { width: 10px; height: 10px; border-radius: 3px; }
 
 #rashmi-tab .rs-chart { height: 280px; }
-#rashmi-tab .rs-caption {
-    margin: 0;
-    padding: 0 16px 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-}
 #rashmi-tab .rs-caption-pad { padding-top: 12px; }
 
 #rashmi-tab .rs-reveals {
@@ -165,7 +145,7 @@ export const styles = `
 }
 #rashmi-tab .rs-reveal-verdict { grid-area: verdict; font-size: var(--t-xs); color: var(--tx-dim); }
 #rashmi-tab .rs-reveal.is-free .rs-reveal-verdict { color: var(--tx-good); font-weight: 600; }
-#rashmi-tab .rs-reveals + .rs-caption { padding-top: 0; }
+#rashmi-tab .rs-reveals + .tx-caption { padding-top: 0; }
 
 #rashmi-tab .rs-details .tx-collapse { border-top: 0; }
 #rashmi-tab .rs-flush { padding: 0; }

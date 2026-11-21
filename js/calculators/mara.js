@@ -390,7 +390,7 @@ function renderSamples(state) {
     const casts = state.opponents.map(opp => samplesFor(opp));
     const games = Array.from({ length: samplesShown }, (_, g) => `
         <div class="opp-game">
-            <div class="opp-game-head">Cast ${g + 1}</div>
+            <div class="opp-game-head tx-eyebrow">Cast ${g + 1}</div>
             ${state.opponents.map((opp, i) => gameRow(opp, casts[i][g])).join('')}
         </div>`).join('');
     panel.innerHTML = `

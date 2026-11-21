@@ -37,14 +37,7 @@
 
 .tx-stat:last-child { border-right: none; }
 
-.tx-stat-label {
-    margin-bottom: 4px;
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
+.tx-stat-label { margin-bottom: 4px; }
 
 .tx-stat-value {
     margin: 6px 0 4px;
@@ -104,17 +97,9 @@
     border-bottom: 1px solid var(--tx-rule);
 }
 
-.tx-hero .tx-stat {
-    padding: 16px 18px;
-    border-bottom: 1px solid var(--tx-rule);
-}
+.tx-hero .tx-stat { padding: 16px 18px; }
 
 .tx-hero .tx-stat:last-child { border-bottom: 1px solid var(--tx-rule); }
-
-/* On wide rows the border-bottom doubles with the wrapper; hide for single-row */
-@media (min-width: 700px) {
-    .tx-hero .tx-stat { border-bottom: none; }
-}
 
 /* The lead number is the answer to the calculator's question, so it gets the
    display register; supporting figures sit a full step down. */
@@ -332,6 +317,33 @@ input.x-number {
 /* Breathing room inside the card */
 .calc-body .chart-container { padding: 10px 12px 6px; }
 
+/* One line under a chart saying how to read it. */
+.tx-caption {
+    margin: 0;
+    padding: 0 16px 14px;
+    font-size: var(--t-xs);
+    line-height: 1.5;
+    color: var(--tx-dim);
+}
+
+/* Key under a chart or band: swatch, label, value. */
+.tx-legend,
+.viz-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--t-xs);
+    color: var(--tx-mid);
+}
+
+.tx-legend li,
+.viz-legend li { display: inline-flex; align-items: center; gap: 7px; }
+
+.tx-legend strong { font-family: var(--font-mono); font-feature-settings: 'tnum' 1; }
+
 /* ==================== TABLE WRAPPER ==================== */
 
 .table-wrapper {
@@ -391,9 +403,9 @@ input.x-number {
 /* Config panels become a persistent left rail on wide screens (see below),
    so inputs sit beside their results instead of scrolling away above them. */
 
-/* Body copy directly in a panel: dense, and a ~70-character measure. */
-.calculator-content .panel > p,
-.calculator-content .panel > section > p {
+/* Body copy directly in a panel: dense, and a ~70-character measure. A
+   default only (one element's worth of specificity), so any class wins. */
+:where(.calculator-content .panel, .calculator-content .panel > section) > p {
     max-width: 70ch;
     font-size: var(--t-xs);
     line-height: 1.6;
@@ -458,10 +470,16 @@ input.x-number {
     .panel-config { position: static; max-height: none; }
 }
 
-/* Hero rows reflow on available space, not viewport width. */
+/* Hero rows reflow on available space, not viewport width: stacked stats
+   get a rule between rows instead of columns, and a phone gets two across. */
 @container shell (max-width: 720px) {
     .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
     .tx-hero .tx-stat { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
+}
+
+@container shell (max-width: 600px) {
+    .tx-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .chart-container { overflow-x: auto; }
 }
 
 /* A wide chart gains a little height so it does not read as a letterbox strip,
@@ -1181,17 +1199,7 @@ input.x-number {
 .viz-dots-tick.is-end { transform: translateX(-100%); }
 .viz-dots-xlabel { margin-top: 2px; text-align: center; font-size: var(--t-label); color: var(--tx-dim); }
 
-.viz-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 18px;
-    margin: 10px 0 0;
-    padding: 0;
-    list-style: none;
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-}
-.viz-legend li { display: inline-flex; align-items: center; gap: 7px; }
+.viz-legend { gap: 6px 18px; }
 .viz-legend strong { font-family: var(--font-mono); color: var(--tx-bright); font-weight: 600; }
 .viz-legend .viz-dot { --dot: 13px; }
 
@@ -1387,12 +1395,11 @@ input.x-number {
 .cast-status { margin: 0; min-height: 3em; font-size: var(--t-sm); line-height: 1.5; color: var(--tx-text); }
 .cast-status strong { color: var(--tx-bright); font-weight: 600; }
 .cast-totals { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 0; }
-.cast-totals dt { font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); }
 .cast-totals dd { margin: 2px 0 0; font-family: var(--font-mono); font-size: var(--t-lg); font-weight: 600; color: var(--tx-bright); }
 .cast-totals dd small { font-size: var(--t-xs); font-weight: 400; color: var(--tx-dim); }
 .cast-totals dd.tone-good { color: var(--tx-good); }
 .cast-zone { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; }
-.cast-zone-label { padding-top: 6px; font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); }
+.cast-zone-label { padding-top: 6px; }
 .cast-row { display: flex; flex-wrap: wrap; gap: 4px; min-height: 61px; padding: 0; }
 .cast-mini { width: 44px; height: 61px; border-radius: 3px; }
 .cast-mini .cast-card-name { font-size: 7.5px; padding: 2px; }

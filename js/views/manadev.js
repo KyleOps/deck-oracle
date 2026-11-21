@@ -105,7 +105,6 @@ export const styles = `
 /* ── Rail ─────────────────────────────────────────────────────────── */
 #manadev-tab .md-rail-body { display: grid; gap: 16px; padding: 16px; }
 #manadev-tab .md-group { display: grid; gap: 8px; }
-#manadev-tab .md-group[hidden] { display: none; }
 #manadev-tab .md-format { margin: 0; font-size: var(--t-xs); line-height: 1.5; color: var(--tx-mid); }
 #manadev-tab .md-format:empty { display: none; }
 #manadev-tab .md-facts { display: grid; gap: 8px; margin: 0; }
@@ -140,7 +139,6 @@ export const styles = `
     color: var(--tx-mid);
 }
 #manadev-tab .md-key { display: inline-flex; align-items: center; gap: 6px; }
-#manadev-tab .md-key[hidden] { display: none; }
 #manadev-tab .md-key::before { content: ''; display: inline-block; width: 16px; height: 10px; border-radius: 2px; }
 #manadev-tab .md-key-line::before { height: 2px; background: var(--tx-good); }
 #manadev-tab .md-key-mid::before { background: color-mix(in srgb, var(--tx-good) 30%, transparent); }

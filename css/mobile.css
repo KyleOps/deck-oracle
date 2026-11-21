@@ -14,22 +14,6 @@
     textarea {
         font-size: 16px;
     }
-
-    .chart-container,
-    .table-wrapper {
-        max-width: 100%;
-        overflow-x: auto;
-    }
-
-    /* Hero stat rows wrap instead of shrinking numbers to illegibility. */
-    .tx-hero {
-        display: grid !important;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .tx-stat { border-right: 0 !important; }
-
-    .type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---- Touch: comfortable targets ---- */

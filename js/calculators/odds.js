@@ -591,7 +591,7 @@ function renderEmpty(ctx) {
         : 'Search your list on the left, start from a type, role or mana value — or open one of these from this deck:';
     return `
         <section class="panel odds-empty" aria-labelledby="odds-empty-title">
-            <p class="odds-eyebrow">${library.size}-card library · ${escapeHtml(format.label)}</p>
+            <p class="odds-eyebrow tx-eyebrow">${library.size}-card library · ${escapeHtml(format.label)}</p>
             <h2 class="odds-empty-title" id="odds-empty-title">What are you hoping to draw?</h2>
             <p class="odds-empty-text">${intro}</p>
             ${cards ? `<div class="odds-sugs">${cards}</div>` : ''}

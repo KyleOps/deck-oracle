@@ -539,7 +539,6 @@ ${s} .opp-miss { font-size: var(--t-xs); color: var(--tx-dim); }
 
 ${s} .opp-games { display: grid; }
 ${s} .opp-game { display: grid; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--tx-rule); }
-${s} .opp-game-head { font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); }
 ${s} .opp-more { display: flex; justify-content: center; padding: 12px 16px 16px; border-top: 1px solid var(--tx-rule); }
 
 @container shell (max-width: 640px) {

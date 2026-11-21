@@ -63,7 +63,6 @@ export const template = `
 export const styles = `
 #manabase-tab .mb,
 #manabase-tab .mb-content { display: grid; gap: 16px; min-width: 0; }
-#manabase-tab .mb [hidden] { display: none !important; }
 
 #manabase-tab .mb-title {
     margin: 0;
@@ -254,18 +253,6 @@ export const styles = `
 #manabase-tab .mb-copies { margin-left: 6px; font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-dim); }
 #manabase-tab .mb-cost-inline { display: none; }
 
-/* Phyrexian and twobrid symbols (the shared sheet styles only two-colour hybrids). */
-#manabase-tab .ms-wp { background: var(--mana-w); color: var(--mana-w-ink); }
-#manabase-tab .ms-up { background: var(--mana-u); color: var(--mana-u-ink); }
-#manabase-tab .ms-bp { background: var(--mana-b); color: var(--mana-b-ink); }
-#manabase-tab .ms-rp { background: var(--mana-r); color: var(--mana-r-ink); }
-#manabase-tab .ms-gp { background: var(--mana-g); color: var(--mana-g-ink); }
-#manabase-tab :is(.ms-wp, .ms-up, .ms-bp, .ms-rp, .ms-gp)::after { content: 'Φ'; }
-#manabase-tab .ms-2w { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-w) 50%); }
-#manabase-tab .ms-2u { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-u) 50%); }
-#manabase-tab .ms-2b { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-b) 50%); }
-#manabase-tab .ms-2r { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-r) 50%); }
-#manabase-tab .ms-2g { background: linear-gradient(135deg, var(--mana-c) 50%, var(--mana-g) 50%); }
 #manabase-tab .mb-turn-short { display: none; }
 #manabase-tab .mb-tag {
     display: inline-flex;

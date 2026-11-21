@@ -156,14 +156,7 @@
 
 .nav-group + .nav-group { margin-top: 14px; }
 
-.nav-group-label {
-    padding: 6px 10px 6px;
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
+.nav-group-label { padding: 6px 10px; }
 
 .nav-list { list-style: none; }
 
@@ -594,11 +587,6 @@
     align-items: center;
     gap: 8px;
     margin-bottom: 10px;
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
 }
 
 .dot-sep {
@@ -782,11 +770,6 @@
 .bottom-line-label {
     display: block;
     margin-bottom: 2px;
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
 }
 
 /* ---------- Glossary terms & card references ---------- */
@@ -1169,14 +1152,7 @@
     flex: 1;
 }
 
-.palette-section {
-    padding: 10px 10px 4px;
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
+.palette-section { padding: 10px 10px 4px; }
 
 .palette-item {
     display: flex;
@@ -1248,13 +1224,7 @@
     border-bottom: 1px solid var(--tx-rule);
 }
 
-.drawer-eyebrow {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-accent);
-}
+.drawer-eyebrow { color: var(--tx-accent); }
 
 .drawer-title { font-size: var(--t-xl); margin-top: 4px; }
 
@@ -1266,20 +1236,13 @@
 
 .guide-block { padding: 18px 0; border-bottom: 1px solid var(--tx-rule); }
 .guide-block:last-child { border-bottom: 0; }
-.guide-block h3 {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 10px;
-}
+.guide-block h3 { margin-bottom: 10px; }
 .guide-block p,
 .guide-block li { color: var(--tx-text); font-size: var(--t-sm); line-height: 1.65; }
 .guide-block p + p { margin-top: 8px; }
 .guide-block ul { padding-left: 18px; display: grid; gap: 8px; }
 .guide-block li::marker { color: var(--tx-dim); }
-.guide-lead { font-size: var(--t-lg) !important; color: var(--tx-bright) !important; line-height: 1.4 !important; margin-bottom: 8px; }
+.guide-block .guide-lead { margin-bottom: 8px; font-size: var(--t-lg); line-height: 1.4; color: var(--tx-bright); }
 .guide-terms { display: grid; gap: 12px; }
 .guide-terms dt { font-weight: 600; color: var(--tx-bright); font-size: var(--t-sm); }
 .guide-terms dd { color: var(--tx-mid); font-size: var(--t-xs); line-height: 1.6; }
@@ -1297,8 +1260,6 @@
 @media (min-width: 1100px) {
     .opponents-bar { margin-inline: max(var(--page-pad), calc((100% - var(--shell-max)) / 2 + var(--page-pad))); }
 }
-
-.opponents-bar[hidden] { display: none; }
 
 .opponents-bar-head {
     display: flex;
@@ -1374,14 +1335,6 @@
     color: var(--tx-text);
 }
 
-.ov-eyebrow {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
-
 .ov-eyebrow a { color: var(--tx-mid); text-decoration: none; }
 .ov-eyebrow a:hover { color: var(--tx-accent); }
 
@@ -1401,14 +1354,6 @@
     flex-wrap: wrap;
     gap: 10px 32px;
     margin-top: 22px;
-}
-
-.ov-hero-stats dt {
-    font-size: var(--t-label);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
 }
 
 .ov-hero-stats dd {
@@ -1807,7 +1752,7 @@
 }
 
 .tool-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.tool-group { font-size: var(--t-micro); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); }
+.tool-group { font-size: var(--t-micro); }
 .tool-name { font-weight: 650; color: var(--tx-bright); font-size: var(--t-body); }
 .tool-question { font-size: var(--t-xs); color: var(--tx-mid); line-height: 1.45; }
 .tool-reason { font-size: var(--t-label); color: var(--tx-good); margin-top: 2px; }

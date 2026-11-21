@@ -399,7 +399,7 @@ function renderSamples(state) {
         const total = results.reduce((a, r) => a + r[g].totalCastableMV, 0);
         return `
         <div class="opp-game">
-            <div class="opp-game-head">Cast ${g + 1}${state.opponents.length > 1 ? ` · ${total} mana stolen in all` : ''}</div>
+            <div class="opp-game-head tx-eyebrow">Cast ${g + 1}${state.opponents.length > 1 ? ` · ${total} mana stolen in all` : ''}</div>
             ${state.opponents.map((opp, i) => gameRow(opp, results[i][g])).join('')}
         </div>`;
     }).join('');

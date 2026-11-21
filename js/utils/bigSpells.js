@@ -513,7 +513,6 @@ ${s} .bs-notice.tone-flat { background: var(--tx-panel-alt); }
 ${s} .bs-chart { position: relative; height: 270px; padding: 14px 14px 4px; }
 ${s} .bs-legend { display: inline-flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 ${s} .bs-key { display: inline-flex; align-items: center; gap: 6px; }
-${s} .bs-key[hidden] { display: none; }
 ${s} .bs-key::before { content: ''; width: 10px; height: 10px; border-radius: 2px; background: var(--key, var(--tx-flat)); }
 ${s} .bs-key.is-line::before { height: 3px; border-radius: 2px; }
 ${s} .bs-key.k-accent { --key: var(--tx-accent); }

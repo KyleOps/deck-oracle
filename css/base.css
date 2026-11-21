@@ -198,26 +198,38 @@ kbd {
 
 ::selection { background: var(--accent-soft); color: var(--tx-bright); }
 
-
-
-/* ==================== DISPLAY TYPOGRAPHY ====================
-   The macro half of the bimodal scale. Reserved for the single number that
-   answers the question on each calculator, and for calculator mastheads. */
+/* ==================== TYPE PRIMITIVES ====================
+   The two ends of the bimodal scale. The display number is the one figure
+   that answers a page's question; the eyebrow labels a value or a section.
+   Shell and calculator rules that share the eyebrow look are listed here and
+   keep only their own spacing. */
 
 .tx-display {
+    font-family: var(--font-mono);
     font-size: var(--t-display);
     font-weight: 700;
-    line-height: 0.9;
+    line-height: 1;
     letter-spacing: var(--track-display);
     color: var(--tx-bright);
     font-feature-settings: 'tnum' 1;
 }
 
-/* Section eyebrow: small, wide-tracked, uppercase. The micro half. */
-.tx-eyebrow {
-    font-size: var(--t-micro);
-    font-weight: 500;
-    letter-spacing: var(--track-wide);
+.tx-eyebrow,
+.tx-stat-label,
+.bottom-line-label,
+.page-eyebrow,
+.nav-group-label,
+.palette-section,
+.drawer-eyebrow,
+.guide-block h3,
+.ov-eyebrow,
+.ov-hero-stats dt,
+.tool-group,
+.cast-totals dt,
+.cast-zone-label {
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: var(--track-label);
     text-transform: uppercase;
     color: var(--tx-dim);
 }

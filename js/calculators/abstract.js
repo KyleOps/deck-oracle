@@ -404,7 +404,7 @@ function renderDetails(results) {
         }
         const rows = [lands, ...counts];
         curveEl.innerHTML = `
-            <p class="ap-caption">Your library of ${state.deck.length}${state.isDefault ? ' (a typical deck — no decklist loaded)' : ''}. Lands and cheap spells are what make a pile look weak.</p>
+            <p class="tx-caption">Your library of ${state.deck.length}${state.isDefault ? ' (a typical deck — no decklist loaded)' : ''}. Lands and cheap spells are what make a pile look weak.</p>
             ${renderDistributionChart(rows, state.deck.length, i => (i === 0 ? 'Lands' : i === 8 ? '7+' : `Mana value ${i - 1}`), () => null)}`;
     }
 }

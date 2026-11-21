@@ -58,7 +58,6 @@ export const template = `
 `;
 
 export const styles = `
-#lands-tab [hidden] { display: none !important; }
 #lands-tab .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 
 /* Assumptions strip */

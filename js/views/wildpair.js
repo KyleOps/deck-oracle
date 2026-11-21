@@ -11,7 +11,7 @@ export const template = `
         <div class="wp-rail">
             <label class="wp-label" for="wildpair-totalSlider">The one number Wild Pair matches on</label>
             <div class="wp-big">
-                <span class="wp-big-num" id="wildpair-total-display">&mdash;</span>
+                <span class="tx-display" id="wildpair-total-display">&mdash;</span>
                 <span class="wp-big-unit">power + toughness</span>
             </div>
             <p class="wp-rail-sum" id="wildpair-total-summary">&mdash;</p>
@@ -54,15 +54,6 @@ export const styles = `
 #wildpair-tab .wp-rail { padding: 16px; display: grid; gap: 8px; }
 #wildpair-tab .wp-label { font-size: var(--t-xs); font-weight: 600; color: var(--tx-mid); }
 #wildpair-tab .wp-big { display: flex; align-items: baseline; gap: 10px; }
-#wildpair-tab .wp-big-num {
-    font-family: var(--font-mono);
-    font-size: var(--t-display);
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: var(--track-display);
-    color: var(--tx-bright);
-    font-feature-settings: 'tnum' 1;
-}
 #wildpair-tab .wp-big-unit { font-size: var(--t-xs); color: var(--tx-dim); }
 #wildpair-tab .wp-rail-sum { margin: 0; font-size: var(--t-sm); color: var(--tx-text); }
 #wildpair-tab .wp-scale {

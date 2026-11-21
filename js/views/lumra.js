@@ -55,7 +55,7 @@ export const template = `
         <div class="chart-container lm-chart">
             <canvas id="lumra-chart" role="img" aria-label="Share of games by Lumra’s power and toughness when it enters"></canvas>
         </div>
-        <p class="lm-caption">Each bar is one size Lumra can enter as; the solid bar is the typical game. Land drops set the floor, the mill decides how far above it you land.</p>
+        <p class="tx-caption">Each bar is one size Lumra can enter as; the solid bar is the typical game. Land drops set the floor, the mill decides how far above it you land.</p>
     </section>
 
     <section class="panel" id="lumra-sample-reveals" aria-label="Sample games">
@@ -102,30 +102,11 @@ export const styles = `
 #lumra-tab .is-gy { background: var(--series-3); }
 #lumra-tab .is-fetch { background: var(--series-6); }
 #lumra-tab .is-mill { background: var(--tx-good); }
-#lumra-tab .lm-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 20px;
-    margin: 10px 0 0;
-    padding: 0;
-    list-style: none;
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-}
-#lumra-tab .lm-legend li { display: inline-flex; align-items: center; gap: 7px; }
-#lumra-tab .lm-legend strong { font-family: var(--font-mono); font-feature-settings: 'tnum' 1; }
 #lumra-tab .lm-legend-total { margin-left: auto; color: var(--tx-text); }
 #lumra-tab .lm-swatch { width: 10px; height: 10px; border-radius: 3px; }
 
 #lumra-tab .lm-chart { height: 280px; }
-#lumra-tab .lm-caption {
-    margin: 0;
-    padding: 0 16px 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-}
-#lumra-tab .tx-collapse-body .lm-caption { padding: 0 0 10px; }
+#lumra-tab .tx-collapse-body .tx-caption { padding: 0 0 10px; }
 
 #lumra-tab .lm-games { display: grid; padding: 4px 16px 0; }
 #lumra-tab .lm-game { padding: 10px 0; border-bottom: 1px solid var(--tx-rule); }
@@ -166,7 +147,7 @@ export const styles = `
     color: var(--tx-text);
 }
 #lumra-tab .lm-game-back { margin-right: 10px; font-weight: 500; color: var(--tx-dim); }
-#lumra-tab .lm-games + .lm-caption { padding-top: 10px; }
+#lumra-tab .lm-games + .tx-caption { padding-top: 10px; }
 
 #lumra-tab .lm-details .tx-collapse:first-child { border-top: 0; }
 #lumra-tab .lm-flush { padding: 0; }

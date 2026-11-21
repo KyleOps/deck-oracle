@@ -417,7 +417,7 @@ function renderSources(r) {
         <div class="lm-band" role="img" aria-label="${parts.map(p => `${p.label} ${one(p.value)}`).join(', ')}">
             ${parts.map(p => `<span class="lm-band-seg is-${p.key}" style="width:${(p.value / total * 100).toFixed(2)}%"></span>`).join('')}
         </div>
-        <ul class="lm-legend">
+        <ul class="tx-legend">
             ${parts.map(p => `<li><span class="lm-swatch is-${p.key}"></span>${p.label}<strong>${one(p.value)}</strong></li>`).join('')}
             <li class="lm-legend-total">Average size<strong>${one(total)}</strong></li>
         </ul>`;
@@ -503,7 +503,7 @@ export function runSampleReveals(passed) {
     }).join('');
     display.innerHTML = `
         <div class="lm-games">${rows}</div>
-        <p class="lm-caption">${SHOWN_GAMES} of ${r.games.length.toLocaleString('en-US')} shuffles of your list. Highlighted cards are lands the trigger returns${gyLands ? `; the ${gyLands} graveyard land${gyLands === 1 ? '' : 's'} you set count in every game` : ''}.</p>`;
+        <p class="tx-caption">${SHOWN_GAMES} of ${r.games.length.toLocaleString('en-US')} shuffles of your list. Highlighted cards are lands the trigger returns${gyLands ? `; the ${gyLands} graveyard land${gyLands === 1 ? '' : 's'} you set count in every game` : ''}.</p>`;
 }
 
 function renderDetails(r) {
@@ -511,7 +511,7 @@ function renderDetails(r) {
     if (millEl) {
         const mill = MILL_PER_TRIGGER * r.config.multiplier;
         millEl.innerHTML = `
-            <p class="lm-caption">Exact chance of each number of lands among the ${mill} cards milled.</p>
+            <p class="tx-caption">Exact chance of each number of lands among the ${mill} cards milled.</p>
             ${renderDistributionChart(r.distribution.map(d => d.probability), 1, k => `${k} land${k === 1 ? '' : 's'}`, () => null, k => (k === 0 ? 'bad' : null))}`;
     }
 

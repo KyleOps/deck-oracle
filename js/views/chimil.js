@@ -36,7 +36,7 @@ export const template = `
     <section class="panel" aria-labelledby="chimil-dots-title">
         <div class="tx-h"><h2 class="ch-h" id="chimil-dots-title">Out of 100 games</h2><span class="tx-h-r">2,000 simulated games</span></div>
         <div id="chimil-dots"></div>
-        <p class="ch-caption">Each dot is one game in a hundred, stacked by the total mana of free spells Chimil cast. Solid dots earned back its own six mana; rings never did. Move the slider to see a shorter or longer game.</p>
+        <p class="tx-caption">Each dot is one game in a hundred, stacked by the total mana of free spells Chimil cast. Solid dots earned back its own six mana; rings never did. Move the slider to see a shorter or longer game.</p>
     </section>
 
     <section class="panel" aria-label="Free mana by end step">
@@ -44,7 +44,7 @@ export const template = `
         <div class="chart-container ch-chart">
             <canvas id="chimil-chart" role="img" aria-label="Total free mana Chimil has cast by each end step: typical game and the range of 8 games in 10"></canvas>
         </div>
-        <p class="ch-caption">The line is the typical game; the shaded band holds 8 games in 10. Where the band clears the dashed line, Chimil has paid back its own six mana in almost every game.</p>
+        <p class="tx-caption">The line is the typical game; the shaded band holds 8 games in 10. Where the band clears the dashed line, Chimil has paid back its own six mana in almost every game.</p>
     </section>
 
     <section class="panel" id="chimil-sample-reveals" aria-label="Sample games">
@@ -116,14 +116,7 @@ export const styles = `
 
 #chimil-tab .ch-h { margin: 0; font: inherit; color: inherit; letter-spacing: inherit; }
 #chimil-tab .ch-chart { height: 300px; }
-#chimil-tab .ch-caption {
-    margin: 0;
-    padding: 0 16px 14px;
-    font-size: var(--t-xs);
-    line-height: 1.5;
-    color: var(--tx-dim);
-}
-#chimil-tab .tx-collapse-body .ch-caption { padding: 0 0 10px; }
+#chimil-tab .tx-collapse-body .tx-caption { padding: 0 0 10px; }
 #chimil-tab .ch-caption-foot { padding-top: 10px; }
 #chimil-tab .ch-key-small { color: var(--tx-warn); font-weight: 600; }
 
