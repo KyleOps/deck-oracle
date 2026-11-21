@@ -73,11 +73,5 @@ export default [
             }
         },
         rules: sharedRules
-    },
-    {
-        // Being reworked on another branch (ramp classification); its unused
-        // import goes with that work. Remove this exception after the merge.
-        files: ['js/utils/manaDevelopment.js'],
-        rules: { 'no-unused-vars': 'off' }
     }
 ];
