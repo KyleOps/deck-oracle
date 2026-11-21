@@ -16,7 +16,7 @@ import * as OpponentState from '../utils/opponentState.js';
 import { registerCalculator, updateCalculatorIfActive } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
-import { isLand } from '../utils/library.js';
+import { isLand, libraryOf } from '../utils/library.js';
 import { one, pct } from '../utils/text.js';
 import {
     opponentLibrary, isHistoricType, createRevealer, countWord, objectId, readOpponents,
@@ -45,9 +45,10 @@ export function calculateMindsDilationStats(opponentData, sixthDoctor = false) {
     const mvBuckets = {};
     const bandCounts = { cheap: 0, mid: 0, big: 0 };
 
-    for (const card of Object.values(opponentData.cardsByName)) {
-        const count = Math.max(0, Math.floor(card?.count ?? 1));
-        if (isLand(card?.type_line)) {
+    // Their library: an opponent's commanders are never in it (see library.js).
+    for (const card of libraryOf(opponentData, { format: 'commander' }).cards) {
+        const count = card.count;
+        if (isLand(String(card.type_line ?? ''))) {
             landCount += count;
             continue;
         }
