@@ -34,7 +34,7 @@ evidence.
 Also included:
 
 - **Deck library**: every import is saved in your browser; switch decks from the sidebar.
-- **Format aware**: Commander (free first mulligan, everyone draws on turn one), 60-card and 40-card (on the play or the draw).
+- **Format aware**: Commander (free first mulligan, everyone draws on turn one; partners, a Doctor and companion, or a background count as the command zone, never the library), 60-card and 40-card (on the play or the draw).
 - **How it works**: every page has a drawer explaining the method, assumptions and terms.
 - **Search everything**: press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> to jump to any calculator, card or action.
 - Light and dark themes, card image previews on hover, share links, offline support (PWA).
@@ -88,10 +88,12 @@ Architecture in one paragraph: `index.html` is only the app shell. `js/main.js`
 wires the shell (`js/shell/`): router, sidebar, command palette, deck dialog,
 guide drawer, overlays, theme. Calculators are listed in
 `js/utils/calculatorRegistry.js` and loaded on first visit: logic in
-`js/calculators/<key>.js`, markup, styles and guide in `js/views/<key>.js`.
-Deck state lives in `js/utils/deckConfig.js`. The pure analysis modules
-(`mana.js`, `cardTags.js`, `deckStats.js`, `format.js`, `hypergeometric.js`)
-are fully unit-tested. See [docs/calculator-anatomy.md](docs/calculator-anatomy.md)
+`js/calculators/<key>.js`, markup, styles and guide in `js/views/<key>.js`,
+and the page's maths in a pure model, `js/utils/models/<key>.js`. Deck state
+lives in `js/utils/deckConfig.js`; every library is built by `js/utils/library.js`
+(commanders are never in it). The models and the analysis modules (`mana.js`,
+`ramp.js`, `cardTags.js`, `deckStats.js`, `format.js`, `hypergeometric.js`, …)
+are unit-tested without a browser. See [docs/calculator-anatomy.md](docs/calculator-anatomy.md)
 before adding a calculator.
 
 ## Credits

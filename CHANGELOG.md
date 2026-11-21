@@ -7,25 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-11-21
+
+Commanders handled properly (two commanders included), answers that arrive about a third sooner, and a codebase reorganised around pure, tested models.
+
 ### Added
-- **Screenshot baselines are live.** Linux baselines for the overview, Draw Odds, Mana Base, Opening Hands, Wild Pair and Primal Surge (dark and light, desktop and phone, 24 images) are committed in `tests/visual/__screenshots__/linux/`, so CI now compares every pull request against them.
+- **Decks with two commanders** (partners, a Doctor and their companion, a commander and a background) work end to end:
+  - Pasted lists, Moxfield and Archidekt keep every commander, each with its card. Saved decks keep them too; decks saved with one commander still load.
+  - The deck is named "A + B" and counted the way players count it: 98 + 2 commanders = 100 cards.
+  - The overview lists every commander and detects the format from the command zone. Deck Radar and the "In this deck" badge match any of them.
+  - **Mana Development** gives each commander's cast turn and both together. For the example deck: "can cast Susan Foreman on turn 2 and The Sixth Doctor on turns 5–7", and both on curve 74% of the time. It names any commander whose card wasn't imported instead of guessing.
+  - **Mana Base** checks the commanders' own costs, pinned and tagged. They count toward the bottleneck and colour demands, but not toward "X of your Y coloured spells".
+- **The example deck** is now the real 100-card list: 98 cards plus The Sixth Doctor and Susan Foreman.
+- **Screenshot baselines are live.** Linux baselines for the overview, Draw Odds, Mana Base, Opening Hands, Wild Pair and Primal Surge (dark and light, desktop and phone) are in `tests/visual/__screenshots__/linux/`, and CI compares every pull request against them.
+
+### Fixed
+- **Commanders are never in the library.** Ten pages (Genesis Wave, Kamahl's Druidic Vow, Primal Surge, Portent, Monstrous Vortex, Rashmi, Abstract Performance, Lumra, Chimil, Head to Head) could reveal the commander from the library. Lands, Mulligan Planner, Mana Base, Wild Pair and the overview counted it as a library card.
+- **The card being cast is not in its own library.** Genesis Wave, Kamahl's Druidic Vow, Portent, Abstract Performance, Chimil, Rashmi, Monstrous Vortex, Head to Head and Lumra now take out the copy being cast. "How it compares" does the same for each spell, and Lumra counts itself among your opening seven.
+- **Archidekt imports** brought in library cards with no mana cost or rules text, so mana pips and ramp/draw tags were missing.
+- **Imports:** a slow deck site could block every later import, and pasting a list during a link import returned the link's deck. The newest import now wins and every request times out. A typo Scryfall corrects ("Sol Rnig") is no longer reported missing, and two printings of one card no longer overwrite each other.
+- **Offline support:** the service worker had not registered for new visitors since the v3 shell.
+- **Ramp is counted the same way on every page.** The old tag missed Utopia Sprawl, Wild Growth, Overgrowth and Courser of Kruphix, and counted Aminatou's Augury and Ashnod's Altar. The overview, Lands, Mulligan Planner, Opening Hands, Draw Odds and Mana Development now share one rule (`js/utils/ramp.js`). Mana Development lists ramp it can't simulate, and cards that help your mana without being ramp, separately.
+- **Form controls:** calculator inputs, selects and sliders (Opening Hands, Land Drops, Mulligan Planner, Compare, Head to Head, the overview, the opponents bar, Lumra, Rashmi, big-spell fields) use the same rounded field as the deck dialog; a legacy rule had out-ranked it. On phones inputs are 16px, so iOS no longer zooms on focus.
+- **Percentages** read the same everywhere: ">99%" and "<1%", never a false 100% or 0%, and "—" for a missing number. Probability bars are neutral unless the number means good or bad. Portent says "2 mana cheaper".
+- Card names with curly apostrophes, dashes or accents match their plain spelling (Kamahl’s Druidic Vow).
 
 ### Changed
-- **Screenshot comparisons allow 300 px of glyph noise on every platform** (`playwright.visual.config.js`), replacing a 50 px budget on Linux that was never tested there. Chromium draws a few letters slightly differently from run to run. Across 192 Linux captures every page flipped between fixed states of 19–187 px, so the old budget would have failed most CI runs. A single raster thread and waiting for idle didn't help. 300 px still fails a misplaced bar (1,306 px) or any layout or colour change.
-- **Development dependencies:** Playwright 1.65.1 (newer Chromium) and ESLint 10.15, which clears the remaining `npm audit` advisory.
+- **Answers appear 22–34% sooner on a phone over slow 4G** (about 30% on desktop):
+  - Each page's modules are preloaded with the shell.
+  - Charts are drawn after the answer, and pages no longer wait for Chart.js. Mulligan Planner and Land Drops never download it.
+  - LZ-String and the chart helpers load on demand.
+  - Prefetching waits until the landing page is done.
+
+  For example, the overview went 2.6 → 2.0 s, Mulligan 3.1 → 2.1 s and Chimil 3.2 → 2.1 s (slow 4G, 4× slower CPU).
+- **Returning to a page** skips re-rendering when nothing it shows changed (Wave, Surge and Chimil revisits are 2–3× faster).
+- **Mana Development's simulation is about 2× faster**, with identical seeded results, and its answer paints about 24% sooner on a slow CPU.
+- **Less to load:**
+  - Render-blocking CSS: 142 → 97 KB (32 → 24 KB gzipped), one fewer stylesheet.
+  - The Wild Pair, Head to Head and "Cast it" CSS loads with those pages.
+  - Big-spell and multiplayer CSS is injected once instead of once per page.
+  - The importer and the opponents bar load on first use.
+  - The bundled example deck is 37% smaller.
+  - The overview lays out its below-the-fold sections only as they near the screen.
+- **One play/draw control** on the seven pages that use it; links already shared still work. One hero grid on every page; captions and legends share one style. Draw Odds keeps its answer-grid divider on phones. In the light theme, card-art edges and mana symbols use warm ink.
+- **Import errors** read as plain sentences ("The deck site isn’t answering right now…") in the deck dialog and opponent seats.
+- **Mulligan share links** are shorter; older links still open.
+- **Code structure:**
+  - Each page's maths is a pure model in `js/utils/models/`, tested without a browser. Pages read `readInputs()` → model → render.
+  - Every library is built by `library.js`. Randomness, percentiles and percentages have one home each (`random.js`, `stats.js`, `text.js`).
+  - The multiplayer pages share `createOpponentPage()` and the X-spell pages share a kit in `bigSpells.js`. `share.js` knows no page.
+  - The importer is split into parse, Scryfall and deck-site modules.
+  - Unit-test coverage is 97% of lines (was 88%).
+- **Performance budgets** measure the real paint (Element Timing), add Mana Development, and are tighter now that the app is faster.
+- **Screenshot comparisons allow 300 px of glyph noise on every platform** (`playwright.visual.config.js`). This replaces a 50 px Linux budget that had never run there: across 192 Linux captures every page flipped between fixed states of 19–187 px. 300 px still fails a misplaced bar (1,306 px) or any layout or colour change.
+- **Development dependencies:** Playwright 1.65.1 (newer Chromium) and ESLint 10.15, which clears the remaining `npm audit` advisory. ESLint now flags unused code in every file.
 
 ### Removed
-- **About 930 lines of dead code**, found by a scan that resolves every static and dynamic import:
-  - `js/utils/tableUtils.js`.
-  - Pre-v3 renderers in `components.js`: verdict badge, recommendation banner, outcome matrix, simulation summary, insight box, sample-reveal controls.
-  - Card badge, coloured type names (and their hard-coded hex `TYPE_COLORS`) and collapsible section in `sampleSimulator.js`.
-  - `hashDeck`, `batchProcess` and `scheduleUpdate` in `simulation.js`.
-  - `factorial` and the two- and three-type multivariate hypergeometric functions in `hypergeometric.js`.
-  - `applyPreset` in `deckConfig.js`.
-  - The legacy one-card-at-a-time `importDecklist`, `clearCardCache` and the `importFromMoxfield` alias in `decklistImport.js`.
-  - `getOpponentDecks` and `OPPONENT_BAR_STYLES` in `opponentState.js`; `isMounted` in `router.js`.
-  - All of `analysis.js` except `recommendThresholdX`; `colorRequirements` in `mana.js`.
-- Tests and benchmarks of the removed functions went with them. Coverage stays at 88% of lines.
+- **About 930 lines of dead JavaScript**, found by a scan that resolves every static and dynamic import:
+  - `tableUtils.js`
+  - pre-v3 renderers in `components.js` and `sampleSimulator.js`, including the hard-coded hex `TYPE_COLORS`
+  - unused simulation and hypergeometric helpers
+  - the legacy one-card-at-a-time `importDecklist`
+  - `applyPreset`, `percent.js` and `formatPercentage`
+- **About 14 KB of CSS that matched nothing.** Also gone: 53 unused design tokens (the legacy alias block included), viewport media queries inside calculator CSS (now container queries), and the `!important` / `[hidden]` overrides that fought the cascade.
+- **Unused deck fields** (`cmc0`–`cmc6`, `power5PlusCMC*`, `creaturesPower5Plus`). `cardDetails` is no longer stored in saved decks; it is derived on demand.
 
 ## [3.1.0] - 2026-11-21
 
