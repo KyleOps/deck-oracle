@@ -1,318 +1,234 @@
 /**
- * Share URL Management
- * Handles deep linking for decklists and calculator settings
+ * Share links — deep links to a page, its deck, and its settings.
+ *
+ * URL shape: `?tab=<key>&deck=<moxfield/archidekt url>&<page params>`
+ *
+ * Calculators load lazily, so applying a link is: import the deck, mount the
+ * target page, then set its inputs. Two ways a page's settings get into a link:
+ *   1. SLIDERS below — legacy input ids, kept so every old link still works
+ *   2. a calculator module may export `getShareParams()` → {param: value} and
+ *      `applyShareParams(URLSearchParams)`; new calculators use this instead of
+ *      editing this file.
  */
 
 import * as DeckConfig from './deckConfig.js';
-import * as Mulligan from '../calculators/mulligan.js';
-import * as Mara from '../calculators/mara.js';
-import * as DreamHarvest from '../calculators/dreamharvest.js';
+import * as OpponentState from './opponentState.js';
+import { getCalculator, getLoadedModule } from './calculatorRegistry.js';
 
-// Valid tab names whitelist
-const VALID_TABS = ['portent', 'surge', 'wave', 'vow', 'vortex', 'rashmi', 'lands', 'mulligan', 'lumra', 'mara', 'dreamharvest', 'mindsdilation', 'abstract', 'chimil', 'wildpair', 'versus'];
+export const ALLOWED_DECK_HOSTS = Object.freeze(['moxfield.com', 'www.moxfield.com', 'archidekt.com', 'www.archidekt.com']);
 
-// LZ-String is loaded globally via CDN
-const LZString = window.LZString;
+/** Input-backed settings, by page. min/max guard against crafted links. */
+export const SLIDERS = Object.freeze([
+    { tab: 'portent', param: 'portentX', id: 'portent-xSlider', min: 0, max: 20 },
+    { tab: 'wave', param: 'waveX', id: 'wave-xSlider', min: 0, max: 30 },
+    { tab: 'wave', param: 'waveLand', id: 'wave-land-value', min: 0, max: 20, float: true },
+    { tab: 'wave', param: 'waveCard', id: 'wave-card-value', min: 0, max: 20, float: true },
+    { tab: 'vow', param: 'vowX', id: 'vow-xSlider', min: 0, max: 30 },
+    { tab: 'vow', param: 'vowLand', id: 'vow-land-value', min: 0, max: 20, float: true },
+    { tab: 'vow', param: 'vowCard', id: 'vow-card-value', min: 0, max: 20, float: true },
+    { tab: 'vortex', param: 'vortexCMC', id: 'vortex-cmcSlider', min: 5, max: 15 },
+    { tab: 'rashmi', param: 'rashmiCMC', id: 'rashmi-cmcSlider', min: 0, max: 15 },
+    { tab: 'lumra', param: 'lumraGY', id: 'lumra-gySlider', min: 0, max: 30 },
+    { tab: 'lumra', param: 'lumraMult', id: 'lumra-multSlider', min: 1, max: 10 },
+    { tab: 'lumra', param: 'lumraFetch', id: 'lumra-fetchLands', min: 0, max: 100 },
+    { tab: 'lumra', param: 'lumraTurn', id: 'lumra-turnSlider', min: 1, max: 20 },
+    { tab: 'chimil', param: 'chimilTurns', id: 'chimil-turnsSlider', min: 1, max: 20 },
+    { tab: 'wildpair', param: 'wpTotal', id: 'wildpair-totalSlider', min: 0, max: 40 },
+    { tab: 'surge', param: 'surgeThreshold', id: 'surge-payback-threshold', min: 0.25, max: 100, float: true },
+    { tab: 'surge', param: 'surgeLand', id: 'surge-land-value', min: 0, max: 20, float: true },
+    { tab: 'surge', param: 'surgeCard', id: 'surge-card-value', min: 0, max: 20, float: true }
+]);
 
-/**
- * Compress mulligan types using LZ-String
- * Returns URL-safe compressed string
- */
-function compressMullTypes(types) {
-    // Minify: use short keys and strip # from colors
-    const minified = types.map(t => [t.id, t.name, t.count, t.required, t.byTurn, (t.color || '').replace('#', '')]);
-    return LZString.compressToEncodedURIComponent(JSON.stringify(minified));
+const OPPONENT_PARAMS = [
+    ['maraOpp1', 'dhOpp1', 'opp1'],
+    ['maraOpp2', 'dhOpp2', 'opp2'],
+    ['maraOpp3', 'dhOpp3', 'opp3']
+];
+
+function lz() {
+    return typeof window !== 'undefined' ? window.LZString : undefined;
 }
 
-/**
- * Decompress mulligan types from LZ-String format
- * Returns null if parsing fails
- */
-function decompressMullTypes(str) {
+/** Validate an external deck URL against the import allowlist. */
+export function isAllowedDeckUrl(value) {
     try {
-        const decompressed = LZString.decompressFromEncodedURIComponent(str);
-        if (!decompressed) return null;
+        const url = new URL(value);
+        return url.protocol === 'https:' && ALLOWED_DECK_HOSTS.includes(url.hostname);
+    } catch {
+        return false;
+    }
+}
 
+/** Parse a numeric param within bounds, or null. */
+export function boundedNumber(raw, { min, max, float = false }) {
+    if (raw === null || raw === undefined || raw === '') return null;
+    const value = float ? parseFloat(raw) : parseInt(raw, 10);
+    if (Number.isNaN(value) || value < min || value > max) return null;
+    return value;
+}
+
+function compressMullTypes(types) {
+    const minified = types.map(t => [t.id, t.name, t.count, t.required, t.byTurn, (t.color || '').replace('#', '')]);
+    return lz()?.compressToEncodedURIComponent(JSON.stringify(minified)) ?? null;
+}
+
+/** Decompress and validate mulligan requirements; null if anything is off. */
+export function decompressMullTypes(str, codec = lz()) {
+    try {
+        const decompressed = codec?.decompressFromEncodedURIComponent(str);
+        if (!decompressed) return null;
         const minified = JSON.parse(decompressed);
         if (!Array.isArray(minified)) return null;
-
         const types = minified.map(arr => ({
-            id: arr[0],
-            name: arr[1],
-            count: arr[2],
-            required: arr[3],
-            byTurn: arr[4],
+            id: arr[0], name: arr[1], count: arr[2], required: arr[3], byTurn: arr[4],
             color: arr[5] ? `#${arr[5]}` : '#808b85'
         }));
-
-        // Validate
-        if (types.every(t =>
-            typeof t.id === 'number' && typeof t.name === 'string' &&
+        const valid = types.every(t =>
+            typeof t.id === 'number' && typeof t.name === 'string' && t.name.length <= 60 &&
             typeof t.count === 'number' && typeof t.required === 'number' && typeof t.byTurn === 'number' &&
-            t.count >= 0 && t.count <= 100 &&
-            t.required >= 0 && t.required <= 100 &&
-            t.byTurn >= 0 && t.byTurn <= 20
-        )) {
-            return types;
-        }
+            t.count >= 0 && t.count <= 100 && t.required >= 0 && t.required <= 100 && t.byTurn >= 0 && t.byTurn <= 20 &&
+            /^#[0-9a-f]{3,8}$/i.test(t.color)
+        );
+        return valid ? types : null;
     } catch (e) {
         console.warn('Failed to decompress mullTypes', e);
+        return null;
     }
-    return null;
 }
 
-// Allowed deck import domains
-const ALLOWED_DECK_HOSTS = ['moxfield.com', 'www.moxfield.com', 'archidekt.com', 'www.archidekt.com'];
-
-// Default example deck URL - excluded from share links since it loads automatically
-const DEFAULT_DECK_URL = 'https://moxfield.com/decks/BdgPCOK4IUyNd2287K2mvg';
+function setInput(id, value) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+}
 
 /**
- * Parse URL parameters and apply settings
+ * Apply the current URL's share parameters.
+ * @param {{ensureMounted:(tab:string)=>Promise<any>}} hooks - mounts a page
+ * @returns {Promise<string|null>} the requested tab, if valid
  */
-export async function parseShareUrl() {
+export async function applyShareUrl({ ensureMounted } = {}) {
     const params = new URLSearchParams(window.location.search);
 
-    // 1. Deck Import (Async) - with URL validation
+    // 1. Deck — validated against the import allowlist
     const deckUrl = params.get('deck');
     if (deckUrl) {
-        try {
-            // Validate URL format and domain
-            const url = new URL(deckUrl);
-            if (!ALLOWED_DECK_HOSTS.includes(url.hostname)) {
-                console.warn('Deck URL from untrusted domain:', url.hostname);
-            } else {
-                console.log('Auto-importing deck from URL:', deckUrl);
+        if (isAllowedDeckUrl(deckUrl)) {
+            try {
                 await DeckConfig.loadDeckFromUrl(deckUrl);
+            } catch (e) {
+                console.error('Failed to load deck from share link', e);
             }
-        } catch (e) {
-            console.error("Failed to load deck from share link", e);
+        } else {
+            console.warn('Ignoring deck link from an unsupported site');
         }
     }
 
-    // 2. Tab Selection - with whitelist validation
+    // 2. Opponents (multiplayer pages)
+    const oppJobs = OPPONENT_PARAMS.map((names, i) => {
+        const value = names.map(n => params.get(n)).find(Boolean);
+        if (!value) return null;
+        if (!isAllowedDeckUrl(value)) {
+            console.warn(`Ignoring opponent ${i + 1} link from an unsupported site`);
+            return null;
+        }
+        return OpponentState.setOpponentUrl(`opponent${i + 1}`, value).catch(e =>
+            console.error(`Failed to load opponent ${i + 1} deck`, e));
+    }).filter(Boolean);
+    await Promise.all(oppJobs);
+
+    // 3. The page and its settings
     const tab = params.get('tab');
-    if (tab && VALID_TABS.includes(tab)) {
-        // Click the tab button rather than calling switchTab, which lives in
-        // main.js and would be a circular import. This targets the terminal tab
-        // row; it used to target `.selector-option`, the dropdown that was
-        // removed with the legacy nav, so shared links stopped restoring the
-        // tab for every calculator.
-        const tabButton = document.querySelector(`.tx-tab[data-tab="${CSS.escape(tab)}"]`);
-        if (tabButton) {
-            tabButton.click();
-        }
+    if (!getCalculator(tab)) return null;
+    const hasPageParams = [...params.keys()].some(k => !['tab', 'deck'].includes(k));
+    if (!hasPageParams || !ensureMounted) return tab;
+
+    try {
+        const record = await ensureMounted(tab);
+        applyPageParams(tab, params, record?.module);
+    } catch (err) {
+        console.error('Could not apply shared settings', err);
     }
+    return tab;
+}
 
-    // 3. Mulligan Specifics - with input validation
-    if (params.has('mullSims')) {
-        const value = parseInt(params.get('mullSims'), 10);
-        if (!isNaN(value) && value >= 1 && value <= 10000) {
-            const input = document.getElementById('mulligan-sample-count');
-            if (input) {
-                input.value = value;
-            }
-        } else {
-            console.warn('Invalid mullSims value, must be between 1 and 10000');
-        }
-    }
-
-    const mullTypes = params.get('mullTypes');
-    if (mullTypes) {
-        const types = decompressMullTypes(mullTypes);
-        if (types) {
-            Mulligan.setCardTypes(types);
-        } else {
-            console.warn('Invalid mulligan types structure');
-        }
-    }
-
-    if (params.has('mullPenalty')) {
-        const value = parseFloat(params.get('mullPenalty'));
-        if (!isNaN(value) && value >= 0 && value <= 100) {
-            const input = document.getElementById('mull-penalty');
-            if (input) {
-                input.value = value;
-                input.dispatchEvent(new Event('input'));
-            }
-        } else {
-            console.warn('Invalid mullPenalty value, must be between 0 and 100');
-        }
-    }
-
-    if (params.has('mullThreshold')) {
-        const value = parseFloat(params.get('mullThreshold'));
-        if (!isNaN(value) && value >= 0 && value <= 100) {
-            const input = document.getElementById('mull-threshold');
-            if (input) {
-                input.value = value;
-                input.dispatchEvent(new Event('input'));
-            }
-        } else {
-            console.warn('Invalid mullThreshold value, must be between 0 and 100');
-        }
-    }
-
-    // 4. Calculator Sliders - with bounds validation
-    const sliderMap = {
-        'portentX': { id: 'portent-xSlider', min: 0, max: 20 },
-        'waveX': { id: 'wave-xSlider', min: 0, max: 30 },
-        'waveLand': { id: 'wave-land-value', min: 0, max: 20, float: true },
-        'waveCard': { id: 'wave-card-value', min: 0, max: 20, float: true },
-        'vowX': { id: 'vow-xSlider', min: 0, max: 30 },
-        'vowLand': { id: 'vow-land-value', min: 0, max: 20, float: true },
-        'vowCard': { id: 'vow-card-value', min: 0, max: 20, float: true },
-        'vortexCMC': { id: 'vortex-cmcSlider', min: 5, max: 15 },
-        'rashmiCMC': { id: 'rashmi-cmcSlider', min: 0, max: 15 },
-        'lands': { id: 'lands-opening-slider', min: 0, max: 60 },
-        'lumraGY': { id: 'lumra-gySlider', min: 0, max: 30 },
-        'lumraMult': { id: 'lumra-multSlider', min: 1, max: 10 },
-        'lumraFetch': { id: 'lumra-fetchLands', min: 0, max: 100 },
-        'lumraTurn': { id: 'lumra-turnSlider', min: 1, max: 20 },
-        'chimilTurns': { id: 'chimil-turnsSlider', min: 1, max: 20 },
-        'wpTotal': { id: 'wildpair-totalSlider', min: 0, max: 40 },
-        'surgeThreshold': { id: 'surge-payback-threshold', min: 0.25, max: 100, float: true },
-        'surgeLand': { id: 'surge-land-value', min: 0, max: 20, float: true },
-        'surgeCard': { id: 'surge-card-value', min: 0, max: 20, float: true },
-    };
-
-    Object.entries(sliderMap).forEach(([param, config]) => {
-        if (params.has(param)) {
-            const value = config.float
-                ? parseFloat(params.get(param))
-                : parseInt(params.get(param), 10);
-            if (!isNaN(value) && value >= config.min && value <= config.max) {
-                const input = document.getElementById(config.id);
-                if (input) {
-                    input.value = value;
-                    input.dispatchEvent(new Event('input'));
-                }
-            } else {
-                console.warn(`Invalid ${param} value, must be between ${config.min} and ${config.max}`);
-            }
-        }
+function applyPageParams(tab, params, module) {
+    SLIDERS.filter(s => s.tab === tab).forEach(s => {
+        const value = boundedNumber(params.get(s.param), s);
+        if (value !== null) setInput(s.id, value);
+        else if (params.has(s.param)) console.warn(`Ignoring out-of-range ${s.param}`);
     });
 
-    // 5. Mara Opponent Decklists
-    const maraOpponentParams = ['maraOpp1', 'maraOpp2', 'maraOpp3'];
-    for (let i = 0; i < maraOpponentParams.length; i++) {
-        const paramName = maraOpponentParams[i];
-        const oppUrl = params.get(paramName);
-        if (oppUrl) {
-            try {
-                const url = new URL(oppUrl);
-                if (ALLOWED_DECK_HOSTS.includes(url.hostname)) {
-                    await Mara.setOpponentUrl(`opponent${i + 1}`, oppUrl);
-                } else {
-                    console.warn(`Mara opponent URL from untrusted domain: ${url.hostname}`);
-                }
-            } catch (e) {
-                console.error(`Failed to load Mara opponent ${i + 1} deck`, e);
-            }
-        }
+    if (tab === 'mulligan') {
+        const types = params.get('mullTypes') ? decompressMullTypes(params.get('mullTypes')) : null;
+        if (types) module?.setCardTypes?.(types);
+        const sims = boundedNumber(params.get('mullSims'), { min: 1, max: 10000 });
+        if (sims !== null) setInput('mulligan-sample-count', sims);
+        const penalty = boundedNumber(params.get('mullPenalty'), { min: 0, max: 100, float: true });
+        if (penalty !== null) setInput('mull-penalty', penalty);
+        const threshold = boundedNumber(params.get('mullThreshold'), { min: 0, max: 100, float: true });
+        if (threshold !== null) setInput('mull-threshold', threshold);
     }
 
-    // 6. Dream Harvest Opponent Decklists
-    const dhOpponentParams = ['dhOpp1', 'dhOpp2', 'dhOpp3'];
-    for (let i = 0; i < dhOpponentParams.length; i++) {
-        const paramName = dhOpponentParams[i];
-        const oppUrl = params.get(paramName);
-        if (oppUrl) {
-            try {
-                const url = new URL(oppUrl);
-                if (ALLOWED_DECK_HOSTS.includes(url.hostname)) {
-                    await DreamHarvest.setOpponentUrl(`opponent${i + 1}`, oppUrl);
-                } else {
-                    console.warn(`Dream Harvest opponent URL from untrusted domain: ${url.hostname}`);
-                }
-            } catch (e) {
-                console.error(`Failed to load Dream Harvest opponent ${i + 1} deck`, e);
-            }
-        }
+    try {
+        module?.applyShareParams?.(params);
+    } catch (err) {
+        console.error(`${tab} rejected its share params`, err);
     }
 }
 
 /**
- * Generate a shareable URL based on current state
+ * Build a share link for a page.
+ * @param {string} tab - the visible page
  */
-export function getShareUrl() {
+export function getShareUrl(tab) {
     const url = new URL(window.location.href);
     const params = new URLSearchParams();
+    if (tab) params.set('tab', tab);
 
-    // Current Tab
-    const activeTab = document.querySelector('.tab-content.active');
-    if (activeTab) {
-        const tabId = activeTab.id.replace('-tab', '');
-        params.set('tab', tabId);
+    const deck = DeckConfig.getDeckConfig();
+    if (deck.importUrl && deck.importUrl !== DeckConfig.DEFAULT_DECK_URL && isAllowedDeckUrl(deck.importUrl)) {
+        params.set('deck', deck.importUrl);
     }
 
-    // Deck URL - exclude default example deck since it loads automatically
-    const deckConfig = DeckConfig.getDeckConfig();
-    if (deckConfig.importUrl && deckConfig.importUrl !== DEFAULT_DECK_URL) {
-        params.set('deck', deckConfig.importUrl);
-    }
-
-    // Mulligan Specifics
-    if (activeTab && activeTab.id === 'mulligan-tab') {
-        const mullState = Mulligan.getState();
-        if (mullState && mullState.types && mullState.types.length > 0) {
-            // Use LZ-String compression for compact URLs
-            params.set('mullTypes', compressMullTypes(mullState.types));
-        }
-        
-        const penalty = document.getElementById('mull-penalty');
-        if (penalty) params.set('mullPenalty', penalty.value);
-        
-        const threshold = document.getElementById('mull-threshold');
-        if (threshold) params.set('mullThreshold', threshold.value);
-
-        const sampleCount = document.getElementById('mulligan-sample-count');
-        if (sampleCount) params.set('mullSims', sampleCount.value);
-    }
-
-    // Slider Settings (Generic)
-    const sliders = [
-        { id: 'portent-xSlider', param: 'portentX' },
-        { id: 'wave-xSlider', param: 'waveX' },
-        { id: 'wave-land-value', param: 'waveLand' },
-        { id: 'wave-card-value', param: 'waveCard' },
-        { id: 'vow-xSlider', param: 'vowX' },
-        { id: 'vow-land-value', param: 'vowLand' },
-        { id: 'vow-card-value', param: 'vowCard' },
-        { id: 'vortex-cmcSlider', param: 'vortexCMC' },
-        { id: 'rashmi-cmcSlider', param: 'rashmiCMC' },
-        { id: 'lumra-gySlider', param: 'lumraGY' },
-        { id: 'lumra-multSlider', param: 'lumraMult' },
-        { id: 'lumra-fetchLands', param: 'lumraFetch' },
-        { id: 'lumra-turnSlider', param: 'lumraTurn' },
-        { id: 'chimil-turnsSlider', param: 'chimilTurns' },
-        { id: 'wildpair-totalSlider', param: 'wpTotal' },
-        { id: 'surge-payback-threshold', param: 'surgeThreshold' },
-        { id: 'surge-land-value', param: 'surgeLand' },
-        { id: 'surge-card-value', param: 'surgeCard' }
-    ];
-
-    sliders.forEach(({ id, param }) => {
-        const input = document.getElementById(id);
-        if (input && input.offsetParent !== null) { // Only if visible? Or just save all?
-            // Better to save all relevant ones or just the active one?
-            // Saving all allows switching tabs and keeping state.
-            params.set(param, input.value);
-        }
+    SLIDERS.filter(s => s.tab === tab).forEach(s => {
+        const input = document.getElementById(s.id);
+        if (input && input.value !== '') params.set(s.param, input.value);
     });
 
-    // Mara Opponent Decklists
-    const maraUrls = Mara.getOpponentUrls();
-    if (maraUrls.opponent1) params.set('maraOpp1', maraUrls.opponent1);
-    if (maraUrls.opponent2) params.set('maraOpp2', maraUrls.opponent2);
-    if (maraUrls.opponent3) params.set('maraOpp3', maraUrls.opponent3);
+    const module = getLoadedModule(tab);
+    if (tab === 'mulligan' && module?.getState) {
+        const state = module.getState();
+        if (state?.types?.length) {
+            const packed = compressMullTypes(state.types);
+            if (packed) params.set('mullTypes', packed);
+        }
+        ['mull-penalty:mullPenalty', 'mull-threshold:mullThreshold', 'mulligan-sample-count:mullSims'].forEach(pair => {
+            const [id, param] = pair.split(':');
+            const el = document.getElementById(id);
+            if (el) params.set(param, el.value);
+        });
+    }
 
-    // Dream Harvest Opponent Decklists
-    const dhUrls = DreamHarvest.getOpponentUrls();
-    if (dhUrls.opponent1) params.set('dhOpp1', dhUrls.opponent1);
-    if (dhUrls.opponent2) params.set('dhOpp2', dhUrls.opponent2);
-    if (dhUrls.opponent3) params.set('dhOpp3', dhUrls.opponent3);
+    if (getCalculator(tab)?.needsOpponents) {
+        const urls = OpponentState.getOpponentUrls();
+        ['opponent1', 'opponent2', 'opponent3'].forEach((key, i) => {
+            if (urls[key] && isAllowedDeckUrl(urls[key])) params.set(`opp${i + 1}`, urls[key]);
+        });
+    }
+
+    try {
+        const extra = module?.getShareParams?.() ?? {};
+        Object.entries(extra).forEach(([k, v]) => {
+            if (v !== null && v !== undefined && v !== '') params.set(k, String(v));
+        });
+    } catch (err) {
+        console.error(`${tab} failed to build share params`, err);
+    }
 
     url.search = params.toString();
+    url.hash = '';
     return url.toString();
 }

@@ -1,31 +1,38 @@
 /**
- * Abstract Performance Calculator
- * Simulates the "blind pick" mechanic: face-down vs face-up pile choice
- * by opponent with partial information.
+ * Abstract Performance — {5}{U} Sorcery
+ *
+ * "Exile the top four cards of your library in a face-down pile, then exile the
+ * top four cards of your library in a face-up pile. An opponent chooses one of
+ * those piles. Put that pile into your graveyard. Look at the cards in the
+ * other pile. You may cast a spell from among them without paying its mana
+ * cost. Put the rest into your hand."
+ *
+ * Simulated: deal two piles of four from a shuffled copy of the library and
+ * record the best spell you could cast free from the pile you keep, under three
+ * opponents:
+ *   - guesses right: knows both piles and bins the one with more total mana value
+ *   - guesses wrong: bins the one with less (your best case)
+ *   - realistic: sees only the face-up pile, and bins it when it is worth more
+ *     than an average four cards; otherwise bins the unseen face-down pile
  */
 
 import { partialShuffle } from '../utils/simulation.js';
-import { createOrUpdateChart } from '../utils/chartHelpers.js';
+import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
-import { updateCalculatorIfActive } from '../utils/calculatorBase.js';
+import { registerCalculator } from '../utils/calculatorBase.js';
+import { renderHeroStats, renderBottomLine } from '../utils/components.js';
+import { buildDeckFromCardData, renderDistributionChart } from '../utils/sampleSimulator.js';
+import { percentileFromDist } from '../utils/discover.js';
+import { cardRef } from '../data/glossary.js';
 
-const CONFIG = {
-    ITERATIONS: 25000,
-    PILE_SIZE: 4,
-};
+export const ITERATIONS = 25000;
+export const PILE_SIZE = 4;
+export const SAMPLE_CASTS = 4;
 
-const COLORS = {
-    best: '#55c97f',
-    realistic: '#f0a92c',
-    worst: '#e8635c',
-    bestDim: 'rgba(85,201,127,0.08)',
-    realisticDim: 'rgba(240,169,44,0.08)',
-    worstDim: 'rgba(232,99,92,0.08)',
-    text: '#808b85',
-    grid: '#1e221f',
-};
+/** Histogram buckets: mana value 0..9, then 10+. */
+const BUCKETS = 11;
 
-// Default CMC distribution for when no deck is imported (~99-card commander)
+/** Fallback curve when no decklist is loaded (~99-card Commander deck). */
 const DEFAULT_DIST = [
     { cmc: 0, count: 36, isLand: true },
     { cmc: 1, count: 10, isLand: false },
@@ -34,29 +41,40 @@ const DEFAULT_DIST = [
     { cmc: 4, count: 10, isLand: false },
     { cmc: 5, count: 8, isLand: false },
     { cmc: 6, count: 5, isLand: false },
-    { cmc: 7, count: 3, isLand: false },
+    { cmc: 7, count: 3, isLand: false }
 ];
 
-function buildDefaultDeck() {
+let chart = null;
+
+// ==================== PURE LOGIC ====================
+
+/**
+ * The library as {name, cmc, isLand}, one entry per copy, lands included.
+ *
+ * Built from cardsByName (every card, with names). The previous version read
+ * `cardDetails`, which the importer fills with NONLAND cards only — so every
+ * simulated pile was dealt from a deck with no lands, inflating the free spell
+ * and making "all lands, nothing to cast" impossible.
+ *
+ * @param {Object} cardsByName
+ * @returns {{deck:Array<{name:string, cmc:number, isLand:boolean}>, isDefault:boolean}}
+ */
+export function buildLibrary(cardsByName) {
+    const names = Object.keys(cardsByName ?? {});
+    if (names.length > 0) {
+        const deck = buildDeckFromCardData({ cardsByName }).map(card => ({
+            name: card.name,
+            cmc: Math.max(0, Math.floor(Number(card.cmc) || 0)),
+            isLand: card.types.includes('land'),
+            isX: /\{X\}/i.test(card.mana_cost ?? '')
+        }));
+        if (deck.length >= PILE_SIZE * 2) return { deck, isDefault: false };
+    }
     const deck = [];
     for (const { cmc, count, isLand } of DEFAULT_DIST) {
-        for (let i = 0; i < count; i++) {
-            deck.push({ name: isLand ? 'Land' : `Spell`, cmc, isLand });
-        }
+        for (let i = 0; i < count; i++) deck.push({ name: isLand ? 'Land' : 'Spell', cmc, isLand });
     }
-    return deck;
-}
-
-function buildDeck(config) {
-    const { cardDetails } = config;
-    if (cardDetails && cardDetails.length > 0) {
-        return cardDetails.map(card => ({
-            name: card.name || 'Unknown',
-            cmc: card.cmc ?? 0,
-            isLand: (card.type || '').toLowerCase().includes('land'),
-        }));
-    }
-    return buildDefaultDeck();
+    return { deck, isDefault: true };
 }
 
 function totalMV(pile) {
@@ -64,366 +82,352 @@ function totalMV(pile) {
 }
 
 /**
- * Returns the highest CMC of any non-land card in the pile.
- * Returns 0 if no non-land cards exist.
+ * The highest mana value of any nonland card in the pile (0 if none).
  * @param {Array} pile
  * @returns {number}
  */
 export function bestFreeCastMV(pile) {
     let max = 0;
     for (const card of pile) {
-        if (!card.isLand && (card.cmc ?? 0) > max) {
-            max = card.cmc;
-        }
+        if (!card.isLand && (card.cmc ?? 0) > max) max = card.cmc;
     }
     return max;
 }
 
+/** The card you would cast from a pile (highest mana value nonland), or null. */
+export function bestFreeCast(pile) {
+    let best = null;
+    for (const card of pile) {
+        if (card.isLand) continue;
+        if (!best || (card.cmc ?? 0) > (best.cmc ?? 0)) best = card;
+    }
+    return best;
+}
+
 /**
- * Core Monte Carlo simulation for Abstract Performance.
- * @param {Array} deck - Array of { name, cmc, isLand }
+ * Which pile a face-up-only opponent bins. They cannot see the face-down pile,
+ * so they compare the face-up pile with an average four cards and bin it when
+ * it looks better than that.
+ *
+ * @returns {boolean} true when they bin the face-up pile (you keep face-down)
+ */
+export function opponentBinsFaceUp(faceUp, expectedFourMV) {
+    return totalMV(faceUp) > expectedFourMV;
+}
+
+function histogramStats(hist, sum, n) {
+    return {
+        mean: n ? sum / n : 0,
+        dist: hist.map(c => (n ? c / n : 0)),
+        p25: percentileFromDist(hist, 0.25),
+        p50: percentileFromDist(hist, 0.5),
+        p75: percentileFromDist(hist, 0.75)
+    };
+}
+
+/**
+ * Monte Carlo over the three opponent models. Means use exact mana values;
+ * the distributions fold 10 and above into one "10+" bucket.
+ *
+ * @param {Array<{name:string, cmc:number, isLand:boolean}>} deck
  * @param {number} iterations
- * @returns {{ best, worst, realistic, deckSize, expectedFourMV } | null}
+ * @returns {{best:Object, worst:Object, realistic:Object, deckSize:number, expectedFourMV:number}|null}
  */
 export function simulateAbstractPerformance(deck, iterations) {
-    const deckSize = deck.length;
-    if (deckSize < CONFIG.PILE_SIZE * 2) return null;
+    const deckSize = Array.isArray(deck) ? deck.length : 0;
+    if (deckSize < PILE_SIZE * 2) return null;
+    const n = Math.max(0, Math.floor(Number(iterations) || 0));
 
     const totalDeckMV = deck.reduce((s, c) => s + (c.cmc ?? 0), 0);
-    // Expected total MV of any 4 randomly drawn cards (opponent's baseline for face-down)
-    const expectedFourMV = (totalDeckMV / deckSize) * CONFIG.PILE_SIZE;
+    // Expected total mana value of four random cards: the realistic opponent's yardstick.
+    const expectedFourMV = (totalDeckMV / deckSize) * PILE_SIZE;
 
-    const bestArr = [];
-    const worstArr = [];
-    const realisticArr = [];
+    const best = new Array(BUCKETS).fill(0);
+    const worst = new Array(BUCKETS).fill(0);
+    const realistic = new Array(BUCKETS).fill(0);
+    const sums = { best: 0, worst: 0, realistic: 0 };
+    const record = (hist, key, v) => { hist[Math.min(v, BUCKETS - 1)]++; sums[key] += v; };
 
-    for (let i = 0; i < iterations; i++) {
-        const d = deck.slice(); // copy
-        partialShuffle(d, CONFIG.PILE_SIZE * 2, deckSize);
-        const faceDown = d.slice(0, CONFIG.PILE_SIZE);
-        const faceUp = d.slice(CONFIG.PILE_SIZE, CONFIG.PILE_SIZE * 2);
-
+    // A partial Fisher–Yates over any permutation yields a uniformly random
+    // ordered sample, so one working copy is reshuffled in place each time.
+    const d = deck.slice();
+    for (let i = 0; i < n; i++) {
+        partialShuffle(d, PILE_SIZE * 2, deckSize);
+        const faceDown = d.slice(0, PILE_SIZE);
+        const faceUp = d.slice(PILE_SIZE, PILE_SIZE * 2);
         const mvFD = totalMV(faceDown);
         const mvFU = totalMV(faceUp);
+        const richer = mvFD >= mvFU ? faceDown : faceUp;
+        const poorer = richer === faceDown ? faceUp : faceDown;
 
-        // Best case: opponent always wrong — you keep the higher-MV pile
-        bestArr.push(bestFreeCastMV(mvFD >= mvFU ? faceDown : faceUp));
-
-        // Worst case: opponent always right — you keep the lower-MV pile
-        worstArr.push(bestFreeCastMV(mvFD >= mvFU ? faceUp : faceDown));
-
-        // Realistic: opponent sees face-up, sends it to GY if it looks above expected
-        // Opponent's goal: deny you the better free cast
-        const realisticKept = mvFU > expectedFourMV ? faceDown : faceUp;
-        realisticArr.push(bestFreeCastMV(realisticKept));
-    }
-
-    function stats(arr) {
-        const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
-        // Build histogram buckets: MV 0..9, 10+
-        const BUCKETS = 11;
-        const hist = new Array(BUCKETS).fill(0);
-        for (const v of arr) {
-            hist[Math.min(v, BUCKETS - 1)]++;
-        }
-        const dist = hist.map(c => c / arr.length);
-        return { mean, dist };
+        record(best, 'best', bestFreeCastMV(richer));
+        record(worst, 'worst', bestFreeCastMV(poorer));
+        record(realistic, 'realistic', bestFreeCastMV(mvFU > expectedFourMV ? faceDown : faceUp));
     }
 
     return {
-        best: stats(bestArr),
-        worst: stats(worstArr),
-        realistic: stats(realisticArr),
+        best: histogramStats(best, sums.best, n),
+        worst: histogramStats(worst, sums.worst, n),
+        realistic: histogramStats(realistic, sums.realistic, n),
         deckSize,
-        expectedFourMV,
+        expectedFourMV
     };
 }
 
-// Module-level state
-let chart = null;
-let cachedResults = null;
-let cachedDeck = null;
-let lastDeckHash = '';
-let stableSamples = [];
-
-function getDeckHash(deck) {
-    return `${deck.length}:${deck.reduce((s, c) => s + (c.cmc ?? 0), 0)}`;
-}
-
-function buildStableSamples(deck, count) {
-    // Abstract Performance exiles two piles of four, so it needs at least eight
-    // non-land cards. Below that, partialShuffle would index past the end of the
-    // array and leave holes, and slicing the second pile then yielded undefined
-    // entries — which threw and aborted the entire deck import.
-    if (!Array.isArray(deck) || deck.length < CONFIG.PILE_SIZE * 2) return [];
-
-    const totalDeckMV = deck.reduce((s, c) => s + (c.cmc ?? 0), 0);
-    const expectedFourMV = (totalDeckMV / deck.length) * CONFIG.PILE_SIZE;
-    const samples = [];
+/**
+ * Deal sample casts: both piles, which one the realistic opponent bins, and
+ * what you cast from the other.
+ */
+export function dealSampleCasts(deck, count = SAMPLE_CASTS) {
+    if (!Array.isArray(deck) || deck.length < PILE_SIZE * 2) return [];
+    const expectedFourMV = (totalMV(deck) / deck.length) * PILE_SIZE;
+    const d = deck.slice();
+    const out = [];
     for (let i = 0; i < count; i++) {
-        const d = deck.slice();
-        partialShuffle(d, CONFIG.PILE_SIZE * 2, deck.length);
-        const faceDown = d.slice(0, CONFIG.PILE_SIZE);
-        const faceUp = d.slice(CONFIG.PILE_SIZE, CONFIG.PILE_SIZE * 2);
-        const mvFU = totalMV(faceUp);
-        const mvFD = totalMV(faceDown);
-        const opponentSendsUp = mvFU > expectedFourMV;
-        samples.push({ faceDown, faceUp, mvFD, mvFU, opponentSendsUp, expectedFourMV });
+        partialShuffle(d, PILE_SIZE * 2, d.length);
+        const faceDown = d.slice(0, PILE_SIZE);
+        const faceUp = d.slice(PILE_SIZE, PILE_SIZE * 2);
+        const binsFaceUp = opponentBinsFaceUp(faceUp, expectedFourMV);
+        const kept = binsFaceUp ? faceDown : faceUp;
+        out.push({
+            faceDown, faceUp, binsFaceUp, expectedFourMV,
+            faceUpMV: totalMV(faceUp),
+            cast: bestFreeCast(kept)
+        });
     }
-    return samples;
+    return out;
 }
 
+const one = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
+const pct = v => `${Math.round((Number.isFinite(v) ? v : 0) * 100)}%`;
+const mvLabel = v => (v >= BUCKETS - 1 ? `${BUCKETS - 1}+` : String(v));
+
+/** Tone of the realistic outcome: a free spell of 4+ is a strong return on six mana. */
+export function outcomeTone(mean) {
+    if (mean >= 4) return 'good';
+    if (mean >= 2.5) return 'warn';
+    return 'bad';
+}
+
+/**
+ * The plain-English answer to "What will your opponent leave you from the two piles?".
+ * @param {{results:Object|null, isDefault?:boolean}} input
+ * @returns {{html:string, tone:string}}
+ */
+export function summarize({ results, isDefault = false } = {}) {
+    if (!results) {
+        return { tone: 'flat', html: 'Abstract Performance needs at least eight cards in your library to deal two piles.' };
+    }
+    const r = results.realistic;
+    const range = r.p25 === r.p75 ? '' : ` (half of casts ${mvLabel(r.p25)}–${mvLabel(r.p75)})`;
+    const deckWord = isDefault ? 'In a typical Commander deck, an' : 'An';
+    const nothing = r.dist[0] ?? 0;
+    let html = `${deckWord} opponent who can only see the face-up pile usually leaves you a free <strong>${mvLabel(r.p50)}-mana</strong> spell${range}, and the other three cards go to your hand. `
+        + `If they always pick right you still average <strong>${one(results.worst.mean)}</strong>; if they pick wrong, <strong>${one(results.best.mean)}</strong>.`;
+    if (nothing >= 0.005) html += ` About ${pct(nothing)} of casts leave you nothing to cast.`;
+    return { html, tone: outcomeTone(r.mean) };
+}
+
+// ==================== STATE ====================
+
+const state = { ref: null, deck: null, isDefault: true, results: null, samples: [] };
+
+/** Simulate once per deck (the deck object is replaced on every import). */
 export function calculate() {
-    const config = DeckConfig.getDeckConfig();
-    const deck = buildDeck(config);
-    const hash = getDeckHash(deck);
-
-    if (hash === lastDeckHash && cachedResults) {
-        return cachedResults;
+    const cardsByName = DeckConfig.getImportedCardData()?.cardsByName ?? null;
+    if (state.ref !== cardsByName || !state.deck) {
+        const { deck, isDefault } = buildLibrary(cardsByName);
+        state.ref = cardsByName;
+        state.deck = deck;
+        state.isDefault = isDefault;
+        state.results = simulateAbstractPerformance(deck, ITERATIONS);
+        state.samples = dealSampleCasts(deck);
     }
-
-    lastDeckHash = hash;
-    cachedDeck = deck;
-    cachedResults = simulateAbstractPerformance(deck, CONFIG.ITERATIONS);
-    stableSamples = buildStableSamples(deck, 20);
-    return cachedResults;
+    return state.results;
 }
 
-export function updateUI() {
-    const results = cachedResults || calculate();
-    if (!results) return;
+// ==================== RENDERING ====================
 
-    updateHeroStats(results);
-    updateChart(results);
-    updateCMCCurve(cachedDeck || buildDeck(DeckConfig.getDeckConfig()));
-    updateSamplePiles();
-    updateBreakdownTable(results);
-}
-
-function updateHeroStats(results) {
-    const setEl = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = val.toFixed(2);
-    };
-    setEl('abstract-hero-best', results.best.mean);
-    setEl('abstract-hero-realistic', results.realistic.mean);
-    setEl('abstract-hero-worst', results.worst.mean);
+function renderHero(results) {
+    const el = document.getElementById('abstract-hero');
+    if (!el) return;
+    const r = results.realistic;
+    el.innerHTML = renderHeroStats([
+        {
+            label: 'Typical free spell',
+            value: mvLabel(r.p50),
+            sub: r.p25 === r.p75 ? 'mana value, realistic opponent' : `mana value · half of casts ${mvLabel(r.p25)}–${mvLabel(r.p75)}`,
+            size: 'big',
+            color: `var(--tx-${outcomeTone(r.mean)})`,
+            tip: 'The median mana value of the best spell in the pile you keep, against an opponent who sees only the face-up pile.'
+        },
+        {
+            label: 'If they pick right',
+            value: one(results.worst.mean),
+            sub: 'average — they bin your better pile',
+            tip: 'An opponent who somehow knows both piles and always bins the one with more total mana value.'
+        },
+        {
+            label: 'If they pick wrong',
+            value: one(results.best.mean),
+            sub: 'average — you keep the better pile',
+            tip: 'Your best case: the opponent always bins the pile with less total mana value.'
+        },
+        {
+            label: 'Nothing to cast',
+            value: pct(r.dist[0] ?? 0),
+            sub: 'kept pile has no spell',
+            color: (r.dist[0] ?? 0) > 0.05 ? 'var(--tx-warn)' : 'var(--tx-bright)',
+            tip: 'Casts where the pile you keep is all lands (or only zero-cost spells), realistic opponent.'
+        }
+    ]);
 }
 
 function updateChart(results) {
-    const labels = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10+'];
+    if (!document.getElementById('abstract-chart')) return;
+    const labels = Array.from({ length: BUCKETS }, (_, i) => mvLabel(i));
+    const series = [
+        { key: 'realistic', label: 'Realistic opponent', color: TX.amber, width: 2.5 },
+        { key: 'worst', label: 'They pick right', color: TX.red, width: 1.5 },
+        { key: 'best', label: 'They pick wrong', color: TX.green, width: 1.5 }
+    ];
     chart = createOrUpdateChart(chart, 'abstract-chart', {
         type: 'line',
         data: {
             labels,
-            datasets: [
-                {
-                    label: 'BEST',
-                    data: results.best.dist.map(v => +(v * 100).toFixed(2)),
-                    borderColor: COLORS.best,
-                    backgroundColor: COLORS.bestDim,
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    tension: 0.25,
-                    fill: false,
-                },
-                {
-                    label: 'REALISTIC',
-                    data: results.realistic.dist.map(v => +(v * 100).toFixed(2)),
-                    borderColor: COLORS.realistic,
-                    backgroundColor: COLORS.realisticDim,
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    tension: 0.25,
-                    fill: false,
-                },
-                {
-                    label: 'WORST',
-                    data: results.worst.dist.map(v => +(v * 100).toFixed(2)),
-                    borderColor: COLORS.worst,
-                    backgroundColor: COLORS.worstDim,
-                    borderWidth: 1.5,
-                    pointRadius: 0,
-                    tension: 0.25,
-                    fill: false,
-                },
-            ],
+            datasets: series.map(s => ({
+                label: s.label,
+                data: results[s.key].dist.map(v => Math.round(v * 1000) / 10),
+                borderColor: s.color,
+                backgroundColor: s.color,
+                borderWidth: s.width,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                tension: 0.25,
+                fill: false
+            }))
         },
         options: {
-            scales: {
-                x: {
-                    title: {
-                        display: true,
-                        text: 'FREE CAST MV',
-                        color: COLORS.text,
-                        font: { size: 9 },
-                    },
-                    ticks: { color: COLORS.text },
-                    grid: { color: COLORS.grid },
-                },
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: '%',
-                        color: COLORS.text,
-                        font: { size: 9 },
-                    },
-                    ticks: { color: COLORS.text, callback: v => v + '%' },
-                    grid: { color: COLORS.grid },
-                },
-            },
             plugins: {
                 legend: {
                     display: true,
-                    labels: { color: '#939c97', font: { size: 9 }, boxWidth: 10, padding: 12 },
+                    position: 'top',
+                    align: 'end',
+                    labels: { color: TX.mid, boxWidth: 12, boxHeight: 2, padding: 14 }
                 },
                 tooltip: {
                     callbacks: {
-                        label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`,
-                    },
-                },
+                        title: items => `Free spell of mana value ${items[0]?.label ?? ''}`,
+                        label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`
+                    }
+                }
             },
-        },
+            scales: {
+                x: { title: { display: true, text: 'Mana value of the free spell', color: TX.dim } },
+                y: { beginAtZero: true, ticks: { callback: v => `${v}%` }, title: { display: true, text: 'Share of casts', color: TX.dim } }
+            }
+        }
     });
 }
 
-function updateCMCCurve(deck) {
-    const el = document.getElementById('abstract-cmc-curve');
-    if (!el || !deck) return;
-
-    const BUCKETS = 8;
-    const counts = new Array(BUCKETS).fill(0);
-    for (const card of deck) {
-        counts[Math.min(card.cmc ?? 0, BUCKETS - 1)]++;
-    }
-    const max = Math.max(...counts, 1);
-
-    el.innerHTML = counts.map((count, cmc) => {
-        const pct = (count / max) * 100;
-        const label = cmc === 0 ? 'L/0' : cmc === BUCKETS - 1 ? `${cmc}+` : String(cmc);
-        return `<div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:10px;">
-            <span style="width:22px; text-align:right; color:var(--tx-dim); letter-spacing:0.05em;">${label}</span>
-            <div style="flex:1; height:5px; background:var(--tx-rule); overflow:hidden;">
-                <div style="height:100%; width:${pct}%; background:var(--tx-amber); opacity:0.55; transition:width 0.2s;"></div>
-            </div>
-            <span style="width:22px; color:var(--tx-mid); text-align:right;">${count}</span>
-        </div>`;
+function pileHTML(cards, { label, kept, cast }) {
+    const rows = cards.map(card => {
+        const isCast = kept && card === cast;
+        const mv = card.isLand ? 'land' : String(card.cmc ?? 0);
+        return `<li class="ap-card${isCast ? ' is-cast' : ''}${card.isLand ? ' is-land' : ''}">
+            <span class="ap-card-name">${card.name === 'Land' || card.name === 'Spell' ? card.name : cardRef(card.name)}</span>
+            <span class="ap-card-mv">${mv}</span>
+        </li>`;
     }).join('');
-
-    const nLabel = document.getElementById('abstract-n-label');
-    if (nLabel) nLabel.textContent = `N=${deck.length}`;
+    return `
+        <div class="ap-pile ${kept ? 'is-kept' : 'is-binned'}">
+            <div class="ap-pile-head"><span>${label}</span><span class="ap-pile-fate">${kept ? 'You keep' : 'Graveyard'}</span></div>
+            <ul class="ap-pile-cards">${rows}</ul>
+        </div>`;
 }
 
-function cardLabel(card) {
-    if (!card) return '?';
-    const name = card.name ? card.name.slice(0, 16) : 'Unknown';
-    const mv = card.isLand ? 'L' : String(card.cmc ?? 0);
-    return `<span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</span><span style="color:var(--tx-dim); margin-left:4px;">${mv}</span>`;
-}
-
-function updateSamplePiles() {
-    const container = document.getElementById('abstract-samples');
-    if (!container) return;
-
-    if (!stableSamples.length) {
-        container.innerHTML = '<div style="padding:20px 16px; color:var(--tx-dim); font-size:10px;">Import a decklist to see sample piles.</div>';
+function renderSamples() {
+    const el = document.getElementById('abstract-samples');
+    if (!el) return;
+    if (!state.samples.length) {
+        el.innerHTML = '<div class="tx-empty">Not enough cards to deal two piles.</div>';
         return;
     }
-
-    const html = stableSamples.slice(0, 4).map((sample, idx) => {
-        const { faceDown, faceUp, opponentSendsUp, mvFD, mvFU, expectedFourMV } = sample;
-        const keptPile = opponentSendsUp ? faceDown : faceUp;
-        const freeMV = bestFreeCastMV(keptPile);
-        const freeCard = keptPile.find(c => !c.isLand && (c.cmc ?? 0) === freeMV);
-        const freeLabel = freeMV > 0
-            ? `✓ MV=${freeMV}${freeCard ? ' · ' + freeCard.name.slice(0, 10) : ''}`
-            : 'FIZZ';
-        const freeColor = freeMV > 0 ? 'var(--tx-green)' : 'var(--tx-dim)';
-
-        const pileRow = (cards, faceDownStyle) => cards.map(c =>
-            `<div style="display:flex; font-size:10px; padding:2px 0; color:${faceDownStyle ? 'var(--tx-mid)' : 'var(--tx-text)'}; gap:4px;">
-                ${faceDownStyle
-                    ? `<span style="color:var(--tx-rule);">▓▓▓▓▓▓▓▓▓▓▓▓▓▓</span>`
-                    : cardLabel(c)
-                }
-            </div>`
-        ).join('');
-
-        const fdLabel = opponentSendsUp ? 'FACE-DOWN · KEPT' : 'FACE-DOWN → GY';
-        const fuLabel = opponentSendsUp ? 'FACE-UP → GY' : 'FACE-UP · KEPT';
-        const fdLabelColor = opponentSendsUp ? 'var(--tx-green)' : 'var(--tx-red)';
-        const fuLabelColor = opponentSendsUp ? 'var(--tx-red)' : 'var(--tx-green)';
-
-        return `<div style="border-bottom:1px solid var(--tx-rule); padding:12px 16px;">
-            <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:9px; letter-spacing:0.1em;">
-                <span style="color:var(--tx-dim);">TRIAL ${idx + 1}</span>
-                <span style="color:${freeColor};">${freeLabel}</span>
-            </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px;">
-                <div>
-                    <div style="font-size:9px; color:${fdLabelColor}; letter-spacing:0.08em; margin-bottom:4px;">${fdLabel}</div>
-                    ${pileRow(faceDown, opponentSendsUp)}
+    el.innerHTML = state.samples.map((s, i) => {
+        const castText = s.cast
+            ? `You cast ${s.cast.name === 'Spell' ? 'a spell' : cardRef(s.cast.name)} free${s.cast.isX ? '<span class="ap-x" data-tip="Cast free, an X spell resolves with X = 0." tabindex="0">X=0</span>' : ''} <span class="ap-mv">${s.cast.cmc}</span>`
+            : 'Nothing to cast — all four go to your hand';
+        const why = s.binsFaceUp
+            ? `The face-up pile totals ${s.faceUpMV} mana value, more than an average four cards (${one(s.expectedFourMV)}), so your opponent bins it.`
+            : `The face-up pile totals ${s.faceUpMV} mana value, no more than an average four cards (${one(s.expectedFourMV)}), so your opponent bins the face-down pile instead.`;
+        return `
+            <article class="ap-sample">
+                <div class="ap-sample-head">
+                    <span class="ap-sample-n">Cast ${i + 1}</span>
+                    <span class="ap-sample-cast ${s.cast ? 'is-good' : 'is-bad'}">${castText}</span>
                 </div>
-                <div>
-                    <div style="font-size:9px; color:${fuLabelColor}; letter-spacing:0.08em; margin-bottom:4px;">${fuLabel}</div>
-                    ${pileRow(faceUp, !opponentSendsUp)}
+                <div class="ap-piles">
+                    ${pileHTML(s.faceDown, { label: 'Face-down pile', kept: s.binsFaceUp, cast: s.cast })}
+                    ${pileHTML(s.faceUp, { label: 'Face-up pile', kept: !s.binsFaceUp, cast: s.cast })}
                 </div>
-            </div>
-            <div style="font-size:9px; border-top:1px solid var(--tx-rule); padding-top:6px; color:var(--tx-dim);">
-                FU MV=${mvFU.toFixed(1)} ${opponentSendsUp ? '>' : '≤'} E[${expectedFourMV.toFixed(1)}]
-                · OPP SENDS ${opponentSendsUp ? 'FACE-UP' : 'FACE-DOWN'}
-            </div>
-        </div>`;
+                <p class="ap-why">${why}</p>
+            </article>`;
     }).join('');
-
-    container.innerHTML = html;
 }
 
-function updateBreakdownTable(results) {
-    const el = document.getElementById('abstract-breakdown');
-    if (!el) return;
+function renderDetails(results) {
+    const tableEl = document.getElementById('abstract-breakdown');
+    if (tableEl) {
+        const rows = Array.from({ length: BUCKETS }, (_, mv) => mv)
+            .filter(mv => results.best.dist[mv] + results.realistic.dist[mv] + results.worst.dist[mv] > 0.0005);
+        tableEl.innerHTML = `
+            <table class="tx-sweep-table">
+                <thead><tr><th class="ta-l">Free spell mana value</th><th>Realistic</th><th>They pick right</th><th>They pick wrong</th></tr></thead>
+                <tbody>${rows.map(mv => `
+                    <tr${mv === results.realistic.p50 ? ' class="active-row"' : ''}>
+                        <td class="ta-l">${mv === 0 ? '0 (nothing)' : mvLabel(mv)}</td>
+                        <td>${(results.realistic.dist[mv] * 100).toFixed(1)}%</td>
+                        <td>${(results.worst.dist[mv] * 100).toFixed(1)}%</td>
+                        <td>${(results.best.dist[mv] * 100).toFixed(1)}%</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>`;
+    }
 
-    const rows = Array.from({ length: 11 }, (_, mv) => {
-        const label = mv === 10 ? '10+' : String(mv);
-        const b = (results.best.dist[mv] * 100).toFixed(1);
-        const r = (results.realistic.dist[mv] * 100).toFixed(1);
-        const w = (results.worst.dist[mv] * 100).toFixed(1);
-        return `<tr style="border-bottom:1px solid var(--tx-rule);">
-            <td style="color:var(--tx-mid); padding:3px 0;">${label}</td>
-            <td style="color:var(--tx-green); text-align:right;">${b}%</td>
-            <td style="color:var(--tx-amber); text-align:right;">${r}%</td>
-            <td style="color:var(--tx-red); text-align:right;">${w}%</td>
-        </tr>`;
-    }).join('');
+    const curveEl = document.getElementById('abstract-cmc-curve');
+    if (curveEl && state.deck) {
+        const counts = new Array(8).fill(0);
+        let lands = 0;
+        for (const card of state.deck) {
+            if (card.isLand) lands++;
+            else counts[Math.min(card.cmc ?? 0, 7)]++;
+        }
+        const rows = [lands, ...counts];
+        curveEl.innerHTML = `
+            <p class="ap-caption">Your library of ${state.deck.length}${state.isDefault ? ' (a typical deck — no decklist loaded)' : ''}. Lands and cheap spells are what make a pile look weak.</p>
+            ${renderDistributionChart(rows, state.deck.length, i => (i === 0 ? 'Lands' : i === 8 ? '7+' : `Mana value ${i - 1}`), () => null)}`;
+    }
+}
 
-    el.innerHTML = `<table style="width:100%; font-size:10px; border-collapse:collapse;">
-        <thead>
-            <tr style="font-size:9px; letter-spacing:0.1em; border-bottom:1px solid var(--tx-rule);">
-                <th style="text-align:left; padding-bottom:6px; color:var(--tx-dim);">MV</th>
-                <th style="text-align:right; padding-bottom:6px; color:var(--tx-green);">BEST</th>
-                <th style="text-align:right; padding-bottom:6px; color:var(--tx-amber);">REALISTIC</th>
-                <th style="text-align:right; padding-bottom:6px; color:var(--tx-red);">WORST</th>
-            </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-    </table>`;
+export function updateUI() {
+    const results = calculate();
+    const bottom = document.getElementById('abstract-bottom-line');
+    if (bottom) bottom.innerHTML = renderBottomLine(summarize({ results, isDefault: state.isDefault }));
+    const meta = document.getElementById('abstract-chart-meta');
+    if (meta) meta.textContent = `${ITERATIONS.toLocaleString('en-US')} simulated casts`;
+    if (!results) return;
+
+    renderHero(results);
+    updateChart(results);
+    renderSamples();
+    renderDetails(results);
 }
 
 export function init() {
-    DeckConfig.onDeckUpdate(() => {
-        lastDeckHash = '';
-        cachedResults = null;
-        updateCalculatorIfActive('abstract', updateUI);
+    registerCalculator({ name: 'abstract', calculate, updateUI });
+    document.getElementById('abstract-reshuffle-btn')?.addEventListener('click', () => {
+        if (!state.deck) return;
+        state.samples = dealSampleCasts(state.deck);
+        renderSamples();
     });
-
-    const reshuffleBtn = document.getElementById('abstract-reshuffle-btn');
-    if (reshuffleBtn) {
-        reshuffleBtn.addEventListener('click', () => {
-            if (cachedDeck) {
-                stableSamples = buildStableSamples(cachedDeck, 20);
-                updateSamplePiles();
-            }
-        });
-    }
 }

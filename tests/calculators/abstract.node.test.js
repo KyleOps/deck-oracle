@@ -1,7 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import '../node-test-helper.js';
-import { simulateAbstractPerformance, bestFreeCastMV } from '../../js/calculators/abstract.js';
+import {
+    simulateAbstractPerformance, bestFreeCastMV, bestFreeCast, buildLibrary, opponentBinsFaceUp,
+    dealSampleCasts, summarize, outcomeTone
+} from '../../js/calculators/abstract.js';
 
 describe('Abstract Performance - bestFreeCastMV', () => {
     it('returns 0 for an all-land pile', () => {
@@ -112,5 +115,112 @@ describe('Abstract Performance - simulateAbstractPerformance', () => {
         assert.strictEqual(results.best.mean, 0);
         assert.strictEqual(results.worst.mean, 0);
         assert.strictEqual(results.realistic.mean, 0);
+    });
+});
+
+describe('Abstract Performance - buildLibrary', () => {
+    const cardsByName = {
+        Forest: { name: 'Forest', count: 36, cmc: 0, type_line: 'Basic Land — Forest' },
+        Bear: { name: 'Bear', count: 40, cmc: 2, type_line: 'Creature — Bear' },
+        Titan: { name: 'Titan', count: 23, cmc: 6.0, type_line: 'Creature — Giant' }
+    };
+
+    it('includes lands (regression: cardDetails holds nonland cards only)', () => {
+        const { deck, isDefault } = buildLibrary(cardsByName);
+        assert.strictEqual(isDefault, false);
+        assert.strictEqual(deck.length, 99);
+        assert.strictEqual(deck.filter(c => c.isLand).length, 36);
+        assert.strictEqual(deck.find(c => c.name === 'Titan').cmc, 6);
+    });
+
+    it('falls back to a typical deck without a decklist', () => {
+        const { deck, isDefault } = buildLibrary({});
+        assert.strictEqual(isDefault, true);
+        assert.strictEqual(deck.length, 99);
+        assert.ok(deck.some(c => c.isLand));
+    });
+
+    it('lets "nothing to cast" happen once lands are in the deck', () => {
+        const { deck } = buildLibrary({
+            Forest: { name: 'Forest', count: 90, cmc: 0, type_line: 'Land' },
+            Bear: { name: 'Bear', count: 9, cmc: 2, type_line: 'Creature' }
+        });
+        const r = simulateAbstractPerformance(deck, 2000);
+        assert.ok(r.realistic.dist[0] > 0.3, `expected many empty piles, got ${r.realistic.dist[0]}`);
+    });
+});
+
+describe('Abstract Performance - helpers', () => {
+    it('picks the highest-mana-value spell to cast', () => {
+        const pile = [
+            { name: 'Forest', cmc: 0, isLand: true },
+            { name: 'Opt', cmc: 1, isLand: false },
+            { name: 'Sphinx', cmc: 6, isLand: false }
+        ];
+        assert.strictEqual(bestFreeCast(pile).name, 'Sphinx');
+        assert.strictEqual(bestFreeCast([{ name: 'Forest', cmc: 0, isLand: true }]), null);
+    });
+
+    it('bins the face-up pile only when it beats an average four cards', () => {
+        const pile = mv => [{ cmc: mv }, { cmc: 0 }, { cmc: 0 }, { cmc: 0 }];
+        assert.strictEqual(opponentBinsFaceUp(pile(10), 8), true);
+        assert.strictEqual(opponentBinsFaceUp(pile(8), 8), false);
+    });
+
+    it('deals sample casts with a consistent story', () => {
+        const deck = [];
+        for (let i = 0; i < 40; i++) deck.push({ name: `Spell${i}`, cmc: i % 7, isLand: false });
+        for (let i = 0; i < 40; i++) deck.push({ name: 'Land', cmc: 0, isLand: true });
+        const samples = dealSampleCasts(deck, 6);
+        assert.strictEqual(samples.length, 6);
+        for (const s of samples) {
+            assert.strictEqual(s.faceDown.length, 4);
+            assert.strictEqual(s.faceUp.length, 4);
+            const kept = s.binsFaceUp ? s.faceDown : s.faceUp;
+            assert.strictEqual(s.cast?.cmc ?? 0, bestFreeCastMV(kept));
+            assert.strictEqual(s.binsFaceUp, s.faceUpMV > s.expectedFourMV);
+        }
+        assert.deepStrictEqual(dealSampleCasts(deck.slice(0, 5)), []);
+    });
+
+    it('averages exact mana values while bucketing 10+ in the distribution', () => {
+        const deck = [];
+        for (let i = 0; i < 20; i++) deck.push({ name: 'Huge', cmc: 12, isLand: false });
+        const r = simulateAbstractPerformance(deck, 50);
+        assert.strictEqual(r.best.mean, 12);
+        assert.strictEqual(r.best.dist[10], 1);
+        assert.strictEqual(r.best.p50, 10);
+    });
+});
+
+describe('Abstract Performance - summarize', () => {
+    const deck = [];
+    for (let i = 0; i < 36; i++) deck.push({ name: 'Land', cmc: 0, isLand: true });
+    for (let i = 0; i < 63; i++) deck.push({ name: 'Spell', cmc: 1 + (i % 7), isLand: false });
+
+    it('leads with the realistic opponent and brackets it with right and wrong picks', () => {
+        const results = simulateAbstractPerformance(deck, 4000);
+        const s = summarize({ results });
+        assert.match(s.html, /usually leaves you a free <strong>\d+\+?-mana<\/strong> spell/);
+        assert.match(s.html, /pick right you still average <strong>[\d.]+<\/strong>/);
+        assert.match(s.html, /pick wrong, <strong>[\d.]+<\/strong>/);
+        assert.ok(['good', 'warn', 'bad'].includes(s.tone));
+    });
+
+    it('says when it is using a typical deck', () => {
+        const s = summarize({ results: simulateAbstractPerformance(deck, 500), isDefault: true });
+        assert.match(s.html, /typical Commander deck/);
+    });
+
+    it('handles a library too small to deal', () => {
+        const s = summarize({ results: null });
+        assert.strictEqual(s.tone, 'flat');
+        assert.doesNotThrow(() => summarize());
+    });
+
+    it('maps the realistic average to a tone', () => {
+        assert.strictEqual(outcomeTone(5), 'good');
+        assert.strictEqual(outcomeTone(3), 'warn');
+        assert.strictEqual(outcomeTone(1), 'bad');
     });
 });

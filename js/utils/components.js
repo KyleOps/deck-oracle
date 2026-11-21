@@ -4,42 +4,57 @@
  */
 
 import { renderDistributionChart } from './sampleSimulator.js';
-
-/**
- * Render a single statistic card
- * @param {string} label - Top label (e.g. "Expected Permanents")
- * @param {string} value - Main value (e.g. "4.5")
- * @param {string} subtext - Bottom text (e.g. "played for free")
- * @param {string} color - Color for the value (optional)
- * @returns {string} - HTML string
- */
-export function renderStatCard(label, value, subtext, color = 'var(--text-light)') {
-    return `
-        <div class="stat-card">
-            <div style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">${label}</div>
-            <div style="font-size: 1.8em; font-weight: bold; color: ${color}; line-height: 1.2;">${value}</div>
-            <div style="color: var(--text-secondary); font-size: 0.8em;">${subtext}</div>
-        </div>
-    `;
-}
+import { hasCardList } from './deckConfig.js';
 
 /**
  * Render a horizontal hero-stat row (the big terminal numerics used across the
  * site for a calculator's headline metrics). Mirrors Portent's hero block so
  * every calculator leads with its key numbers in the same visual language.
  *
- * @param {Array<{label:string, value:string|number, sub?:string, color?:string, size?:'big'|'medium'}>} stats
+ * @param {Array<{label:string, value:string|number, sub?:string, color?:string, size?:'big'|'medium', tip?:string, term?:string}>} stats
+ *   tip: plain-text explanation shown on hover/focus of the label
+ *   term: a GLOSSARY key (js/data/glossary.js) — shows its definition instead
  * @returns {string} - HTML string
  */
 export function renderHeroStats(stats) {
     if (!Array.isArray(stats) || stats.length === 0) return '';
+    const label = s => {
+        const text = s.label ?? '';
+        if (s.term) return `<span class="term" data-term="${s.term}" tabindex="0">${text}</span>`;
+        if (s.tip) return `<span class="term" data-tip="${String(s.tip).replace(/"/g, '&quot;')}" tabindex="0">${text}</span>`;
+        return text;
+    };
     const cells = stats.map(s => `
         <div class="tx-stat">
-            <div class="tx-stat-label">${s.label ?? ''}</div>
+            <div class="tx-stat-label">${label(s)}</div>
             <div class="tx-stat-value ${s.size === 'big' ? '' : 'medium'}" style="color:${s.color || 'var(--tx-bright)'};">${s.value ?? '—'}</div>
             <div class="tx-stat-sub">${s.sub ?? ''}</div>
         </div>`).join('');
     return `<div class="tx-hero">${cells}</div>`;
+}
+
+/**
+ * The plain-language answer to a calculator's question, shown first.
+ *
+ * Every calculator leads with one or two sentences a player could repeat at
+ * the table ("Genesis Wave at X=8 usually puts 4–6 permanents into play and
+ * pays for itself 3 times in 4"), with the numbers bolded. Tone colours the
+ * marker by what the answer MEANS, never decoration.
+ *
+ * @param {Object} opts
+ * @param {string} opts.html - the sentence(s); may contain <strong>, term(), cardRef()
+ * @param {'good'|'warn'|'bad'|'flat'} [opts.tone='flat']
+ * @param {string} [opts.label='Bottom line']
+ * @returns {string}
+ */
+export function renderBottomLine({ html, tone = 'flat', label = 'Bottom line' } = {}) {
+    if (!html) return '';
+    const icon = { good: '✓', warn: '!', bad: '✕', flat: '→' }[tone] ?? '→';
+    return `
+        <div class="bottom-line tone-${tone}" role="status">
+            <span class="bottom-line-icon" aria-hidden="true">${icon}</span>
+            <p class="bottom-line-text"><span class="bottom-line-label">${label}</span>${html}</p>
+        </div>`;
 }
 
 /**
@@ -226,7 +241,13 @@ export function renderSimulationSummary(opts = {}) {
         </div>` : '';
 
     let distHTML = '';
-    if (distribution && Array.isArray(distribution.counts) && distribution.totalSims > 0) {
+    if (distribution && typeof distribution.html === 'string') {
+        distHTML = `
+            <div class="tx-sim-block">
+                <div class="tx-sim-block-title">${distribution.title ?? 'Distribution'}</div>
+                ${distribution.html}
+            </div>`;
+    } else if (distribution && Array.isArray(distribution.counts) && distribution.totalSims > 0) {
         const { counts, totalSims, labelFn, markerFn = () => null, toneFn = null, title: distTitle = 'Distribution' } = distribution;
         distHTML = `
             <div class="tx-sim-block">
@@ -266,19 +287,6 @@ export function renderSimulationSummary(opts = {}) {
 }
 
 /**
- * Render a grid of stat cards
- * @param {Array<string>} cardsHTML - Array of HTML strings from renderStatCard
- * @returns {string} - HTML string
- */
-export function renderStatsGrid(cardsHTML) {
-    return `
-        <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; margin-bottom: 16px;">
-            ${cardsHTML.join('')}
-        </div>
-    `;
-}
-
-/**
  * Render an insight/interpretation box
  * @param {string} title - Title (e.g. "Analysis")
  * @param {string} content - Main content
@@ -289,99 +297,10 @@ export function renderInsightBox(title, content, footer = '') {
     return `
         <div class="insight-box">
             ${title ? `<h3>${title}</h3>` : ''}
-            <div style="margin-bottom: 8px;">${content}</div>
-            ${footer ? `<div style="color: var(--text-secondary); font-size: 0.9em; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; margin-top: 8px;">${footer}</div>` : ''}
+            <div class="insight-body">${content}</div>
+            ${footer ? `<div class="insight-foot">${footer}</div>` : ''}
         </div>
     `;
-}
-
-/**
- * Create a collapsible panel
- * @param {string} id - Panel ID
- * @param {string} title - Panel title
- * @param {HTMLElement} content - Content element
- * @param {boolean} startOpen - Whether to start expanded
- * @returns {HTMLElement} - Panel element
- */
-export function createCollapsiblePanel(id, title, content, startOpen = true) {
-    const panel = document.createElement('section');
-    panel.className = `panel collapsible-panel${startOpen ? ' expanded' : ''}`;
-    panel.id = id;
-
-    const header = document.createElement('div');
-    header.className = 'panel-header';
-    header.innerHTML = `
-        <h2>${title}</h2>
-        <button class="collapse-btn" aria-label="Toggle section">
-            <span class="collapse-icon">${startOpen ? '▼' : '▶'}</span>
-        </button>
-    `;
-
-    const contentWrapper = document.createElement('div');
-    contentWrapper.className = 'panel-content';
-    contentWrapper.appendChild(content);
-
-    panel.appendChild(header);
-    panel.appendChild(contentWrapper);
-
-    // Add click handler
-    header.addEventListener('click', () => togglePanel(panel));
-
-    return panel;
-}
-
-/**
- * Toggle a collapsible panel
- * @param {HTMLElement} panel - Panel element
- */
-export function togglePanel(panel) {
-    const isExpanded = panel.classList.contains('expanded');
-    const icon = panel.querySelector('.collapse-icon');
-
-    panel.classList.toggle('expanded');
-    if (icon) {
-        icon.textContent = isExpanded ? '▶' : '▼';
-    }
-
-    // Save state to localStorage
-    if (panel.id) {
-        localStorage.setItem(`panel-${panel.id}`, !isExpanded);
-    }
-}
-
-/**
- * Restore panel states from localStorage
- */
-export function restorePanelStates() {
-    document.querySelectorAll('.collapsible-panel').forEach(panel => {
-        if (panel.id) {
-            const savedState = localStorage.getItem(`panel-${panel.id}`);
-            if (savedState === 'false') {
-                togglePanel(panel);
-            }
-        }
-    });
-}
-
-/**
- * Initialize all collapsible panels
- */
-export function initCollapsiblePanels() {
-    document.querySelectorAll('.panel-header').forEach(header => {
-        header.addEventListener('click', (e) => {
-            // Don't toggle if clicking on icon buttons (theme, nav, share toggles)
-            if (e.target.closest('.icon-btn') && !e.target.closest('.collapse-btn')) {
-                return;
-            }
-            const panel = header.closest('.collapsible-panel');
-            if (panel) {
-                togglePanel(panel);
-            }
-        });
-    });
-
-    // Restore saved states
-    restorePanelStates();
 }
 
 /**
@@ -392,15 +311,18 @@ export function initCollapsiblePanels() {
  * @returns {string} - HTML string
  */
 export function generateSampleRevealsHTML(prefix, title, options = {}) {
+    // Simulations need real card records. Decided at render time (pages mount
+    // lazily, after any import) and kept in sync by main.js on deck changes.
     const { requiresImport = true } = options;
-    
+    const locked = requiresImport && !hasCardList();
+
     return `
         <div class="tx-h"><span>${title}</span></div>
         <div class="tx-sim-controls">
             <label for="${prefix}-sample-count">Simulations</label>
             <input type="number" id="${prefix}-sample-count" min="1" max="10000" value="500">
-            <button id="${prefix}-draw-reveals-btn" class="import-btn run-sim-btn" ${requiresImport ? 'disabled' : ''}>Run simulations</button>
-            ${requiresImport ? `<span class="sim-import-note">Import a deck to enable</span>` : ''}
+            <button id="${prefix}-draw-reveals-btn" class="import-btn run-sim-btn"${requiresImport ? ' data-requires-import' : ''}${locked ? ' disabled' : ''}>Run simulations</button>
+            ${requiresImport ? `<span class="sim-import-note"${locked ? '' : ' hidden'}>Import a decklist to enable</span>` : ''}
             <span class="tx-sim-controls-hint">1–10,000</span>
         </div>
         <div id="${prefix}-reveals-display"></div>

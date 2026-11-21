@@ -5,6 +5,89 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-11-21
+
+Deck Oracle 3 is a ground-up overhaul: it works with any deck, every page answers one question in plain words, and the app is faster to load.
+
+### Added
+- **Deck Overview** (new landing page) — plain-language health checks for any deck: land count against Frank Karsten's regression, opening-hand land odds, colour sources versus your hardest-to-cast card of each colour, ramp/draw/removal/wipe counts detected from rules text, a mana curve by card type, and the calculators that match your list. Each check links to the page that explains it.
+- **Draw Odds** — exact chances of drawing any card or group of cards (up to three groups, combined, overlap-aware — verified against brute force) by any turn; build groups from a card search, card types, roles or mana values, or start from questions suggested for your deck.
+- **Mana Base** — Karsten-style castability for every coloured card, including exact multicolour costs (a pip-set dynamic programme over land colour groups — a five-colour Progenitus check runs in ~70 ms), the sources each colour needs at every turn computed for your deck size, and your lands grouped by what they make. X spells are judged at X = 1.
+- **Opening Hands** — draw sample hands as card images, mulligan with the London rule and the format's free mulligan (with suggested bottom cards), goldfish the first turns with tap-to-cast, practise keep-or-mulligan decisions, and see exact keepable-hand odds plus a 10,000-game mulligan simulation (~8 ms, cached).
+- **Compare Decks** — any two saved decks, or two versions of one deck, side by side: health metrics, curve overlay and a card-by-card diff.
+- **Deck library** — every import is saved in this browser and the active deck is restored on reload; switch decks from the sidebar or the command palette, remove with undo.
+- **Formats** — Commander (99-card library, everyone draws on turn one, free first mulligan), 60-card and 40-card (on the play or the draw), detected automatically or set on the overview.
+- **Command palette** (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> or <kbd>/</kbd>) — fuzzy search over calculators, the cards in your deck, saved decks and actions; choosing a card opens its draw odds.
+- **"How it works" guide** on every page — the question, how to read the results, the method, assumptions and the terms used.
+- **Plain-language answers** — every calculator now leads with a one- or two-sentence bottom line built from its numbers.
+- **Glossary tooltips and card previews** — hover a dotted term for its definition and any card name for its image.
+- **Light theme** with a no-flash startup, following the system setting until you choose; charts re-theme live.
+- **Keyboard shortcuts** — <kbd>D</kbd> deck, <kbd>[</kbd>/<kbd>]</kbd> previous/next calculator, <kbd>O</kbd> overview, <kbd>H</kbd> guide, <kbd>T</kbd> theme, <kbd>?</kbd> list.
+- **Example decks** for 60-card and 40-card formats alongside the Commander example.
+- New app icon, PNG icons for install and iOS, manifest shortcuts, and an "update available" prompt when a new version is cached.
+
+### Changed
+- **Ensnared by the Mara** is now calculated exactly from each opponent's list instead of simulated; **Dream Harvest** simulations are seeded so the same lists always give the same numbers; **Mind's Dilation** no longer needs Chart.js.
+- **Opponent decklists** — one input per seat takes a link or a pasted list, with per-seat progress and keyboard navigation; multiplayer pages explain the card and offer example opponents before any list is loaded.
+- **Chimil** simulates 2,000 games once per deck and the end-step slider reads from them, so dragging never re-simulates; **Lumra** answers how big it is when it enters; **Abstract Performance** compares a realistic opponent with best and worst picks.
+- **Engines** — Wild Pair, Monstrous Vortex and Head to Head share one seeded discover simulation, so their numbers agree; distributions end in an open "13+" bucket instead of a sampled maximum.
+- Pasted decks are named from their colours ("Simic deck") and saved decks can be renamed.
+- **Mulligan Planner** and **Land Drops** follow the deck's format (library size, first-turn draws, free mulligan, play/draw). Mulligan offers three starting rules built from your list (enough lands, lands + ramp, lands + an early play) and a keep grid per mulligan; Land Drops answers turn by turn, can count cheap ramp, and shows the effect of ±1/±2 lands.
+- **Big spells** (Portent, Genesis Wave, Kamahl's Vow, Primal Surge) lead with the answer, then a chart, four sample casts you can reshuffle, and a compact "How it compares" computed at idle time; per-X tables and distributions are folded away.
+- **Hand-edited type counts** turn the deck into a counts-only deck (saved as "Custom counts"), so card-based pages never mix the counts with a stale card list.
+- **New app shell** — a sidebar grouped by what calculators do (Your deck, Engines, Big spells, Multiplayer), a top bar with breadcrumbs and search, and a mobile navigation drawer. Head to Head moves to Engines.
+- **Shared page header** — card art, mana cost, rules text, the question the page answers, and an "In this deck" badge.
+- **Calculator pages rewritten for clarity** — plain sentence-case labels instead of codes like `P(FREE)` and `E[TYPES]`, secondary diagnostics folded into collapsible sections, sample reveals with card previews.
+- **Design system** — one token file for both themes, Geist and Geist Mono type (serif only for card rules text), rounded cards, larger minimum text size, and AA contrast in both themes.
+- **Pasted decklists** understand Arena/MTGO/Moxfield sections, strip set codes and foil markers, skip maybeboards, and take the commander from a "Commander" section or `*CMDR*` marker. Imports keep colour identity and produced mana.
+- **Share links** carry only the settings of the page being shared; calculators can add their own parameters. Old links still work.
+
+### Performance
+- Calculators load on first visit instead of all at startup, and Chart.js loads only for pages that draw charts (the overview and seven other pages never load it). Measured cold against v2.13: first paint 480 ms (was 496), content on screen 585 ms (was 609), 39% fewer DOM nodes, and less JavaScript before the page is usable. The startup module graph is preloaded in parallel.
+- Card art, hover previews and sample-hand images load straight from Scryfall's CDN using each card's Scryfall id (one request instead of an API redirect); below-the-fold art is lazy.
+- Deck analysis for a 99-card deck takes about 1 ms; Mana Base recomputes in 2–3 ms; slider moves on the big-spell pages take about 10 ms. Performance budgets are enforced in tests (`tests/performance/deckAnalysis.node.test.js`).
+- The service worker serves pages network-first (new deploys show up on the next visit), keeps app assets stale-while-revalidate, and caches card images for offline use with a size limit. Its asset list and the preload hints are generated (`npm run sw:manifest`) and tested. It reads only its own caches and deletes every older one on activation, including v2's `mtg-calc-v*` caches, so returning visitors never get v2 JavaScript under v3 pages.
+
+### CI / Deploy
+- Tests (lint, 1,037 unit tests, Playwright browser tests) now run on every pull request as well as on `main`; superseded pull-request runs are cancelled, and jobs have timeouts.
+- CI runs on Node.js 26 (current LTS), pinned in `.nvmrc`; the supported minimum rises from Node 20 (end of life) to 22.12. The suite passes on 20, 22 and 26.
+- GitHub Actions updated to current majors: checkout v7, setup-node v7, upload-artifact v7, configure-pages v6, upload-pages-artifact v5, deploy-pages v5.
+- GitHub Pages receives only the site (`index.html`, `manifest.json`, `sw.js`, `css/`, `js/`, `images/`) instead of the whole repository, so tests, docs, design files and archives are no longer published.
+
+### Fixed
+- **Monstrous Vortex** overstated chained discovers: its formula let a chaining creature be found again and again (e.g. 5.0 instead of the true 4.17) and disagreed with Head to Head.
+- **Head to Head** and **Wild Pair** linked creatures to the wrong group entry, so some creatures appeared to find themselves; Head to Head also left the cast creature in the library to discover itself, and its spread section went blank when the engines were swapped.
+- **Abstract Performance** built its piles from nonland cards only, so piles never contained lands and every average was too high.
+- **Rashmi** cached results by deck shape, so a different deck with the same shape showed stale odds.
+- **Lumra** overwrote a shared fetch-land count on first render and read a field that doesn't exist.
+- **Chimil** reported the best and worst simulated games; it now reports percentiles.
+- **Multiplayer** — modal double-faced spell//land cards were counted as lands; restoring opponents from a share link filled seats out of order; a paste import with no matching cards reported success; Ensnared by the Mara computed every number twice with two different sample sizes.
+- Basic-land fetchers (Evolving Wilds) only count as sources of colours whose basics the deck runs.
+- Wild Pair share links were overridden on first load; Monstrous Vortex's Run simulations button was permanently disabled.
+- The page now has a `<!DOCTYPE html>`; it previously rendered in quirks mode.
+- Chart.js is pinned to an exact version instead of tracking the CDN's latest release.
+- Simulation buttons are enabled whenever the deck has card data, including on pages opened after an import.
+- Big-spell comparisons no longer read another calculator's inputs from the page (they crashed when Portent had not been opened).
+- **Portent of Calamity** counted distinct card types, but a dual-typed card can only be exiled once; free-spell odds now use the real maximum number of exiled cards.
+- **Kamahl's Druidic Vow** re-ticked its copy checkbox on every render with a legendary commander; **Vow** and **Primal Surge** cache keys ignored inputs and could return stale results.
+- **Mulligan Planner** — the penalty setting never changed a decision; London-mulligan bottoming wasn't modelled, so 7-land hands counted as keeps; deck size, first-turn draws and the free mulligan were hard-coded; average mulligans reused the opener's keep rate at every step.
+- **Land Drops** always used Commander draws, and its sample button never enabled.
+- Every page meets WCAG AA contrast in both themes at desktop and phone widths, with no horizontal scrolling.
+
+### Removed
+- The terminal-style header, tab rows, import strip and deck-radar panel (replaced by the sidebar, deck dialog and overview), the noise texture overlay, and unused helpers (`renderStatCard`, `renderStatsGrid`, collapsible-panel helpers, `radarPanel.js`, seven unused `ui.js` functions).
+- About 1,000 lines of CSS that no page used (stylesheets are now smaller than in v2.13 despite the new shell).
+- The legacy single-process test runner (`npm run test:legacy`), its helpers and six duplicate `*.test.js` files; the hypergeometric tests moved to the node runner. `npm run test:watch` now uses `node --test --watch`, and `nodemon` is no longer a dependency.
+
+## [2.13.0] - 2026-09-23
+
+### Added
+- **Complete Primal Surge sample distribution** — a horizontal 100% probability band and compact value ranges show every simulated run, including rare high-value outcomes in an open-ended tail range. Ranges meet at the configured payback threshold so whiffs and paid-back results never share a bucket; the counts add to the full sample size.
+
+### Fixed
+- **Cast Surge in sample libraries** — remove one card named Primal Surge instead of the first arbitrary instant or sorcery. Imported lists without a named Surge are sampled as given, and the exact statistics and big-spell comparison use the same rule.
+- **Stale Surge samples after deck imports** — regenerates stable samples when card names, counts, mana values, or types change, even if the total deck size and non-permanent count stay the same.
+
 ## [2.12.2] - 2026-09-19
 
 ### Added

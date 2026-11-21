@@ -42,8 +42,45 @@ describe('service worker asset manifest', () => {
         assert.deepEqual(missing, [], `missing JavaScript assets: ${missing.join(', ')}`);
     });
 
-    it('pre-caches both external runtime scripts from index.html', () => {
-        assert.ok(staticAssets.includes('https://cdn.jsdelivr.net/npm/chart.js'));
-        assert.ok(staticAssets.includes('https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js'));
+    it('pre-caches every stylesheet', () => {
+        const cssFiles = readdirSync(path.join(projectRoot, 'css')).filter(f => f.endsWith('.css')).map(f => `css/${f}`);
+        assert.deepEqual(cssFiles.filter(f => !staticAssets.includes(f)), []);
+    });
+
+    it('pre-caches the pinned external runtime scripts the app loads', () => {
+        const html = readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
+        const vendor = readFileSync(path.join(projectRoot, 'js/shell/vendor.js'), 'utf8');
+        const chartUrl = vendor.match(/CHART_JS_URL = '([^']+)'/)?.[1];
+        assert.ok(chartUrl, 'vendor.js declares the Chart.js URL');
+        assert.match(chartUrl, /@\d+\.\d+\.\d+\//, 'Chart.js must be pinned to an exact version');
+        assert.ok(staticAssets.includes(chartUrl), 'pinned Chart.js is pre-cached');
+        const lz = html.match(/src="(https:\/\/cdn\.jsdelivr\.net\/npm\/lz-string[^"]+)"/)?.[1];
+        assert.ok(lz && staticAssets.includes(lz), 'LZ-String is pre-cached');
+    });
+
+    it('preloads the whole startup import graph (npm run sw:manifest)', async () => {
+        const { preloadTags } = await import('../../scripts/update-sw-manifest.mjs');
+        const html = readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
+        const block = html.match(/<!-- BEGIN MODULEPRELOAD -->\r?\n([\s\S]*?)\r?\n\s*<!-- END MODULEPRELOAD -->/)?.[1];
+        assert.equal(block?.replace(/\r\n/g, '\n'), preloadTags());
+    });
+
+    it('is regenerated from disk (npm run sw:manifest)', async () => {
+        const { buildAssetList } = await import('../../scripts/update-sw-manifest.mjs');
+        assert.deepEqual(staticAssets, buildAssetList());
+    });
+});
+
+describe('service worker cache isolation', () => {
+    it('never looks requests up across every cache', () => {
+        // A global caches.match() also searches caches left by older workers
+        // (v2 used `mtg-calc-v*`) and would serve their stale JS to v3 pages.
+        assert.doesNotMatch(serviceWorkerSource, /caches\.match\(/);
+    });
+
+    it('deletes every cache that is not current on activate', () => {
+        const activate = serviceWorkerSource.match(/addEventListener\('activate'[\s\S]*?\n\}\);/)?.[0] ?? '';
+        assert.match(activate, /name !== CACHE_NAME && name !== IMAGE_CACHE/);
+        assert.doesNotMatch(activate, /startsWith\(/, 'filtering by prefix would keep legacy caches alive');
     });
 });

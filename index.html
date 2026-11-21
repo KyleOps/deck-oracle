@@ -1,1197 +1,283 @@
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="description" content="Advanced Magic: The Gathering (MTG) probability calculator for Portent of Calamity, Primal Surge, Genesis Wave, Monstrous Vortex, Rashmi, Mulligan strategies, and Land drops. Analyze deck consistency and expected values.">
-    <meta name="theme-color" content="#0a0b0a">
+    <meta name="description" content="Deck Oracle — probability tools for Magic: The Gathering. Import a Moxfield or Archidekt deck and get exact odds for draws, mana, mulligans, land drops and big spells like Genesis Wave and Primal Surge.">
+    <meta name="theme-color" content="#0b0d0c" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f6f4ee" media="(prefers-color-scheme: light)">
+    <meta name="color-scheme" content="dark light">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="images/icon.svg" type="image/svg+xml">
-    <link rel="shortcut icon" href="images/icon.svg" type="image/svg+xml">
-    <title>Deck Oracle - MTG Probability Calculator</title>
+    <link rel="apple-touch-icon" href="images/icon-180.png">
+    <meta property="og:title" content="Deck Oracle — MTG probability tools">
+    <meta property="og:description" content="Import a deck and get exact odds for draws, mana, opening hands, mulligans and big spells.">
+    <meta property="og:image" content="images/icon-512.png">
+    <title>Deck Oracle — MTG probability tools</title>
 
-    <!-- Preconnect to external resources -->
+    <!-- Apply the saved theme before first paint so there is no flash -->
+    <script>
+        try {
+            var t = localStorage.getItem('deckOracle.theme');
+            if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+            else if (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches) document.documentElement.dataset.theme = 'light';
+        } catch (e) { /* storage blocked — keep dark */ }
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600;700&family=Crimson+Pro:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
 
-    <!-- Fonts - JetBrains Mono for terminal aesthetic -->
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- Stylesheets -->
+    <link rel="modulepreload" href="js/main.js">
+    <!-- BEGIN MODULEPRELOAD -->
+    <link rel="modulepreload" href="js/utils/deckConfig.js">
+    <link rel="modulepreload" href="js/utils/opponentState.js">
+    <link rel="modulepreload" href="js/utils/share.js">
+    <link rel="modulepreload" href="js/utils/deckRadar.js">
+    <link rel="modulepreload" href="js/utils/deckStats.js">
+    <link rel="modulepreload" href="js/data/images.js">
+    <link rel="modulepreload" href="js/utils/format.js">
+    <link rel="modulepreload" href="js/utils/simulation.js">
+    <link rel="modulepreload" href="js/utils/calculatorRegistry.js">
+    <link rel="modulepreload" href="js/shell/router.js">
+    <link rel="modulepreload" href="js/shell/sidebar.js">
+    <link rel="modulepreload" href="js/shell/pageHeader.js">
+    <link rel="modulepreload" href="js/shell/palette.js">
+    <link rel="modulepreload" href="js/shell/deckDialog.js">
+    <link rel="modulepreload" href="js/shell/overlays.js">
+    <link rel="modulepreload" href="js/shell/theme.js">
+    <link rel="modulepreload" href="js/utils/decklistImport.js">
+    <link rel="modulepreload" href="js/utils/defaultDeckData.js">
+    <link rel="modulepreload" href="js/utils/deckLibrary.js">
+    <link rel="modulepreload" href="js/data/glossary.js">
+    <link rel="modulepreload" href="js/utils/hypergeometric.js">
+    <link rel="modulepreload" href="js/utils/mana.js">
+    <link rel="modulepreload" href="js/utils/cardTags.js">
+    <link rel="modulepreload" href="js/shell/vendor.js">
+    <link rel="modulepreload" href="js/data/cards.js">
+    <link rel="modulepreload" href="js/utils/chartHelpers.js">
+    <!-- END MODULEPRELOAD -->
+    <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/shell.css">
     <link rel="stylesheet" href="css/mobile.css">
     <link rel="stylesheet" href="css/ux-enhancements.css">
 </head>
-<body class="theme-wildpair">
-    <a class="tx-skip" href="#main">Skip to calculator</a>
-    <div class="container">
+<body class="theme-overview">
+    <a class="skip-link" href="#main">Skip to content</a>
 
-        <!-- HEADER BAND -->
-        <header class="tx-header" id="tx-header">
-            <!-- Top row: wordmark + group buttons + deck pill -->
-            <div class="tx-header-top">
-                <div class="tx-wordmark">
-                    <span class="tx-deck">DECK</span>
-                    <span class="tx-oracle">ORACLE</span>
-                </div>
-                <div class="tx-group-row">
-                    <button class="tx-group active" data-group="engines">ENGINES</button>
-                    <button class="tx-group" data-group="spells">SPELLS</button>
-                    <button class="tx-group" data-group="deck-tools">TOOLS</button>
-                    <button class="tx-group" data-group="multiplayer">MULTI</button>
-                </div>
-                <div class="tx-deck-pill">
-                    <span class="tx-pill" id="tx-deck-pill">
-                        <span class="tx-dot" style="background: var(--tx-dim);"></span>
-                        NO DECK
-                    </span>
-                    <span class="tx-deck-hash" id="tx-deck-hash"></span>
-                </div>
+    <div class="app" id="app">
+        <!-- ============ SIDEBAR ============ -->
+        <aside class="sidebar" id="sidebar" aria-label="Navigation">
+            <div class="sidebar-brand">
+                <a class="brand" href="?tab=overview" data-tab-link="overview" aria-label="Deck Oracle home">
+                    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16c3.6-6 8-9 13-9s9.4 3 13 9c-3.6 6-8 9-13 9S6.6 22 3 16Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="16" cy="16" r="4.6" fill="currentColor"/></svg>
+                    <span class="brand-name">Deck Oracle</span>
+                </a>
+                <button class="icon-btn sidebar-close" id="sidebar-close" type="button" aria-label="Close navigation">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
             </div>
-            <!-- Bottom row: calculator tabs (filtered by active group) -->
-            <div class="tx-tab-row" id="tx-tab-row">
-                <button class="tx-tab active" data-tab="wildpair" data-group="engines"><span class="tx-code">WPR</span><span class="tx-sep">·</span><span class="tx-name">Wild Pair</span></button>
-                <button class="tx-tab" data-tab="vortex" data-group="engines"><span class="tx-code">VOR</span><span class="tx-sep">·</span><span class="tx-name">Monstrous Vortex</span></button>
-                <button class="tx-tab" data-tab="chimil" data-group="engines"><span class="tx-code">CHM</span><span class="tx-sep">·</span><span class="tx-name">Chimil</span></button>
-                <button class="tx-tab" data-tab="rashmi" data-group="engines"><span class="tx-code">RSH</span><span class="tx-sep">·</span><span class="tx-name">Rashmi</span></button>
-                <button class="tx-tab group-hidden" data-tab="portent" data-group="spells"><span class="tx-code">POR</span><span class="tx-sep">·</span><span class="tx-name">Portent of Calamity</span></button>
-                <button class="tx-tab group-hidden" data-tab="wave" data-group="spells"><span class="tx-code">WAV</span><span class="tx-sep">·</span><span class="tx-name">Genesis Wave</span></button>
-                <button class="tx-tab group-hidden" data-tab="vow" data-group="spells"><span class="tx-code">VOW</span><span class="tx-sep">·</span><span class="tx-name">Kamahl's Vow</span></button>
-                <button class="tx-tab group-hidden" data-tab="surge" data-group="spells"><span class="tx-code">SUR</span><span class="tx-sep">·</span><span class="tx-name">Primal Surge</span></button>
-                <button class="tx-tab group-hidden" data-tab="abstract" data-group="spells"><span class="tx-code">ABS</span><span class="tx-sep">·</span><span class="tx-name">Abstract Perf.</span></button>
-                <button class="tx-tab group-hidden" data-tab="lumra" data-group="spells"><span class="tx-code">LMR</span><span class="tx-sep">·</span><span class="tx-name">Lumra</span></button>
-                <button class="tx-tab group-hidden" data-tab="mulligan" data-group="deck-tools"><span class="tx-code">MUL</span><span class="tx-sep">·</span><span class="tx-name">Mulligan</span></button>
-                <button class="tx-tab group-hidden" data-tab="lands" data-group="deck-tools"><span class="tx-code">LND</span><span class="tx-sep">·</span><span class="tx-name">Land Drops</span></button>
-                <button class="tx-tab group-hidden" data-tab="versus" data-group="deck-tools"><span class="tx-code">VS</span><span class="tx-sep">·</span><span class="tx-name">Head to Head</span></button>
-                <button class="tx-tab group-hidden" data-tab="mara" data-group="multiplayer"><span class="tx-code">MAR</span><span class="tx-sep">·</span><span class="tx-name">Ensnared / Mara</span></button>
-                <button class="tx-tab group-hidden" data-tab="dreamharvest" data-group="multiplayer"><span class="tx-code">DRH</span><span class="tx-sep">·</span><span class="tx-name">Dream Harvest</span></button>
-                <button class="tx-tab group-hidden" data-tab="mindsdilation" data-group="multiplayer"><span class="tx-code">MND</span><span class="tx-sep">·</span><span class="tx-name">Mind's Dilation</span></button>
+
+            <button class="deck-switcher" id="deck-switcher" type="button" aria-haspopup="dialog" aria-controls="deck-dialog">
+                <span class="deck-switcher-art" id="deck-switcher-art" aria-hidden="true"></span>
+                <span class="deck-switcher-text">
+                    <span class="deck-switcher-name" id="deck-switcher-name">Example deck</span>
+                    <span class="deck-switcher-meta" id="deck-switcher-meta">Loading…</span>
+                </span>
+                <svg class="deck-switcher-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+            </button>
+
+            <nav class="nav" id="nav" aria-label="Calculators"></nav>
+
+            <div class="sidebar-foot">
+                <button class="sidebar-foot-btn" id="open-shortcuts" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg>
+                    Shortcuts <kbd>?</kbd>
+                </button>
+                <span class="app-version" id="app-version">v3.0.0</span>
             </div>
-        </header>
-
-        <!-- SUB-BAR: deck import strip (replaces collapsible deck-config for spells/creatures/tools) -->
-        <div class="tx-sub-bar" id="tx-sub-bar">
-            <span class="tx-src-label">Import deck</span>
-            <input class="tx-url-input" id="moxfield-input" type="text" placeholder="Paste a Moxfield or Archidekt URL" autocomplete="off">
-            <button class="tx-fetch-btn" id="moxfield-import-btn">Fetch</button>
-            <span class="tx-or">or</span>
-            <input class="tx-paste-input" id="tx-paste-hint" type="text" placeholder="paste a decklist instead" readonly>
-            <span class="tx-import-meta" id="tx-import-meta">
-                <a href="#" id="load-example-btn">Try an example deck</a>
-            </span>
-        </div>
-
-        <!-- DECK RADAR — auto-detected relevant calculators + composition breakdown -->
-        <section id="tx-radar" aria-label="Deck radar" aria-live="polite"></section>
-
-        <!-- SHARED DECK CONFIGURATION — hidden panel, kept for JS state management -->
-        <section class="panel collapsible-panel expanded" id="deck-config" aria-label="Deck configuration" style="display:none;">
-            <div class="panel-content">
-                <div class="collapsible-panel expanded" id="manual-counts-section">
-                    <div class="panel-content">
-                        <div class="type-grid">
-                            <div class="type-input"><label for="deck-creatures">Creatures</label><input type="number" id="deck-creatures" value="25" min="0"></div>
-                            <div class="type-input"><label for="deck-instants">Instant</label><input type="number" id="deck-instants" value="8" min="0"></div>
-                            <div class="type-input"><label for="deck-sorceries">Sorcery</label><input type="number" id="deck-sorceries" value="6" min="0"></div>
-                            <div class="type-input"><label for="deck-artifacts">Artifact</label><input type="number" id="deck-artifacts" value="4" min="0"></div>
-                            <div class="type-input"><label for="deck-enchantments">Enchant</label><input type="number" id="deck-enchantments" value="3" min="0"></div>
-                            <div class="type-input"><label for="deck-planeswalkers">Planeswalker</label><input type="number" id="deck-planeswalkers" value="2" min="0"></div>
-                            <div class="type-input"><label for="deck-lands">Land</label><input type="number" id="deck-lands" value="32" min="0"></div>
-                            <div class="type-input"><label for="deck-battles">Battle</label><input type="number" id="deck-battles" value="0" min="0"></div>
-                        </div>
-                        <div class="deck-total">Total: <span id="deck-total">80</span></div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- OPPONENTS DECK IMPORT — visible for multiplayer tabs -->
-        <section class="panel collapsible-panel expanded" id="opponents-config" aria-label="Opponent configuration" style="display: none;">
-            <div class="tx-h"><span>OPPONENT DECKLISTS</span><span class="tx-h-r"><button id="load-example-opponents-btn" style="background:transparent; border:none; color:var(--tx-amber); font-family:inherit; font-size:9px; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; padding:0;">LOAD EXAMPLES ↓</button></span></div>
-            <div class="panel-content" style="padding: 14px;">
-                <div id="shared-opponent-tabs" class="opponent-tabs"></div>
-                <div id="shared-opponent-import"></div>
-            </div>
-        </section>
-
-        <!-- PASTE DECKLIST PANEL (shown when user clicks paste hint in sub-bar) -->
-        <div id="tx-paste-panel" style="display:none; border-bottom:1px solid var(--tx-rule); background:var(--tx-panel);">
-            <div class="tx-h"><span>PASTE DECKLIST</span><span class="tx-h-r" id="tx-paste-panel-close" style="cursor:pointer;">[ CLOSE ✕ ]</span></div>
-            <div style="padding:14px; display:flex; gap:12px; align-items:flex-start;">
-                <textarea id="decklist-input" placeholder="Paste your decklist here…&#10;Format: 4 Lightning Bolt&#10;1 Jace, the Mind Sculptor" rows="6" style="flex:1; background:var(--tx-bg); border:1px solid var(--tx-rule); color:var(--tx-bright); padding:10px; font-family:inherit; font-size:11px; resize:vertical; outline:none;" aria-label="Decklist input"></textarea>
-                <div style="display:flex; flex-direction:column; gap:8px;">
-                    <button id="import-btn" class="tx-fetch-btn">IMPORT ↵</button>
-                    <div class="import-progress" id="import-progress"><div class="import-progress-bar" id="import-progress-bar"></div></div>
-                    <div id="import-status" class="import-status" role="status" aria-live="polite"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Calculator Content Wrapper -->
-        <main class="calculator-content" id="main">
-
-        <!-- PORTENT TAB -->
-        <div id="portent-tab" class="tab-content" role="tabpanel" aria-labelledby="portent">
-            <div class="portent-grid">
-
-                <!-- LEFT RAIL: inputs -->
-                <div class="portent-left">
-                    <div class="tx-h"><span>01 · X PARAM</span><span class="tx-h-r">cards to reveal</span></div>
-                    <div style="padding:16px;">
-                        <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:10px;">
-                            <span id="portent-x-display" style="font-size:56px; font-weight:700; color:var(--tx-bright); line-height:1; letter-spacing:-0.02em; font-feature-settings:'tnum' 1;">7</span>
-                            <span style="color:var(--tx-dim); font-size:11px;">/ <span id="portent-n-display">80</span></span>
-                            <span style="flex:1;"></span>
-                            <span id="portent-pct-display" style="color:var(--tx-mid); font-size:10px;"></span>
-                        </div>
-                        <input class="tx-slider" type="range" id="portent-xSlider" value="7" min="1" max="20" step="1" aria-label="X value slider">
-                        <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:9px; color:var(--tx-dim);">
-                            <span>1</span><span>5</span><span>10</span><span>15</span><span>20</span>
-                        </div>
-                        <div style="display:flex; gap:6px; margin-top:12px;" id="portent-presets">
-                            <button class="tx-chip" data-x="5">X=5</button>
-                            <button class="tx-chip" data-x="7">X=7</button>
-                            <button class="tx-chip" data-x="9">X=9</button>
-                            <button class="tx-chip" data-x="12">X=12</button>
-                            <button class="tx-chip" data-x="15">X=15</button>
-                        </div>
-                        <!-- Hidden number input for JS compatibility -->
-                        <input type="number" id="portent-xValue" value="7" min="1" max="50" style="position:absolute; opacity:0; pointer-events:none; width:1px; height:1px;" aria-label="X value" tabindex="-1">
-                    </div>
-
-                    <div class="tx-h"><span>02 · LIBRARY</span><span class="tx-h-r" id="portent-n-label">N=80</span></div>
-                    <div style="padding:16px;">
-                        <div class="tx-bar" id="portent-type-bar"></div>
-                        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:4px 12px; font-size:11px; margin-top:8px;" id="portent-type-grid"></div>
-                    </div>
-
-                    <div class="tx-h"><span>03 · TRIGGER RULE</span><span class="tx-h-r">&ge;4 types</span></div>
-                    <div style="padding:16px; font-size:11px; color:var(--tx-mid); line-height:1.55;">
-                        <div style="margin-bottom:8px;">If reveal contains <span style="color:var(--tx-amber);">&ge;4 distinct types</span>, all X cards go to hand.</div>
-                        <div style="color:var(--tx-dim); font-size:10px;">Method: hypergeometric · Monte Carlo 25,000 trials · seed-stable.</div>
-                    </div>
-
-                    <!-- Big spell comparison (legacy, repurposed as extra rail content) -->
-                    <div id="big-spell-comparison-portent"></div>
-
-                    <!-- Legacy stats panel, hidden (replaced by hero numerics) -->
-                    <div id="portent-stats" style="display:none;"></div>
-                </div>
-
-                <!-- CENTER: hero numerics + chart + sweep table -->
-                <div class="portent-center">
-                    <!-- Hero numerics -->
-                    <div class="portent-hero" id="portent-hero">
-                        <div class="tx-stat">
-                            <div class="tx-stat-label">P(FREE SPELL)</div>
-                            <div class="tx-stat-value" id="portent-hero-pfree" style="color:var(--tx-green);">—</div>
-                            <div class="tx-stat-sub" id="portent-hero-pfree-sub">x=7</div>
-                        </div>
-                        <div class="tx-stat">
-                            <div class="tx-stat-label">E[TYPES EXILED]</div>
-                            <div class="tx-stat-value medium" id="portent-hero-types" style="color:var(--tx-amber);">—</div>
-                            <div class="tx-stat-sub">avg distinct types</div>
-                        </div>
-                        <div class="tx-stat" style="border-right:none;">
-                            <div class="tx-stat-label">MARGINAL +1X</div>
-                            <div class="tx-stat-value medium" id="portent-hero-marginal" style="color:var(--tx-blue);">—</div>
-                            <div class="tx-stat-sub" id="portent-hero-marginal-sub">Δ free spell %</div>
-                        </div>
-                    </div>
-
-                    <!-- Chart -->
-                    <div class="tx-h">
-                        <span>04 · KERNEL · P(FREE) AND E[TYPES] vs X</span>
-                        <span class="tx-h-r"><span style="color:var(--tx-green);">●</span> P(FREE) &nbsp; <span style="color:var(--tx-amber);">▮</span> E[TYPES]</span>
-                    </div>
-                    <div class="chart-container" style="height:280px; padding:0;">
-                        <canvas id="portent-combinedChart" role="img" aria-label="Portent probability chart"></canvas>
-                    </div>
-
-                    <!-- X sweep table -->
-                    <div class="tx-h"><span>05 · X SWEEP · STEP RESPONSE</span><span class="tx-h-r">P(FREE), E[CARDS], Δ vs prev</span></div>
-                    <div style="overflow-x:auto;">
-                        <table class="portent-sweep-table" id="portent-sweep-table">
-                            <thead>
-                                <tr>
-                                    <th style="text-align:left;">x</th>
-                                    <th>p(free)</th>
-                                    <th class="p-bar-cell" style="text-align:left;">p bar</th>
-                                    <th>E[cards]</th>
-                                    <th>Δp</th>
-                                    <th>verdict</th>
-                                </tr>
-                            </thead>
-                            <tbody id="portent-sweep-body">
-                                <!-- Populated by portent.js -->
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- Legacy comparison table (hidden, kept for JS compatibility) -->
-                    <div style="display:none;">
-                        <table class="comparison-table" id="portent-comparisonTable"></table>
-                    </div>
-                </div>
-
-                <!-- RIGHT RAIL: sample reveals + live tape -->
-                <div class="portent-right">
-                    <div class="tx-h">
-                        <span id="portent-reveal-header">06 · SAMPLE REVEAL · X=7</span>
-                        <span class="tx-h-r" id="portent-reshuffle-btn" style="cursor:pointer;">[ ↻ RESHUFFLE ]</span>
-                    </div>
-                    <div id="portent-trials-container">
-                        <!-- 4 trial cards populated by portent.js -->
-                        <div class="portent-trial" style="color:var(--tx-dim); font-size:10px; padding:20px 16px;">
-                            Import a decklist to see sample reveals.
-                        </div>
-                    </div>
-
-                    <div class="tx-h"><span>07 · TRIAL FEED</span><span class="tx-h-r">types · FREE / FIZZ</span></div>
-                    <div id="portent-live-tape">
-                        <!-- 14 tape rows populated by portent.js -->
-                    </div>
-
-                    <!-- Legacy sample reveals panel (hidden) -->
-                    <div id="portent-sample-reveals" style="display:none;"></div>
-                    <div id="portent-reveals-display" style="display:none;"></div>
-                    <div id="portent-sample-count" style="display:none;"></div>
-                </div>
-
-            </div><!-- end portent-grid -->
-        </div>
-
-        <!-- PRIMAL SURGE TAB -->
-        <div id="surge-tab" class="tab-content" role="tabpanel" aria-labelledby="surge">
-            <h1>Primal Surge Calculator</h1>
-            <p class="card-text">"So do you win here or...?"</p>
-
-            <div class="main-grid single-column">
-                <section class="panel panel-config" aria-label="Primal Surge payback model">
-                    <div class="tx-h"><span>Payback model</span><span class="tx-h-r">tune what value means</span></div>
-                    <p class="surge-value-intro">A run pays for Primal Surge when its effective value reaches your threshold.</p>
-                    <div class="surge-value-formula" aria-label="Effective value formula">
-                        <span>effective value</span>
-                        <strong>printed MV + land value + card value</strong>
-                    </div>
-                    <div class="surge-value-fields">
-                        <label class="surge-value-field" for="surge-payback-threshold">
-                            <span>Payback threshold</span>
-                            <input type="number" id="surge-payback-threshold" value="10" min="0.25" max="100" step="0.25" inputmode="decimal">
-                            <small>Below this is a whiff</small>
-                        </label>
-                        <label class="surge-value-field" for="surge-land-value">
-                            <span>Extra value per land</span>
-                            <input type="number" id="surge-land-value" value="1" min="0" max="20" step="0.25" inputmode="decimal">
-                            <small>Added on top of printed MV</small>
-                        </label>
-                        <label class="surge-value-field" for="surge-card-value">
-                            <span>Value per card put in play</span>
-                            <input type="number" id="surge-card-value" value="0.25" min="0" max="20" step="0.25" inputmode="decimal">
-                            <small>Deck-thinning, ETB, and board value</small>
-                        </label>
-                    </div>
-                    <p class="surge-value-example">Example: 5 lands + three 1-MV dorks = 3 raw MV + 5 land value + 2 card value = <strong>10 effective value</strong>.</p>
-                </section>
-
-                <section class="panel" aria-label="Expected permanents chart">
-                    <h2>Expected Permanents & Early-stop Risk</h2>
-                    <div class="chart-container" style="height: 320px;">
-                        <canvas id="surge-chart" role="img" aria-label="Primal Surge chart"></canvas>
-                    </div>
-                    <div class="chart-legend">
-                        <span class="legend-item"><span class="legend-color" style="background: #55c97f;"></span> Expected Permanents</span>
-                        <span class="legend-item"><span class="legend-color" style="background: #e8635c;"></span> Early stop (&lt;5 permanents)</span>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Simulation results">
-                    <h2>Simulation Results</h2>
-                    <div class="table-wrapper" id="surge-stats-container">
-                        <!-- Stats content will be inserted here -->
-                    </div>
-                </section>
-
-                <section class="panel" id="big-spell-comparison-surge" aria-label="Big spell comparison">
-                    <!-- Comparison will be inserted here -->
-                </section>
-
-                <section class="panel" id="surge-sample-reveals" aria-label="Sample reveals">
-                </section>
-            </div>
-        </div>
-
-        <!-- GENESIS WAVE TAB -->
-        <div id="wave-tab" class="tab-content" role="tabpanel" aria-labelledby="wave">
-            <h1>Genesis Wave Calculator</h1>
-            <p class="card-text">"Best green mill spell in the game"</p>
-
-            <div class="main-grid single-column">
-                <section class="panel panel-config" aria-label="Configuration">
-                    <h2>Calculation Settings</h2>
-                    <div class="input-group">
-                        <label for="wave-xValue">X value (cards to reveal)</label>
-                        <div class="x-slider-row">
-                            <input type="range" id="wave-xSlider" value="6" min="1" max="30" step="1" aria-label="X value slider">
-                            <input type="number" id="wave-xValue" value="6" min="1" max="50" class="x-number" aria-label="X value number input">
-                        </div>
-                    </div>
-                    <div class="payback-model" aria-label="Genesis Wave value model">
-                        <div class="tx-h"><span>VALUE MODEL</span><span class="tx-h-r">target = X + 3 mana</span></div>
-                        <div class="payback-formula">
-                            <span>Effective value</span>
-                            <strong>printed MV + land bonus + card bonus</strong>
-                        </div>
-                        <div class="payback-fields">
-                            <label class="payback-field" for="wave-land-value">
-                                <span>Extra value per land</span>
-                                <input type="number" id="wave-land-value" value="1" min="0" max="20" step="0.25" inputmode="decimal">
-                                <small>Values the additional land drop beyond its printed MV of 0.</small>
-                            </label>
-                            <label class="payback-field" for="wave-card-value">
-                                <span>Value per card put in play</span>
-                                <input type="number" id="wave-card-value" value="0.25" min="0" max="20" step="0.25" inputmode="decimal">
-                                <small>Credits deck thinning and card access separately from mana value.</small>
-                            </label>
-                        </div>
-                        <p class="payback-example">At the current X, Wave pays for itself at <strong id="wave-payback-target">9 effective mana</strong>.</p>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Expected permanents chart">
-                    <h2>Expected Permanents vs X Value</h2>
-                    <div class="chart-container" style="height: 320px;">
-                        <canvas id="wave-chart" role="img" aria-label="Genesis Wave chart"></canvas>
-                    </div>
-                    <div class="chart-legend">
-                        <span class="legend-item"><span class="legend-color" style="background: #7d8a92;"></span> Expected Permanents Played</span>
-                        <span class="legend-item"><span class="legend-color" style="background: #55c97f;"></span> Total Cards Revealed</span>
-                    </div>
-                </section>
-
-                <section class="panel" id="wave-stats" aria-label="Current X analysis">
-                    <!-- Analysis content will be inserted here -->
-                </section>
-
-                <section class="panel" id="big-spell-comparison-wave" aria-label="Big spell comparison">
-                    <!-- Comparison will be inserted here -->
-                </section>
-
-                <section class="panel" id="wave-sample-reveals" aria-label="Sample reveals">
-                </section>
-
-                <section class="panel" aria-label="X value comparison">
-                    <div class="tx-h"><span>X SWEEP · STEP RESPONSE</span><span class="tx-h-r">E[perms], hit rate, Δ vs prev</span></div>
-                    <div class="table-wrapper" id="wave-comparisonTable"></div>
-                </section>
-            </div>
-        </div>
-
-        <!-- KAMAHL'S DRUIDIC VOW TAB -->
-        <div id="vow-tab" class="tab-content" role="tabpanel" aria-labelledby="vow">
-            <h1>Kamahl's Druidic Vow Calculator</h1>
-            <p class="card-text">"For the land and the legends"</p>
-
-            <div class="main-grid single-column">
-                <section class="panel panel-full" id="vow-import-warning" aria-label="Import required notice">
-                    <h2>Import Required</h2>
-                    <p style="color: var(--text-secondary); margin: 0;">
-                        This calculator requires decklist import to accurately identify Legendary permanents. Please use the
-                        <strong style="color: var(--text-light);">📚 Deck Configuration</strong> panel above to import your decklist.
-                    </p>
-                </section>
-
-                <section class="panel panel-config" aria-label="Configuration">
-                    <h2>Calculation Settings</h2>
-                    <div class="input-group">
-                        <label for="vow-xValue">X value (cards to reveal)</label>
-                        <div class="x-slider-row">
-                            <input type="range" id="vow-xSlider" value="6" min="1" max="30" step="1" aria-label="X value slider">
-                            <input type="number" id="vow-xValue" value="6" min="1" max="50" class="x-number" aria-label="X value number input">
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="vow-doubleCast" aria-label="Double cast (Sixth Doctor, Magus Lucea Kane)">
-                            <span>Double Cast (Sixth Doctor / Magus Lucea Kane)</span>
-                        </label>
-                        <p class="helper-text">Copies the spell with the same X value, revealing 2X total cards</p>
-                    </div>
-                    <div class="payback-model" aria-label="Kamahl's Druidic Vow value model">
-                        <div class="tx-h"><span>VALUE MODEL</span><span class="tx-h-r">target = X + 2 mana</span></div>
-                        <div class="payback-formula">
-                            <span>Effective value</span>
-                            <strong>printed MV + land bonus + card bonus</strong>
-                        </div>
-                        <div class="payback-fields">
-                            <label class="payback-field" for="vow-land-value">
-                                <span>Extra value per land</span>
-                                <input type="number" id="vow-land-value" value="1" min="0" max="20" step="0.25" inputmode="decimal">
-                                <small>Values the additional land drop beyond its printed MV of 0.</small>
-                            </label>
-                            <label class="payback-field" for="vow-card-value">
-                                <span>Value per card put in play</span>
-                                <input type="number" id="vow-card-value" value="0.25" min="0" max="20" step="0.25" inputmode="decimal">
-                                <small>Credits deck thinning and card access separately from mana value.</small>
-                            </label>
-                        </div>
-                        <p class="payback-example">At the current X, Vow pays for itself at <strong id="vow-payback-target">8 effective mana</strong>.</p>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Expected hits chart">
-                    <h2>Expected Hits vs X Value</h2>
-                    <div class="chart-container" style="height: 320px;">
-                        <canvas id="vow-chart" role="img" aria-label="Druidic Vow chart"></canvas>
-                    </div>
-                    <div class="chart-legend">
-                        <span class="legend-item"><span class="legend-color" style="background: #55c97f;"></span> Expected Hits (Land/Legendary)</span>
-                        <span class="legend-item"><span class="legend-color" style="background: #7d8a92;"></span> Cards Revealed</span>
-                    </div>
-                </section>
-
-                <section class="panel" id="vow-stats" aria-label="Current X analysis">
-                    <!-- Analysis content will be inserted here -->
-                </section>
-
-                <section class="panel" id="big-spell-comparison" aria-label="Big spell comparison">
-                    <!-- Comparison will be inserted here -->
-                </section>
-
-                <section class="panel" id="vow-sample-reveals" aria-label="Sample reveals">
-                </section>
-
-                <section class="panel" aria-label="X value comparison">
-                    <div class="tx-h"><span>X SWEEP · STEP RESPONSE</span><span class="tx-h-r">E[hits], hit rate, Δ vs prev</span></div>
-                    <div class="table-wrapper" id="vow-comparisonTable"></div>
-                </section>
-            </div>
-        </div>
-
-        <!-- VORTEX TAB -->
-        <div id="vortex-tab" class="tab-content" role="tabpanel" aria-labelledby="vortex">
-            <h1>Monstrous Vortex Calculator</h1>
-            <p class="card-text">"Big Creature, Big Value"</p>
-
-            <div class="main-grid single-column">
-                <section class="panel panel-full" id="vortex-import-warning" aria-label="Import required notice">
-                    <h2>Import Required</h2>
-                    <p style="color: var(--text-secondary); margin: 0;">
-                        This calculator requires decklist import to work. Please use the
-                        <strong style="color: var(--text-light);">📚 Deck Configuration</strong> panel above to import your decklist.
-                        The import will automatically detect creatures with power 5+ and CMC distribution.
-                    </p>
-                </section>
-
-                <section class="panel panel-config" aria-label="Configuration">
-                    <h2>Calculation Settings</h2>
-                    <div class="input-group">
-                        <label for="vortex-cmcValue">CMC of power 5+ creature being cast</label>
-                        <div class="x-slider-row">
-                            <input type="range" id="vortex-cmcSlider" value="6" min="3" max="10" step="1" aria-label="Creature CMC slider">
-                            <input type="number" id="vortex-cmcValue" value="6" min="3" max="15" class="x-number" aria-label="Creature CMC number input">
-                        </div>
-                    </div>
-                    <div class="input-group" style="margin-top: var(--spacing-md);">
-                        <label style="display: flex; align-items: center; gap: var(--spacing-sm); cursor: pointer; user-select: none;">
-                            <input type="checkbox" id="vortex-star-power" style="width: auto; cursor: pointer;" checked>
-                            <span>Treat */* creatures (X/X) as Power 5+</span>
-                        </label>
-                        <small style="color: var(--text-dim); display: block; margin-top: 4px; margin-left: 24px;">
-                            Assume dynamic power creatures (like Lumra, Ashaya) are big enough to chain
-                        </small>
-                    </div>
-                </section>
-
-
-                <section class="panel" aria-label="Expected spells chart">
-                    <h2>Discover Value by Creature CMC</h2>
-                    <div class="chart-container" style="height: 320px;">
-                        <canvas id="vortex-chart" role="img" aria-label="Vortex discover chart"></canvas>
-                    </div>
-                    <div class="chart-legend">
-                        <span class="legend-item"><span class="legend-color" style="background: #f0a92c;"></span> Avg Free Mana Value</span>
-                        <span class="legend-item"><span class="legend-color" style="background: #55c97f;"></span> Avg Spell CMC Found</span>
-                        <span class="legend-item"><span class="legend-color" style="background: #a68ac4;"></span> Avg Spells Cast</span>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Discover analysis">
-                    <div id="vortex-stats"></div>
-                </section>
-
-                <section class="panel" id="vortex-sample-reveals" aria-label="Sample reveals">
-                </section>
-
-                <section class="panel" aria-label="Creature comparison">
-                    <div class="tx-h"><span>DISCOVER SWEEP · BY CREATURE CMC</span><span class="tx-h-r">pool, free MV, chain %</span></div>
-                    <div class="table-wrapper" id="vortex-comparisonTable"></div>
-                </section>
-            </div>
-        </div>
-
-        <!-- LAND DROPS TAB -->
-        <div id="lands-tab" class="tab-content" role="tabpanel" aria-labelledby="lands">
-            <h1>Land Drop Calculator</h1>
-            <p class="card-text">"Will I make my land drops?"</p>
-
-            <div class="main-grid single-column">
-                <div class="panel-row">
-                <section class="panel" aria-label="Opening hand distribution">
-                    <h2>Opening Hand Land Distribution</h2>
-                    <div class="chart-container" style="height: 300px;">
-                        <canvas id="lands-opening-chart" role="img" aria-label="Opening hand lands chart"></canvas>
-                    </div>
-                    <div class="chart-legend">
-                        <span class="legend-item"><span class="legend-color" style="background: #55c97f;"></span> Probability of Drawing X Lands</span>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Land drop probability">
-                    <h2>Land Drop Probability by Turn</h2>
-                    <div class="chart-container" style="height: 300px;">
-                        <canvas id="lands-landdrop-chart" role="img" aria-label="Land drop probability chart"></canvas>
-                    </div>
-                    <div class="chart-legend">
-                        <span class="legend-item"><span class="legend-color" style="background: #55c97f;"></span> Make Land Drop</span>
-                        <span class="legend-item"><span class="legend-color" style="background: #e8635c;"></span> Miss Land Drop</span>
-                    </div>
-                </section>
-                </div>
-
-                <section class="panel" aria-label="Statistics">
-                    <h2>Land Drop Statistics</h2>
-                    <div class="table-wrapper" id="lands-stats-container">
-                        <table class="comparison-table" id="lands-statsTable">
-                        </table>
-                    </div>
-                </section>
-
-                <section class="panel" id="lands-sample-reveals" aria-label="Sample reveals">
-                </section>
-            </div>
-        </div>
-
-        <!-- RASHMI TAB -->
-        <div id="rashmi-tab" class="tab-content" role="tabpanel" aria-labelledby="rashmi">
-            <h1>Rashmi, Eternities Crafter Calculator</h1>
-            <p class="card-text">"The simic phyrexian arena"</p>
-
-            <div class="main-grid single-column">
-                <section class="panel panel-full" id="rashmi-import-warning" aria-label="Import required notice">
-                    <h2>Import Required</h2>
-                    <p style="color: var(--text-secondary); margin: 0;">
-                        This calculator requires decklist import to work. Please use the
-                        <strong style="color: var(--text-light);">📚 Deck Configuration</strong> panel above to import your decklist.
-                        The import will automatically detect CMC distribution for your non-land spells.
-                    </p>
-                </section>
-
-                <section class="panel panel-config" id="rashmi-stats" aria-label="Configuration">
-                    <h2>Calculation Settings</h2>
-                    <div class="input-group">
-                        <label for="rashmi-cmcValue">CMC of spell you're casting</label>
-                        <div class="x-slider-row">
-                            <input type="range" id="rashmi-cmcSlider" value="5" min="1" max="10" step="1" aria-label="Cast CMC slider">
-                            <input type="number" id="rashmi-cmcValue" value="5" min="1" max="15" class="x-number" aria-label="Cast CMC number input">
-                        </div>
-                    </div>
-                    <div class="input-group" style="margin-top: var(--spacing-md);">
-                        <label style="display: flex; align-items: center; gap: var(--spacing-sm); cursor: pointer; user-select: none;">
-                            <input type="checkbox" id="rashmi-exclude-x" style="width: auto; cursor: pointer;">
-                            <span>Exclude X spells from "free spell" calculation</span>
-                        </label>
-                        <small style="color: var(--text-dim); display: block; margin-top: 4px; margin-left: 24px;">
-                            When revealed from library, X=0, so X spells can't be cast for free with Rashmi
-                        </small>
-                    </div>
-                </section>
-                
-                <section class="panel" id="rashmi-hero" aria-label="Current cast analysis"></section>
-
-                <section class="panel" aria-label="Probability chart">
-                    <h2>Free Spell Probability vs Cast CMC</h2>
-                    <div class="chart-container" style="height: 320px;">
-                        <canvas id="rashmi-chart" role="img" aria-label="Rashmi probability chart"></canvas>
-                    </div>
-                    <div class="chart-legend">
-                        <span class="legend-item"><span class="legend-color" style="background: #55c97f;"></span> P(Free Spell) %</span>
-                        <span class="legend-item"><span class="legend-color" style="background: #6f9dc4;"></span> Expected Free CMC</span>
-                    </div>
-                </section>
-
-                <section class="panel" id="rashmi-breakdown" aria-label="CMC distribution">
-                </section>
-
-                <section class="panel" id="rashmi-sample-reveals" aria-label="Sample reveals">
-                </section>
-
-
-                <section class="panel" aria-label="CMC comparison">
-                    <div class="tx-h"><span>CAST CMC SWEEP · STEP RESPONSE</span><span class="tx-h-r">P(free), Δ vs prev</span></div>
-                    <div class="table-wrapper" id="rashmi-comparisonTable"></div>
-                </section>
-            </div>
-        </div>
-
-        <!-- LUMRA TAB -->
-        <div id="lumra-tab" class="tab-content" role="tabpanel" aria-labelledby="lumra">
-            <h1>Lumra, Bellow of the Woods</h1>
-            <p class="card-text">"Mill 4, return all lands. How big is the bear?"</p>
-
-            <div class="main-grid single-column">
-                <section class="panel panel-config" aria-label="Configuration">
-                    <h2>Calculation Settings</h2>
-                    <div class="input-group">
-                        <label for="lumra-gyLands">Other lands already in Graveyard</label>
-                        <div class="x-slider-row">
-                            <input type="range" id="lumra-gySlider" value="3" min="0" max="30" step="1" aria-label="Lands in Graveyard slider">
-                            <input type="number" id="lumra-gyLands" value="3" min="0" max="100" class="x-number" aria-label="Lands in Graveyard number input">
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label for="lumra-multiplier">Triggers (Panharmonicon/Roaming Throne)</label>
-                        <div class="x-slider-row">
-                            <input type="range" id="lumra-multSlider" value="1" min="1" max="5" step="1" aria-label="Trigger multiplier slider">
-                            <input type="number" id="lumra-multiplier" value="1" min="1" max="10" class="x-number" aria-label="Trigger multiplier number input">
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label for="lumra-fetchLands">Fetch lands in deck</label>
-                        <input type="number" id="lumra-fetchLands" value="0" min="0" max="100" step="1" inputmode="numeric">
-                        <small>Auto-detected on deck import; you can override the count.</small>
-                    </div>
-                    <div class="input-group">
-                        <label for="lumra-turn">Turn Lumra enters</label>
-                        <div class="x-slider-row">
-                            <input type="range" id="lumra-turnSlider" value="6" min="1" max="20" step="1" aria-label="Lumra cast turn slider">
-                            <input type="number" id="lumra-turn" value="6" min="1" max="30" class="x-number" aria-label="Lumra cast turn number input">
-                        </div>
-                        <small>Assumes a seven-card opener, one draw each turn, and that fetches seen can be cracked.</small>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Lands Milled Chart">
-                    <h2 id="lumra-chart-header">Lands Milled Distribution (Mill 4)</h2>
-                    <div class="chart-container" style="height: 300px;">
-                        <canvas id="lumra-chart" role="img" aria-label="Lumra lands milled chart"></canvas>
-                    </div>
-                    <div class="chart-legend">
-                        <span class="legend-item"><span class="legend-color" style="background: #8b9c78;"></span> Probability</span>
-                    </div>
-                </section>
-
-                <section class="panel" id="lumra-stats" aria-label="Lumra Analysis">
-                    <!-- Analysis content will be inserted here -->
-                </section>
-
-                <section class="panel" id="lumra-sample-reveals" aria-label="Sample reveals">
-                </section>
-            </div>
-        </div>
-
-        <!-- MULLIGAN TAB -->
-        <div id="mulligan-tab" class="tab-content" role="tabpanel" aria-labelledby="mulligan">
-            <h1>Mulligan Strategy Calculator</h1>
-            <p class="card-text">"Should I keep this hand?"</p>
-
-            <div class="main-grid single-column">
-                <section class="panel panel-config" aria-label="Configuration">
-                    <h2>Card Type Requirements</h2>
-                    <p style="margin-bottom: 16px;">
-                        Define what you need in your opening hand. Add card types (e.g. Lands, Creatures) and set your requirements.
-                    </p>
-                    
-                    <div class="tx-field-row">
-                        <label for="mull-deck-size">Deck size</label>
-                        <input type="number" id="mull-deck-size" value="99" min="1" max="200" style="width: 80px;">
-                        <small>Overrides global deck config</small>
-                    </div>
-
-                    <div id="mull-types-container">
-                        <!-- Dynamic type rows will be inserted here -->
-                    </div>
-
-                    <button id="mull-add-type" class="import-btn" style="margin-top: 12px; width: 100%;">
-                        + Add Another Card Type
+        </aside>
+        <div class="scrim" id="scrim" hidden></div>
+
+        <!-- ============ MAIN COLUMN ============ -->
+        <div class="main-col">
+            <header class="topbar" id="topbar">
+                <button class="icon-btn nav-toggle" id="nav-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+                </button>
+                <nav class="crumbs" aria-label="Breadcrumb">
+                    <span class="crumb-group" id="crumb-group"></span>
+                    <svg class="crumb-sep" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    <span class="crumb-page" id="crumb-page" aria-current="page"></span>
+                </nav>
+                <div class="topbar-actions">
+                    <button class="search-btn" id="search-btn" type="button" aria-haspopup="dialog" aria-controls="palette">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+                        <span class="search-btn-label">Search calculators &amp; cards</span>
+                        <kbd class="search-btn-kbd" id="search-kbd">Ctrl K</kbd>
                     </button>
-
-                    <div style="margin-top: 24px; border-top: 1px solid var(--tx-rule); padding-top: 16px;">
-                         <h3>Strategy Settings</h3>
-
-                         <div class="input-group">
-                            <label>Mulligan Strategy Preset</label>
-                            <div class="preset-buttons">
-                                <button class="preset-btn" data-preset="casual">Casual</button>
-                                <button class="preset-btn active" data-preset="balanced">Balanced</button>
-                                <button class="preset-btn" data-preset="competitive">Competitive</button>
-                            </div>
-                        </div>
-
-                        <div class="input-group" style="margin-top: 16px;">
-                            <label for="mull-penalty">Mulligan Penalty (Risk Tolerance)</label>
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <input type="range" id="mull-penalty" value="20" min="0" max="100" step="1" style="flex: 1;">
-                                <span id="mull-penalty-display" style="min-width: 40px; text-align: right; color: var(--text-light);">20%</span>
-                            </div>
-                            <small id="mull-penalty-desc" style="color: var(--text-dim);">Standard penalty. Going down a card is bad.</small>
-                        </div>
-
-                        <div class="input-group" style="margin-top: 16px;">
-                            <label for="mull-threshold">Confidence Threshold</label>
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <input type="range" id="mull-threshold" value="75" min="0" max="100" step="1" style="flex: 1;">
-                                <span id="mull-threshold-display" style="min-width: 40px; text-align: right; color: var(--text-light);">75%</span>
-                            </div>
-                            <small id="mull-threshold-desc" style="color: var(--text-dim);">You want a high chance to find your cards.</small>
-                        </div>
-
-                        <div class="input-group" style="margin-top: 16px; display: flex; flex-wrap: wrap; gap: 24px;">
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="mull-free" checked>
-                                <span>First Mulligan is Free</span>
-                            </label>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Strategy Summary">
-                    <h2>Strategy Summary</h2>
-                    <div id="mull-summary">
-                        <!-- Summary stats will be inserted here -->
-                    </div>
-                </section>
-
-                <section class="panel" id="mulligan-sample-reveals" aria-label="Sample reveals">
-                </section>
-
-                <section class="panel" aria-label="Turn-by-Turn Probability">
-                    <h2>Probability by Turn</h2>
-                    <div class="chart-container" style="height: 300px;">
-                        <canvas id="mull-turn-chart" role="img" aria-label="Turn probability chart"></canvas>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Strategy Table">
-                    <h2>Hand Decision Table</h2>
-                    <div class="table-wrapper">
-                        <table class="comparison-table" id="mull-strategyTable">
-                        </table>
-                    </div>
-                </section>
-            </div>
-        </div>
-
-
-        <!-- CHIMIL TAB -->
-        <div id="chimil-tab" class="tab-content" role="tabpanel" aria-labelledby="chimil">
-            <h1>Chimil, the Inner Sun</h1>
-            <p class="card-text">"At the beginning of your end step, discover 5."</p>
-
-            <div class="main-grid single-column">
-                <section class="panel panel-config" aria-label="Configuration">
-                    <div class="tx-h"><span>Turns with Chimil out</span><span class="tx-h-r">end steps</span></div>
-                    <div style="padding:16px;">
-                        <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:10px;">
-                            <span id="chimil-turns-display" style="font-size:var(--t-xxl); font-weight:700; color:var(--tx-bright); line-height:1; font-feature-settings:'tnum' 1;">10</span>
-                            <span style="color:var(--tx-dim); font-size:var(--t-xs);">end steps it survives</span>
-                        </div>
-                        <input class="tx-slider" type="range" id="chimil-turnsSlider" value="10" min="1" max="20" step="1" aria-label="End steps with Chimil on the battlefield">
-                        <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:var(--t-micro); color:var(--tx-dim);">
-                            <span>1</span><span>10</span><span>20</span>
-                        </div>
-                        <input type="number" id="chimil-turnsValue" value="10" min="1" max="20" style="position:absolute; opacity:0; pointer-events:none; width:1px; height:1px;" aria-label="End steps" tabindex="-1">
-                    </div>
-
-                    <div class="tx-h"><span>Your deck</span><span class="tx-h-r">as built</span></div>
-                    <div style="padding:16px;">
-                        <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:4px;">
-                            <span id="chimil-share-display" style="font-size:var(--t-xl); font-weight:700; color:var(--tx-bright); line-height:1; font-feature-settings:'tnum' 1;">—</span>
-                            <span style="color:var(--tx-dim); font-size:var(--t-xs);">of the library is eligible</span>
-                        </div>
-                        <div style="color:var(--tx-dim); font-size:var(--t-xs);">Everything below is computed from the decklist exactly as imported.</div>
-                    </div>
-
-                    <div class="tx-h"><span>Eligible pool</span><span class="tx-h-r">MV &le; 5, nonland</span></div>
-                    <div style="padding:16px; font-size:var(--t-xs); color:var(--tx-mid); line-height:1.55;">
-                        <div style="margin-bottom:8px;">Discover hits <span id="chimil-pool-display" style="color:var(--tx-bright);">—</span> cards.</div>
-                        <div style="color:var(--tx-dim); font-size:var(--t-micro);">Lands and spells of mana value 6 or more are exiled and put on the bottom — they cost you dig, not value. Closed-form, no simulation.</div>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Chimil analysis">
-                    <div class="tx-h"><span>Per end step</span><span class="tx-h-r">expected value</span></div>
-                    <div id="chimil-hero"></div>
-                    <div id="chimil-fit"></div>
-                    <div id="chimil-recommendation"></div>
-                </section>
-
-                <section class="panel" aria-label="Value over time chart">
-                    <div class="tx-h"><span>Value accumulated</span><span class="tx-h-r">expected, per end step</span></div>
-                    <div class="chart-container" style="height: 300px;">
-                        <canvas id="chimil-chart" role="img" aria-label="Chimil cumulative value chart"></canvas>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Discover distribution">
-                    <div id="chimil-distribution"></div>
-                </section>
-
-                <section class="panel" id="chimil-sample-reveals" aria-label="Sample reveals">
-                </section>
-
-                <section class="panel" aria-label="Turn sweep">
-                    <div class="tx-h"><span>Turn sweep</span><span class="tx-h-r">★ marks the payback turn</span></div>
-                    <div id="chimil-sweepTable"></div>
-                </section>
-            </div>
-        </div>
-
-        <!-- WILD PAIR TAB -->
-        <div id="wildpair-tab" class="tab-content active" role="tabpanel" aria-labelledby="wildpair">
-            <h1>Wild Pair</h1>
-            <p class="card-text">"Whenever a creature enters, if you cast it from your hand, you may search your library for a creature card with the same total power and toughness, put it onto the battlefield, then shuffle."</p>
-
-            <div class="main-grid single-column">
-                <section class="panel panel-config" aria-label="Configuration">
-                    <div class="tx-h"><span>Total power + toughness</span><span class="tx-h-r">the search key</span></div>
-                    <div style="padding:16px;">
-                        <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:4px;">
-                            <span id="wildpair-total-display" style="font-size:var(--t-display); font-weight:700; color:var(--tx-bright); line-height:1; letter-spacing:var(--track-display); font-feature-settings:'tnum' 1;">—</span>
-                            <span style="color:var(--tx-dim); font-size:var(--t-xs);">power + toughness</span>
-                        </div>
-                        <div id="wildpair-total-summary" style="color:var(--tx-mid); font-size:var(--t-xs); margin-bottom:12px; line-height:1.5;">—</div>
-                        <input class="tx-slider" type="range" id="wildpair-totalSlider" value="0" min="0" max="0" step="1" aria-label="Step through the totals in your deck">
-                        <div id="wildpair-total-scale" style="display:flex; justify-content:space-between; margin-top:4px; font-size:var(--t-micro); color:var(--tx-dim); font-feature-settings:'tnum' 1;">
-                            <span>&mdash;</span><span>&mdash;</span>
-                        </div>
-                        <div id="wildpair-total-stops" style="margin-top:6px; font-size:var(--t-micro); letter-spacing:var(--track-label); text-transform:uppercase; color:var(--tx-mid);"></div>
-                        <input type="number" id="wildpair-totalValue" value="0" min="0" max="40" style="position:absolute; opacity:0; pointer-events:none; width:1px; height:1px;" aria-label="Total power and toughness" tabindex="-1">
-                        <div style="color:var(--tx-dim); font-size:var(--t-micro); margin-top:10px; line-height:1.5;">Wild Pair matches on this number and nothing else. The slider steps through the totals your deck actually has &mdash; no empty stops. Clicking any group below moves it too.</div>
-                    </div>
-
-                    <div class="tx-h"><span>Your deck</span><span class="tx-h-r">as built</span></div>
-                    <div style="padding:16px; font-size:var(--t-xs); color:var(--tx-mid); line-height:1.55;">
-                        <div style="margin-bottom:6px;">Creatures that find something: <span id="wildpair-live-display" style="color:var(--tx-bright);">&mdash;</span></div>
-                        <div style="margin-bottom:8px;">Matched totals: <span id="wildpair-matched-display" style="color:var(--tx-bright);">&mdash;</span></div>
-                        <div style="color:var(--tx-dim); font-size:var(--t-micro);">A 5/5 and a 3/7 match; a 5/5 and a 5/6 never do. Creatures sharing a total are interchangeable &mdash; cast any one of them and you may search up any other.</div>
-                    </div>
-                </section>
-
-                <section class="panel" id="wildpair-group" aria-label="Search options at the selected total"></section>
-
-                <section class="panel" id="wildpair-groups" aria-label="All groups"></section>
-
-                <section class="panel" aria-label="Power and toughness spread">
-                    <div class="tx-h"><span>Total power + toughness spread</span><span class="tx-h-r">any column of two or more is live</span></div>
-                    <div class="chart-container" style="height: 300px;">
-                        <canvas id="wildpair-pt-chart" role="img" aria-label="Creature count by total power and toughness"></canvas>
-                    </div>
-                </section>
-
-                <section class="panel" aria-label="Wild Pair ceiling">
-                    <div class="tx-h"><span>Across the deck</span><span class="tx-h-r">per activation, exact from the decklist</span></div>
-                    <div id="wildpair-hero"></div>
-                    <div id="wildpair-fit"></div>
-                    <div id="wildpair-recommendation"></div>
-                    <div id="wildpair-datanote"></div>
-                </section>
-
-                <section class="panel" id="wildpair-pairings" aria-label="Available pairings"></section>
-
-                <section class="panel" aria-label="Pair ladder">
-                    <div class="tx-h"><span>Total ladder</span><span class="tx-h-r">&#9733; marks your deepest total</span></div>
-                    <div id="wildpair-sweepTable"></div>
-                </section>
-            </div>
-        </div>
-
-        <!-- HEAD TO HEAD TAB -->
-        <div id="versus-tab" class="tab-content" role="tabpanel" aria-labelledby="versus">
-            <h1>Head to Head</h1>
-            <p class="card-text">Two payoff engines, one deck. Which is worth more when you cast a creature &mdash; and at which point in the game?</p>
-
-            <div class="main-grid single-column">
-                <section class="panel panel-config" aria-label="Configuration">
-                    <div class="tx-h"><span>Engines</span><span class="tx-h-r">pick two</span></div>
-                    <div style="padding:16px;">
-                        <label for="versus-engine-a" style="display:block; font-size:var(--t-micro); letter-spacing:var(--track-label); text-transform:uppercase; color:var(--tx-dim); margin-bottom:5px;">Side A</label>
-                        <select id="versus-engine-a" class="vs-select" aria-label="First engine"></select>
-                        <div style="text-align:center; font-size:var(--t-micro); letter-spacing:var(--track-wide); color:var(--tx-dim); margin:10px 0;">VS</div>
-                        <label for="versus-engine-b" style="display:block; font-size:var(--t-micro); letter-spacing:var(--track-label); text-transform:uppercase; color:var(--tx-dim); margin-bottom:5px;">Side B</label>
-                        <select id="versus-engine-b" class="vs-select" aria-label="Second engine"></select>
-                    </div>
-
-                    <div class="tx-h"><span>Assumptions</span><span class="tx-h-r">how to read the deck</span></div>
-                    <div style="padding:16px;">
-                        <label style="display:flex; align-items:flex-start; gap:8px; font-size:var(--t-xs); color:var(--tx-mid); line-height:1.5; cursor:pointer;">
-                            <input type="checkbox" id="versus-star-power" style="margin-top:2px;">
-                            <span>Count <span style="color:var(--tx-bright);">*</span> power as 5 or greater</span>
-                        </label>
-                        <div style="color:var(--tx-dim); font-size:var(--t-micro); margin-top:8px; line-height:1.5;">A creature with a variable power box is 0 in the library but can be large on the stack. Off by default.</div>
-                    </div>
-
-                    <div class="tx-h"><span>This deck</span><span class="tx-h-r">as built</span></div>
-                    <div style="padding:16px; font-size:var(--t-xs); color:var(--tx-mid); line-height:1.55;">
-                        <div style="margin-bottom:6px;">Creature casts compared: <span id="versus-creatures-display" style="color:var(--tx-bright);">&mdash;</span></div>
-                        <div style="margin-bottom:8px;">Leader: <span id="versus-lead-display" style="color:var(--tx-bright);">&mdash;</span></div>
-                        <div style="color:var(--tx-dim); font-size:var(--t-micro);">Both are measured as free mana value off a single creature cast. They do not feed each other: Wild Pair never casts its creature, and a card cast off discover comes from exile, not hand.</div>
-                    </div>
-                </section>
-
-                <section class="panel" id="versus-scoreboard" aria-label="Scoreboard"></section>
-
-                <section class="panel" aria-label="Value by mana value">
-                    <div class="tx-h"><span>Value at each point in the game</span><span class="tx-h-r">by the mana value of the creature you cast</span></div>
-                    <div class="chart-container" style="height: 320px;">
-                        <canvas id="versus-curve-chart" role="img" aria-label="Expected free mana value by cast creature mana value"></canvas>
-                    </div>
-                    <div id="versus-recommendation"></div>
-                </section>
-
-                <section class="panel" id="versus-peaks" aria-label="Peaks"></section>
-
-                <section class="panel" aria-label="Creature by creature">
-                    <div class="tx-h"><span>Creature by creature</span><span class="tx-h-r">what each cast is worth to each engine</span></div>
-                    <div id="versus-table"></div>
-                </section>
-            </div>
-        </div>
-
-        <!-- MARA TAB -->
-        <div id="mara-tab" class="tab-content" role="tabpanel" aria-labelledby="mara">
-            <h1>Ensnared by the Mara Calculator</h1>
-            <p class="card-text">"Each opponent faces a villainous choice..."</p>
-
-            <div class="main-grid single-column">
-                <section class="panel" id="mara-results" aria-label="Choice analysis">
-                    <h2>Results</h2>
-                    <p style="color: var(--text-dim); text-align: center; padding: 20px;">
-                        Import at least one opponent's decklist to see analysis.
-                    </p>
-                </section>
-
-                <section class="panel" id="mara-sample-reveals" aria-label="Sample reveals">
-                    <h2>Sample Reveals</h2>
-                    <p style="color: var(--text-dim); text-align: center; padding: 20px;">
-                        Import opponent decklists to see sample simulations.
-                    </p>
-                </section>
-            </div>
-        </div>
-
-        <!-- DREAM HARVEST TAB -->
-        <div id="dreamharvest-tab" class="tab-content" role="tabpanel" aria-labelledby="dreamharvest">
-            <h1>Dream Harvest Calculator</h1>
-            <p class="card-text">"Each opponent exiles until total MV reaches 5 or greater..."</p>
-
-            <div class="main-grid single-column">
-                <section class="panel" id="dreamharvest-results" aria-label="Dream Harvest analysis">
-                    <h2>Results</h2>
-                    <p style="color: var(--text-dim); text-align: center; padding: 20px;">
-                        Import at least one opponent's decklist to see analysis.
-                    </p>
-                </section>
-
-                <section class="panel" id="dreamharvest-sample-reveals" aria-label="Sample reveals">
-                    <h2>Sample Reveals</h2>
-                    <p style="color: var(--text-dim); text-align: center; padding: 20px;">
-                        Import opponent decklists to see sample simulations.
-                    </p>
-                </section>
-            </div>
-        </div>
-
-        <!-- ABSTRACT PERFORMANCE TAB -->
-        <div id="abstract-tab" class="tab-content" role="tabpanel" aria-labelledby="abstract">
-            <div class="portent-grid">
-
-                <!-- LEFT RAIL: card info + CMC curve -->
-                <div class="portent-left">
-                    <div class="tx-h"><span>01 · CARD INFO</span><span class="tx-h-r">{5}{U} Sorcery</span></div>
-                    <div style="padding:16px; font-size:10px; color:var(--tx-mid); line-height:1.6;">
-                        <div style="margin-bottom:8px; color:var(--tx-text);">Exile the top <span style="color:var(--tx-amber);">four cards</span> face-down, then the top <span style="color:var(--tx-amber);">four cards</span> face-up.</div>
-                        <div style="margin-bottom:8px;">An opponent chooses one pile. Put it into your graveyard.</div>
-                        <div>Look at the other pile. You may <span style="color:var(--tx-green);">cast a spell for free</span>. Put the rest into your hand.</div>
-                    </div>
-
-                    <div class="tx-h"><span>02 · SCENARIOS</span></div>
-                    <div style="padding:14px 16px; font-size:10px; line-height:1.6;">
-                        <div style="margin-bottom:8px; display:flex; gap:8px; align-items:baseline;">
-                            <span style="color:var(--tx-green); letter-spacing:0.08em; font-size:9px;">BEST</span>
-                            <span style="color:var(--tx-mid);">Opponent always picks the worse pile for you (sends it to GY).</span>
-                        </div>
-                        <div style="margin-bottom:8px; display:flex; gap:8px; align-items:baseline;">
-                            <span style="color:var(--tx-amber); letter-spacing:0.08em; font-size:9px;">REALISTIC</span>
-                            <span style="color:var(--tx-mid);">Opponent sees face-up pile MV. Sends it to GY if above deck average.</span>
-                        </div>
-                        <div style="display:flex; gap:8px; align-items:baseline;">
-                            <span style="color:var(--tx-red); letter-spacing:0.08em; font-size:9px;">WORST</span>
-                            <span style="color:var(--tx-mid);">Opponent always picks the better pile for you (denies it).</span>
-                        </div>
-                    </div>
-
-                    <div class="tx-h"><span>03 · CMC CURVE</span><span class="tx-h-r" id="abstract-n-label">N=99</span></div>
-                    <div id="abstract-cmc-curve" style="padding:14px 16px;"></div>
+                    <button class="icon-btn" id="deck-btn" type="button" aria-label="Load a deck" data-tip="Load or switch deck (D)" aria-haspopup="dialog" aria-controls="deck-dialog">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3.5" width="11" height="15" rx="1.5"/><path d="M8.5 20.5h9a1.5 1.5 0 0 0 1.5-1.5V7"/></svg>
+                    </button>
+                    <button class="icon-btn" id="share-button" type="button" aria-label="Copy a share link" data-tip="Copy a link to this page and deck">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg>
+                    </button>
+                    <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch to light theme" data-tip="Light / dark (T)">
+                        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.5 12h-2M21.5 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4"/></svg>
+                        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/></svg>
+                    </button>
                 </div>
+            </header>
 
-                <!-- CENTER: hero stats + chart + breakdown -->
-                <div class="portent-center">
-                    <!-- Hero numerics -->
-                    <div class="portent-hero" id="abstract-hero">
-                        <div class="tx-stat">
-                            <div class="tx-stat-label">BEST CASE</div>
-                            <div class="tx-stat-value" id="abstract-hero-best" style="color:var(--tx-green);">—</div>
-                            <div class="tx-stat-sub">E[free cast MV]</div>
-                        </div>
-                        <div class="tx-stat">
-                            <div class="tx-stat-label">REALISTIC</div>
-                            <div class="tx-stat-value medium" id="abstract-hero-realistic" style="color:var(--tx-amber);">—</div>
-                            <div class="tx-stat-sub">partial-info opp</div>
-                        </div>
-                        <div class="tx-stat" style="border-right:none;">
-                            <div class="tx-stat-label">WORST CASE</div>
-                            <div class="tx-stat-value medium" id="abstract-hero-worst" style="color:var(--tx-red);">—</div>
-                            <div class="tx-stat-sub">E[free cast MV]</div>
-                        </div>
+            <!-- Opponent decklists — shown above the multiplayer calculators -->
+            <section class="opponents-bar" id="opponents-config" aria-label="Opponent decklists" hidden>
+                <div class="opponents-bar-head">
+                    <div>
+                        <h2 class="opponents-bar-title">Opponent decklists</h2>
+                        <p class="opponents-bar-sub">These calculators read your opponents’ libraries. Import up to three lists, or load the examples.</p>
                     </div>
-
-                    <!-- Chart -->
-                    <div class="tx-h">
-                        <span>04 · FREE CAST MV DISTRIBUTION</span>
-                        <span class="tx-h-r">
-                            <span style="color:var(--tx-green);">●</span> BEST &nbsp;
-                            <span style="color:var(--tx-amber);">●</span> REALISTIC &nbsp;
-                            <span style="color:var(--tx-red);">●</span> WORST
-                        </span>
-                    </div>
-                    <div class="chart-container" style="height:280px; padding:0;">
-                        <canvas id="abstract-chart" role="img" aria-label="Abstract Performance free cast MV distribution"></canvas>
-                    </div>
-
-                    <!-- MV breakdown table -->
-                    <div class="tx-h"><span>05 · MV BREAKDOWN</span><span class="tx-h-r">% of trials per scenario</span></div>
-                    <div id="abstract-breakdown" style="padding:14px 16px;"></div>
-                </div>
-
-                <!-- RIGHT RAIL: sample piles -->
-                <div class="portent-right">
-                    <div class="tx-h">
-                        <span>06 · SAMPLE PILES</span>
-                        <span class="tx-h-r" id="abstract-reshuffle-btn" style="cursor:pointer;">[ ↻ RESHUFFLE ]</span>
-                    </div>
-                    <div id="abstract-samples">
-                        <div style="padding:20px 16px; color:var(--tx-dim); font-size:10px;">
-                            Import a decklist to see sample piles.
-                        </div>
+                    <div class="opponents-bar-actions">
+                        <button class="btn btn-ghost" id="load-example-opponents-btn" type="button">Load example opponents</button>
+                        <button class="btn btn-ghost" id="opponents-toggle" type="button" aria-expanded="true" aria-controls="opponents-body">Hide</button>
                     </div>
                 </div>
-
-            </div><!-- end portent-grid -->
-        </div>
-
-        <!-- MIND'S DILATION TAB -->
-        <div id="mindsdilation-tab" class="tab-content" role="tabpanel" aria-labelledby="mindsdilation">
-            <div class="portent-grid">
-
-                <!-- LEFT RAIL: card info + Sixth Doctor toggle + per-deck breakdown -->
-                <div class="portent-left">
-                    <div class="tx-h"><span>01 · CARD INFO</span><span class="tx-h-r">{5}{U}{U} Enchantment</span></div>
-                    <div style="padding:16px; font-size:10px; color:var(--tx-mid); line-height:1.6;">
-                        <div style="margin-bottom:8px; color:var(--tx-text);">Whenever an opponent casts their <span style="color:var(--tx-amber);">first spell each turn</span>, that player exiles the top card of their library.</div>
-                        <div>If it's a <span style="color:var(--tx-green);">nonland card</span>, you may cast it without paying its mana cost.</div>
-                    </div>
-
-                    <div class="tx-h"><span>02 · SIXTH DOCTOR</span><span class="tx-h-r">modifier</span></div>
-                    <div style="padding:14px 16px; border-bottom:1px solid var(--tx-rule);">
-                        <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:11px; color:var(--tx-text);">
-                            <input type="checkbox" id="mnds-sixth-doctor" style="width:14px; height:14px; cursor:pointer; accent-color:var(--tx-amber);">
-                            <span>The Sixth Doctor is in play</span>
-                        </label>
-                        <div style="margin-top:6px; font-size:9px; color:var(--tx-dim); padding-left:24px;">Doubles effective MV of historic spells (artifact, legendary, saga). Marked ★ in exile events.</div>
-                    </div>
-
-                    <div class="tx-h"><span>03 · DECK BREAKDOWN</span></div>
-                    <div id="mnds-left-content">
-                        <div style="padding:20px 16px; color:var(--tx-dim); font-size:10px;">Import opponent decklists to see breakdown.</div>
-                    </div>
+                <div class="opponents-bar-body panel-content" id="opponents-body">
+                    <div id="shared-opponent-tabs" class="opponent-tabs"></div>
+                    <div id="shared-opponent-import"></div>
                 </div>
+            </section>
 
-                <!-- CENTER: hero stats + per-opponent table + MV distribution chart -->
-                <div class="portent-center">
-                    <div class="portent-hero" id="mnds-hero">
-                        <div class="tx-stat">
-                            <div class="tx-stat-label">E[MV / ROUND]</div>
-                            <div class="tx-stat-value" style="color:var(--tx-blue);">—</div>
-                            <div class="tx-stat-sub">all opponents</div>
-                        </div>
-                        <div class="tx-stat">
-                            <div class="tx-stat-label">E[MV / 10T]</div>
-                            <div class="tx-stat-value medium" style="color:var(--tx-green);">—</div>
-                            <div class="tx-stat-sub">projected 10 turns</div>
-                        </div>
-                        <div class="tx-stat" style="border-right:none;">
-                            <div class="tx-stat-label">SIXTH DOCTOR</div>
-                            <div class="tx-stat-value medium" style="color:var(--tx-dim);">OFF</div>
-                            <div class="tx-stat-sub">historic ×2 MV</div>
-                        </div>
-                    </div>
+            <main class="calculator-content" id="main" tabindex="-1">
+                <!-- Calculator pages are created by the router on first visit -->
+            </main>
 
-                    <div class="tx-h"><span>04 · OPPONENT BREAKDOWN</span><span class="tx-h-r">per trigger EV</span></div>
-                    <div id="mnds-table" style="padding:14px 16px;">
-                        <div style="color:var(--tx-dim); font-size:10px; text-align:center; padding:20px 0;">Import opponent decklists to see analysis.</div>
-                    </div>
-
-                    <div class="tx-h">
-                        <span>05 · NONLAND MV DISTRIBUTION</span>
-                        <span class="tx-h-r">% of cards per MV</span>
-                    </div>
-                    <div class="chart-container" style="height:260px; padding:0;">
-                        <canvas id="mnds-chart" role="img" aria-label="Mind's Dilation MV distribution chart"></canvas>
-                    </div>
-                </div>
-
-                <!-- RIGHT RAIL: sample exile events -->
-                <div class="portent-right">
-                    <div class="tx-h">
-                        <span>06 · SAMPLE EXILE EVENTS</span>
-                        <span class="tx-h-r" id="mnds-resample-btn" style="cursor:pointer;">[ ↻ RESAMPLE ]</span>
-                    </div>
-                    <div id="mnds-samples">
-                        <div style="padding:20px 16px; color:var(--tx-dim); font-size:10px;">Import opponent decklists to see sample exile events.</div>
-                    </div>
-                </div>
-
-            </div><!-- end portent-grid -->
+            <footer class="app-footer">
+                <span>Card data and images from <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>. Deck Oracle is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. Not approved or endorsed by Wizards.</span>
+            </footer>
         </div>
-
-        </main><!-- End calculator-content -->
-
-        <!-- TERMINAL FOOTER -->
-        <footer class="tx-footer" id="tx-footer">
-            <span><kbd>←</kbd><kbd>→</kbd> switch calculator</span>
-            <span><kbd>F</kbd> fetch deck</span>
-            <span><kbd>P</kbd> paste deck</span>
-            <span class="tx-footer-right">
-                <button id="share-button" class="tx-footer-btn" title="Copy a link to this calculator and deck">Copy share link</button>
-                <span class="tx-footer-ver">v2.12.0</span>
-            </span>
-        </footer>
-
-        <!-- Hidden legacy buttons kept for JS -->
-        <div style="display:none;">
-            <button id="install-button"></button>
-        </div>
-
     </div>
 
-    <!-- Load Chart.js on demand -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- LZ-String for URL compression -->
-    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
+    <!-- ============ DECK DIALOG ============ -->
+    <dialog class="dialog deck-dialog" id="deck-dialog" aria-labelledby="deck-dialog-title">
+        <div class="dialog-head">
+            <div>
+                <h2 class="dialog-title" id="deck-dialog-title">Load a deck</h2>
+                <p class="dialog-sub">Every calculator reads this deck. Imports are saved in this browser so you can switch back any time.</p>
+            </div>
+            <button class="icon-btn" type="button" data-close-dialog aria-label="Close">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+        </div>
 
-    <!-- Main application - use modules -->
+        <div class="seg" role="tablist" aria-label="Import method">
+            <button class="seg-btn active" role="tab" type="button" aria-selected="true" aria-controls="deck-pane-link" id="deck-tab-link" data-pane="link">From a link</button>
+            <button class="seg-btn" role="tab" type="button" aria-selected="false" aria-controls="deck-pane-paste" id="deck-tab-paste" data-pane="paste" tabindex="-1">Paste a list</button>
+            <button class="seg-btn" role="tab" type="button" aria-selected="false" aria-controls="deck-pane-saved" id="deck-tab-saved" data-pane="saved" tabindex="-1">Saved decks <span class="seg-count" id="saved-count"></span></button>
+            <button class="seg-btn" role="tab" type="button" aria-selected="false" aria-controls="deck-pane-manual" id="deck-tab-manual" data-pane="manual" tabindex="-1">By the numbers</button>
+        </div>
+
+        <div class="dialog-body">
+            <section class="deck-pane active" id="deck-pane-link" role="tabpanel" aria-labelledby="deck-tab-link">
+                <label class="field-label" for="moxfield-input">Moxfield or Archidekt deck URL</label>
+                <div class="field-row">
+                    <input class="field" id="moxfield-input" type="url" inputmode="url" placeholder="https://moxfield.com/decks/…" autocomplete="off" spellcheck="false">
+                    <button class="btn btn-primary" id="moxfield-import-btn" type="button">Import</button>
+                </div>
+                <p class="field-hint">Public decks only. Commander, 60-card and 40-card lists all work — the format is detected automatically.</p>
+                <div class="example-decks">
+                    <div class="field-label">Or try an example</div>
+                    <div class="example-list" id="example-decks"></div>
+                </div>
+            </section>
+
+            <section class="deck-pane" id="deck-pane-paste" role="tabpanel" aria-labelledby="deck-tab-paste" hidden>
+                <label class="field-label" for="decklist-input">Decklist</label>
+                <textarea class="field field-area" id="decklist-input" rows="10" spellcheck="false" placeholder="1 Sol Ring&#10;1 Cultivate&#10;4 Lightning Bolt&#10;36 Forest&#10;&#10;Most export formats work — MTGO, Arena, Moxfield and plain lists."></textarea>
+                <div class="field-row field-row-end">
+                    <p class="field-hint">Card data comes from Scryfall. A “Sideboard” section is ignored.</p>
+                    <button class="btn btn-primary" id="import-btn" type="button">Import list</button>
+                </div>
+            </section>
+
+            <section class="deck-pane" id="deck-pane-saved" role="tabpanel" aria-labelledby="deck-tab-saved" hidden>
+                <ul class="saved-decks" id="saved-decks" aria-label="Saved decks"></ul>
+            </section>
+
+            <section class="deck-pane" id="deck-pane-manual" role="tabpanel" aria-labelledby="deck-tab-manual" hidden>
+                <p class="field-hint">No list handy? Enter how many of each card type the deck runs. Count a dual-typed card (an artifact creature) under each of its types. Calculators that need card names — Wild Pair, Head to Head, Mana Base — work best with an imported list.</p>
+                <div class="type-grid" id="deck-config">
+                    <div class="type-input"><label for="deck-creatures">Creatures</label><input type="number" id="deck-creatures" value="25" min="0" inputmode="numeric"></div>
+                    <div class="type-input"><label for="deck-instants">Instants</label><input type="number" id="deck-instants" value="8" min="0" inputmode="numeric"></div>
+                    <div class="type-input"><label for="deck-sorceries">Sorceries</label><input type="number" id="deck-sorceries" value="6" min="0" inputmode="numeric"></div>
+                    <div class="type-input"><label for="deck-artifacts">Artifacts</label><input type="number" id="deck-artifacts" value="4" min="0" inputmode="numeric"></div>
+                    <div class="type-input"><label for="deck-enchantments">Enchantments</label><input type="number" id="deck-enchantments" value="3" min="0" inputmode="numeric"></div>
+                    <div class="type-input"><label for="deck-planeswalkers">Planeswalkers</label><input type="number" id="deck-planeswalkers" value="2" min="0" inputmode="numeric"></div>
+                    <div class="type-input"><label for="deck-lands">Lands</label><input type="number" id="deck-lands" value="32" min="0" inputmode="numeric"></div>
+                    <div class="type-input"><label for="deck-battles">Battles</label><input type="number" id="deck-battles" value="0" min="0" inputmode="numeric"></div>
+                </div>
+                <div class="deck-total">Library size: <strong id="deck-total">80</strong></div>
+            </section>
+        </div>
+
+        <div class="dialog-foot">
+            <div class="import-progress" id="import-progress" aria-hidden="true"><div class="import-progress-bar" id="import-progress-bar"></div></div>
+            <div id="import-status" class="import-status" role="status" aria-live="polite"></div>
+        </div>
+    </dialog>
+
+    <!-- ============ COMMAND PALETTE ============ -->
+    <dialog class="dialog palette" id="palette" aria-label="Search">
+        <div class="palette-input-row">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+            <input class="palette-input" id="palette-input" type="text" role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" placeholder="Search calculators, cards in your deck, or actions…" autocomplete="off" spellcheck="false">
+            <kbd>Esc</kbd>
+        </div>
+        <ul class="palette-list" id="palette-list" role="listbox" aria-label="Results"></ul>
+        <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
+    </dialog>
+
+    <!-- ============ SHORTCUTS ============ -->
+    <dialog class="dialog shortcuts" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+        <div class="dialog-head">
+            <h2 class="dialog-title" id="shortcuts-title">Keyboard shortcuts</h2>
+            <button class="icon-btn" type="button" data-close-dialog aria-label="Close">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+        </div>
+        <dl class="shortcut-list">
+            <div><dt><kbd>Ctrl</kbd> <kbd>K</kbd> or <kbd>/</kbd></dt><dd>Search calculators, cards and actions</dd></div>
+            <div><dt><kbd>D</kbd></dt><dd>Load or switch deck</dd></div>
+            <div><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Previous / next calculator</dd></div>
+            <div><dt><kbd>O</kbd></dt><dd>Go to the deck overview</dd></div>
+            <div><dt><kbd>H</kbd></dt><dd>How this calculator works</dd></div>
+            <div><dt><kbd>T</kbd></dt><dd>Light / dark theme</dd></div>
+            <div><dt><kbd>?</kbd></dt><dd>This list</dd></div>
+        </dl>
+    </dialog>
+
+    <!-- ============ GUIDE DRAWER ============ -->
+    <aside class="drawer" id="guide-drawer" aria-labelledby="guide-title" hidden>
+        <div class="drawer-head">
+            <div>
+                <div class="drawer-eyebrow">How it works</div>
+                <h2 class="drawer-title" id="guide-title"></h2>
+            </div>
+            <button class="icon-btn" type="button" id="guide-close" aria-label="Close guide">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+            </button>
+        </div>
+        <div class="drawer-body" id="guide-body"></div>
+    </aside>
+
+    <!-- Floating layers -->
+    <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+    <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+    <div class="card-preview" id="card-preview" aria-hidden="true" hidden><img alt="" decoding="async"></div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
     <script type="module" src="js/main.js"></script>
 </body>
 </html>

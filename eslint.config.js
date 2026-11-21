@@ -56,6 +56,7 @@ export default [
         files: [
             'eslint.config.js',
             'playwright.config.js',
+            'scripts/**/*.mjs',
             'tests/**/*.node.test.js',
             'tests/e2e/**/*.js'
         ],
@@ -74,9 +75,20 @@ export default [
             'eslint.config.js',
             'playwright.config.js',
             'tests/e2e/**/*.js',
+            'scripts/**/*.mjs',
             'js/main.js',
+            'js/shell/**/*.js',
+            'js/data/**/*.js',
+            'js/calculators/overview.js',
             'js/utils/calculatorBase.js',
-            'js/utils/calculatorRegistry.js'
+            'js/utils/calculatorRegistry.js',
+            'js/utils/cardTags.js',
+            'js/utils/deckConfig.js',
+            'js/utils/deckLibrary.js',
+            'js/utils/deckStats.js',
+            'js/utils/format.js',
+            'js/utils/mana.js',
+            'js/utils/share.js'
         ],
         rules: {
             'no-unused-vars': strictUnusedVars

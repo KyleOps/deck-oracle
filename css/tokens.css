@@ -1,0 +1,268 @@
+/* ==================== DESIGN TOKENS ====================
+   Every colour, size and radius in the app comes from here. Two themes share
+   one set of names; components never know which theme is active.
+
+   Canvas charts read these same tokens at runtime (applyChartTheme in
+   js/utils/chartHelpers.js), so this file is the single source of truth for
+   both the DOM and Chart.js. */
+
+:root {
+    /* ---- SUBSTRATE (dark) ----
+       Near-black with a faint cool-green cast. Each step is a real surface
+       level: page → panel → raised (popovers, dialogs). */
+    --tx-void:      #070908;
+    --tx-bg:        #0b0d0c;
+    --tx-panel:     #111413;
+    --tx-panel-alt: #161a18;
+    --tx-row-hi:    #1a1f1c;
+    --surface-raised: #181c1a;
+    --tx-rule:      #212623;
+    --tx-rule-hi:   #303833;
+
+    /* ---- INK ---- all body tones clear WCAG AA (4.5:1) on --tx-panel */
+    --tx-dim:       #87928c;
+    --tx-mid:       #a0a9a4;
+    --tx-text:      #d6dcd8;
+    --tx-bright:    #f2f5f3;
+
+    /* ---- ACCENT ----
+       ONE brand accent: the active page, the focus ring, the primary action,
+       the recommended row. Nothing decorative uses it, so it always means
+       "look here" / "this is interactive". */
+    --tx-accent:      #f0a92c;
+    --tx-accent-dim:  #7a5716;
+    --accent-soft:    rgba(240, 169, 44, 0.12);
+    --accent-ink:     #1a1205;   /* text on an accent fill */
+
+    /* ---- MEANING ----
+       Reserved for what numbers MEAN (likely / borderline / unlikely). Never
+       chrome, so colour always carries information. */
+    --tx-good:      #55c97f;
+    --tx-warn:      #e98a4a;
+    --tx-bad:       #ec6a62;
+    --tx-flat:      #7d8a92;
+    --good-soft:    rgba(85, 201, 127, 0.12);
+    --warn-soft:    rgba(233, 138, 74, 0.13);
+    --bad-soft:     rgba(236, 106, 98, 0.13);
+
+    /* ---- CHART SERIES (for multi-line charts) ---- */
+    --series-1: #55c97f;
+    --series-2: #f0a92c;
+    --series-3: #6f9dc4;
+    --series-4: #ec6a62;
+    --series-5: #a68ac4;
+    --series-6: #5fa8a0;
+
+    /* ---- MTG CARD TYPES ---- */
+    --type-creature:     #7ab77f;
+    --type-instant:      #6f9dc4;
+    --type-sorcery:      #a68ac4;
+    --type-artifact:     #9aa19d;
+    --type-enchantment:  #d2ac6b;
+    --type-planeswalker: #c4869e;
+    --type-battle:       #c67d72;
+    --type-land:         #8b9c78;
+
+    /* ---- MANA SYMBOLS ---- */
+    --mana-w: #f4ecd2;  --mana-w-ink: #3b3526;
+    --mana-u: #9ccbe8;  --mana-u-ink: #0f2b3d;
+    --mana-b: #b8aeb0;  --mana-b-ink: #1c1718;
+    --mana-r: #f0a487;  --mana-r-ink: #3d1408;
+    --mana-g: #9fd3a6;  --mana-g-ink: #0f2f15;
+    --mana-c: #cfd2cf;  --mana-c-ink: #262826;
+
+    /* ---- TYPE ----
+       Sans for reading, mono for numbers and data, serif only for card rules
+       text (a nod to the card frame). The scale is bimodal: a dense band for
+       data and a display band for the one number that answers the question. */
+    --font-body:    'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-display: var(--font-body);
+    --font-mono:    'Geist Mono', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+    --font-serif:   'Crimson Pro', 'Iowan Old Style', Georgia, serif;
+
+    --t-display: clamp(40px, 4.4vw, 62px);
+    --t-xxl:     32px;
+    --t-xl:      24px;
+    --t-lg:      18px;
+    --t-body:    14px;
+    --t-sm:      13px;
+    --t-xs:      12px;
+    --t-label:   11px;
+    --t-micro:   10.5px;
+
+    --track-display: -0.035em;
+    --track-tight:   -0.015em;
+    --track-label:    0.08em;
+    --track-wide:     0.12em;
+
+    /* ---- SHAPE ---- */
+    --radius-xs:   3px;
+    --radius-sm:   6px;
+    --radius-md:   9px;
+    --radius-lg:   12px;
+    --radius-xl:   16px;
+    --radius-2xl:  20px;
+    --radius-full: 999px;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+    --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.32);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+
+    /* ---- SPACE ---- */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 20px;
+    --spacing-2xl: 24px;
+    --spacing-3xl: 32px;
+    --page-pad: clamp(16px, 2.6vw, 36px);
+
+    /* ---- MOTION ---- */
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --transition-fast:   0.12s ease;
+    --transition-normal: 0.18s ease;
+    --transition-slow:   0.26s var(--ease-out);
+    --transition-bounce: 0.18s var(--ease-out);
+
+    /* ---- LAYERS ---- */
+    --z-base:     1;
+    --z-dropdown: 100;
+    --z-sticky:   200;
+    --z-drawer:   900;
+    --z-modal:    1000;
+    --z-toast:    2000;
+    --z-tooltip:  2100;
+
+    /* ---- LAYOUT ---- */
+    --sidebar-w: 268px;
+    --topbar-h:  56px;
+    --shell-max: 1680px;
+    --shell-gutter: 0px;
+
+    color-scheme: dark;
+
+    /* ==================== LEGACY ALIASES ====================
+       Older calculator markup and CSS use these names; they resolve onto the
+       tokens above so both generations theme together. */
+    --tx-green:     var(--tx-good);
+    --tx-green-dim: #2c5f40;
+    --tx-amber:     var(--tx-accent);
+    --tx-amber-dim: var(--tx-accent-dim);
+    --tx-red:       var(--tx-bad);
+    --tx-blue:      var(--tx-flat);
+
+    --primary:        var(--tx-accent);
+    --primary-light:  var(--tx-bright);
+    --primary-dark:   var(--tx-accent-dim);
+    --primary-glow:   transparent;
+    --secondary:      var(--tx-good);
+    --secondary-light: var(--tx-good);
+    --secondary-dark: var(--tx-green-dim);
+    --secondary-glow: transparent;
+
+    --bg-dark:       var(--tx-bg);
+    --bg-gradient-1: var(--tx-panel);
+    --bg-gradient-2: var(--tx-panel);
+    --bg-gradient-3: var(--tx-panel);
+
+    --glass-bg:           var(--tx-panel);
+    --glass-bg-hover:     var(--tx-panel-alt);
+    --glass-border:       var(--tx-rule);
+    --glass-border-hover: var(--tx-rule-hi);
+    --glass-highlight:    transparent;
+    --glass-shadow:       none;
+    --glass-blur:         0px;
+
+    --text-primary:   var(--tx-text);
+    --text-secondary: var(--tx-mid);
+    --text-muted:     var(--tx-dim);
+    --text-dim:       var(--tx-dim);
+    --text-light:     var(--tx-bright);
+
+    --success:       var(--tx-good);
+    --success-light: var(--tx-good);
+    --success-dark:  var(--tx-green-dim);
+    --warning:       var(--tx-warn);
+    --warning-light: var(--tx-warn);
+    --danger:        var(--tx-bad);
+    --danger-light:  var(--tx-bad);
+    --danger-dark:   var(--tx-bad);
+    --info:          var(--tx-flat);
+    --info-dark:     var(--tx-flat);
+
+    --input-bg:      var(--tx-bg);
+    --overlay-bg:    rgba(0, 0, 0, 0.6);
+    --panel-bg-alt:  var(--tx-panel-alt);
+
+    --accent:       var(--tx-accent);
+    --accent-light: var(--tx-bright);
+    --accent-glow:  transparent;
+    --theme-tint:   transparent;
+}
+
+/* ==================== LIGHT THEME ====================
+   Warm paper rather than clinical white. Every ink and meaning colour is
+   darkened to keep AA contrast on the light surfaces. */
+:root[data-theme="light"] {
+    --tx-void:      #e9e5da;
+    --tx-bg:        #f4f1ea;
+    --tx-panel:     #fffdf8;
+    --tx-panel-alt: #f6f2e9;
+    --tx-row-hi:    #f1ecdf;
+    --surface-raised: #ffffff;
+    --tx-rule:      #e4ded1;
+    --tx-rule-hi:   #cfc7b6;
+
+    --tx-dim:       #6b665b;
+    --tx-mid:       #57534a;
+    --tx-text:      #2a2823;
+    --tx-bright:    #12110e;
+
+    --tx-accent:     #8a5500;
+    --tx-accent-dim: #e9cf9f;
+    --accent-soft:   rgba(138, 85, 0, 0.09);
+    --accent-ink:    #ffffff;
+
+    --tx-good:  #146b3a;
+    --tx-warn:  #9a5414;
+    --tx-bad:   #b23a28;
+    --tx-flat:  #66727a;
+    --good-soft: rgba(20, 107, 58, 0.09);
+    --warn-soft: rgba(154, 84, 20, 0.09);
+    --bad-soft:  rgba(178, 58, 40, 0.09);
+    --tx-green-dim: #bfe0cb;
+
+    --series-1: #146b3a;
+    --series-2: #8a5500;
+    --series-3: #2f6f9f;
+    --series-4: #b23a28;
+    --series-5: #7457a3;
+    --series-6: #2c7f76;
+
+    /* Dark enough to read as TEXT on paper (AA), still distinct as fills. */
+    --type-creature:     #2f6f37;
+    --type-instant:      #2c5f8a;
+    --type-sorcery:      #654a8f;
+    --type-artifact:     #5f6762;
+    --type-enchantment:  #8a6418;
+    --type-planeswalker: #8f4567;
+    --type-battle:       #8f4232;
+    --type-land:         #52623f;
+
+    --mana-w: #f1e6c2;  --mana-u: #a9d2ec;  --mana-b: #bdb3b5;
+    --mana-r: #f2ad94;  --mana-g: #a8d7ae;  --mana-c: #d9dbd8;
+
+    --shadow-sm: 0 1px 2px rgba(60, 50, 30, 0.08);
+    --shadow-md: 0 6px 18px rgba(60, 50, 30, 0.1);
+    --shadow-lg: 0 24px 60px rgba(60, 50, 30, 0.18), 0 2px 8px rgba(60, 50, 30, 0.08);
+    --overlay-bg: rgba(30, 26, 18, 0.35);
+
+    color-scheme: light;
+}
+
+/* Smooth cross-fade while the theme switches (class added for ~300ms). */
+:root.theme-fade,
+:root.theme-fade * {
+    transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease, fill 0.28s ease !important;
+}

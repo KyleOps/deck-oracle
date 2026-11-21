@@ -1,389 +1,9 @@
 /* ==================== TERMINAL COMPONENTS ==================== */
 
-/* ==================== FOOTER ==================== */
-
-.tx-footer {
-    min-height: 34px;
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    padding: 8px 16px;
-    border-top: 1px solid var(--tx-rule);
-    font-size: var(--t-micro);
-    letter-spacing: 0.04em;
-    color: var(--tx-dim);
-    gap: 6px 20px;
-    background: var(--tx-bg);
-    position: sticky;
-    bottom: 0;
-    z-index: var(--z-sticky);
-    flex-shrink: 0;
-}
-
-.tx-footer kbd {
-    display: inline-block;
-    min-width: 16px;
-    padding: 1px 4px;
-    margin-right: 3px;
-    border: 1px solid var(--tx-rule-hi);
-    background: var(--tx-panel-alt);
-    color: var(--tx-mid);
-    font-family: inherit;
-    font-size: var(--t-micro);
-    text-align: center;
-    line-height: 1.4;
-}
-
-.tx-footer-btn {
-    background: none;
-    border: 0;
-    padding: 0;
-    font-family: inherit;
-    font-size: var(--t-micro);
-    color: var(--tx-mid);
-    cursor: pointer;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    text-decoration-color: var(--tx-rule-hi);
-    transition: color var(--transition-fast);
-}
-
-.tx-footer-btn:hover { color: var(--tx-accent); }
-
-.tx-footer-ver {
-    /* --tx-rule-hi is a border tone, far too dim to read as text (1.5:1). */
-    color: var(--tx-dim);
-    font-variant-numeric: tabular-nums;
-}
-
-.tx-footer .tx-footer-right {
-    margin-left: auto;
-}
-
-/* ==================== TERMINAL HEADER ==================== */
-
-.tx-header {
-    display: flex;
-    flex-direction: column;
-    border-bottom: 1px solid var(--tx-rule-hi);
-    background: var(--tx-bg);
-    position: sticky;
-    top: 0;
-    z-index: calc(var(--z-sticky) - 1);
-}
-
-/* Top row: wordmark | group buttons | deck pill */
-.tx-header-top {
-    display: grid;
-    /* Auto rails so the wordmark and deck pill size to their content rather than
-       overflowing a fixed column (the "◇ TERMINAL" tag used to collide). */
-    grid-template-columns: auto 1fr minmax(160px, auto);
-    height: 44px;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.tx-wordmark {
-    padding: 0 18px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border-right: 1px solid var(--tx-rule);
-    height: 100%;
-    white-space: nowrap;
-}
-
-.tx-wordmark .tx-deck {
-    font-size: var(--t-lg);
-    font-weight: 700;
-    letter-spacing: var(--track-tight);
-    color: var(--tx-bright);
-}
-
-.tx-wordmark .tx-oracle {
-    font-size: var(--t-lg);
-    font-weight: 300;
-    letter-spacing: var(--track-tight);
-    color: var(--tx-mid);
-}
-
-.tx-wordmark .tx-tag {
-    font-size: 9px;
-    color: var(--tx-dim);
-    margin-left: 4px;
-    letter-spacing: 0.08em;
-}
-
-/* Group selector buttons */
-.tx-group-row {
-    display: flex;
-    align-items: stretch;
-    height: 100%;
-    padding: 0 8px;
-    gap: 4px;
-    border-right: 1px solid var(--tx-rule);
-}
-
-.tx-group {
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    font-size: var(--t-label);
-    font-weight: 500;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    border: none;
-    border-bottom: 2px solid transparent;
-    background: none;
-    cursor: pointer;
-    transition: color 0.12s, background 0.12s, border-color 0.12s;
-    font-family: inherit;
-    white-space: nowrap;
-}
-
-.tx-group:hover {
-    color: var(--tx-text);
-    background: var(--tx-panel-alt);
-}
-
-.tx-group.active {
-    color: var(--tx-bright);
-    border-bottom-color: var(--tx-accent);
-}
-
-/* Bottom row: calculator tabs for current group */
-.tx-tab-row {
-    display: flex;
-    height: 40px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    width: 100%;
-}
-
-.tx-tab-row::-webkit-scrollbar { display: none; }
-
-.tx-tab {
-    padding: 0 18px;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: var(--t-xs);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    border-right: 1px solid var(--tx-rule);
-    cursor: pointer;
-    transition: color 0.12s, background 0.12s;
-    white-space: nowrap;
-    /* Sized to content, not stretched: with only two tabs in a group, `flex: 1`
-       turned the active tab into a half-width slab of solid amber. */
-    flex: 0 0 auto;
-    background: none;
-    border-top: 2px solid transparent;
-    border-bottom: none;
-    border-left: none;
-    font-family: inherit;
-    justify-content: center;
-}
-
-.tx-tab:last-child { border-right: 0; }
-
-.tx-tab:hover {
-    color: var(--tx-text);
-    background: var(--tx-panel-alt);
-}
-
-.tx-tab.active {
-    color: var(--tx-bright);
-    background: var(--tx-panel-alt);
-    border-top-color: var(--tx-accent);
-}
-
-.tx-tab.active .tx-code { color: var(--tx-accent); }
-
-.tx-tab.group-hidden {
-    display: none;
-}
-
-.tx-tab .tx-code {
-    font-weight: 700;
-    font-size: 11px;
-}
-
-.tx-tab .tx-sep {
-    color: var(--tx-dim);
-    font-weight: 400;
-}
-
-.tx-tab.active .tx-sep {
-    color: var(--tx-dim);
-}
-
-.tx-tab .tx-name {
-    font-size: 10px;
-    font-weight: 400;
-    opacity: 0.8;
-}
-
-.tx-tab.active .tx-name {
-    opacity: 1;
-}
-
-.tx-deck-pill {
-    padding: 0 18px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    height: 100%;
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.tx-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px;
-    border: 1px solid var(--tx-rule);
-    font-size: 11px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--tx-mid);
-    background: var(--tx-panel);
-}
-
-.tx-deck-hash {
-    font-size: 10px;
-    color: var(--tx-dim);
-}
-
-/* ==================== SUB-BAR (deck import strip) ==================== */
-
-.tx-sub-bar {
-    height: 38px;
-    display: flex;
-    align-items: center;
-    padding: 0 14px;
-    gap: 12px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-    position: sticky;
-    top: 84px;
-    z-index: calc(var(--z-sticky) - 2);
-    overflow: hidden;
-}
-
-.tx-sub-bar .tx-src-label {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-wide);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.tx-sub-bar .tx-url-input {
-    flex: 0 0 320px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    padding: 5px 10px;
-    font-family: inherit;
-    font-size: 11px;
-    outline: none;
-    border-radius: 0;
-    transition: border-color 0.12s;
-}
-
-.tx-sub-bar .tx-url-input:focus { border-color: var(--tx-amber); }
-.tx-sub-bar .tx-url-input::placeholder { color: var(--tx-dim); }
-
-.tx-sub-bar .tx-or {
-    font-size: var(--t-xs);
-    color: var(--tx-rule-hi);
-    flex-shrink: 0;
-}
-
-.tx-sub-bar .tx-import-meta {
-    margin-left: auto;
-    font-size: var(--t-xs);
-    flex-shrink: 0;
-}
-
-.tx-sub-bar .tx-import-meta a {
-    color: var(--tx-mid);
-    text-decoration: underline;
-    text-underline-offset: 3px;
-    text-decoration-color: var(--tx-rule-hi);
-    transition: color var(--transition-fast);
-}
-
-.tx-sub-bar .tx-import-meta a:hover { color: var(--tx-accent); }
-
-.tx-sub-bar .tx-paste-input {
-    flex: 0 0 200px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    padding: 5px 10px;
-    font-family: inherit;
-    font-size: 11px;
-    outline: none;
-    border-radius: 0;
-    transition: border-color 0.12s;
-}
-
-.tx-sub-bar .tx-paste-input:focus { border-color: var(--tx-amber); }
-.tx-sub-bar .tx-paste-input::placeholder { color: var(--tx-dim); }
-
-.tx-fetch-btn {
-    background: transparent;
-    border: 1px solid var(--tx-amber);
-    color: var(--tx-amber);
-    padding: 5px 14px;
-    font-family: inherit;
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-    flex-shrink: 0;
-}
-
-.tx-fetch-btn:hover {
-    background: var(--tx-amber);
-    color: var(--tx-bg);
-}
-
-.tx-import-meta {
-    margin-left: auto;
-    font-size: 10px;
-    letter-spacing: 0.10em;
-    color: var(--tx-dim);
-    white-space: nowrap;
-}
-
-.tx-import-meta .tx-hash {
-    color: var(--tx-amber);
-}
-
-/* ==================== TERMINAL DOT (status indicator) ==================== */
-
-.tx-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
-}
-
 /* ==================== PANEL HEADER BAND ==================== */
 
 .tx-h {
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--tx-dim);
@@ -398,7 +18,7 @@
 
 .tx-h .tx-h-r {
     color: var(--tx-mid);
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.08em;
     text-transform: none;
     cursor: pointer;
@@ -414,7 +34,7 @@
     color: var(--tx-bright);
     padding: 8px 10px;
     font-family: inherit;
-    font-size: 12px;
+    font-size: var(--t-sm);
     outline: none;
     border-radius: 0;
     width: 100%;
@@ -423,7 +43,7 @@
 }
 
 .tx-input:focus {
-    border-color: var(--tx-amber);
+    border-color: var(--tx-dim);
 }
 
 /* ==================== TERMINAL RANGE SLIDER ==================== */
@@ -465,7 +85,7 @@
     padding: 4px 10px;
     border: 1px solid var(--tx-rule);
     font-family: inherit;
-    font-size: 11px;
+    font-size: var(--t-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--tx-mid);
@@ -535,16 +155,6 @@
     overflow: hidden;
 }
 
-.tx-bar-seg {
-    height: 100%;
-    flex-shrink: 0;
-    transition: width 0.2s;
-}
-
-.tx-bar-cell {
-    height: 100%;
-}
-
 /* Inline p-bar for sweep table */
 .tx-p-bar {
     display: inline-block;
@@ -566,158 +176,13 @@
 
 /* ==================== PORTENT 3-COL LAYOUT ==================== */
 
-.portent-grid {
-    display: grid;
-    grid-template-columns: 320px 1fr 320px;
-    min-height: calc(100vh - 156px);
-}
-
-.portent-left {
-    border-right: 1px solid var(--tx-rule);
-    overflow-y: auto;
-}
-
-.portent-center {
-    overflow-y: auto;
-    border-right: 1px solid var(--tx-rule);
-}
-
-.portent-right {
-    overflow-y: auto;
-}
-
 /* Hero numerics 3-up */
-.portent-hero {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(190px, 280px));
-    justify-content: start;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.portent-hero .tx-stat:first-child .tx-stat-value {
-    font-size: var(--t-display);
-    font-weight: 700;
-    letter-spacing: var(--track-display);
-}
 
 /* X sweep table */
-.portent-sweep-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 11px;
-}
-
-.portent-sweep-table thead th {
-    font-size: 9px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    text-align: right;
-    background: var(--tx-panel);
-}
-
-.portent-sweep-table thead th:first-child { text-align: left; }
-
-.portent-sweep-table tbody tr {
-    cursor: pointer;
-    transition: background 0.1s;
-}
-
-.portent-sweep-table tbody tr:hover {
-    background: var(--tx-panel-alt);
-}
-
-.portent-sweep-table tbody tr.active-row {
-    background: var(--tx-row-hi);
-    color: var(--tx-bright);
-}
-
-.portent-sweep-table tbody td {
-    padding: 6px 14px;
-    text-align: right;
-    border-bottom: 1px solid var(--tx-rule);
-    color: var(--tx-text);
-}
-
-.portent-sweep-table tbody td:first-child { text-align: left; }
-
-.portent-sweep-table .p-bar-cell {
-    width: 120px;
-    text-align: left;
-}
-
-.portent-p-bar {
-    height: 8px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-}
-
-.portent-p-bar-fill {
-    height: 100%;
-    background: var(--tx-green);
-    opacity: 0.7;
-    transition: width 0.15s;
-}
-
-.portent-p-bar-fill.active { opacity: 1; }
 
 /* Live tape */
-.portent-tape-row {
-    display: grid;
-    grid-template-columns: 60px 22px 1fr 54px;
-    align-items: center;
-    padding: 5px 16px;
-    border-bottom: 1px solid var(--tx-rule);
-    font-size: 10px;
-    letter-spacing: 0.04em;
-}
-
-.portent-tape-row.current {
-    background: rgba(74, 222, 128, 0.04);
-}
-
-.portent-tape-bar {
-    height: 4px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    flex: 1;
-}
-
-.portent-tape-bar-fill {
-    height: 100%;
-    background: var(--tx-green);
-}
 
 /* Sample reveal */
-.portent-trial {
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--tx-rule);
-    font-size: 11px;
-}
-
-.portent-trial-header {
-    display: flex;
-    align-items: center;
-    margin-bottom: 6px;
-    gap: 8px;
-}
-
-.portent-trial-card-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 10px;
-    padding: 1px 0;
-}
-
-.portent-type-dot {
-    width: 8px;
-    height: 8px;
-    flex-shrink: 0;
-}
 
 /* ==================== SHARED TERMINAL COMPONENTS (used site-wide) ==================== */
 
@@ -727,8 +192,7 @@
     /* auto-fit alongside an explicit track produced phantom 0px columns; sizing
        tracks to content and packing them left keeps the stats as a readable
        cluster rather than stretching them to the panel edges. */
-    grid-template-columns: repeat(auto-fit, minmax(190px, 260px));
-    justify-content: start;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     background: var(--tx-panel);
     border-bottom: 1px solid var(--tx-rule);
 }
@@ -761,7 +225,7 @@
     display: inline-block;
     padding: 1px 7px;
     border: 1px solid currentColor;
-    font-size: 9px;
+    font-size: var(--t-micro);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -777,7 +241,7 @@
     padding: 10px 14px;
     border-bottom: 1px solid var(--tx-rule);
     background: var(--tx-panel-alt);
-    font-size: 11px;
+    font-size: var(--t-xs);
     color: var(--tx-text);
     line-height: 1.55;
 }
@@ -789,7 +253,7 @@
 .tx-empty {
     padding: 18px 14px;
     color: var(--tx-dim);
-    font-size: 11px;
+    font-size: var(--t-xs);
     letter-spacing: 0.04em;
 }
 
@@ -797,12 +261,12 @@
 .tx-sweep-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 11px;
+    font-size: var(--t-xs);
     font-feature-settings: 'tnum' 1;
 }
 
 .tx-sweep-table thead th {
-    font-size: 9px;
+    font-size: var(--t-micro);
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -838,80 +302,6 @@
 .tx-hero + .insight-box,
 .tx-rec + .insight-box { border-top: 0; }
 
-/* ==================== GLASS PANEL (legacy — now flat) ==================== */
-
-.panel {
-    background: var(--tx-panel);
-    border: 0;
-    border-bottom: 1px solid var(--tx-rule);
-    border-radius: 0;
-    padding: 0;
-    box-shadow: none;
-    margin-bottom: 0;
-    width: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
-    position: relative;
-}
-
-.panel::before { display: none; }
-
-.panel:hover {
-    transform: none;
-    border-color: inherit;
-    box-shadow: none;
-}
-
-#deck-config {
-    margin-bottom: 0;
-}
-
-#deck-config:not(.expanded) {
-    margin-bottom: 0;
-}
-
-/* ==================== NAVIGATION ==================== */
-
-.tab-groups { display: none; }
-#tab-group-nav { display: none !important; }
-.tab-sub-nav { display: none; }
-
-/* ==================== ICON BUTTONS ==================== */
-
-.icon-btn {
-    width: 32px;
-    height: 28px;
-    padding: 0;
-    background: transparent;
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-mid);
-    font-size: 0.9rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.12s;
-    flex-shrink: 0;
-}
-
-.icon-btn:hover {
-    background: var(--tx-panel-alt);
-    border-color: var(--tx-amber);
-    color: var(--tx-amber);
-    transform: none;
-    box-shadow: none;
-}
-
-.icon-btn.active {
-    background: var(--tx-amber);
-    border-color: var(--tx-amber);
-    color: var(--tx-bg);
-}
-
-/* ==================== LEGACY DROPDOWN SELECTOR (hidden) ==================== */
-
-.calculator-selector { display: none !important; }
-
 /* ==================== INPUT GROUPS ==================== */
 
 .input-group {
@@ -924,7 +314,7 @@
 .input-group label {
     display: block;
     margin-bottom: var(--spacing-xs);
-    font-size: 9px;
+    font-size: var(--t-micro);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--tx-dim);
@@ -939,7 +329,7 @@
     background: var(--tx-bg);
     border: 1px solid var(--tx-rule);
     color: var(--tx-bright);
-    font-size: 11px;
+    font-size: var(--t-xs);
     font-family: inherit;
     transition: border-color 0.12s;
     resize: vertical;
@@ -983,86 +373,63 @@
     gap: var(--spacing-sm);
     cursor: pointer;
     user-select: none;
-    font-size: 11px;
+    font-size: var(--t-xs);
     color: var(--tx-text);
-}
-
-.helper-text {
-    font-size: 10px;
-    color: var(--tx-dim);
-    margin-top: var(--spacing-xs);
 }
 
 /* ==================== TYPE GRID ==================== */
 
 .type-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1px;
-    background: var(--tx-rule);
-    border: 1px solid var(--tx-rule);
-    margin: 0 14px 14px;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin: 0 16px 16px;
 }
 
 .type-input {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    background: var(--tx-panel);
-    padding: 10px var(--spacing-md);
-    border: none;
-    transition: background 0.1s;
+    display: grid;
+    gap: 5px;
+    align-content: start;
 }
 
-.type-input:hover { background: var(--tx-panel-alt); }
-
 .type-input label {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin: 0;
-    padding: 0;
+    font-size: var(--t-label);
+    font-weight: 600;
+    color: var(--tx-mid);
 }
 
 .type-input input {
-    width: 72px;
-    padding: 4px 6px;
+    width: 100%;
+    height: 36px;
+    padding: 0 10px;
     background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
+    border: 1px solid var(--tx-rule-hi);
+    border-radius: var(--radius-sm);
     color: var(--tx-bright);
-    font-size: 11px;
-    text-align: center;
-    font-family: inherit;
-    font-feature-settings: 'tnum' 1;
-    transition: border-color 0.12s;
-    border-radius: 0;
+    font-family: var(--font-mono);
+    font-size: var(--t-sm);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .type-input input:focus {
     outline: none;
-    border-color: var(--tx-amber);
-    box-shadow: none;
+    border-color: var(--tx-accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* ==================== DECK TOTAL ==================== */
 
 .deck-total {
     margin: 0;
-    padding: 8px 14px;
-    font-size: 10px;
-    letter-spacing: 0.10em;
-    text-transform: uppercase;
+    font-size: var(--t-xs);
     color: var(--tx-dim);
-    border-top: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
 }
 
+.deck-total strong,
 .deck-total span {
-    font-weight: 700;
-    color: var(--tx-amber);
-    font-feature-settings: 'tnum' 1;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--tx-bright);
 }
 
 /* ==================== X SLIDER ROW ==================== */
@@ -1122,21 +489,12 @@
 
 /* ==================== IMPORT SECTION ==================== */
 
-.import-section {
-    margin-bottom: 0;
-    padding-bottom: 0;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.import-row { display: flex; gap: var(--spacing-sm); }
-.import-row input { flex: 1; }
-
 .import-btn {
     padding: 6px 14px;
     color: var(--tx-bg);
     font-weight: 600;
     font-family: inherit;
-    font-size: 11px;
+    font-size: var(--t-xs);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     cursor: pointer;
@@ -1168,7 +526,7 @@
 
 .import-status {
     margin-top: var(--spacing-sm);
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.08em;
     min-height: 16px;
 }
@@ -1204,7 +562,7 @@
 
 .deck-name {
     padding: 6px 14px;
-    font-size: 10px;
+    font-size: var(--t-label);
     color: var(--tx-amber);
     background: var(--tx-panel);
     border-bottom: 1px solid var(--tx-rule);
@@ -1213,7 +571,7 @@
 
 .deck-name .label {
     color: var(--tx-dim);
-    font-size: 9px;
+    font-size: var(--t-micro);
     letter-spacing: 0.10em;
     text-transform: uppercase;
     display: block;
@@ -1228,15 +586,6 @@
     margin: 0;
 }
 
-.chart-legend {
-    display: flex;
-    gap: 18px;
-    padding: 6px 14px;
-    font-size: 10px;
-    border-top: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-}
-
 .legend-item {
     display: flex;
     align-items: center;
@@ -1244,14 +593,7 @@
     color: var(--tx-mid);
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    font-size: 9px;
-}
-
-.legend-color {
-    width: 10px;
-    height: 3px;
-    border-radius: 0;
-    box-shadow: none;
+    font-size: var(--t-micro);
 }
 
 /* ==================== COMPARISON TABLE ==================== */
@@ -1265,7 +607,7 @@
 .comparison-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 11px;
+    font-size: var(--t-xs);
     min-width: 400px;
     font-feature-settings: 'tnum' 1;
 }
@@ -1280,7 +622,7 @@
 }
 
 .comparison-table th {
-    font-size: 9px;
+    font-size: var(--t-micro);
     font-weight: 500;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1300,22 +642,10 @@
     color: var(--tx-bright);
 }
 
-.marginal-positive { color: var(--tx-green); }
-.marginal-negative { color: var(--tx-red); }
-
-.section-header { background: var(--tx-panel-alt) !important; }
-.section-header td {
-    padding: 5px 14px !important;
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--tx-dim);
-}
-
 /* ==================== INSIGHT BOX ==================== */
 
 .insight-box {
-    padding: var(--spacing-md) 14px;
+    padding: var(--spacing-md) 16px;
     margin: 0;
     border-top: 1px solid var(--tx-rule);
     background: var(--tx-panel-alt);
@@ -1326,65 +656,37 @@
 }
 
 .insight-box h3 {
-    font-size: 9px;
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
     margin-bottom: var(--spacing-sm);
-    color: var(--tx-amber);
+    color: var(--tx-dim);
     border: none;
     padding: 0;
 }
 
-.insight-box p {
-    font-size: 10px;
+.insight-box p,
+.insight-body {
+    font-size: var(--t-xs);
     color: var(--tx-mid);
     line-height: 1.6;
 }
 
+.insight-body { margin-bottom: 8px; }
+.insight-body:last-child { margin-bottom: 0; }
+
+.insight-foot {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--tx-rule);
+    font-size: var(--t-label);
+    color: var(--tx-dim);
+}
+
 /* ==================== STAT CARDS ==================== */
 
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1px;
-    background: var(--tx-rule);
-    margin: 0;
-}
-
-.stat-card {
-    background: var(--tx-panel);
-    border: none;
-    padding: var(--spacing-md) 14px;
-    border-radius: 0;
-    transition: background 0.1s;
-    animation: none;
-}
-
-.stat-card:hover {
-    background: var(--tx-panel-alt);
-    transform: none;
-    box-shadow: none;
-    border-color: inherit;
-}
-
 /* ==================== MULLIGAN CARD TYPES ==================== */
-
-.card-type-row {
-    background: var(--tx-panel);
-    border-radius: 0;
-    padding: var(--spacing-md) 14px;
-    margin-bottom: 0;
-    border-bottom: 1px solid var(--tx-rule);
-    transition: background 0.1s;
-    border-left: 0;
-    border-right: 0;
-    border-top: 0;
-}
-
-.card-type-row:hover {
-    transform: none;
-    box-shadow: none;
-    border-color: inherit;
-    background: var(--tx-panel-alt);
-}
 
 .type-header {
     display: flex;
@@ -1393,127 +695,7 @@
     margin-bottom: var(--spacing-sm);
 }
 
-.type-name-input {
-    flex: 1;
-    padding: 5px 8px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    color: var(--tx-bright);
-    font-size: 11px;
-    font-weight: 600;
-    font-family: inherit;
-    transition: border-color 0.12s;
-    border-radius: 0;
-}
-
-.type-name-input:focus {
-    outline: none;
-    border-color: var(--tx-amber);
-    box-shadow: none;
-}
-
-.remove-type-btn {
-    background: transparent;
-    border: 1px solid var(--tx-red);
-    color: var(--tx-red);
-    padding: 4px 10px;
-    border-radius: 0;
-    cursor: pointer;
-    font-size: 10px;
-    font-family: inherit;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    transition: all 0.12s;
-    white-space: nowrap;
-}
-
-.remove-type-btn:hover {
-    background: var(--tx-red);
-    color: var(--tx-bg);
-    transform: none;
-}
-
-.remove-type-btn:active { transform: none; }
-
-.preset-btn {
-    flex: 1;
-    padding: 6px 8px;
-    border: 1px solid var(--tx-rule);
-    background: transparent;
-    color: var(--tx-dim);
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 10px;
-    letter-spacing: 0.10em;
-    text-transform: uppercase;
-    transition: all 0.12s;
-    border-radius: 0;
-}
-
-.preset-btn:hover {
-    border-color: var(--tx-rule-hi);
-    background: var(--tx-panel-alt);
-    color: var(--tx-text);
-}
-
-.preset-btn.active {
-    border-color: var(--tx-amber);
-    background: var(--tx-amber);
-    color: var(--tx-bg);
-}
-
 /* ==================== COLLAPSIBLE PANELS ==================== */
-
-.collapsible-panel {
-    overflow: hidden;
-}
-
-.panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    user-select: none;
-    margin: 0;
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-    transition: background 0.1s;
-}
-
-.panel-header:hover { background: var(--tx-panel-alt); }
-
-.panel-header h2 {
-    margin: 0;
-    padding: 0;
-    border: none;
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    color: var(--tx-dim);
-    text-transform: uppercase;
-}
-
-.collapse-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px;
-    color: var(--tx-dim);
-    font-size: 0.8rem;
-    transition: color 0.12s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-}
-
-.collapse-btn:hover { color: var(--tx-amber); background: none; }
-
-.collapse-icon {
-    display: inline-block;
-    transition: transform 0.2s ease;
-}
 
 .panel-content {
     max-height: 2000px;
@@ -1522,34 +704,14 @@
     opacity: 1;
 }
 
-.collapsible-panel:not(.expanded) .panel-content {
-    max-height: 0;
-    opacity: 0;
-}
-
-.collapsible-panel:not(.expanded) .collapse-icon {
-    transform: rotate(-90deg);
-}
-
 /* ==================== SAMPLE REVEALS ==================== */
-
-.sample-reveal {
-    background: var(--tx-panel);
-    border: 0;
-    border-bottom: 1px solid var(--tx-rule);
-    padding: 10px 14px;
-    margin-bottom: 0;
-}
-
-.sample-reveal.free-spell { border-left: 2px solid var(--tx-green); }
-.sample-reveal.whiff      { border-left: 2px solid var(--tx-red); }
 
 .reveal-card {
     display: inline-block;
     padding: 2px 6px;
     margin: 2px;
     border: 1px solid var(--tx-rule);
-    font-size: 10px;
+    font-size: var(--t-label);
     font-weight: 400;
     cursor: default;
     border-radius: 0;
@@ -1567,17 +729,6 @@
 .reveal-card.battle       { background: var(--tx-panel-alt); border-color: var(--type-battle); color: var(--type-battle); }
 .reveal-card.land         { background: var(--tx-panel-alt); border-color: var(--type-land); color: var(--type-land); }
 .reveal-card.dual         { border-style: dashed; }
-
-.reveal-summary {
-    margin-top: 6px;
-    font-size: 10px;
-    color: var(--tx-mid);
-    letter-spacing: 0.06em;
-}
-
-.reveal-summary strong { font-size: 10px; font-weight: 600; }
-.reveal-summary.free-spell strong { color: var(--tx-green); }
-.reveal-summary.whiff strong      { color: var(--tx-red); }
 
 /* ==================== DISTRIBUTION CHART ==================== */
 
@@ -1601,7 +752,7 @@
     text-align: right;
     color: var(--tx-mid);
     white-space: nowrap;
-    font-size: 10px;
+    font-size: var(--t-label);
 }
 
 .dist-bar-container {
@@ -1630,7 +781,7 @@
 }
 
 .dist-marker {
-    font-size: 9px;
+    font-size: var(--t-micro);
     color: var(--tx-amber);
     white-space: nowrap;
     letter-spacing: 0.08em;
@@ -1638,322 +789,6 @@
 }
 
 /* ==================== BIG SPELL COMPARISON ==================== */
-
-.big-spell-comparison-container {
-    background: var(--tx-panel);
-    padding: 14px;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.big-spell-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1px;
-    background: var(--tx-rule);
-    margin-bottom: var(--spacing-md);
-}
-
-.big-spell-card {
-    background: var(--tx-panel-alt);
-    padding: var(--spacing-md) 14px;
-    border: none;
-    transition: background 0.1s;
-}
-
-.big-spell-card:hover {
-    background: var(--tx-row-hi);
-    transform: none;
-}
-
-.big-spell-title {
-    margin-top: 0;
-    font-size: 9px;
-    letter-spacing: 0.10em;
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-bottom: 4px;
-}
-
-.big-spell-x-value {
-    margin-bottom: 2px;
-    font-weight: 700;
-    font-size: 10px;
-    color: var(--tx-amber);
-    letter-spacing: 0.08em;
-}
-
-.big-spell-value {
-    font-size: 1.8em;
-    font-weight: 700;
-    color: var(--tx-bright);
-    font-feature-settings: 'tnum' 1;
-}
-
-.big-spell-metric {
-    color: var(--tx-mid);
-    font-size: 9px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: var(--spacing-sm);
-}
-
-.big-spell-details {
-    color: var(--tx-dim);
-    font-size: 9px;
-    border-top: 1px solid var(--tx-rule);
-    padding-top: var(--spacing-xs);
-}
-
-.big-spell-restriction {
-    margin-top: 2px;
-    font-size: 9px;
-    line-height: 1.4;
-}
-
-.big-spell-recommendations { margin-top: var(--spacing-md); }
-
-.big-spell-recommendation-item {
-    padding: 6px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-}
-
-/* ==================== DECK RADAR ==================== */
-
-#tx-radar {
-    display: none;
-    border-bottom: 1px solid var(--tx-rule-hi);
-    background: var(--tx-panel);
-}
-
-.rdr-close {
-    background: none;
-    border: none;
-    color: var(--tx-dim);
-    font-family: inherit;
-    font-size: 9px;
-    letter-spacing: 0.1em;
-    cursor: pointer;
-    padding: 0 0 0 12px;
-}
-
-.rdr-close:hover { color: var(--tx-amber); }
-
-.rdr-body {
-    display: grid;
-    grid-template-columns: minmax(280px, 400px) 1fr;
-}
-
-.rdr-col { padding: 14px 16px; }
-
-.rdr-col-comp { border-right: 1px solid var(--tx-rule); }
-
-.rdr-col-title {
-    font-size: 9px;
-    letter-spacing: 0.18em;
-    color: var(--tx-dim);
-    text-transform: uppercase;
-    margin-bottom: 12px;
-}
-
-/* Headline composition numbers */
-.rdr-metrics {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-bottom: 14px;
-}
-
-.rdr-metric { display: flex; flex-direction: column; gap: 2px; }
-
-.rdr-metric-n {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--tx-bright);
-    line-height: 1;
-    font-feature-settings: 'tnum' 1;
-}
-
-.rdr-metric-l {
-    font-size: 8px;
-    letter-spacing: 0.1em;
-    color: var(--tx-dim);
-    text-transform: uppercase;
-}
-
-/* Stacked type-composition bar */
-.rdr-bar {
-    display: flex;
-    height: 10px;
-    width: 100%;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    overflow: hidden;
-}
-
-.rdr-seg { display: block; height: 100%; }
-
-.rdr-legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 14px;
-    margin-top: 8px;
-}
-
-.rdr-legend-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 9px;
-    letter-spacing: 0.08em;
-    color: var(--tx-mid);
-}
-
-.rdr-swatch { width: 8px; height: 8px; display: inline-block; }
-
-.rdr-legend-n {
-    color: var(--tx-bright);
-    font-feature-settings: 'tnum' 1;
-}
-
-/* Mana curve histogram */
-.rdr-curve-title {
-    font-size: 9px;
-    letter-spacing: 0.14em;
-    color: var(--tx-dim);
-    text-transform: uppercase;
-    margin: 16px 0 6px;
-}
-
-.rdr-dim { color: var(--tx-rule-hi); }
-
-.rdr-curve {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
-    gap: 4px;
-    height: 76px;
-    align-items: end;
-}
-
-.rdr-curve-col {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    height: 100%;
-    gap: 3px;
-}
-
-.rdr-curve-n {
-    font-size: 8px;
-    color: var(--tx-mid);
-    font-feature-settings: 'tnum' 1;
-    min-height: 10px;
-}
-
-.rdr-curve-bar {
-    width: 100%;
-    background: var(--tx-green-dim);
-    border-top: 2px solid var(--tx-green);
-    min-height: 0;
-    transition: height 0.25s ease;
-}
-
-.rdr-curve-col:hover .rdr-curve-bar { background: var(--tx-green); }
-
-.rdr-curve-x {
-    font-size: 9px;
-    color: var(--tx-dim);
-    font-feature-settings: 'tnum' 1;
-}
-
-/* Ranked calculator matches */
-.rdr-rows { display: flex; flex-direction: column; }
-
-.rdr-row {
-    display: grid;
-    grid-template-columns: 78px 1fr auto;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    padding: 8px 10px;
-    background: transparent;
-    border: 0;
-    border-bottom: 1px solid var(--tx-rule);
-    border-left: 2px solid transparent;
-    font-family: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition: background 0.12s, border-color 0.12s;
-}
-
-.rdr-row:hover { background: var(--tx-row-hi); }
-.rdr-row.rdr-tier-core { border-left-color: var(--tx-green); }
-.rdr-row.rdr-tier-likely { border-left-color: var(--tx-amber); }
-.rdr-row.rdr-tier-possible { border-left-color: var(--tx-blue); }
-
-.rdr-badge {
-    display: inline-block;
-    padding: 2px 0;
-    border: 1px solid;
-    font-size: 8px;
-    letter-spacing: 0.12em;
-    text-align: center;
-    text-transform: uppercase;
-}
-
-.rdr-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-
-.rdr-row-title {
-    font-size: 11px;
-    color: var(--tx-bright);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-
-.rdr-code {
-    color: var(--tx-amber);
-    font-weight: 700;
-    margin-right: 4px;
-}
-
-.rdr-reason {
-    font-size: 10px;
-    color: var(--tx-mid);
-    line-height: 1.4;
-}
-
-.rdr-reason-2 { color: var(--tx-dim); }
-
-.rdr-go {
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    color: var(--tx-dim);
-    white-space: nowrap;
-}
-
-.rdr-row:hover .rdr-go { color: var(--tx-amber); }
-
-.rdr-empty {
-    font-size: 11px;
-    color: var(--tx-dim);
-    padding: 10px 0;
-}
-
-/* Relevance markers on the nav tabs */
-.tx-tab-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--tx-green);
-    flex: 0 0 auto;
-}
-
-.tx-tab-maybe .tx-tab-dot { background: var(--tx-amber); }
 
 /* ==================== GLOBAL CONTROL THEMING ====================
    Native form controls inside calculator panels used to render with the OS
@@ -1970,7 +805,7 @@
     border: 1px solid var(--tx-rule);
     color: var(--tx-bright);
     font-family: inherit;
-    font-size: 11px;
+    font-size: var(--t-xs);
     padding: 5px 8px;
     border-radius: 0;
     outline: none;
@@ -2050,27 +885,26 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 /* Generic action buttons: outlined, not filled. Solid amber is reserved for the
    single primary action in the sub-bar. */
-.calculator-content button:not([class*="tx-"]):not([class*="rdr-"]):not(.preset-btn) {
+.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn) {
     background: transparent;
     border: 1px solid var(--tx-rule-hi);
-    color: var(--tx-mid);
+    color: var(--tx-text);
     font-family: inherit;
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-size: var(--t-xs);
+    font-weight: 600;
     padding: 7px 14px;
-    border-radius: 0;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.calculator-content button:not([class*="tx-"]):not([class*="rdr-"]):not(.preset-btn):hover {
+.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):hover {
     background: var(--tx-panel-alt);
     color: var(--tx-bright);
     border-color: var(--tx-amber);
 }
 
-.calculator-content button:not([class*="tx-"]):not([class*="rdr-"]):not(.preset-btn):disabled {
+.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):disabled {
     opacity: 0.4;
     cursor: not-allowed;
     border-color: var(--tx-rule);
@@ -2078,12 +912,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 /* Section headings inside calculators — keep the terminal label voice rather
    than falling back to browser-default h1/h2 sizing. */
-.calculator-content h2,
-.calculator-content h3 {
+/* Only bare headings: anything with its own class styles itself. */
+.calc-body h2:not([class]),
+.calc-body h3:not([class]) {
     font-family: inherit;
-    font-size: 10px;
+    font-size: var(--t-label);
     font-weight: 600;
-    letter-spacing: 0.18em;
+    letter-spacing: var(--track-label);
     text-transform: uppercase;
     color: var(--tx-mid);
     margin: 0 0 10px;
@@ -2091,75 +926,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 /* ==================== TERMINAL FORM PATTERNS ====================
-   Shared layout primitives so calculators stop reaching for inline styles. */
-
-/* label + control + hint on one rule-bounded line */
-.tx-field-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    padding: 10px 12px;
-    margin-bottom: 16px;
-    background: var(--tx-panel-alt);
-    border: 1px solid var(--tx-rule);
-}
-
-.tx-field-row > label {
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--tx-mid);
-    white-space: nowrap;
-}
-
-.tx-field-row > small {
-    font-size: 10px;
-    color: var(--tx-dim);
-}
 
 /* Segmented preset selector (mulligan strategy, and reusable elsewhere) */
-.preset-buttons {
-    display: flex;
-    gap: 0;
-    margin-bottom: 8px;
-}
-
-.calculator-content .preset-btn {
-    flex: 1;
-    padding: 8px 10px;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-    border-right-width: 0;
-    color: var(--tx-dim);
-    font-family: inherit;
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    border-radius: 0;
-    cursor: pointer;
-    transition: background 0.12s, color 0.12s;
-}
-
-.calculator-content .preset-btn:last-child { border-right-width: 1px; }
-
-.calculator-content .preset-btn:hover {
-    background: var(--tx-panel-alt);
-    color: var(--tx-text);
-}
-
-.calculator-content .preset-btn.active {
-    background: var(--tx-panel-alt);
-    color: var(--tx-bright);
-    border-color: var(--tx-amber);
-    border-right-width: 1px;
-    box-shadow: inset 0 2px 0 var(--tx-amber);
-}
 
 /* Labelled slider block */
 .calculator-content .input-group > label {
     display: block;
-    font-size: 9px;
+    font-size: var(--t-micro);
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--tx-dim);
@@ -2169,95 +942,11 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .calculator-content .input-group small {
     display: block;
     margin-top: 5px;
-    font-size: 10px;
+    font-size: var(--t-label);
     color: var(--tx-dim);
 }
 
 /* Primal Surge's payoff model is deliberately written as an equation: the
-   tunable assumptions sit beside the result instead of hiding in help text. */
-.surge-value-intro,
-.surge-value-example,
-.payback-example {
-    margin: 0;
-    padding: 12px 14px;
-    color: var(--tx-mid);
-    font-size: var(--t-xs);
-    line-height: 1.55;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.surge-value-formula,
-.payback-formula {
-    display: grid;
-    gap: 5px;
-    padding: 14px;
-    background: var(--tx-panel-alt);
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.surge-value-formula span,
-.surge-value-field > span,
-.payback-formula span,
-.payback-field > span {
-    color: var(--tx-dim);
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-}
-
-.surge-value-formula strong,
-.payback-formula strong {
-    color: var(--tx-green);
-    font-size: var(--t-body);
-    font-weight: 600;
-    font-feature-settings: 'tnum' 1;
-}
-
-.surge-value-fields,
-.payback-fields {
-    display: grid;
-}
-
-.surge-value-field,
-.payback-field {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 76px;
-    gap: 5px 12px;
-    align-items: center;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.surge-value-field input,
-.payback-field input {
-    width: 76px;
-    text-align: right;
-}
-
-.surge-value-field small,
-.payback-field small {
-    grid-column: 1 / -1;
-    color: var(--tx-dim);
-    font-size: var(--t-micro);
-    line-height: 1.4;
-}
-
-.surge-value-example,
-.payback-example {
-    border-bottom: 0;
-}
-
-.surge-value-example strong,
-.payback-example strong {
-    color: var(--tx-bright);
-    font-weight: 600;
-}
-
-.payback-model {
-    margin-top: var(--spacing-md);
-    border: 1px solid var(--tx-rule);
-    background: var(--tx-panel);
-}
 
 /* Chrome paints its own light runnable-track over an appearance:none range;
    clear it so the input's own background is the only track. */
@@ -2276,7 +965,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 /* Body copy inside calculators: terminal-sized, not browser-default. */
 .calculator-content .panel > p,
 .calculator-content .panel > section > p {
-    font-size: 11px;
+    font-size: var(--t-xs);
     color: var(--tx-mid);
     line-height: 1.6;
 }
@@ -2289,8 +978,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     margin-bottom: var(--spacing-lg);
 }
 
-.mull-summary-block { margin-bottom: var(--spacing-lg); }
-
 .tx-mx-table {
     width: 100%;
     border-collapse: collapse;
@@ -2298,7 +985,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 .tx-mx-table th {
-    font-size: 9px;
+    font-size: var(--t-micro);
     font-weight: 500;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -2330,13 +1017,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .tx-mx-cell.is-bad  { background: color-mix(in oklab, var(--tx-red) 5%, transparent); }
 
 .tx-mx-mark {
-    font-size: 11px;
+    font-size: var(--t-xs);
     float: right;
     line-height: 1;
 }
 
 .tx-mx-label {
-    font-size: 10px;
+    font-size: var(--t-label);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--tx-mid);
@@ -2352,7 +1039,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 .tx-mx-note {
-    font-size: 10px;
+    font-size: var(--t-label);
     color: var(--tx-dim);
     line-height: 1.45;
     margin-top: 6px;
@@ -2363,7 +1050,7 @@ input[type="range"].tx-slider::-moz-range-thumb {
     align-items: baseline;
     gap: 12px;
     padding: 10px 14px;
-    font-size: 9px;
+    font-size: var(--t-micro);
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--tx-dim);
@@ -2381,24 +1068,8 @@ input[type="range"].tx-slider::-moz-range-thumb {
     margin-left: auto;
     text-transform: none;
     letter-spacing: 0;
-    font-size: 10px;
+    font-size: var(--t-label);
 }
-
-/* ==================== SQUARE-CORNER ENFORCEMENT ====================
-   The terminal language is hard-edged throughout. A lot of calculator output is
-   built as HTML strings with inline `border-radius` left over from the previous
-   rounded-glass design (sample-hand card chips, reveal cards, distribution
-   bars). Inline styles beat normal declarations, so this override needs
-   !important. Scoped to generated calculator output only — it deliberately does
-   not touch native controls like checkboxes. */
-.calculator-content .sample-reveal,
-.calculator-content .sample-reveal *,
-.calculator-content .card-chip,
-.calculator-content [class*="reveal"] [style*="border-radius"],
-.calculator-content [style*="border-radius"]:not(input):not(.tx-p-bar):not(.tx-p-fill) {
-    border-radius: 0 !important;
-}
-
 
 /* ==================== FOCUS ====================
    One visible, consistent focus ring in the brand accent. Keyboard users get
@@ -2452,7 +1123,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 /* A card-type name is a short label, not a paragraph. */
-.type-name-input { max-width: 340px; }
 
 .type-header {
     display: flex;
@@ -2462,7 +1132,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 /* Segmented preset control shouldn't span a metre of screen. */
-.calculator-content .preset-buttons { max-width: 560px; }
 
 /* Prose measure — roughly 70 characters. */
 .calculator-content .panel > p,
@@ -2529,24 +1198,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 /* Portent's bespoke three-column dashboard, made fluid: side rails scale with
-   the container and the centre absorbs the remainder. It collapses in stages
-   rather than all at once. */
-.portent-grid {
-    grid-template-columns: clamp(260px, 22cqi, 340px) minmax(0, 1fr) clamp(260px, 22cqi, 340px);
-}
-
-@container shell (max-width: 1240px) {
-    .portent-grid {
-        grid-template-columns: clamp(260px, 30cqi, 340px) minmax(0, 1fr);
-    }
-    .portent-right { grid-column: 1 / -1; border-top: 1px solid var(--tx-rule); }
-}
-
-@container shell (max-width: 820px) {
-    .portent-grid { grid-template-columns: minmax(0, 1fr); }
-    .portent-left { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
-    .portent-center { border-right: 0; }
-}
 
 /* Hero rows reflow on available space, not viewport width. */
 @container shell (max-width: 720px) {
@@ -2559,10 +1210,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 /* The deck radar follows the same rule. */
-@container shell (max-width: 900px) {
-    .rdr-body { grid-template-columns: minmax(0, 1fr); }
-    .rdr-col-comp { border-right: 0; border-bottom: 1px solid var(--tx-rule); }
-}
 
 /* A wide chart gains a little height so it does not read as a letterbox strip,
    but not so much that two stacked charts stop fitting on one screen. */
@@ -2636,27 +1283,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     border-color: var(--tx-rule-hi);
     color: var(--tx-dim);
     cursor: not-allowed;
-}
-
-.opponent-tab {
-    background: transparent;
-    border: 1px solid var(--tx-rule);
-    border-top: 2px solid transparent;
-    color: var(--tx-dim);
-    font-family: inherit;
-    font-size: var(--t-xs);
-    padding: 7px 14px;
-    border-radius: 0;
-    cursor: pointer;
-    transition: color var(--transition-fast), background var(--transition-fast);
-}
-
-.opponent-tab:hover { color: var(--tx-text); background: var(--tx-panel-alt); }
-
-.opponent-tab.active {
-    background: var(--tx-panel-alt);
-    border-top-color: var(--tx-accent);
-    color: var(--tx-bright);
 }
 
 /* ==================== SIMULATION SUMMARY ====================
@@ -2793,6 +1419,79 @@ input[type="range"].tx-slider::-moz-range-thumb {
 .dist-bar.is-bad  { background: var(--tx-bad); }
 .dist-bar.is-warn { background: var(--tx-accent); }
 
+/* Surge's outcome ranges form one horizontal 100% band. The seam between
+   semantic colours is the payback boundary; each run belongs to one segment. */
+.surge-range-band {
+    display: flex;
+    height: 30px;
+    overflow: hidden;
+    background: var(--tx-bg);
+    border: 1px solid var(--tx-rule);
+}
+
+.surge-range-segment {
+    min-width: 0;
+    flex-basis: 0;
+    border-right: 1px solid var(--tx-panel);
+}
+
+.surge-range-segment.is-whiff,
+.surge-range-item.is-whiff .surge-range-swatch { background: var(--tx-bad); }
+.surge-range-segment.is-paid,
+.surge-range-item.is-paid .surge-range-swatch { background: var(--tx-good); }
+.surge-range-segment:nth-child(even) { filter: brightness(0.78); }
+
+.surge-range-axis,
+.surge-range-totals {
+    display: flex;
+    justify-content: space-between;
+    font-feature-settings: 'tnum' 1;
+}
+
+.surge-range-totals {
+    margin: 10px 0 12px;
+    font-size: var(--t-xs);
+    font-weight: 600;
+}
+
+.surge-range-totals .is-whiff { color: var(--tx-bad); }
+.surge-range-totals .is-paid { color: var(--tx-good); }
+
+.surge-range-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 24px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.surge-range-item {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr) auto 48px;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    padding: 5px 0;
+    border-top: 1px solid var(--tx-rule);
+    font-size: var(--t-xs);
+    font-feature-settings: 'tnum' 1;
+}
+
+.surge-range-swatch { width: 8px; height: 8px; }
+.surge-range-label { color: var(--tx-text); }
+.surge-range-count { color: var(--tx-dim); }
+.surge-range-item strong { color: var(--tx-bright); text-align: right; }
+
+@container shell (max-width: 700px) {
+    .surge-range-list { grid-template-columns: minmax(0, 1fr); }
+}
+
+@container shell (max-width: 420px) {
+    .surge-range-item { grid-template-columns: 8px minmax(0, 1fr) 48px; }
+    .surge-range-count { display: none; }
+}
+
 /* Shared sample-simulation controls (used by every calculator via
    generateSampleRevealsHTML). */
 .tx-sim-controls {
@@ -2845,15 +1544,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     padding: 12px 14px;
 }
 
-/* Per-opponent block, shared by the multiplayer calculators (Mara, Dream
-   Harvest) which previously emitted identical inline-styled wrappers. */
-.tx-opp-card {
-    margin-bottom: var(--spacing-lg);
-    padding: var(--spacing-md);
-    background: var(--tx-panel-alt);
-    border: 1px solid var(--tx-rule);
-}
-
 /* ==================== EXPLICIT PANEL PAIRING ====================
    Results are a single full-width column by design (see ADAPTIVE LAYOUT). This
    is the one sanctioned exception: an author can wrap exactly two related
@@ -2894,38 +1584,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     background: var(--tx-panel-alt);
 }
 
-.chimil-fit-badge {
-    border: 1px solid;
-    padding: 5px 10px;
-    font-size: var(--t-micro);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.chimil-fit-advice {
-    font-size: var(--t-body);
-    color: var(--tx-bright);
-    line-height: 1.5;
-}
-
-.chimil-fit-detail {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-    margin-top: 4px;
-    line-height: 1.5;
-}
-
-.chimil-fit-tuning {
-    font-size: var(--t-xs);
-    color: var(--tx-accent);
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--tx-rule);
-    line-height: 1.5;
-}
-
 /* ==================== CHIMIL SAMPLE GAMES ====================
    One row per simulated game, showing the actual sequence of discovers. The
    average is in the summary above; this is what a game feels like. */
@@ -2935,68 +1593,9 @@ input[type="range"].tx-slider::-moz-range-thumb {
     padding: 10px 0;
 }
 
-.chimil-game:last-child { border-bottom: 0; }
-
-.chimil-game-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 6px;
-}
-
-.chimil-game-total {
-    font-feature-settings: 'tnum' 1;
-    font-weight: 600;
-    letter-spacing: 0;
-    text-transform: none;
-}
-
-.chimil-game-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-}
-
-.chimil-hit {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 6px;
-    padding: 3px 7px;
-    border: 1px solid var(--tx-rule-hi);
-    background: var(--tx-panel-alt);
-    font-size: var(--t-xs);
-    color: var(--tx-text);
-    white-space: nowrap;
-}
-
-.chimil-hit-turn { color: var(--tx-dim); font-size: var(--t-micro); }
-
-.chimil-hit-mv {
-    color: var(--tx-good);
-    font-weight: 600;
-    font-feature-settings: 'tnum' 1;
-}
-
 /* The outcome the player is worried about: a cheap creature off a six-mana rock. */
-.chimil-hit.is-small { border-color: var(--tx-accent-dim); }
-.chimil-hit.is-small .chimil-hit-mv { color: var(--tx-accent); }
-
-.chimil-hit.is-miss { border-color: var(--tx-bad); color: var(--tx-bad); }
 
 /* Honest limit of the model, stated next to the verdict rather than buried. */
-.chimil-fit-caveat {
-    font-size: var(--t-xs);
-    color: var(--tx-dim);
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--tx-rule);
-    line-height: 1.5;
-}
-
 
 /* ==================== WILD PAIR ====================
    Wild Pair searches rather than reveals, so there is no probability to show —
@@ -3018,34 +1617,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 /* The search key itself, in the display band — it is the one number the whole
-   calculator turns on. */
-.wp-detail-key {
-    font-size: var(--t-xxl);
-    font-weight: 700;
-    line-height: 1;
-    color: var(--tx-bright);
-    letter-spacing: var(--track-display);
-    font-feature-settings: 'tnum' 1;
-    border: 1px solid var(--tx-rule-hi);
-    padding: 8px 14px;
-    min-width: 68px;
-    text-align: center;
-}
-
-.wp-group-detail.is-empty .wp-detail-key { color: var(--tx-dim); }
-
-.wp-detail-headline {
-    font-size: var(--t-body);
-    color: var(--tx-bright);
-    line-height: 1.5;
-}
-
-.wp-detail-sub {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-    margin-top: 4px;
-    line-height: 1.5;
-}
 
 /* --- The search pool: the full roster at the selected total --- */
 
@@ -3130,40 +1701,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 .wp-opt.is-high .wp-opt-mv { color: var(--tx-good); }
 
-/* --- The one derived number for a pool: its widest mana swing --- */
-
-.wp-swing {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--tx-rule);
-}
-
-.wp-swing-label {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-}
-
-.wp-swing-value {
-    font-size: var(--t-lg);
-    font-weight: 700;
-    line-height: 1;
-    font-feature-settings: 'tnum' 1;
-}
-
-.wp-swing-line {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-    line-height: 1.5;
-}
-
-.wp-swing-line strong { color: var(--tx-text); font-weight: 600; }
-
 /* --- All groups: the at-a-glance grid --- */
 
 /* Auto-fill so the grid gains COLUMNS as the shell widens rather than just
@@ -3235,15 +1772,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     font-weight: 700;
     font-feature-settings: 'tnum' 1;
     line-height: 1;
-}
-
-.wp-gc-range {
-    display: block;
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin: 7px 0 0 54px;
 }
 
 .wp-gc-cards {
@@ -3327,137 +1855,11 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 /* --- Fit verdict (secondary panel) --- */
 
-.wp-fit {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 14px;
-    align-items: start;
-    padding: 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    background: var(--tx-panel-alt);
-}
-
-.wp-fit-badge {
-    border: 1px solid;
-    padding: 5px 10px;
-    font-size: var(--t-micro);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.wp-fit-advice {
-    font-size: var(--t-body);
-    color: var(--tx-bright);
-    line-height: 1.5;
-}
-
-.wp-fit-detail {
-    font-size: var(--t-xs);
-    color: var(--tx-mid);
-    margin-top: 4px;
-    line-height: 1.5;
-}
-
 /* The rules text that decides every number above it — stated, not buried. */
-.wp-fit-caveat {
-    font-size: var(--t-xs);
-    color: var(--tx-dim);
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--tx-rule);
-    line-height: 1.5;
-}
 
 /* Data-quality warnings: variable power/toughness boxes, missing data. */
-.wp-note {
-    padding: 10px 14px;
-    border-top: 1px solid var(--tx-rule);
-    font-size: var(--t-xs);
-    color: var(--tx-accent);
-    line-height: 1.55;
-    display: grid;
-    gap: 4px;
-}
-
-/* --- Best lines --- */
-
-.wp-pair-list { display: grid; }
-
-.wp-pair {
-    display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) 18px minmax(0, 1fr) 62px;
-    gap: 10px;
-    align-items: center;
-    padding: 8px 14px;
-    border-bottom: 1px solid var(--tx-rule);
-    font-size: var(--t-xs);
-}
-
-.wp-pair:last-child { border-bottom: 0; }
-.wp-pair:hover { background: var(--tx-row-hi); }
-
-.wp-pair-head {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    background: var(--tx-panel-alt);
-}
-
-.wp-pair-head:hover { background: var(--tx-panel-alt); }
 
 /* The total is the join key, so it gets the fixed column and a tabular figure. */
-.wp-pair-total {
-    font-feature-settings: 'tnum' 1;
-    font-weight: 700;
-    color: var(--tx-bright);
-    text-align: center;
-    border: 1px solid var(--tx-rule-hi);
-    padding: 2px 0;
-}
-
-.wp-pair-head .wp-pair-total {
-    border-color: transparent;
-    font-weight: 400;
-    color: var(--tx-dim);
-}
-
-.wp-pair-cast,
-.wp-pair-fetch {
-    display: grid;
-    gap: 1px;
-    min-width: 0;
-}
-
-.wp-pair-name {
-    color: var(--tx-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.wp-pair-fetch .wp-pair-name { color: var(--tx-good); }
-
-.wp-pair-meta {
-    font-size: var(--t-micro);
-    color: var(--tx-dim);
-    font-feature-settings: 'tnum' 1;
-}
-
-.wp-pair-arrow {
-    color: var(--tx-dim);
-    text-align: center;
-}
-
-.wp-pair-gain {
-    text-align: right;
-    font-weight: 700;
-    font-feature-settings: 'tnum' 1;
-}
-
-.wp-pair-head .wp-pair-gain { font-weight: 400; }
 
 /* The pair ladder carries more columns than the other sweep tables, so it is
    the one that runs out of room first. Let it scroll inside its own box rather
@@ -3472,14 +1874,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     #wildpair-sweepTable .tx-sweep-table td:last-child { display: none; }
 }
 
-/* Compact P/T strip inside the pair-ladder table. */
-.wp-mini {
-    color: var(--tx-dim);
-    font-size: var(--t-micro);
-    font-feature-settings: 'tnum' 1;
-    letter-spacing: 0.04em;
-}
-
 @media (max-width: 620px) {
     /* The spread bar is the first thing to go when the row gets tight — the
        printed numbers beside it say the same thing. */
@@ -3490,17 +1884,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     .wp-opt-edge,
     .wp-opt-bar { display: none; }
 
-    /* And the five-column pairing row stacks: total and delta stay on the first
-       line, the pair below it. */
-    .wp-pair {
-        grid-template-columns: 42px minmax(0, 1fr) 62px;
-        row-gap: 4px;
-    }
-    .wp-pair-cast { grid-column: 2 / 3; }
-    .wp-pair-arrow { display: none; }
-    .wp-pair-fetch { grid-column: 2 / 4; }
-    .wp-pair-gain { grid-row: 1; grid-column: 3 / 4; }
-    .wp-pair-head .wp-pair-fetch { display: none; }
 }
 
 /* ==================== HEAD TO HEAD ====================
@@ -3544,14 +1927,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     font-size: var(--t-body);
     font-weight: 600;
     color: var(--tx-bright);
-}
-
-.vs-side-cost {
-    font-size: var(--t-micro);
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    color: var(--tx-dim);
-    margin-bottom: 8px;
 }
 
 .vs-side-value {
@@ -3625,38 +2000,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
     text-align: center;
 }
 
-.vs-verdict {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 14px;
-    border-bottom: 1px solid var(--tx-rule);
-}
-
-.vs-verdict-badge {
-    border: 1px solid;
-    padding: 5px 10px;
-    font-size: var(--t-micro);
-    font-weight: 600;
-    letter-spacing: var(--track-label);
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.vs-verdict-text {
-    font-size: var(--t-xs);
-    color: var(--tx-text);
-    line-height: 1.55;
-}
-
-/* --- Peaks --- */
-
-.vs-peaks-metrics {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    border-bottom: 1px solid var(--tx-rule);
-}
-
 .vs-peak {
     padding: 12px 14px;
     border-right: 1px solid var(--tx-rule);
@@ -3694,7 +2037,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 /* --- Creature table --- */
 
-.vs-name { color: var(--tx-text); }
 .vs-pt { color: var(--tx-dim); font-feature-settings: 'tnum' 1; }
 
 .vs-detail {
@@ -3733,5 +2075,206 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
     .vs-side.is-leader { box-shadow: inset 2px 0 0 var(--tx-accent); }
 
-    .vs-verdict { flex-direction: column; gap: 8px; }
 }
+
+/* ==================== V3 REFRESH — SHARED PRIMITIVES ====================
+   The calculator primitives above were built for the square, all-mono
+   terminal skin. These rules restate them in the v3 language (rounded,
+   sentence-case labels, mono only for numbers) in one place, so every
+   calculator inherits the new look without per-page overrides. */
+
+.tx-input,
+.input-group input[type="text"],
+.input-group input[type="number"],
+.input-group textarea,
+.calc-body select {
+    border: 1px solid var(--tx-rule-hi);
+    border-radius: var(--radius-sm);
+    background: var(--tx-bg);
+    color: var(--tx-bright);
+    min-height: 34px;
+    padding: 6px 10px;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.calc-body input[type="number"] { font-family: var(--font-mono); }
+
+.tx-input:focus,
+.input-group input:focus,
+.input-group textarea:focus,
+.calc-body select:focus {
+    outline: none;
+    border-color: var(--tx-accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.input-group label,
+.calculator-content .input-group > label {
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--tx-mid);
+}
+
+.input-group input[type="checkbox"],
+.calc-body input[type="checkbox"],
+.calc-body input[type="radio"] {
+    accent-color: var(--tx-accent);
+}
+
+/* Range slider: a rounded track and a real, grabbable thumb */
+.tx-slider,
+.calc-body input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 6px;
+    background: var(--tx-rule);
+    outline: none;
+    cursor: pointer;
+}
+
+.tx-slider::-webkit-slider-thumb,
+.calc-body input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--tx-accent);
+    border: 3px solid var(--tx-panel);
+    box-shadow: 0 0 0 1px var(--tx-accent), var(--shadow-sm);
+    cursor: grab;
+    transition: transform var(--transition-fast);
+}
+
+.tx-slider::-moz-range-thumb,
+.calc-body input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--tx-accent);
+    border: 3px solid var(--tx-panel);
+    box-shadow: 0 0 0 1px var(--tx-accent);
+    cursor: grab;
+}
+
+.tx-slider:active::-webkit-slider-thumb,
+.calc-body input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.15); cursor: grabbing; }
+
+.tx-slider:focus-visible::-webkit-slider-thumb,
+.calc-body input[type="range"]:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 1px var(--tx-accent), 0 0 0 5px var(--accent-soft);
+}
+
+/* Preset chips: pills, sentence case; selected = soft accent, not solid */
+.tx-chip {
+    height: 28px;
+    padding: 0 11px;
+    border: 1px solid var(--tx-rule-hi);
+    border-radius: var(--radius-full);
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--tx-mid);
+}
+
+.tx-chip:hover { color: var(--tx-bright); border-color: var(--tx-dim); background: transparent; }
+
+.tx-chip.active {
+    background: var(--accent-soft);
+    color: var(--tx-accent);
+    border-color: color-mix(in srgb, var(--tx-accent) 50%, transparent);
+}
+
+/* Hero stats */
+.tx-stat { padding: 18px 20px; }
+
+.tx-stat-label {
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: var(--track-label);
+    margin-bottom: 4px;
+}
+
+.tx-stat-value { font-family: var(--font-mono); font-weight: 600; }
+
+/* Verdict pill */
+.tx-verdict {
+    padding: 2px 9px;
+    border-radius: var(--radius-full);
+    font-size: var(--t-micro);
+    letter-spacing: 0.06em;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    border-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+/* Recommendation note */
+.tx-rec {
+    font-size: var(--t-xs);
+    padding: 12px 16px;
+    background: var(--tx-panel-alt);
+}
+
+/* Collapsible detail sections */
+.tx-collapse-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--tx-mid);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.tx-collapse-head::before,
+.tx-collapse[open] > .tx-collapse-head::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.tx-collapse[open] > .tx-collapse-head::before { transform: rotate(45deg); }
+.tx-collapse-head:hover { color: var(--tx-bright); background: var(--tx-panel-alt); }
+
+/* Tables */
+.tx-sweep-table thead th,
+.portent-sweep-table thead th,
+.comparison-table th {
+    font-size: var(--t-label);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: none;
+    color: var(--tx-dim);
+}
+
+.tx-sweep-table tbody td,
+.portent-sweep-table tbody td { font-family: var(--font-mono); font-size: var(--t-xs); }
+.tx-sweep-table tbody td.ta-l { font-family: var(--font-body); }
+
+.tx-sweep-table tbody tr.rec-row td:first-child { box-shadow: inset 3px 0 0 var(--tx-accent); }
+
+/* Probability bars inside tables */
+.tx-p-bar { border-radius: 4px; overflow: hidden; }
+.tx-p-fill { border-radius: 4px; }
+
+/* Sample reveal chips */
+.reveal-card {
+    border-radius: var(--radius-xs);
+}
+
+/* Chart wrapper: breathing room inside the card */
+.calc-body .chart-container { padding: 10px 12px 6px; }

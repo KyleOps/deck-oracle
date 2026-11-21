@@ -1,473 +1,377 @@
 /**
- * Kamahl's Druidic Vow Calculator
- * Simulates hits for {X}{G}{G} Legendary Sorcery
- * "Look at the top X cards of your library. You may put any number of land and/or legendary permanent cards with mana value X or less from among them onto the battlefield. Put the rest into your graveyard."
+ * Kamahl's Druidic Vow — {X}{G}{G} legendary sorcery.
+ *
+ * "Look at the top X cards of your library. You may put any number of land
+ * and/or legendary permanent cards with mana value X or less from among them
+ * onto the battlefield. Put the rest into your graveyard."
+ *
+ * Exact throughout: hits among the cards looked at are hypergeometric, and the
+ * chance the cast pays for itself is an exact dynamic program over the cards'
+ * values (js/utils/payback.js). When the Vow is copied (The Sixth Doctor and
+ * similar), the copy looks at the next X cards, so 2X cards are seen.
  */
 
-import { createCache, partialShuffle, formatNumber } from '../utils/simulation.js';
-import { createOrUpdateChart } from '../utils/chartHelpers.js';
+import { createCache } from '../utils/simulation.js';
+import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderHeroStats, renderRecommendation, renderInsightBox, renderVerdictBadge, renderSweepTable, pBarCell, generateSampleRevealsHTML } from '../utils/components.js';
-import { efficiencyVerdict, formatDelta, deltaColor, recommendKneeX } from '../utils/analysis.js';
-import { compareBigSpells, renderComparison } from '../utils/bigSpellComparison.js';
+import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell } from '../utils/components.js';
 import { calculateFixedDrawPayback, scoreBattlefieldValue } from '../utils/payback.js';
-
 import {
-    buildDeckFromCardData, shuffleDeck, renderDistributionChart,
-    createCollapsibleSection
-} from '../utils/sampleSimulator.js';
+    avg, barsHTML, bindXPresets, cardListKey, chanceTone, createSampler, deckCardList, expandCards, fade,
+    hypergeometricPmf, isPermanentTypeLine, listSize, noticeHTML, pct, plural, quantileOf, readX,
+    renderHowItCompares, sampleCardHTML, syncXControl, toneColor
+} from '../utils/bigSpells.js';
 
-const CONFIG = {
-    X_RANGE_BEFORE: 4,
-    X_RANGE_AFTER: 4,
-    DEFAULT_SAMPLE_SIZE: 500,
-    DEFAULT_X_VALUE: 10,
-    SAMPLE_BATCH_SIZE: 50,
-    STABLE_SAMPLE_COUNT: 20
-};
+const CONFIG = Object.freeze({
+    MAX_X: 30,
+    DEFAULT_X: 7,
+    TABLE_MAX_X: 20,
+    RELIABLE: 0.75,
+    SAMPLE_COUNT: 4,
+    SAMPLE_ROWS: 12,
+    DEFAULT_LAND_VALUE: 1,
+    DEFAULT_CARD_VALUE: 0.25,
+    EXTRA_MANA: 2
+});
 
-let simulationCache = createCache(50);
-let lastDeckHash = '';
+/** Commanders that copy the Vow every time it is cast. */
+const COPYING_COMMANDERS = new Set(['The Sixth Doctor']);
+
+const paybackCache = createCache(256);
+const sampler = createSampler(CONFIG.SAMPLE_COUNT);
 let chart = null;
+let lastCommander;          // undefined until the first render
+let copyChosenByUser = false;
 
-// Stable samples state
-let stableSamples = [];
-let renderedCount = 0;
-
-// Card analysis cache (cleared when deck or X changes)
-const cardAnalysisCache = new Map();
-
-/**
- * Check if a type line represents a permanent type
- * @param {string} typeLine - Card type line (case-insensitive)
- * @returns {boolean} - True if the card is a permanent type
- */
-function isPermanentType(typeLine) {
-    if (!typeLine) return false;
-    const lower = typeLine.toLowerCase();
-    return lower.includes('creature') ||
-           lower.includes('artifact') ||
-           lower.includes('enchantment') ||
-           lower.includes('planeswalker') ||
-           lower.includes('battle') ||
-           lower.includes('land');
-}
-
-/**
- * Analyze card for all display purposes (single source of truth)
- * Cached per card name + X value for performance
- * @param {Object} card - Card object with type_line and cmc
- * @param {number} xValue - X value for CMC comparison
- * @returns {Object} - Comprehensive card analysis
- */
-function analyzeCardForDisplay(card, xValue) {
-    const cacheKey = `${card.name}-${xValue}`;
-
-    if (cardAnalysisCache.has(cacheKey)) {
-        return cardAnalysisCache.get(cacheKey);
-    }
-
-    const typeLine = card.type_line || '';
-    const lower = typeLine.toLowerCase();
-    const cmc = card.cmc !== undefined ? card.cmc : 0;
-
+/** Land, or legendary permanent — the cards the Vow can put into play. */
+function classify(typeLine) {
+    const lower = String(typeLine ?? '').toLowerCase();
     const isLand = lower.includes('land');
-    const isLegendary = lower.includes('legendary');
-    const isPermanent = isPermanentType(typeLine);
-
-    const isValid = isLand || (isLegendary && isPermanent);
-    const matchesX = cmc <= xValue;
-
-    const result = {
-        isLand,
-        isLegendary,
-        isPermanent,
-        cmc,
-        matchesX,
-        isValid,
-        isHit: isValid && matchesX
-    };
-
-    cardAnalysisCache.set(cacheKey, result);
-    return result;
+    const isLegendary = !isLand && lower.includes('legendary') && isPermanentTypeLine(lower);
+    return { isLand, isLegendary, isValid: isLand || isLegendary };
 }
 
 /**
- * Get display styling for a card in sample reveals
- * @param {Object} analysis - Card analysis from analyzeCardForDisplay()
- * @param {string} cardTypeLine - Original type line for tooltip
- * @returns {Object} - {bgColor, textColor, tooltip}
- */
-/**
- * Get display styling for a card in sample reveals
- * 4-color system:
- * 1. Lands (green) - always hit
- * 2. Legends that hit (cyan/blue) - legendary permanents with CMC ≤ X
- * 3. Legends that missed (yellow/orange) - legendary permanents with CMC > X
- * 4. Non-legends (gray/red) - all other cards
- */
-function getCardDisplayStyle(analysis, cardTypeLine) {
-    const { isLand, isLegendary, isPermanent, matchesX, cmc } = analysis;
-    const baseTooltip = `${cardTypeLine} - CMC: ${cmc}`;
-
-    // Color 1: Lands (green) - always hit
-    if (isLand) {
-        return {
-            bgColor: '#55c97f',
-            textColor: '#0a0b0a',
-            tooltip: `${baseTooltip} (Land → battlefield)`
-        };
-    }
-
-    // Color 2: Legends that hit (cyan/blue) - legendary permanents with CMC ≤ X
-    if (isLegendary && isPermanent && matchesX) {
-        return {
-            bgColor: '#5b8db8',
-            textColor: '#0a0b0a',
-            tooltip: `${baseTooltip} (Legendary + CMC ≤ X → battlefield)`
-        };
-    }
-
-    // Color 3: Legends that missed (yellow/orange) - legendary permanents with CMC > X
-    if (isLegendary && isPermanent && !matchesX) {
-        return {
-            bgColor: '#f0a92c',
-            textColor: '#0a0b0a',
-            tooltip: `${baseTooltip} (Legendary but CMC > X → graveyard)`
-        };
-    }
-
-    // Color 4: Non-legends (gray/red) - everything else
-    return {
-        bgColor: '#808b85',
-        textColor: '#0a0b0a',
-        tooltip: `${baseTooltip} (Non-legendary → graveyard)`
-    };
-}
-
-/**
- * Generate stable samples from the deck
- * @param {Array} deck - The source deck
- * @param {number} count - Number of samples to generate
- */
-function generateStableSamples(deck, count) {
-    stableSamples = [];
-    for (let i = 0; i < Math.max(count, CONFIG.DEFAULT_SAMPLE_SIZE); i++) {
-        stableSamples.push(shuffleDeck([...deck]));
-    }
-}
-
-/**
- * Force refresh of stable samples
- */
-function refreshSamples() {
-    const config = getDeckConfig();
-    const cardData = config.cardData;
-
-    if (cardData && cardData.cardsByName && Object.keys(cardData.cardsByName).length > 0) {
-        const countInput = document.getElementById('vow-sample-count');
-        const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
-        const deck = buildDeckFromCardData(cardData);
-        generateStableSamples(deck, numSims);
-        runSampleReveals();
-    }
-}
-
-/**
- * Create a hash for the distribution object
- */
-function hashDistribution(dist) {
-    return Object.entries(dist)
-        .sort((a, b) => Number(a[0]) - Number(b[0]))
-        .map(([k, v]) => `${k}:${v}`)
-        .join('|');
-}
-
-/**
- * Check if a card is a valid hit for Kamahl's Druidic Vow
- * Must be (Land) OR (Legendary AND Permanent)
- * Note: CMC check happens during simulation/calculation against X
- * @param {Object} card
- * @returns {boolean}
- */
-function isValidType(card) {
-    const typeLine = card.type_line || '';
-    const lower = typeLine.toLowerCase();
-    const isLand = lower.includes('land');
-    const isLegendary = lower.includes('legendary');
-    const isPermanent = isPermanentType(typeLine);
-
-    return isLand || (isLegendary && isPermanent);
-}
-
-/**
- * Check if a card is a Legendary Permanent (specifically)
- * @param {Object} card
- * @returns {boolean}
- */
-function isLegendaryPermanent(card) {
-    const typeLine = card.type_line || '';
-    const lower = typeLine.toLowerCase();
-    const isLegendary = lower.includes('legendary');
-    const isPermanent = isPermanentType(typeLine);
-
-    return isLegendary && isPermanent;
-}
-
-/**
- * Simulate Kamahl's Druidic Vow using Expected Value
- * @param {number} deckSize
- * @param {Object} distribution - Map of CMC -> count of VALID TYPES only
+ * Expected hits for the Vow at X (linearity of expectation).
+ *
+ * @param {number} deckSize - cards in the library
+ * @param {Object} distribution - mana value -> count of lands/legendary permanents
  * @param {number} x
- * @param {boolean} doubleCast - If true, copy the spell (reveal 2X cards total)
- * @param {Object} cardData - Full card data for detailed breakdown
+ * @param {boolean} [doubleCast=false] - copied: look at 2X cards
+ * @param {{cardsByName:Object}|null} [cardData] - when given, also splits lands from legends
+ * @returns {{expectedHits:number, expectedLands:number, expectedLegends:number, expectedManaValue:number}}
  */
 export function simulateVow(deckSize, distribution, x, doubleCast = false, cardData = null) {
-    const multiplier = doubleCast ? 2 : 1;
-    const cacheKey = `${deckSize}-${x}-${doubleCast}-${hashDistribution(distribution)}`;
-    const cached = simulationCache.get(cacheKey);
-    if (cached) return cached;
+    let hits = 0;
+    let lands = 0;
+    let legends = 0;
+    let manaValue = 0;
 
-    let validHitsCount = 0;
-    let landCount = 0;
-    let legendaryHitsCount = 0;
-    let totalManaValue = 0;
-
-    // Calculate breakdown if we have card data
-    if (cardData && cardData.cardsByName) {
-        Object.values(cardData.cardsByName).forEach(card => {
-            const analysis = analyzeCardForDisplay(card, x);
-            if (analysis.isValid && analysis.matchesX) {
-                validHitsCount += card.count;
-                totalManaValue += analysis.cmc * card.count;
-
-                if (analysis.isLand) {
-                    landCount += card.count;
-                }
-                if (analysis.isLegendary && analysis.isPermanent) {
-                    legendaryHitsCount += card.count;
-                }
-            }
-        });
+    if (cardData?.cardsByName) {
+        for (const card of Object.values(cardData.cardsByName)) {
+            const { isLand, isLegendary, isValid } = classify(card?.type_line);
+            const cmc = Number(card?.cmc) || 0;
+            const count = Number(card?.count) || 0;
+            if (!isValid || cmc > x) continue;
+            hits += count;
+            manaValue += cmc * count;
+            if (isLand) lands += count;
+            if (isLegendary) legends += count;
+        }
     } else {
-        // Fallback to simple count from distribution
-        for (const [key, count] of Object.entries(distribution)) {
-            const cmc = parseInt(key);
-            if (!isNaN(cmc) && cmc <= x) {
-                validHitsCount += (count || 0);
-                totalManaValue += cmc * (count || 0);
+        for (const [key, count] of Object.entries(distribution ?? {})) {
+            const cmc = parseInt(key, 10);
+            if (!Number.isNaN(cmc) && cmc <= x) {
+                hits += count || 0;
+                manaValue += cmc * (count || 0);
             }
         }
     }
 
-    // Probabilities
-    const hitProbability = deckSize > 0 ? validHitsCount / deckSize : 0;
-    const landProbability = deckSize > 0 ? landCount / deckSize : 0;
-    const legendProbability = deckSize > 0 ? legendaryHitsCount / deckSize : 0;
-    const avgManaValue = validHitsCount > 0 ? totalManaValue / validHitsCount : 0;
-
-    const cardsRevealed = Math.min(x * multiplier, deckSize);
-
-    const result = {
-        expectedHits: cardsRevealed * hitProbability,
-        expectedLands: cardsRevealed * landProbability,
-        expectedLegends: cardsRevealed * legendProbability,
-        expectedManaValue: cardsRevealed * hitProbability * avgManaValue
-    };
-
-    simulationCache.set(cacheKey, result);
-    return result;
-}
-
-/**
- * Get current deck configuration
- */
-export function getDeckConfig() {
-    const config = DeckConfig.getDeckConfig();
-    const cardData = DeckConfig.getImportedCardData();
-    const deckSize = DeckConfig.getDeckSize(true);
-
-    // Distribution map: CMC (number) -> count of VALID HITS only
-    let distribution = {};
-    let totalHits = 0;
-    let totalLegendaries = 0;
-    let totalPermanents = 0;
-    const paybackCards = [];
-    
-    if (cardData && cardData.cardsByName && Object.keys(cardData.cardsByName).length > 0) {
-        Object.values(cardData.cardsByName).forEach(card => {
-            const isPermanent = isPermanentType(card.type_line);
-            const analysis = analyzeCardForDisplay(card, Number.MAX_SAFE_INTEGER);
-
-            if (isPermanent) totalPermanents += card.count;
-
-            if (isValidType(card)) {
-                const cmc = card.cmc !== undefined ? Math.floor(card.cmc) : 0;
-                distribution[cmc] = (distribution[cmc] || 0) + card.count;
-                totalHits += card.count;
-            }
-
-            if (isLegendaryPermanent(card)) {
-                totalLegendaries += card.count;
-            }
-            paybackCards.push({
-                count: card?.count ?? 0,
-                cmc: card?.cmc ?? 0,
-                isLand: analysis.isLand,
-                isValid: analysis.isValid
-            });
-        });
-    } else {
-        // Fallback: assume only Lands are hits if no import
-        distribution[0] = config.lands;
-        totalHits = config.lands;
-        totalPermanents = config.lands + config.creatures + config.artifacts + config.enchantments + config.planeswalkers;
-        paybackCards.push(
-            { count: config.lands ?? 0, cmc: 0, isLand: true, isValid: true },
-            { count: Math.max(0, deckSize - (config.lands ?? 0)), cmc: 0, isLand: false, isValid: false }
-        );
-        // Assume 0 legends in manual mode to encourage import
-    }
-
-    const newHash = hashDistribution(distribution);
-    
-    // Check for sample refresh need
-    if (newHash !== lastDeckHash && cardData && cardData.cardsByName) {
-        const deck = buildDeckFromCardData(cardData);
-        generateStableSamples(deck, CONFIG.STABLE_SAMPLE_COUNT);
-    }
-
-    if (newHash !== lastDeckHash) {
-        simulationCache.clear();
-        cardAnalysisCache.clear();
-        lastDeckHash = newHash;
-    }
-
-    const xSlider = document.getElementById('vow-xSlider');
-    if (xSlider) {
-        xSlider.max = Math.min(deckSize, 30);
-    }
-
-    // Auto-check double cast for "The Sixth Doctor" commander
-    const commanderName = DeckConfig.getCommanderName();
-    const doubleCastCheckbox = document.getElementById('vow-doubleCast');
-    if (doubleCastCheckbox && commanderName === 'The Sixth Doctor') {
-        doubleCastCheckbox.checked = true;
-    }
-    const doubleCast = doubleCastCheckbox ? doubleCastCheckbox.checked : false;
-
-    const x = parseInt(document.getElementById('vow-xValue')?.value) || CONFIG.DEFAULT_X_VALUE;
-    const landValue = Math.max(0, parseFloat(document.getElementById('vow-land-value')?.value) || 0);
-    const cardValue = Math.max(0, parseFloat(document.getElementById('vow-card-value')?.value) || 0);
-
+    const seen = Math.min(Math.max(0, x) * (doubleCast ? 2 : 1), deckSize);
+    const share = n => (deckSize > 0 ? seen * n / deckSize : 0);
     return {
-        deckSize,
-        x,
-        distribution,
-        totalHits,
-        totalLegendaries,
-        totalPermanents,
-        cardData,
-        doubleCast,
-        paybackCards,
-        paybackSettings: { threshold: x + 2, landValue, cardValue }
+        expectedHits: share(hits),
+        expectedLands: share(lands),
+        expectedLegends: share(legends),
+        expectedManaValue: share(manaValue)
     };
 }
 
+// ── The library ──────────────────────────────────────────────────────────────
+
 /**
- * Calculate results
+ * The library as the Vow sees it. With only type counts, legendary status is
+ * unknown, so only lands count as hits.
  */
-export function calculate() {
-    const config = getDeckConfig();
-
-    if (config.deckSize === 0) {
-        return { config, results: {} };
-    }
-
-    const results = {};
-    const minX = Math.max(1, config.x - CONFIG.X_RANGE_BEFORE);
-    const maxX = Math.min(config.x + CONFIG.X_RANGE_AFTER, config.deckSize);
-
-    for (let testX = minX; testX <= maxX; testX++) {
-        const sim = simulateVow(config.deckSize, config.distribution, testX, config.doubleCast, config.cardData);
-        const multiplier = config.doubleCast ? 2 : 1;
-        results[testX] = {
-            expectedHits: sim.expectedHits,
-            expectedLands: sim.expectedLands,
-            expectedLegends: sim.expectedLegends,
-            expectedManaValue: sim.expectedManaValue,
-            cardsRevealed: testX * multiplier
+export function buildVowLibrary(cards = [], counts = {}) {
+    if (cards.length > 0) {
+        return {
+            hasList: true,
+            deckSize: listSize(cards),
+            entries: cards.map(card => ({ name: card.name, count: card.count, cmc: card.cmc, ...classify(card.type_line) }))
         };
     }
+    const n = field => Math.max(0, Math.floor(Number(counts?.[field]) || 0));
+    const lands = n('lands');
+    const rest = n('creatures') + n('artifacts') + n('enchantments') + n('planeswalkers') + n('battles') + n('instants') + n('sorceries');
+    return {
+        hasList: false,
+        deckSize: lands + rest,
+        entries: [
+            { count: lands, cmc: 0, isLand: true, isLegendary: false, isValid: true },
+            { count: rest, cmc: 0, isLand: false, isLegendary: false, isValid: false }
+        ]
+    };
+}
 
-    const current = results[config.x];
-    if (current) {
-        current.payback = calculateFixedDrawPayback(
-            config.paybackCards.map(card => ({ ...card, eligible: card.isValid && card.cmc <= config.x })),
-            config.x * (config.doubleCast ? 2 : 1),
-            config.paybackSettings
+/** Everything the page shows for one X. Exact; payback is cached. */
+export function vowOutcome(library, x, { copies = 1, landValue = CONFIG.DEFAULT_LAND_VALUE, cardValue = CONFIG.DEFAULT_CARD_VALUE } = {}, deckKey = 'deck') {
+    const seen = Math.min(x * copies, library.deckSize);
+    let lands = 0;
+    let legends = 0;
+    for (const e of library.entries) {
+        if (!e.isValid || e.cmc > x) continue;
+        if (e.isLand) lands += e.count;
+        else legends += e.count;
+    }
+    const eligible = lands + legends;
+    const pmf = hypergeometricPmf(library.deckSize, eligible, seen);
+    const share = n => (library.deckSize > 0 ? seen * n / library.deckSize : 0);
+
+    const key = `${deckKey}|${x}|${copies}|${landValue}|${cardValue}`;
+    let payback = paybackCache.get(key);
+    if (!payback) {
+        payback = calculateFixedDrawPayback(
+            library.entries.map(e => ({ ...e, eligible: e.isValid && e.cmc <= x })),
+            seen,
+            { threshold: x + CONFIG.EXTRA_MANA, landValue, cardValue }
         );
+        paybackCache.set(key, payback);
     }
 
+    return {
+        x,
+        mana: x + CONFIG.EXTRA_MANA,
+        copies,
+        seen,
+        deckSize: library.deckSize,
+        eligibleLands: lands,
+        eligibleLegends: legends,
+        eligible,
+        expectedHits: share(eligible),
+        expectedLands: share(lands),
+        expectedLegends: share(legends),
+        pmf,
+        low: quantileOf(pmf, 0.1),
+        high: quantileOf(pmf, 0.9),
+        payback,
+        legendsKnown: library.hasList
+    };
+}
+
+// ── Plain-English answer ─────────────────────────────────────────────────────
+
+export function analyze(sweep, x) {
+    const xs = Object.keys(sweep ?? {}).map(Number).sort((a, b) => a - b);
+    const at = sweep?.[x] ?? null;
+    const next = sweep?.[x + 1] ?? null;
+    return {
+        ...at,
+        next,
+        marginal: next && at ? next.expectedHits - at.expectedHits : null,
+        reliableX: xs.find(k => (sweep[k]?.payback?.paybackProbability ?? 0) >= CONFIG.RELIABLE) ?? null,
+        maxX: xs.length ? xs[xs.length - 1] : 0
+    };
+}
+
+/**
+ * The page's bottom line: "How many lands and legendaries will the Vow put
+ * into play?"
+ * @returns {{html:string, tone:'good'|'warn'|'bad'|'flat'}}
+ */
+export function summarize(a) {
+    if (!a || !a.deckSize) return { html: 'Add cards to your deck to see what Kamahl’s Druidic Vow does.', tone: 'flat' };
+    const copied = a.copies > 1;
+    const opener = `Kamahl’s Druidic Vow at <strong>X=${a.x}</strong> (${a.mana} mana${copied ? `, copied — ${a.seen} cards seen` : ''})`;
+    const p = a.payback?.paybackProbability ?? 0;
+    if (!a.legendsKnown) {
+        return {
+            html: `${opener} puts about <strong>${avg(a.expectedHits)} lands</strong> onto the battlefield and pays for itself ${pct(p)} of the time — counting lands only. Import your decklist so the page can find your legendary permanents.`,
+            tone: 'flat'
+        };
+    }
+    const lead = `${opener} puts about <strong>${avg(a.expectedHits)} lands and legends</strong> onto the battlefield (${avg(a.expectedLands)} lands, ${avg(a.expectedLegends)} legendary permanents) and pays for itself <strong>${pct(p)}</strong> of the time.`;
+    let follow = '';
+    if (p >= CONFIG.RELIABLE) {
+        if (a.marginal != null) follow = `Each extra point of X adds about ${avg(a.marginal)} more hits.`;
+    } else if (a.reliableX != null && a.reliableX > a.x) {
+        follow = `At <strong>X=${a.reliableX}</strong> it pays for itself 3 times in 4.`;
+    } else if (a.reliableX == null) {
+        follow = `With these value settings it never pays back 3 times in 4, even at X=${a.maxX}.`;
+    }
+    return { html: follow ? `${lead} ${follow}` : lead, tone: chanceTone(p) };
+}
+
+// ── Deck and page state ──────────────────────────────────────────────────────
+
+function readNumber(id, fallback) {
+    const value = parseFloat(typeof document !== 'undefined' ? document.getElementById(id)?.value : NaN);
+    return Number.isFinite(value) ? Math.min(20, Math.max(0, value)) : fallback;
+}
+
+/**
+ * Whether the Vow is copied. Follows the commander (checked automatically for
+ * one that copies it) until the player — or a share link — sets it by hand.
+ */
+function resolveCopy(commanderName) {
+    const box = typeof document !== 'undefined' ? document.getElementById('vow-doubleCast') : null;
+    if (!box) return COPYING_COMMANDERS.has(commanderName);
+    if (commanderName !== lastCommander) {
+        if (lastCommander !== undefined) copyChosenByUser = false;
+        lastCommander = commanderName;
+        if (!copyChosenByUser) box.checked = COPYING_COMMANDERS.has(commanderName);
+    }
+    return box.checked;
+}
+
+/** The page's inputs and the library they apply to. */
+export function getDeckConfig() {
+    const deck = DeckConfig.getDeckConfig();
+    const cards = deckCardList(deck);
+    const library = buildVowLibrary(cards, deck);
+    const maxX = Math.max(1, Math.min(library.deckSize, CONFIG.MAX_X));
+    const x = Math.min(maxX, readX('vow', CONFIG.DEFAULT_X));
+    const doubleCast = resolveCopy(deck.commanderName ?? null);
+    const settings = {
+        copies: doubleCast ? 2 : 1,
+        landValue: readNumber('vow-land-value', CONFIG.DEFAULT_LAND_VALUE),
+        cardValue: readNumber('vow-card-value', CONFIG.DEFAULT_CARD_VALUE)
+    };
+    const deckKey = cards.length ? cardListKey(cards) : `counts:${library.entries.map(e => e.count).join(',')}`;
+    return { deckSize: library.deckSize, x, maxX, library, cards, doubleCast, settings, deckKey };
+}
+
+/** Outcomes for every X up to the slider maximum. */
+export function calculate() {
+    const config = getDeckConfig();
+    const results = {};
+    if (config.deckSize === 0) return { config, results };
+    for (let x = 1; x <= config.maxX; x++) {
+        results[x] = vowOutcome(config.library, x, config.settings, config.deckKey);
+    }
     return { config, results };
 }
 
-/**
- * Update chart visualization
- */
-function updateChart(config, results) {
-    const xValues = Object.keys(results).map(Number).sort((a, b) => a - b);
-    const expectedHitsData = xValues.map(x => results[x].expectedHits);
-    const cardsRevealedData = xValues.map(x => results[x].cardsRevealed);
+/** Share-link settings beyond the legacy sliders. */
+export function getShareParams() {
+    const box = document.getElementById('vow-doubleCast');
+    return box ? { vowCopy: box.checked ? 1 : 0 } : {};
+}
 
+export function applyShareParams(params) {
+    const value = params?.get?.('vowCopy');
+    if (value !== '0' && value !== '1') return;
+    const box = document.getElementById('vow-doubleCast');
+    if (!box) return;
+    box.checked = value === '1';
+    copyChosenByUser = true;
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+
+function renderAnswer(config, a) {
+    const el = document.getElementById('vow-stats');
+    if (!el) return;
+    const { html, tone } = summarize(a);
+    const p = a.payback?.paybackProbability ?? 0;
+    const hero = renderHeroStats([
+        {
+            label: 'Pays for itself', value: pct(p), size: 'big', color: toneColor(chanceTone(p)),
+            sub: `reaches ${a.mana} value${a.legendsKnown ? '' : ' · lands only'}`,
+            term: 'payback'
+        },
+        {
+            label: 'Lands & legends', value: avg(a.expectedHits),
+            sub: a.low === a.high ? `almost always ${a.low}` : `${a.low}–${a.high} in 8 of 10 casts`,
+            tip: 'Average number of lands and legendary permanents with mana value X or less among the cards the Vow looks at — the ones it puts onto the battlefield.'
+        },
+        {
+            label: 'Value into play', value: avg(a.payback?.expectedEffectiveValue ?? 0),
+            sub: `${avg(a.payback?.expectedManaValue ?? 0)} printed mana value`,
+            tip: 'The printed mana value of everything put onto the battlefield, plus the land and per-permanent credit set on the left. Compared with the mana spent to decide whether the cast paid for itself.'
+        },
+        {
+            label: 'Cards it can hit', value: `${a.eligible}`,
+            sub: `${a.eligibleLands} lands + ${a.eligibleLegends} legends`,
+            tip: 'Lands and legendary permanents in your library with mana value X or less. Everything else the Vow looks at goes to the graveyard.'
+        }
+    ]);
+    const notice = config.cards.length ? '' : noticeHTML('Card-type counts can’t tell which permanents are legendary, so only lands are counted. Import your decklist for the full answer.', 'warn');
+    el.innerHTML = renderBottomLine({ html, tone }) + notice + hero;
+
+    const target = document.getElementById('vow-payback-target');
+    if (target) target.textContent = `${a.mana} value at X=${a.x}`;
+}
+
+function renderChart(config, results) {
+    const top = Math.min(config.maxX, Math.max(15, config.x + 5));
+    const xs = Array.from({ length: top }, (_, i) => i + 1);
     chart = createOrUpdateChart(chart, 'vow-chart', {
-        type: 'line',
+        type: 'bar',
         data: {
-            labels: xValues.map(x => 'X=' + x),
+            labels: xs.map(String),
             datasets: [
                 {
-                    label: 'Expected Hits',
-                    data: expectedHitsData,
-                    borderColor: '#55c97f',
-                    backgroundColor: 'rgba(85, 201, 127, 0.1)',
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: xValues.map(x => x === config.x ? 8 : 4),
-                    pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#55c97f'),
-                    yAxisID: 'y'
+                    label: 'Lands & legends',
+                    data: xs.map(x => +(results[x]?.expectedHits ?? 0).toFixed(2)),
+                    backgroundColor: xs.map(x => x === config.x ? TX_CHART.amber : fade(TX_CHART.blue, 0.45)),
+                    hoverBackgroundColor: xs.map(x => x === config.x ? TX_CHART.amber : fade(TX_CHART.blue, 0.7)),
+                    borderRadius: 3,
+                    maxBarThickness: 34,
+                    yAxisID: 'y',
+                    order: 2
                 },
                 {
-                    label: 'Cards Revealed',
-                    data: cardsRevealedData,
-                    borderColor: '#7d8a92',
-                    backgroundColor: 'rgba(125, 138, 146, 0.1)',
-                    fill: false,
+                    label: 'Pays for itself',
+                    type: 'line',
+                    data: xs.map(x => +((results[x]?.payback?.paybackProbability ?? 0) * 100).toFixed(1)),
+                    borderColor: TX_CHART.green,
+                    backgroundColor: TX_CHART.green,
+                    borderWidth: 2,
                     tension: 0.3,
-                    pointRadius: xValues.map(x => x === config.x ? 8 : 4),
-                    pointBackgroundColor: xValues.map(x => x === config.x ? '#fff' : '#7d8a92'),
-                    yAxisID: 'y'
+                    pointRadius: xs.map(x => x === config.x ? 5 : 2),
+                    pointBackgroundColor: xs.map(x => x === config.x ? TX_CHART.green : TX_CHART.bg),
+                    pointBorderColor: TX_CHART.green,
+                    yAxisID: 'y2',
+                    order: 1
                 }
             ]
         },
         options: {
+            onClick: (event, elements) => {
+                const index = elements?.[0]?.index;
+                if (index != null) setX(index + 1);
+            },
+            onHover: (event, elements) => {
+                const target = event?.native?.target;
+                if (target) target.style.cursor = elements?.length ? 'pointer' : 'default';
+            },
             scales: {
-                y: {
-                    type: 'linear',
-                    beginAtZero: true,
-                    title: { display: true, text: 'Count', color: '#55c97f' },
-                    grid: { color: 'rgba(85, 201, 127, 0.1)' },
-                    ticks: { color: '#55c97f', stepSize: 1 }
-                },
-                x: {
-                    grid: { color: 'rgba(128, 139, 133, 0.1)' },
-                    ticks: { color: '#808b85' }
-                }
+                x: { title: { display: true, text: 'X', color: TX_CHART.dim }, grid: { display: false } },
+                y: { beginAtZero: true, title: { display: true, text: 'Lands & legends', color: TX_CHART.dim } },
+                y2: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false }, ticks: { stepSize: 25, callback: v => `${v}%` } }
             },
             plugins: {
                 tooltip: {
                     callbacks: {
-                        label: ctx => ctx.datasetIndex === 0 ? `Hits: ${ctx.parsed.y.toFixed(2)}` : `Cards: ${ctx.parsed.y}`
+                        title: items => `X=${items[0].label} · ${Number(items[0].label) + CONFIG.EXTRA_MANA} mana`,
+                        label: item => {
+                            if (item.datasetIndex === 1) return `Pays for itself: ${pct(item.parsed.y / 100)}`;
+                            const r = results[Number(item.label)];
+                            return `${avg(item.parsed.y)} hits (${avg(r?.expectedLands ?? 0)} lands, ${avg(r?.expectedLegends ?? 0)} legends)`;
+                        }
                     }
                 }
             }
@@ -475,365 +379,141 @@ function updateChart(config, results) {
     });
 }
 
-/**
- * Compute expected hits across the full practical X range for the sweep table and
- * the diminishing-returns recommendation.
- * @returns {Array<{x:number, value:number, efficiency:number, cardsRevealed:number}>}
- */
-function computeSweep(config) {
-    const multiplier = config.doubleCast ? 2 : 1;
-    const maxX = Math.min(config.deckSize, 20);
-    const sweep = [];
-    for (let x = 1; x <= maxX; x++) {
-        const sim = simulateVow(config.deckSize, config.distribution, x, config.doubleCast, config.cardData);
-        const cardsRevealed = x * multiplier;
-        sweep.push({ x, value: sim.expectedHits, cardsRevealed, efficiency: cardsRevealed > 0 ? sim.expectedHits / cardsRevealed : 0 });
+function renderSamples(config) {
+    const el = document.getElementById('vow-samples');
+    const header = document.getElementById('vow-samples-title');
+    const seen = Math.min(config.x * config.settings.copies, config.deckSize);
+    if (header) header.textContent = `Sample casts at X=${config.x}${config.doubleCast ? ` (copied, ${seen} cards)` : ''}`;
+    if (!el) return;
+    if (!config.cards.length) {
+        el.innerHTML = noticeHTML('Sample casts need a decklist with card names — import one from the deck menu.', 'flat');
+        return;
     }
-    return sweep;
+    const threshold = config.x + CONFIG.EXTRA_MANA;
+    const decks = sampler.get(config.deckKey, () => expandCards(config.cards));
+    el.innerHTML = decks.map((library, i) => {
+        const looked = library.slice(0, seen);
+        let hits = 0;
+        let lands = 0;
+        let manaValue = 0;
+        const rows = looked.map(card => {
+            const { isLand, isLegendary, isValid } = classify(card.type_line);
+            const hit = isValid && card.cmc <= config.x;
+            if (hit) {
+                hits++;
+                manaValue += card.cmc;
+                if (isLand) lands++;
+            }
+            const permanent = isPermanentTypeLine(card.type_line);
+            return {
+                name: card.name,
+                type: isLand ? 'land' : card.types[0] ?? 'artifact',
+                mv: isLand && card.cmc === 0 ? '' : card.cmc,
+                fate: hit ? (isLegendary ? 'legend → play' : 'land → play') : (isLegendary ? 'costs too much' : (permanent ? 'not legendary' : 'graveyard')),
+                state: hit ? (isLegendary ? 'star' : 'hit') : 'miss'
+            };
+        });
+        const scored = scoreBattlefieldValue({ manaValue, lands, cards: hits }, { ...config.settings, threshold });
+        const shown = rows.slice(0, CONFIG.SAMPLE_ROWS);
+        const hidden = rows.slice(CONFIG.SAMPLE_ROWS);
+        return sampleCardHTML({
+            title: `Shuffle ${i + 1}`,
+            tag: scored.paidForItself ? 'Pays for itself' : 'Falls short',
+            tone: scored.paidForItself ? 'good' : 'bad',
+            rows: shown,
+            more: hidden.length ? `+ ${plural(hidden.length, 'more card')} (${plural(hidden.filter(r => r.state !== 'miss').length, 'hit')})` : '',
+            footer: `<strong>${plural(lands, 'land')}</strong>, <strong>${plural(hits - lands, 'legend')}</strong> · value <strong>${avg(scored.effectiveValue)}</strong> of ${threshold} needed`
+        });
+    }).join('');
 }
 
-/**
- * Render the X-sweep step-response table.
- */
-function updateTable(config) {
-    const sweep = computeSweep(config);
-    const knee = recommendKneeX(sweep.map(p => ({ x: p.x, value: p.efficiency })), { fraction: 0.92 });
-    const recommended = knee ? knee.x : null;
-
-    let prev = null;
-    const rows = sweep.map(p => {
-        const delta = prev != null ? p.value - prev : null;
-        prev = p.value;
-        return { ...p, delta };
-    });
-
+function renderDetails(config, results, a) {
+    const rows = [];
+    for (let x = 1; x <= Math.min(config.maxX, CONFIG.TABLE_MAX_X); x++) {
+        const r = results[x];
+        if (!r) continue;
+        rows.push({ x, r, delta: results[x - 1] ? r.expectedHits - results[x - 1].expectedHits : null });
+    }
     renderSweepTable('vow-comparisonTable', {
         current: config.x,
-        recommended,
+        recommended: a.reliableX,
         rows,
         columns: [
-            { label: 'X', align: 'left', render: r => `${r.x}` },
-            { label: 'E[HITS]', render: r => `<span style="color:var(--tx-green);">${formatNumber(r.value, 2)}</span>` },
-            { label: 'HIT RATE', align: 'left', render: r => pBarCell(r.efficiency, 'var(--tx-green)') },
-            { label: '%', render: r => `<span style="color:var(--tx-green);">${(r.efficiency * 100).toFixed(0)}%</span>` },
-            { label: 'Δ HITS', render: r => r.delta == null ? '—' : `<span style="color:${deltaColor(r.delta, 0.01)};">${formatDelta(r.delta, 2)}</span>` },
-            { label: 'VERDICT', render: r => { const v = efficiencyVerdict(r.efficiency); return `<span style="color:${v.color}; font-weight:600; letter-spacing:0.06em;">${v.label}</span>`; } }
+            { label: 'X', align: 'left', render: row => `${row.x}` },
+            { label: 'Mana', render: row => `${row.r.mana}` },
+            { label: 'Lands', render: row => avg(row.r.expectedLands) },
+            { label: 'Legends', render: row => avg(row.r.expectedLegends) },
+            { label: 'Change', render: row => row.delta == null ? '—' : `+${avg(row.delta, 2)}` },
+            { label: 'Hit rate', align: 'left', render: row => pBarCell(row.r.seen ? row.r.expectedHits / row.r.seen : 0, 'var(--tx-flat)') },
+            { label: 'Pays for itself', render: row => `<span style="color:${toneColor(chanceTone(row.r.payback.paybackProbability))}">${pct(row.r.payback.paybackProbability)}</span>` }
         ]
+    });
+
+    const distEl = document.getElementById('vow-dist');
+    const sub = document.getElementById('vow-dist-sub');
+    if (sub) sub.textContent = `at X=${config.x}`;
+    if (distEl) {
+        const pmf = a.pmf ?? [];
+        const peak = Math.max(...pmf, 0.0001);
+        const typical = quantileOf(pmf, 0.5);
+        const bars = pmf.map((p, k) => ({ k, p })).filter(({ p }) => p >= 0.0005).map(({ k, p }) => ({
+            label: plural(k, 'hit'),
+            value: p,
+            tone: k === typical ? 'accent' : 'flat'
+        }));
+        distEl.innerHTML = '<p class="bs-caption">Exact odds of each result from your card counts; a hit is a land or a legendary permanent the Vow can put into play. The highlighted bar is the typical cast.</p>'
+            + barsHTML(bars, { scale: peak });
+    }
+}
+
+function setX(x) {
+    const slider = document.getElementById('vow-xSlider');
+    const input = document.getElementById('vow-xValue');
+    if (slider) slider.value = x;
+    if (input) input.value = x;
+    updateUI();
+}
+
+export function updateUI() {
+    const { config, results } = calculate();
+    syncXControl('vow', config.x, config.maxX, `${config.x + CONFIG.EXTRA_MANA} mana · {X}{G}{G}`);
+
+    if (config.deckSize === 0 || !results[config.x]) {
+        const el = document.getElementById('vow-stats');
+        if (el) el.innerHTML = renderBottomLine({ html: 'Add cards to your deck to see what Kamahl’s Druidic Vow does.', tone: 'flat' });
+        chart?.destroy?.();
+        chart = null;
+        return;
+    }
+
+    const a = analyze(results, config.x);
+    renderAnswer(config, a);
+    renderChart(config, results);
+    renderSamples(config);
+    renderDetails(config, results, a);
+    renderHowItCompares('big-spell-comparison', {
+        x: config.x, source: 'vow', deckKey: config.deckKey, options: { vowDoubleCast: config.doubleCast }
     });
 }
 
-/**
- * Render hero numerics + verdict + recommendation for the current X.
- */
-function updateStats(config, results) {
-    const statsPanel = document.getElementById('vow-stats');
-    const currentResult = results[config.x];
-    const warningPanel = document.getElementById('vow-import-warning');
-
-    // Show warning if no import
-    const hasImport = config.cardData && config.cardData.cardsByName && Object.keys(config.cardData.cardsByName).length > 0;
-    if (warningPanel) {
-        warningPanel.style.display = hasImport ? 'none' : 'block';
-    }
-
-    if (!statsPanel || !currentResult) return;
-
-    const legendaryPercent = config.totalPermanents > 0 ? (config.totalLegendaries / config.totalPermanents) * 100 : 0;
-    const cardsRevealed = currentResult.cardsRevealed;
-    const efficiency = cardsRevealed > 0 ? currentResult.expectedHits / cardsRevealed : 0;
-    const next = results[config.x + 1];
-    const marginal = next ? next.expectedHits - currentResult.expectedHits : null;
-    const verdict = efficiencyVerdict(efficiency);
-    const payback = currentResult.payback;
-    const paybackPercent = (payback?.paybackProbability ?? 0) * 100;
-
-    const hero = renderHeroStats([
-        { label: 'PAYBACK CHANCE', value: formatNumber(paybackPercent, 0) + '%', sub: `reach ${config.paybackSettings.threshold} value${config.doubleCast ? ' · 2× reveal' : ''}`, color: paybackPercent >= 50 ? 'var(--tx-green)' : 'var(--tx-amber)', size: 'big' },
-        { label: 'E[EFFECTIVE VALUE]', value: formatNumber(payback?.expectedEffectiveValue ?? 0, 1), sub: `raw MV ${formatNumber(payback?.expectedManaValue ?? 0, 1)}`, color: 'var(--tx-blue)' },
-        { label: 'E[HITS]', value: formatNumber(currentResult.expectedHits, 1), sub: `land + legend${config.doubleCast ? ' · 2×' : ''}`, color: 'var(--tx-green)' },
-        { label: 'E[LANDS]', value: formatNumber(currentResult.expectedLands, 1), sub: 'ramp onto field', color: 'var(--tx-amber)' }
-    ]);
-
-    const knee = recommendKneeX(computeSweep(config).map(p => ({ x: p.x, value: p.efficiency })), { fraction: 0.92 });
-    const rec = knee
-        ? renderRecommendation(`Efficient cast at <strong>X=${knee.x}</strong> (~${(knee.value * 100).toFixed(0)}% hit rate). ${config.totalLegendaries} legendary permanents and ${formatNumber(legendaryPercent, 0)}% legendary density in the pile.`)
-        : '';
-
-    const insight = renderInsightBox('', `Kamahl's Druidic Vow at X=${config.x} costs ${config.paybackSettings.threshold} mana and reveals ${cardsRevealed} card${cardsRevealed === 1 ? '' : 's'}. The value model expects <strong style="color:var(--tx-blue);">${formatNumber(payback?.expectedEffectiveValue ?? 0, 1)}</strong> effective mana and classifies <strong>${formatNumber(paybackPercent, 0)}%</strong> of reveals as paid-for. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
-
-    statsPanel.innerHTML = hero + rec + insight;
-
-    const target = document.getElementById('vow-payback-target');
-    if (target) target.textContent = `${config.paybackSettings.threshold} effective mana`;
-}
-
-/**
- * Run sample Vow simulations
- */
-export function runSampleReveals() {
-    const config = getDeckConfig();
-    const cardData = config.cardData;
-
-    if (!cardData || !cardData.cardsByName || Object.keys(cardData.cardsByName).length === 0) {
-        document.getElementById('vow-reveals-display').innerHTML = '<p style="color: var(--text-dim);">Please import a decklist to run simulations.</p>';
-        return;
-    }
-
-    const countInput = document.getElementById('vow-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || 10);
-
-    const deck = buildDeckFromCardData(cardData);
-    if (stableSamples.length < numSims) {
-        generateStableSamples(deck, numSims);
-    }
-
-    // 1. STATS LOOP
-    const multiplier = config.doubleCast ? 2 : 1;
-    const cardsToReveal = Math.min(config.x * multiplier, deck.length);
-    const maxPossibleHits = cardsToReveal;
-
-    let totalHits = 0;
-    let totalLands = 0;
-    let totalLegends = 0;
-    let totalManaValue = 0;
-    let totalEffectiveValue = 0;
-    let paidRuns = 0;
-    const hitDistribution = new Array(maxPossibleHits + 1).fill(0);
-
-    for (let i = 0; i < numSims; i++) {
-        const shuffled = stableSamples[i];
-        const revealed = shuffled.slice(0, cardsToReveal);
-
-        let hitsInSim = 0;
-        let landsInSim = 0;
-        let legendsInSim = 0;
-        let manaValueInSim = 0;
-
-        revealed.forEach(card => {
-            if (isValidType(card)) {
-                const cmc = card.cmc !== undefined ? card.cmc : 0;
-                if (cmc <= config.x) {
-                    hitsInSim++;
-                    manaValueInSim += cmc;
-
-                    const analysis = analyzeCardForDisplay(card, config.x);
-                    if (analysis.isLand) landsInSim++;
-                    if (analysis.isLegendary && analysis.isPermanent) legendsInSim++;
-                }
-            }
-        });
-
-        totalHits += hitsInSim;
-        totalLands += landsInSim;
-        totalLegends += legendsInSim;
-        totalManaValue += manaValueInSim;
-        const scored = scoreBattlefieldValue(
-            { manaValue: manaValueInSim, lands: landsInSim, cards: hitsInSim },
-            config.paybackSettings
-        );
-        totalEffectiveValue += scored.effectiveValue;
-        if (scored.paidForItself) paidRuns++;
-        hitDistribution[hitsInSim]++;
-    }
-
-    // 2. Build Summary UI
-    const avgHits = (totalHits / numSims).toFixed(2);
-    const avgLands = (totalLands / numSims).toFixed(2);
-    const avgLegends = (totalLegends / numSims).toFixed(2);
-    const avgManaValue = (totalManaValue / numSims).toFixed(1);
-    const avgEffectiveValue = (totalEffectiveValue / numSims).toFixed(2);
-    const paidPercent = ((paidRuns / numSims) * 100).toFixed(1);
-
-    // Add color legend
-    let legendHTML = '<div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: var(--spacing-md); padding: var(--spacing-sm); background: var(--panel-bg); border-radius: var(--radius-md); font-size: 0.9em;">';
-    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #55c97f; border-radius: 3px; display: inline-block;"></span>Lands</span>';
-    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #5b8db8; border-radius: 3px; display: inline-block;"></span>Legends (Hit)</span>';
-    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #f0a92c; border-radius: 3px; display: inline-block;"></span>Legends (Miss)</span>';
-    legendHTML += '<span style="display: flex; align-items: center; gap: 6px;"><span style="width: 16px; height: 16px; background: #808b85; border-radius: 3px; display: inline-block;"></span>Non-Legends</span>';
-    legendHTML += '</div>';
-
-    let distributionHTML = '<div class="tx-sim">';
-    distributionHTML += '<div class="tx-h"><span>Hits — distribution</span></div>';
-    distributionHTML += '<div class="tx-sim-block">';
-
-    distributionHTML += renderDistributionChart(
-        hitDistribution,
-        numSims,
-        (count) => `${count.toString().padStart(2)} hits`,
-        () => ''
-    );
-    distributionHTML += '</div><div class="tx-sim-block">';
-    distributionHTML += `<div style="text-align: center; margin-bottom: var(--spacing-sm);"><strong>Average Results (${numSims} simulations):</strong></div>`;
-    distributionHTML += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--spacing-sm); font-size: 0.9em;">`;
-    distributionHTML += `<div><strong>Total Hits:</strong> ${avgHits}</div>`;
-    distributionHTML += `<div><strong>Lands:</strong> <span style="color: #55c97f;">${avgLands}</span></div>`;
-    distributionHTML += `<div><strong>Legends:</strong> <span style="color: #5b8db8;">${avgLegends}</span></div>`;
-    distributionHTML += `<div><strong>Total MV:</strong> ${avgManaValue}</div>`;
-    distributionHTML += `<div><strong>Effective value:</strong> ${avgEffectiveValue}</div>`;
-    distributionHTML += `<div><strong>Paid-for:</strong> ${paidPercent}%</div>`;
-    distributionHTML += `<div><strong>Whiff:</strong> ${(100 - Number(paidPercent)).toFixed(1)}%</div>`;
-    distributionHTML += `</div>`;
-    if (config.doubleCast) {
-        distributionHTML += `<div style="text-align: center; margin-top: var(--spacing-sm); color: var(--text-secondary); font-size: 0.85em;">X=${config.x}, doubled (${cardsToReveal} cards revealed)</div>`;
-    } else {
-        distributionHTML += `<div style="text-align: center; margin-top: var(--spacing-sm); color: var(--text-secondary); font-size: 0.85em;">${cardsToReveal} cards revealed</div>`;
-    }
-    distributionHTML += '</div></div>';
-
-    // 3. Prepare List
-    const listId = 'vow-samples-list';
-    const btnId = 'vow-load-more';
-    const listHTML = `<div id="${listId}"></div><button id="${btnId}" class="import-btn" style="width: 100%; margin-top: 12px; display: none;">Load More (50)</button>`;
-
-    const revealsSectionHTML = createCollapsibleSection(
-        `Show/Hide Individual Reveals (${numSims} simulations)`,
-        listHTML,
-        true
-    );
-
-    document.getElementById('vow-reveals-display').innerHTML = legendHTML + distributionHTML + revealsSectionHTML;
-
-    // 4. Render Batch
-    const listContainer = document.getElementById(listId);
-    const loadMoreBtn = document.getElementById(btnId);
-    renderedCount = 0;
-
-    const renderBatch = (batchSize) => {
-        const start = renderedCount;
-        const end = Math.min(start + batchSize, numSims);
-        let html = '';
-
-        for (let i = start; i < end; i++) {
-            const shuffled = stableSamples[i];
-            const revealed = shuffled.slice(0, cardsToReveal);
-
-            // Cache analyses for this reveal to avoid double pass
-            const cardAnalyses = new Map();
-            let totalManaValue = 0;
-            let landCount = 0;
-            let hitCount = 0;
-
-            // Single pass: analyze all cards once and cache results
-            revealed.forEach(card => {
-                const analysis = analyzeCardForDisplay(card, config.x);
-                cardAnalyses.set(card, analysis);
-
-                if (analysis.isValid && analysis.matchesX) {
-                    hitCount++;
-                    totalManaValue += analysis.cmc;
-                    if (analysis.isLand) {
-                        landCount++;
-                    }
-                }
-            });
-
-            const scored = scoreBattlefieldValue(
-                { manaValue: totalManaValue, lands: landCount, cards: hitCount },
-                config.paybackSettings
-            );
-
-            html += `<div class="sample-reveal ${scored.paidForItself ? 'free-spell' : 'whiff'}">`;
-            html += `<div><strong>Reveal ${i + 1}`;
-            if (config.doubleCast) {
-                html += ` (X=${config.x}, doubled)`;
-            } else {
-                html += ` (X=${config.x})`;
-            }
-            html += `:</strong></div>`;
-            html += '<div style="margin: 8px 0;">';
-
-            // Use cached analyses for rendering
-            revealed.forEach(card => {
-                const analysis = cardAnalyses.get(card);
-                const style = getCardDisplayStyle(analysis, card.type_line);
-
-                html += `<span class="reveal-card" style="background: ${style.bgColor}; color: ${style.textColor};" title="${style.tooltip}">${card.name}</span>`;
-            });
-
-            html += '</div>';
-            html += `<div class="reveal-summary">`;
-            html += `<strong>Result:</strong> ${hitCount} hit${hitCount !== 1 ? 's' : ''} `;
-            html += `| <strong>Lands:</strong> ${landCount} `;
-            html += `| <strong>Total MV:</strong> ${totalManaValue}`;
-            html += ` | <strong>${scored.effectiveValue.toFixed(2)} / ${config.paybackSettings.threshold} value — ${scored.paidForItself ? 'PAID' : 'WHIFF'}</strong>`;
-            html += '</div></div>';
-        }
-
-        if (listContainer) {
-            listContainer.insertAdjacentHTML('beforeend', html);
-        }
-        
-        renderedCount = end;
-        
-        if (loadMoreBtn) {
-            if (renderedCount < numSims) {
-                loadMoreBtn.style.display = 'block';
-                loadMoreBtn.textContent = `Load More (Showing ${renderedCount}/${numSims})`;
-            } else {
-                loadMoreBtn.style.display = 'none';
-            }
-        }
-    };
-
-    renderBatch(CONFIG.SAMPLE_BATCH_SIZE);
-    if (loadMoreBtn) {
-        loadMoreBtn.addEventListener('click', () => renderBatch(CONFIG.SAMPLE_BATCH_SIZE));
-    }
-}
-
-/**
- * Update all UI elements
- */
-export function updateUI() {
-    const { config, results } = calculate();
-
-    if (config.deckSize === 0 || Object.keys(results).length === 0) {
-        if (chart) chart.destroy();
-        document.getElementById('vow-comparisonTable').innerHTML = '';
-        document.getElementById('big-spell-comparison').innerHTML = '';
-        return;
-    }
-
-    updateChart(config, results);
-    updateStats(config, results);
-    updateTable(config);
-
-    // Update big spell comparison
-    const comparisonContainer = document.getElementById('big-spell-comparison');
-    if (comparisonContainer) {
-        const comparison = compareBigSpells(config.x, 'vow');
-        comparisonContainer.innerHTML = renderComparison(comparison);
-    }
-
-    if (config.cardData && config.cardData.cardsByName && Object.keys(config.cardData.cardsByName).length > 0) {
-        runSampleReveals();
-    }
-}
-
-/**
- * Initialize Vow calculator
- */
 export function init() {
     registerCalculator({
         name: 'vow',
         calculate,
         updateUI,
         inputs: ['x'],
-        init: () => {
-            const container = document.getElementById('vow-sample-reveals');
-            if (container) {
-                container.innerHTML = generateSampleRevealsHTML('vow', 'Sample Vow Reveals');
-            }
-            const btn = document.getElementById('vow-draw-reveals-btn');
-            if (btn) btn.addEventListener('click', refreshSamples);
-
-            // Add event listener for double cast checkbox
-            const doubleCastCheckbox = document.getElementById('vow-doubleCast');
-            if (doubleCastCheckbox) {
-                doubleCastCheckbox.addEventListener('change', updateUI);
-            }
+        init: debouncedUpdate => {
+            bindXPresets('vow', setX);
+            document.getElementById('vow-doubleCast')?.addEventListener('change', () => {
+                copyChosenByUser = true;
+                updateUI();
+            });
             ['vow-land-value', 'vow-card-value'].forEach(id => {
-                document.getElementById(id)?.addEventListener('input', updateUI);
+                document.getElementById(id)?.addEventListener('input', debouncedUpdate);
+            });
+            document.getElementById('vow-reshuffle-btn')?.addEventListener('click', () => {
+                sampler.reshuffle();
+                renderSamples(getDeckConfig());
             });
         }
     });

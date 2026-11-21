@@ -41,6 +41,32 @@ function normalizeCardName(cardName) {
     return cardName.split('//')[0].trim().toLowerCase();
 }
 
+
+/**
+ * Colour and identity fields worth keeping from any card source. Scryfall uses
+ * snake_case, Archidekt camelCase; Moxfield has no produced_mana, so land
+ * colours fall back to rules text and identity (see utils/mana.js).
+ */
+function colourFields(cardData = {}) {
+    const front = cardData.card_faces?.[0] ?? {};
+    const out = {};
+    const colors = front.colors ?? cardData.colors;
+    const identity = cardData.color_identity ?? cardData.colorIdentity;
+    const produced = cardData.produced_mana ?? cardData.producedMana;
+    const id = cardData.scryfall_id ?? cardData.scryfallId ?? (cardData.object === 'card' ? cardData.id : undefined);
+    // Archidekt spells colours out ("Green"); everyone else uses letters.
+    const letter = c => (String(c).length === 1 ? String(c).toUpperCase() : colourLetter(c));
+    if (Array.isArray(colors)) out.colors = colors.map(letter);
+    if (Array.isArray(identity)) out.color_identity = identity.map(letter);
+    if (Array.isArray(produced)) out.produced_mana = produced;
+    if (typeof id === 'string') out.scryfall_id = id;
+    return out;
+}
+
+function colourLetter(name) {
+    return { white: 'W', blue: 'U', black: 'B', red: 'R', green: 'G', colorless: 'C' }[String(name).toLowerCase()] ?? String(name);
+}
+
 /**
  * Parse creature power value to integer
  * Handles special cases like *, X, 1+*, etc.
@@ -218,9 +244,21 @@ export function parseDecklistText(decklistText) {
 
     // Pre-compile regex patterns outside loops for performance
     const SIDEBOARD_REGEX = /^SIDEBOARD:?$/i;
-    const SECTION_HEADER_REGEX = /^(creatures?|lands?|spells?|artifacts?|enchantments?|planeswalkers?|battles?|commander|sideboard):?$/i;
+    // Section headers from Moxfield, Archidekt, MTGO and Arena exports. The
+    // section decides where the following cards go.
+    const SECTION_HEADER_REGEX = /^(creatures?|lands?|spells?|instants?|sorcer(y|ies)|artifacts?|enchantments?|planeswalkers?|battles?|commanders?|companions?|deck|main ?(deck|board)|sideboard|maybeboard|considering|tokens?|about)(\s*\(\d+\))?:?$/i;
+    const EXCLUDED_SECTIONS = /^(sideboard|maybeboard|considering|tokens?|about|companions?)/i;
     const CARD_COUNT_REGEX = /^(\d+)x?\s+(.+)$/;
     const CARD_COUNT_ONLY_REGEX = /^(\d+)x?\s+/;
+    // Trailing printing / marker noise: "(C21) 263", "[C21]", "*F*", "*CMDR*", "#tag", "^Have,#37d67a^"
+    const CMDR_MARKER = /\*CMDR\*/i;
+    const cleanName = raw => raw
+        .replace(/\^[^^]*\^/g, '')
+        .replace(/\s+\*[A-Z]+\*/gi, '')
+        .replace(/\s+\[[^\]]*\]/g, '')
+        .replace(/\s+#\S+/g, '')
+        .replace(/\s+\([A-Z0-9]{2,6}\)(\s+[\w★-]+)?\s*$/i, '')
+        .trim();
 
     // Detect sideboard marker
     const sideboardIndex = decklistText.search(/^SIDEBOARD:?$/im);
@@ -231,23 +269,29 @@ export function parseDecklistText(decklistText) {
     // Count sideboard cards
     let sideboardCount = 0;
     if (hasSideboard) {
-        const sideboardLines = sideboardText.split('\n');
+        const sideboardLines = sideboardText.split(/\r?\n/);
         for (const line of sideboardLines) {
             const match = line.match(CARD_COUNT_ONLY_REGEX);
             if (match) {
                 sideboardCount += parseInt(match[1], 10);
-            } else if (line.trim().length > 0 && !SIDEBOARD_REGEX.test(line)) {
+            } else if (line.trim().length > 0 && !SIDEBOARD_REGEX.test(line.trim())) {
                 sideboardCount += 1;
             }
         }
     }
 
-    const lines = maindeckText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    const lines = maindeckText.split(/\r?\n/).map(line => line.trim()).filter(line => line.length > 0);
     const cards = [];
+    const commanders = [];
+    let section = 'main';
 
     for (const line of lines) {
-        // Skip section headers like "Creatures:", "Lands:", "SIDEBOARD:", etc.
+        // Section headers like "Creatures:", "Commander", "Deck", "Maybeboard (3)"
         if (SECTION_HEADER_REGEX.test(line)) {
+            const header = line.toLowerCase();
+            section = /^commander/.test(header) ? 'commander'
+                : EXCLUDED_SECTIONS.test(header) ? 'excluded'
+                    : 'main';
             continue;
         }
 
@@ -255,37 +299,31 @@ export function parseDecklistText(decklistText) {
         if (line.startsWith('//') || line.startsWith('#')) {
             continue;
         }
+        if (section === 'excluded') continue;
 
         // Match formats: "4 Card Name" or "4x Card Name"
         const match = line.match(CARD_COUNT_REGEX);
+        const count = match ? parseInt(match[1], 10) : 1;
+        const rawName = match ? match[2].trim() : line;
+        const isCommander = section === 'commander' || CMDR_MARKER.test(rawName);
+        const name = cleanName(rawName);
 
-        if (match) {
-            const count = parseInt(match[1], 10);
-            const name = match[2].trim();
-
-            // Validate count and name
-            if (isNaN(count) || count < MIN_CARD_COUNT || count > MAX_CARD_COUNT) {
-                console.warn(`Invalid card count: ${count} for ${name} (skipping)`);
-                continue;
-            }
-
-            if (name.length === 0 || name.length > MAX_CARD_NAME_LENGTH) {
-                console.warn(`Invalid card name length: "${name}" (skipping)`);
-                continue;
-            }
-
-            cards.push({ count, name });
-        } else {
-            // If no count, assume 1 copy
-            if (line.length > 0 && line.length <= MAX_CARD_NAME_LENGTH) {
-                cards.push({ count: 1, name: line });
-            } else if (line.length > MAX_CARD_NAME_LENGTH) {
-                console.warn(`Card name too long: "${line.substring(0, 50)}..." (skipping)`);
-            }
+        if (match && (isNaN(count) || count < MIN_CARD_COUNT || count > MAX_CARD_COUNT)) {
+            console.warn(`Invalid card count: ${count} for ${name} (skipping)`);
+            continue;
         }
+        if (name.length === 0 || name.length > MAX_CARD_NAME_LENGTH) {
+            console.warn(`Invalid card name length: "${name.substring(0, 50)}" (skipping)`);
+            continue;
+        }
+
+        // The commander lives in the command zone, not the library — the same
+        // rule the Moxfield and Archidekt importers follow.
+        if (isCommander) commanders.push({ count, name });
+        else cards.push({ count, name });
     }
 
-    return { cards, hasSideboard, sideboardCount };
+    return { cards, hasSideboard, sideboardCount, commanders };
 }
 
 /**
@@ -545,7 +583,7 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
     }
 
     const parseResult = parseDecklistText(decklistText);
-    const { cards, hasSideboard, sideboardCount } = parseResult;
+    const { cards, hasSideboard, sideboardCount, commanders = [] } = parseResult;
 
     if (cards.length === 0) {
         throw new Error('No cards found in decklist');
@@ -716,7 +754,8 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
                     toughness: toughness,
                     category: primaryCategory,
                     allCategories: allCategories, // Store all categories
-                    count: count
+                    count: count,
+                    ...colourFields(cardData)
                 };
 
                 // Store detailed card info for non-lands
@@ -795,8 +834,10 @@ export async function importDecklistBatch(decklistText, progressCallback = null)
         cardDetails,  // Full card-level data
         cardsByName,  // Card data indexed by name
         creaturesPower5Plus,
+        commanderName: commanders[0]?.name ?? null,
         // Import metadata
         importMetadata: {
+            commanderName: commanders[0]?.name ?? null,
             hasSideboard,
             sideboardCount,
             missingCards: missingCardDetails,
@@ -973,7 +1014,8 @@ function processCardEntry(cardData, count, typeCounts, cardDetails, cardsByName)
         toughness: toughness,
         category: primaryCategory,
         allCategories: allCategories,
-        count: count
+        count: count,
+        ...colourFields(cardData)
     };
 
     // Detailed info for non-lands

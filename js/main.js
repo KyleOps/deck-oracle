@@ -1,497 +1,266 @@
 /**
- * Main Application Entry Point
- * Initializes calculators, event listeners, and manages tab switching
+ * Deck Oracle — application bootstrap.
+ *
+ * Wires the shell together: deck state, router, sidebar, dialogs, overlays and
+ * shortcuts. Calculators themselves are lazy-loaded by the router, so nothing
+ * here imports one directly — startup cost is the shell plus the first page.
  */
 
-import * as Share from './utils/share.js';
-import * as OpponentState from './utils/opponentState.js';
-import * as Components from './utils/components.js';
 import * as DeckConfig from './utils/deckConfig.js';
-import { renderRadar } from './utils/radarPanel.js';
-import { TX_CHART as TX } from './utils/chartHelpers.js';
-import { CALCULATORS as calculators, initializeCalculators } from './utils/calculatorRegistry.js';
+import * as OpponentState from './utils/opponentState.js';
+import * as Share from './utils/share.js';
+import { analyzeDeck } from './utils/deckRadar.js';
+import { featuredCardName } from './utils/deckStats.js';
+import { findCard } from './data/images.js';
+import { FORMATS } from './utils/format.js';
+import { debounce } from './utils/simulation.js';
+import { CALCULATORS, DEFAULT_TAB } from './utils/calculatorRegistry.js';
+import { initRouter, navigate, ensureMounted, currentTab, refreshCurrent, onNavigate, onNavigated, step, tabFromUrl, mountedModule } from './shell/router.js';
+import { initSidebar, markRelevance, renderDeckSwitcher } from './shell/sidebar.js';
+import { initGuide, openGuide, isGuideOpen, refreshPageHeader } from './shell/pageHeader.js';
+import { initPalette, openPalette } from './shell/palette.js';
+import { initDeckDialog, openDeckDialog, renderSavedDecks } from './shell/deckDialog.js';
+import { initOverlays, toast } from './shell/overlays.js';
+import { initTheme, toggleTheme, onThemeChange } from './shell/theme.js';
 
-// Current active tab and group
-let currentTab = 'wildpair';
-let currentGroup = 'engines';
+const EXAMPLE_OPPONENTS = [
+    'https://moxfield.com/decks/NVsnEkQ3y02ATHYk6n1pTA',
+    'https://moxfield.com/decks/Vpiz7R8Rfk-0J7yX0AUQtA',
+    'https://moxfield.com/decks/KP_jB2nYqUmQHVjYQeldyA'
+];
 
-// ==================== CHART.JS GLOBAL TERMINAL DEFAULTS ====================
+// ── Deck-dependent chrome ────────────────────────────────────────────────────
 
-// Set after Chart.js loads
-function applyChartDefaults() {
-    if (typeof Chart === 'undefined') return;
-    Chart.defaults.color = TX.dim;
-    Chart.defaults.borderColor = TX.rule;
-    Chart.defaults.backgroundColor = TX.bg;
-    Chart.defaults.font.family = "'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace";
-    Chart.defaults.font.size = 10;
-    Chart.defaults.plugins.legend.display = false;
-    Chart.defaults.plugins.tooltip.backgroundColor = TX.bg;
-    Chart.defaults.plugins.tooltip.borderColor = TX.ruleHi;
-    Chart.defaults.plugins.tooltip.borderWidth = 1;
-    Chart.defaults.plugins.tooltip.titleColor = TX.mid;
-    Chart.defaults.plugins.tooltip.bodyColor = TX.text;
-    Chart.defaults.plugins.tooltip.padding = 8;
-    Chart.defaults.plugins.tooltip.cornerRadius = 0;
-    Chart.defaults.scale = Chart.defaults.scale || {};
-    if (Chart.defaults.scales) {
-        // Merge one level deeper than a plain spread. Replacing the whole `ticks`
-        // object drops Chart.js's own tick callback — on a category axis that is
-        // what maps an index back to its label, so string labels silently
-        // rendered as 0, 1, 2 … instead of the labels supplied.
-        const applyScaleDefaults = (scale = {}) => ({
-            ...scale,
-            grid: { ...scale.grid, color: TX.rule, drawTicks: false },
-            ticks: { ...scale.ticks, color: TX.dim, font: { size: 9 } },
-            border: { ...scale.border, color: TX.rule, dash: [] }
-        });
-        Chart.defaults.scales.linear = applyScaleDefaults(Chart.defaults.scales.linear);
-        Chart.defaults.scales.category = applyScaleDefaults(Chart.defaults.scales.category);
-    }
+function deckSummary(config) {
+    const size = DeckConfig.getDeckSize(true);
+    const format = DeckConfig.getFormat();
+    const name = config.deckName
+        || (config.commanderName ? `${config.commanderName}` : null)
+        || (config.importSource === 'manual' ? 'Custom counts' : 'Untitled deck');
+    const parts = [`${size} cards`, format.label.replace(/ \(\d+\)/, '')];
+    if (config.importSource === 'manual') parts.push('counts only');
+    const artName = featuredCardName(config);
+    return { name, meta: parts.join(' · '), artName, artCard: findCard(config.cardsByName, artName) };
 }
 
-/**
- * Switch between tab groups
- * @param {string} group - Group name (engines, spells, deck-tools, multiplayer)
- */
-function switchGroup(group) {
-    currentGroup = group;
-
-    // Update new terminal group buttons
-    document.querySelectorAll('.tx-group[data-group]').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.group === group);
+function syncDeckChrome() {
+    const config = DeckConfig.getDeckConfig();
+    // Simulation buttons need card records; manual-count decks have none.
+    const locked = !DeckConfig.hasCardList();
+    document.querySelectorAll('.run-sim-btn[data-requires-import]').forEach(btn => {
+        btn.disabled = locked;
+        const note = btn.parentElement?.querySelector('.sim-import-note');
+        if (note) note.hidden = !locked;
     });
-
-    // Show/hide tx-tabs by group
-    document.querySelectorAll('.tx-tab[data-group]').forEach(tab => {
-        tab.classList.toggle('group-hidden', tab.dataset.group !== group);
-    });
-
+    renderDeckSwitcher(deckSummary(config));
+    markRelevance(analyzeDeck(config));
+    const tab = currentTab();
+    if (tab) refreshPageHeader(tab);
 }
 
-/**
- * Initialize terminal chrome: clock, seed display, build date, tx-tab navigation, paste panel
- */
-function initTerminalChrome() {
-    // TX tab row: ARIA roles + click handlers
-    const tabRow = document.getElementById('tx-tab-row');
-    if (tabRow) tabRow.setAttribute('role', 'tablist');
-    document.querySelectorAll('.tx-tab[data-tab]').forEach(tab => {
-        tab.setAttribute('role', 'tab');
-        tab.setAttribute('aria-selected', tab.classList.contains('active') ? 'true' : 'false');
-        tab.addEventListener('click', () => {
-            switchTab(tab.dataset.tab);
-        });
+// ── Opponents bar (multiplayer pages) ────────────────────────────────────────
+
+function initOpponentsBar() {
+    const bar = document.getElementById('opponents-config');
+    const body = document.getElementById('opponents-body');
+    const toggle = document.getElementById('opponents-toggle');
+    onNavigate(name => {
+        if (bar) bar.hidden = CALCULATORS[name]?.group !== 'multiplayer';
+    });
+    // Seat the bar under the page header, so a multiplayer page opens with
+    // what the card does before asking for decklists.
+    onNavigated((name, panel) => {
+        if (!bar || CALCULATORS[name]?.group !== 'multiplayer') return;
+        const body = panel.querySelector(':scope > .calc-body');
+        if (body && bar.nextElementSibling !== body) body.before(bar);
+    });
+    toggle?.addEventListener('click', () => {
+        const open = toggle.getAttribute('aria-expanded') !== 'true';
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.textContent = open ? 'Hide' : 'Show';
+        if (body) body.hidden = !open;
     });
 
-    // Group button click handlers — switch to first tab in group
-    document.querySelectorAll('.tx-group[data-group]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const group = btn.dataset.group;
-            const firstTab = document.querySelector(`.tx-tab[data-group="${group}"]`);
-            if (firstTab) switchTab(firstTab.dataset.tab);
-        });
-    });
-
-    // Paste panel toggle: clicking the paste hint input opens the panel
-    const pasteHint = document.getElementById('tx-paste-hint');
-    const pastePanel = document.getElementById('tx-paste-panel');
-    const pastePanelClose = document.getElementById('tx-paste-panel-close');
-
-    if (pasteHint && pastePanel) {
-        pasteHint.addEventListener('click', () => {
-            pastePanel.style.display = pastePanel.style.display === 'none' ? 'block' : 'none';
-            if (pastePanel.style.display === 'block') {
-                const textarea = pastePanel.querySelector('#decklist-input');
-                if (textarea) textarea.focus();
-            }
-        });
-    }
-
-    if (pastePanelClose && pastePanel) {
-        pastePanelClose.addEventListener('click', () => {
-            pastePanel.style.display = 'none';
-        });
-    }
-
-    // F key: focus moxfield URL input
-    // P key: open paste panel
-    document.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-        if (e.key === 'f' || e.key === 'F') {
-            const moxInput = document.getElementById('moxfield-input');
-            if (moxInput) { e.preventDefault(); moxInput.focus(); }
-        } else if (e.key === 'p' || e.key === 'P') {
-            if (pastePanel) {
-                e.preventDefault();
-                pastePanel.style.display = 'block';
-                const textarea = pastePanel.querySelector('#decklist-input');
-                if (textarea) textarea.focus();
-            }
-        }
-    });
-
-    // Deck pill: update whenever DeckConfig changes (fires after every import)
-    DeckConfig.onDeckUpdate((config) => {
-        const pill = document.getElementById('tx-deck-pill');
-        const sourceEl = document.getElementById('tx-deck-hash');
-        if (!pill) return;
-
-        const n = DeckConfig.getDeckSize(true);
-        const name = config.deckName;
-        const source = config.importSource;
-        const url = config.importUrl;
-
-        // Dot: a steady state marker, not an animated one
-        const dot = pill.querySelector('.tx-dot');
-        if (dot) dot.style.background = 'var(--tx-green)';
-
-        // Pill label: truncated deck name or fallback
-        const label = pill.childNodes[pill.childNodes.length - 1];
-        const displayName = name
-            ? (name.length > 22 ? name.slice(0, 21) + '…' : name)
-            : 'DECK LOADED';
-        if (label && label.nodeType === Node.TEXT_NODE) {
-            label.textContent = ` ${displayName} · N=${n}`;
-        } else {
-            pill.insertAdjacentText('beforeend', ` ${displayName} · N=${n}`);
-        }
-
-        // Source tag + optional link
-        if (sourceEl) {
-            if (source === 'moxfield' || source === 'archidekt') {
-                const label = source === 'moxfield' ? 'MOXFIELD' : 'ARCHIDEKT';
-                if (url) {
-                    sourceEl.innerHTML = `<a href="${url}" target="_blank" rel="noopener" style="color:var(--tx-amber); text-decoration:none; letter-spacing:0.08em;">VIA ${label} ↗</a>`;
-                } else {
-                    sourceEl.textContent = `VIA ${label}`;
-                    sourceEl.style.color = 'var(--tx-amber)';
-                }
-            } else {
-                sourceEl.textContent = 'PASTED';
-                sourceEl.style.color = 'var(--tx-mid)';
-            }
+    const exampleBtn = document.getElementById('load-example-opponents-btn');
+    exampleBtn?.addEventListener('click', async () => {
+        const label = exampleBtn.textContent;
+        exampleBtn.textContent = 'Loading…';
+        exampleBtn.disabled = true;
+        try {
+            while (OpponentState.getActiveOpponents().length < 3) OpponentState.addOpponent();
+            await Promise.all(EXAMPLE_OPPONENTS.map((url, i) =>
+                OpponentState.importOpponentDeck(`opponent${i + 1}`, url, true)));
+            OpponentState.renderOpponentTabs();
+            toast('Loaded three example opponents.', { tone: 'good' });
+        } catch (e) {
+            console.error('Failed to load example opponents', e);
+            toast('Couldn’t load the example opponents. Check your connection.', { tone: 'bad' });
+        } finally {
+            exampleBtn.textContent = label;
+            exampleBtn.disabled = false;
         }
     });
 }
 
-/**
- * Initialize the Deck Radar: after every import, analyse the decklist, show the
- * composition breakdown plus the ranked list of calculators that actually apply,
- * and mark the matching tabs in the nav.
- */
-function initDeckRadar() {
-    DeckConfig.onDeckImport((config) => {
-        renderRadar(config, { onSelect: switchTab });
+// ── Share ────────────────────────────────────────────────────────────────────
 
-        // Deliberately does NOT change tabs. Auto-navigating to the strongest
-        // match reads as the app moving on its own for no visible reason —
-        // especially when the match came from stale state. The radar lists the
-        // matches and marks the tabs; choosing one stays the user's decision.
-
-        const radar = document.getElementById('tx-radar');
-        radar?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-}
-
-/**
- * Switch between calculator tabs
- * @param {string} tab - Tab name, e.g. wildpair, vortex, chimil, portent, mulligan
- */
-function switchTab(tab) {
-    // Update body theme
-    document.body.className = 'theme-' + tab;
-
-    // Update terminal tab row active state
-    document.querySelectorAll('.tx-tab[data-tab]').forEach(txTab => {
-        const isActive = txTab.dataset.tab === tab;
-        txTab.classList.toggle('active', isActive);
-        txTab.setAttribute('aria-selected', isActive ? 'true' : 'false');
-    });
-
-    // Update the calculator group if needed
-    if (calculators[tab] && calculators[tab].group !== currentGroup) {
-        switchGroup(calculators[tab].group);
+async function copyShareLink() {
+    const url = Share.getShareUrl(currentTab());
+    try {
+        await navigator.clipboard.writeText(url);
+        toast('Link copied — it opens this page with this deck.', { tone: 'good' });
+    } catch {
+        window.prompt('Copy this link:', url);
     }
-
-    // Update tab content
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    document.getElementById(`${tab}-tab`).classList.add('active');
-
-    currentTab = tab;
-
-    // Show/hide config panels based on calculator's group
-    const deckConfig = document.getElementById('deck-config');
-    const opponentsConfig = document.getElementById('opponents-config');
-    const calcGroup = calculators[tab]?.group;
-
-    if (calcGroup === 'multiplayer') {
-        // Multiplayer: hide deck config, show opponents config
-        if (deckConfig) deckConfig.style.display = 'none';
-        if (opponentsConfig) opponentsConfig.style.display = 'block';
-    } else {
-        // Spells, Creatures, Tools: show deck config, hide opponents config
-        if (deckConfig) deckConfig.style.display = 'block';
-        if (opponentsConfig) opponentsConfig.style.display = 'none';
-    }
-
-    calculators[tab]?.module?.updateUI?.();
 }
 
-/**
- * Initialize tab navigation
- */
-function initTabNavigation() {
-    // The terminal tab row and group rail are wired in initTerminalChrome().
-    // The old hidden sub-nav pills and dropdown selector were removed along with
-    // their markup — nothing else to bind here.
+// ── Keyboard ─────────────────────────────────────────────────────────────────
+
+function isTyping(target) {
+    const tag = target?.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable;
 }
 
-/**
- * Initialize keyboard navigation across calculator tabs.
- * - Left/Right arrows (and Home/End) move between tabs in the active group
- * - Alt+1..9 jumps to the Nth tab in the active group
- * Ignored while typing in inputs, and arrows only act from the tab strip or body
- * so they don't hijack scrolling or slider adjustment.
- */
-function initKeyboardNav() {
-    document.addEventListener('keydown', (e) => {
-        const tag = e.target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+function anyDialogOpen() {
+    return Boolean(document.querySelector('dialog[open]'));
+}
 
-        const visibleTabs = Array.from(document.querySelectorAll('.tx-tab:not(.group-hidden)'));
-        if (visibleTabs.length === 0) return;
-        const currentIndex = Math.max(0, visibleTabs.findIndex(t => t.dataset.tab === currentTab));
+function initShortcuts() {
+    const shortcuts = document.getElementById('shortcuts-dialog');
+    const openShortcuts = () => { if (shortcuts && !shortcuts.open) shortcuts.showModal(); };
+    document.getElementById('open-shortcuts')?.addEventListener('click', openShortcuts);
+    document.querySelectorAll('dialog [data-close-dialog]').forEach(btn =>
+        btn.addEventListener('click', () => btn.closest('dialog')?.close()));
+    shortcuts?.addEventListener('click', e => { if (e.target === shortcuts) shortcuts.close(); });
 
-        // Alt+number → Nth tab in the active group
-        if (e.altKey && /^[1-9]$/.test(e.key)) {
-            const idx = parseInt(e.key, 10) - 1;
-            if (idx < visibleTabs.length) {
-                e.preventDefault();
-                switchTab(visibleTabs[idx].dataset.tab);
-            }
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            openPalette();
             return;
         }
-
-        // Arrow / Home / End → move within the active group, but only when the tab
-        // strip (or nothing) is focused, to avoid hijacking page scroll.
-        const active = document.activeElement;
-        const fromTabStrip = active && active.classList && active.classList.contains('tx-tab');
-        const fromBody = !active || active === document.body;
-        if (!fromTabStrip && !fromBody) return;
-
-        let target = null;
-        if (e.key === 'ArrowRight') target = (currentIndex + 1) % visibleTabs.length;
-        else if (e.key === 'ArrowLeft') target = (currentIndex - 1 + visibleTabs.length) % visibleTabs.length;
-        else if (e.key === 'Home') target = 0;
-        else if (e.key === 'End') target = visibleTabs.length - 1;
-
-        if (target !== null) {
-            e.preventDefault();
-            const tab = visibleTabs[target];
-            switchTab(tab.dataset.tab);
-            tab.focus();
+        if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || anyDialogOpen()) return;
+        switch (e.key) {
+            case '/': e.preventDefault(); openPalette(); break;
+            case 'd': case 'D': e.preventDefault(); openDeckDialog(); break;
+            case '[': step(-1); break;
+            case ']': step(1); break;
+            case 'o': case 'O': navigate(DEFAULT_TAB); break;
+            case 'h': case 'H': if (!isGuideOpen()) openGuide(currentTab()); break;
+            case 't': case 'T': toggleTheme(); break;
+            case '?': openShortcuts(); break;
+            default: break;
         }
     });
 }
 
-/**
- * Initialize service worker for offline support
- */
+// ── PWA ──────────────────────────────────────────────────────────────────────
+
 function initServiceWorker() {
-    // Skip on localhost. The worker is stale-while-revalidate, so during local
-    // development it silently serves the previous build's CSS/JS and every edit
-    // appears to do nothing until the caches are manually purged.
+    // Never on localhost: stale-while-revalidate would serve the previous
+    // build's CSS/JS during development and every edit would appear to do nothing.
     const isLocal = ['localhost', '127.0.0.1', '::1', ''].includes(window.location.hostname);
     if (isLocal) {
         navigator.serviceWorker?.getRegistrations?.().then(rs => rs.forEach(r => r.unregister()));
         return;
     }
-
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            // Get the correct path for service worker based on deployment
-            const swPath = window.location.pathname.includes('/deck-oracle/')
-                ? '/deck-oracle/sw.js'
-                : '/sw.js';
-
-            navigator.serviceWorker.register(swPath)
-                .then(registration => {
-                    console.log('ServiceWorker registered:', registration);
-                })
-                .catch(error => {
-                    console.log('ServiceWorker registration failed (optional):', error);
-                });
-        });
-    }
-}
-
-/**
- * Initialize UX enhancements
- */
-function initUXEnhancements() {
-    // Initialize collapsible panels
-    Components.initCollapsiblePanels();
-
-    // Deliberately no resize handler here. This used to call
-    // autoCollapseOnMobile() on every resize event, which collapses panels and
-    // scrollIntoView()s the results — so dragging a window smaller repeatedly
-    // yanked the user's scroll position. The layout adapts through CSS
-    // container queries instead, which need no JavaScript at all.
-}
-
-/**
- * Initialize PWA Installation logic
- */
-function initPWAInstall() {
-    let deferredPrompt;
-    const installBtn = document.getElementById('install-button');
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-        // Prevent Chrome 67 and earlier from automatically showing the prompt
-        e.preventDefault();
-        // Stash the event so it can be triggered later.
-        deferredPrompt = e;
-        // Update UI to notify the user they can add to home screen
-        if (installBtn) {
-            installBtn.style.display = 'flex';
-        }
-    });
-
-    if (installBtn) {
-        installBtn.addEventListener('click', () => {
-            // hide our user interface that shows our A2HS button
-            installBtn.style.display = 'none';
-            // Show the prompt
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                // Wait for the user to respond to the prompt
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        console.log('User accepted the A2HS prompt');
-                    } else {
-                        console.log('User dismissed the A2HS prompt');
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', () => {
+        const swPath = new URL('sw.js', document.baseURI).pathname;
+        navigator.serviceWorker.register(swPath).then(reg => {
+            // A new version installed in the background → offer a reload.
+            reg.addEventListener('updatefound', () => {
+                const worker = reg.installing;
+                worker?.addEventListener('statechange', () => {
+                    if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                        toast('A new version of Deck Oracle is ready.', {
+                            timeout: 12000,
+                            action: { label: 'Reload', run: () => window.location.reload() }
+                        });
                     }
-                    deferredPrompt = null;
                 });
-            }
-        });
-    }
+            });
+        }).catch(err => console.warn('Service worker registration failed (optional):', err));
+    });
 }
 
-/**
- * Initialize application
- */
+// ── Startup ──────────────────────────────────────────────────────────────────
+
 async function init() {
-    // Apply terminal Chart.js defaults before any calculator renders
-    applyChartDefaults();
+    initTheme();
+    initOverlays();
 
-    // Initialize shared deck configuration first
-    DeckConfig.initDeckConfig();
-
-    // Initialize shared opponent state for multiplayer calculators
+    // Restore the last active deck before anything renders. A deck in a share
+    // link replaces it below once its import finishes.
+    DeckConfig.initDeckConfig({ restore: true });
     OpponentState.init();
 
-    // Example opponents button — loads 3 preset decks simultaneously
-    const exampleOpponentsBtn = document.getElementById('load-example-opponents-btn');
-    if (exampleOpponentsBtn) {
-        exampleOpponentsBtn.addEventListener('click', async () => {
-            const urls = calculators.mindsdilation.module.EXAMPLE_OPPONENTS;
-            const keys = ['opponent1', 'opponent2', 'opponent3'];
-            exampleOpponentsBtn.textContent = 'LOADING…';
-            exampleOpponentsBtn.disabled = true;
-            try {
-                // Ensure 3 opponent slots are active
-                while (OpponentState.getActiveOpponents().length < 3) {
-                    OpponentState.addOpponent();
-                }
-                await Promise.all(urls.map((url, i) =>
-                    OpponentState.importOpponentDeck(keys[i], url, true)
-                ));
-                OpponentState.renderOpponentTabs();
-                // Collapse the import panel once decks are loaded
-                const opponentsPanelContent = document.querySelector('#opponents-config .panel-content');
-                if (opponentsPanelContent) opponentsPanelContent.style.display = 'none';
-            } catch (e) {
-                console.error('Failed to load example opponents', e);
-            } finally {
-                exampleOpponentsBtn.textContent = 'LOAD EXAMPLES ↓';
-                exampleOpponentsBtn.disabled = false;
-            }
-        });
+    initSidebar();
+    initRouter();
+    initGuide();
+    initDeckDialog();
+    initOpponentsBar();
+    initShortcuts();
+    initPalette({
+        navigate: name => navigate(name, { focus: true }),
+        openDeck: pane => openDeckDialog(pane),
+        toggleTheme,
+        share: copyShareLink,
+        shortcuts: () => document.getElementById('shortcuts-dialog')?.showModal(),
+        loadDeck: id => {
+            if (DeckConfig.loadSavedDeck(id)) toast(`Switched to ${DeckConfig.getDeckConfig().deckName ?? 'saved deck'}.`, { tone: 'good' });
+        },
+        cardOdds: async name => {
+            await navigate('odds', { focus: true });
+            mountedModule('odds')?.focusCard?.(name);
+        }
+    });
+    document.getElementById('share-button')?.addEventListener('click', copyShareLink);
+
+    const refreshChrome = debounce(syncDeckChrome, 120);
+    DeckConfig.onDeckUpdate(refreshChrome);
+    DeckConfig.onDeckImport(() => {
+        syncDeckChrome();
+        renderSavedDecks();
+    });
+    onThemeChange(() => refreshCurrent());
+    syncDeckChrome();
+
+    // Shared links: import the deck and apply page settings before the first
+    // render, so the landing state is the shared state.
+    const tab = tabFromUrl();
+    if (window.location.search.length > 1) {
+        await Share.applyShareUrl({ ensureMounted });
     }
+    await navigate(tab, { history: 'replace' });
 
-    // Make the opponents-config tx-h header toggleable (click to collapse/expand)
-    const opponentsConfigHeader = document.querySelector('#opponents-config .tx-h');
-    if (opponentsConfigHeader) {
-        opponentsConfigHeader.style.cursor = 'pointer';
-        opponentsConfigHeader.addEventListener('click', (e) => {
-            if (e.target.closest('button')) return;
-            const content = document.querySelector('#opponents-config .panel-content');
-            if (content) {
-                content.style.display = content.style.display === 'none' ? 'block' : 'none';
-            }
-        });
-    }
-
-    // Initialize terminal chrome (clock, seed, tx-tabs, paste panel)
-    initTerminalChrome();
-    initDeckRadar();
-
-    // Initialize all components
-    initTabNavigation();
-    initializeCalculators();
     initServiceWorker();
-    initUXEnhancements();
     initPWAInstall();
 
-    // Share Button Logic
-    const shareBtn = document.getElementById('share-button');
-    if (shareBtn) {
-        shareBtn.addEventListener('click', () => {
-            const url = Share.getShareUrl();
-            navigator.clipboard.writeText(url).then(() => {
-                const originalText = shareBtn.innerHTML;
-                shareBtn.innerHTML = '✅'; // Checkmark
-                setTimeout(() => {
-                    shareBtn.innerHTML = originalText;
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy URL:', err);
-                alert('Failed to copy URL. Please copy it manually from the address bar.');
-            });
-        });
-    }
-
-    // Check for share link parameters and auto-load if present
-    // Must be called AFTER all inputs are initialized so listeners are ready
-    await Share.parseShareUrl();
-
-    // Initial render goes through switchTab so the first paint takes exactly the
-    // same path as every later tab change. Calling updateUI() directly skipped
-    // the panel show/hide logic, so the shared deck-config panel stayed hidden
-    // until the user clicked a tab and then appeared — a visible inconsistency
-    // between the landing state and every state after it.
-    // currentTab is whatever parseShareUrl() resolved to, so a shared link still wins.
-    switchTab(currentTab);
-
-    // Add keyboard navigation (dynamic — follows the visible tabs in the active group)
-    initKeyboardNav();
-
-    // Mark as visited
-    if (!localStorage.getItem('visited')) {
-        localStorage.setItem('visited', 'true');
-    }
-
-    console.log('Deck Oracle initialized');
+    const fmt = DeckConfig.getFormat();
+    document.documentElement.dataset.format = fmt.key in FORMATS ? fmt.key : 'commander';
 }
 
-// Start the app when DOM is ready
+/** Offer installation at most once a month — it is an offer, not a nag. */
+function initPWAInstall() {
+    const KEY = 'deckOracle.installOffered';
+    const MONTH = 30 * 24 * 60 * 60 * 1000;
+    window.addEventListener('beforeinstallprompt', e => {
+        e.preventDefault();
+        let last = 0;
+        try { last = Number(localStorage.getItem(KEY)) || 0; } catch { /* storage blocked */ }
+        if (Date.now() - last < MONTH) return;
+        try { localStorage.setItem(KEY, String(Date.now())); } catch { /* storage blocked */ }
+        toast('Install Deck Oracle for offline use?', {
+            timeout: 10000,
+            action: { label: 'Install', run: () => e.prompt() }
+        });
+    }, { once: true });
+}
+
 function startApp() {
     init().catch(error => {
-        console.error('Deck Oracle failed to initialize:', error);
+        console.error('Deck Oracle failed to initialise:', error);
     });
 }
 

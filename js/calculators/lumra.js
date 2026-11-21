@@ -1,32 +1,49 @@
 /**
- * Lumra, Bellow of the Woods Calculator
- * Simulates mill 4 and land return triggers
+ * Lumra, Bellow of the Woods — {4}{G}{G}
+ *
+ * "Lumra's power and toughness are each equal to the number of lands you
+ * control. When Lumra enters, mill four cards. Then return all land cards from
+ * your graveyard to the battlefield tapped."
+ *
+ * So Lumra's size is the land drops you have made by the turn you cast it plus
+ * every land the trigger brings back: the lands milled, the fetch lands you have
+ * cracked, and any other lands already in your graveyard.
+ *
+ * Exact (hypergeometric) for the averages: land drops by turn T, lands milled,
+ * fetch lands seen. Simulated for the spread and the sample games: real
+ * shuffles of the decklist are dealt to turn T and then milled. The shuffles are
+ * made once per deck and re-read for every setting, so moving a slider never
+ * re-shuffles.
  */
 
 import { drawType } from '../utils/hypergeometric.js';
-import { createCache, formatNumber, debounce } from '../utils/simulation.js';
+import { createCache } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
-import { registerCalculator } from '../utils/calculatorBase.js';
-import { renderHeroStats, renderVerdictBadge, renderInsightBox, generateSampleRevealsHTML } from '../utils/components.js';
-import {
-    buildDeckFromCardData, shuffleDeck, renderCardBadge, renderDistributionChart,
-    createCollapsibleSection
-} from '../utils/sampleSimulator.js';
+import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
+import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
+import { buildDeckFromCardData, shuffleDeck, renderDistributionChart } from '../utils/sampleSimulator.js';
+import { cardRef } from '../data/glossary.js';
 
-const CONFIG = {
-    DEFAULT_SAMPLE_SIZE: 500
-};
+/** Cards milled per Lumra trigger. */
+export const MILL_PER_TRIGGER = 4;
 
-let simulationCache = createCache(50);
-let lastDeckHash = '';
+/** Opening hand size; one card is drawn each turn after (Commander: no skipped draw). */
+export const OPENING_HAND = 7;
+
+/** Shuffled libraries kept per deck for the spread and sample games. */
+export const SIM_GAMES = 2000;
+
+/** Sample games listed on the page. */
+const SHOWN_GAMES = 5;
+
+/** Defaults for the inputs. */
+const DEFAULTS = { turn: 6, gyLands: 0, multiplier: 1 };
+
+const statsCache = createCache(50);
 let chart = null;
 
-// Stable samples state
-let stableSamples = [];
-let lastSampleDeckHash = '';
-let renderedCount = 0;
-let lastFetchDeckRef = null;
+// ==================== FETCH LANDS ====================
 
 // Name fallback for cached/third-party imports that predate stored oracle text.
 const KNOWN_FETCH_LANDS = new Set([
@@ -41,8 +58,8 @@ const KNOWN_FETCH_LANDS = new Set([
 
 /**
  * Identify a land whose own rules text sacrifices it to search for a land.
- * This covers traditional fetch lands plus cards such as Evolving Wilds and
- * Fabled Passage without relying on a hard-coded name list.
+ * Covers traditional fetch lands plus Evolving Wilds, Fabled Passage and the
+ * like without relying only on a name list.
  */
 export function isFetchLand(card = {}) {
     const name = String(card?.name ?? '').toLowerCase();
@@ -62,10 +79,17 @@ export function isFetchLand(card = {}) {
     ));
 }
 
+/** Fetch-land copies in a decklist. */
+export function countFetchLands(cardsByName) {
+    return Object.values(cardsByName ?? {}).reduce((sum, card) =>
+        sum + (isFetchLand(card) ? Math.max(0, Number(card?.count) || 0) : 0), 0);
+}
+
 /**
- * Estimate fetch access by a given turn from exact without-replacement odds.
+ * Fetch access by a given turn from exact without-replacement odds.
+ * Cracked fetches are approximated as the fetches seen, capped at one per turn.
  */
-export function calculateFetchLandSetup(deckSize, fetchCount, turn, openingHand = 7) {
+export function calculateFetchLandSetup(deckSize, fetchCount, turn, openingHand = OPENING_HAND) {
     const size = Math.max(0, Math.floor(Number(deckSize) || 0));
     const fetches = Math.min(size, Math.max(0, Math.floor(Number(fetchCount) || 0)));
     const castTurn = Math.max(0, Math.floor(Number(turn) || 0));
@@ -82,495 +106,488 @@ export function calculateFetchLandSetup(deckSize, fetchCount, turn, openingHand 
     return { cardsSeen, probabilityAtLeastOne, expectedSeen, expectedCracked };
 }
 
+// ==================== EXACT MATH ====================
+
 /**
- * Generate stable samples from the deck
- * @param {Array} deck - The source deck
- * @param {number} count - Number of samples to generate
+ * Expected land drops made by turn T: E[min(T, lands seen)], where the lands
+ * seen in the opening hand plus T draws are hypergeometric. Assumes one land a
+ * turn whenever you have one, and no other ramp.
  */
-function generateStableSamples(deck, count) {
-    stableSamples = [];
-    for (let i = 0; i < Math.max(count, CONFIG.DEFAULT_SAMPLE_SIZE); i++) {
-        stableSamples.push(shuffleDeck([...deck]));
-    }
+export function expectedLandDrops(deckSize, lands, turn, openingHand = OPENING_HAND) {
+    const N = Math.max(0, Math.floor(Number(deckSize) || 0));
+    const K = Math.min(N, Math.max(0, Math.floor(Number(lands) || 0)));
+    const T = Math.max(0, Math.floor(Number(turn) || 0));
+    const n = Math.min(N, Math.max(0, Math.floor(Number(openingHand) || 0)) + T);
+    if (N === 0 || K === 0 || T === 0) return 0;
+    let expected = 0;
+    for (let x = 0; x <= Math.min(K, n); x++) expected += Math.min(T, x) * drawType(N, K, n, x);
+    return expected;
 }
 
 /**
- * Force refresh of stable samples
- */
-function refreshSamples() {
-    const config = getDeckConfig();
-    const cardData = config.cardData;
-
-    if (cardData && cardData.cardsByName && Object.keys(cardData.cardsByName).length > 0) {
-        const countInput = document.getElementById('lumra-sample-count');
-        const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
-        const deck = buildDeckFromCardData(cardData);
-        generateStableSamples(deck, numSims);
-        runSampleReveals(); // Re-render
-    }
-}
-
-/**
- * Get current deck configuration
- * @returns {Object} - Deck configuration
- */
-export function getDeckConfig() {
-    const config = DeckConfig.getDeckConfig();
-    const cardData = DeckConfig.getImportedCardData();
-
-    // Use shared getDeckSize function to properly handle dual-typed cards
-    const deckSize = DeckConfig.getDeckSize(true);
-    
-    // Get total lands from config or card data
-    let landCount = config.lands;
-    
-    // If we have imported data, recalculate exact land count (including dual faces if handled by loader)
-    if (cardData && cardData.cardsByName) {
-        // Recalculate lands from scratch to be safe
-        let calculatedLands = 0;
-        Object.values(cardData.cardsByName).forEach(card => {
-            if (card.types && card.types.includes('land')) {
-                calculatedLands += card.count;
-            }
-        });
-        if (calculatedLands > 0) landCount = calculatedLands;
-    }
-
-    const fetchInput = document.getElementById('lumra-fetchLands');
-    if (cardData?.cardsByName && cardData.cardsByName !== lastFetchDeckRef) {
-        const detectedFetches = Object.values(cardData.cardsByName).reduce((sum, card) =>
-            sum + (isFetchLand(card) ? Math.max(0, Number(card?.count) || 0) : 0), 0);
-        if (fetchInput) fetchInput.value = String(detectedFetches);
-        lastFetchDeckRef = cardData.cardsByName;
-    }
-    const fetchCount = Math.min(deckSize, Math.max(0, parseInt(fetchInput?.value) || 0));
-    const turnInput = document.getElementById('lumra-turn');
-    const turn = Math.max(1, parseInt(turnInput?.value) || 6);
-    const fetchSetup = calculateFetchLandSetup(deckSize, fetchCount, turn);
-
-    // Get user input for GY lands
-    const gyLandsInput = document.getElementById('lumra-gyLands');
-    const gyLands = parseInt(gyLandsInput?.value) || 0;
-
-    // Get trigger multiplier
-    const multInput = document.getElementById('lumra-multiplier');
-    const multiplier = Math.max(1, parseInt(multInput?.value) || 1);
-
-    // Check for sample refresh need (using object reference check for speed)
-    if (cardData && cardData.cardsByName && cardData.cardsByName !== lastSampleDeckHash) {
-        const deck = buildDeckFromCardData(cardData);
-        generateStableSamples(deck, CONFIG.DEFAULT_SAMPLE_SIZE);
-        lastSampleDeckHash = cardData.cardsByName;
-    }
-
-    return {
-        deckSize,
-        landCount,
-        gyLands,
-        multiplier,
-        cardData,
-        fetchCount,
-        turn,
-        fetchSetup
-    };
-}
-
-/**
- * Calculate Lumra statistics (Pure function)
- * @param {number} deckSize - Total cards in library
- * @param {number} landCount - Total lands in library
- * @param {number} gyLands - Lands already in graveyard
- * @param {number} multiplier - Number of times the ability triggers
- * @returns {Object} - Calculation results
+ * Lands milled and returned (exact).
+ * @param {number} deckSize - Cards in library
+ * @param {number} landCount - Lands in library
+ * @param {number} gyLands - Other lands already in the graveyard
+ * @param {number} [multiplier=1] - How many times the enter trigger resolves
+ * @param {number} [setupLands=0] - Expected fetch lands in the graveyard
+ * @returns {{distribution:Array<{count:number, probability:number}>, expectedMilled:number, totalReturned:number, setupLands:number}}
  */
 export function calculateLumraStats(deckSize, landCount, gyLands, multiplier = 1, setupLands = 0) {
     const safeSetupLands = Math.max(0, Number(setupLands) || 0);
     const cacheKey = `${deckSize}-${landCount}-${gyLands}-${multiplier}-${safeSetupLands}`;
-    const cached = simulationCache.get(cacheKey);
+    const cached = statsCache.get(cacheKey);
     if (cached) return cached;
 
     const distribution = [];
     let expectedMilled = 0;
-
-    // Mill 4 cards * multiplier
-    const MILL_AMOUNT = 4 * multiplier;
-    
-    for (let k = 0; k <= MILL_AMOUNT; k++) {
-        // Probability of hitting exactly k lands in N cards
-        const prob = drawType(deckSize, landCount, MILL_AMOUNT, k);
+    const millAmount = MILL_PER_TRIGGER * multiplier;
+    for (let k = 0; k <= millAmount; k++) {
+        const prob = drawType(deckSize, landCount, millAmount, k);
         distribution.push({ count: k, probability: prob });
         expectedMilled += k * prob;
     }
 
-    const totalReturned = gyLands + safeSetupLands + expectedMilled;
-
     const result = {
         distribution,
         expectedMilled,
-        totalReturned,
+        totalReturned: gyLands + safeSetupLands + expectedMilled,
         setupLands: safeSetupLands
     };
-
-    simulationCache.set(cacheKey, result);
+    statsCache.set(cacheKey, result);
     return result;
 }
 
+// ==================== SIMULATION ====================
+
 /**
- * Calculate probabilities
- * @returns {Object} - Calculation results
+ * Mark which library cards act as fetch lands. Detected fetch lands come
+ * first; if the fetch count is overridden upward, other lands stand in for the
+ * extra fetches, and downward, surplus fetches act as ordinary lands.
+ *
+ * @param {Array<{types:string[], isFetchCard?:boolean}>} deck - mutated: sets `isFetch`
+ * @param {number} fetchCount
+ * @returns {Array} the same deck
  */
-export function calculate() {
-    const config = getDeckConfig();
-    const { deckSize, landCount, gyLands, multiplier } = config;
-
-    if (deckSize === 0) {
-        return { config, results: null };
-    }
-
-    const results = calculateLumraStats(deckSize, landCount, gyLands, multiplier, config.fetchSetup.expectedCracked);
-
-    return {
-        config,
-        ...results
-    };
+export function assignFetchRoles(deck, fetchCount) {
+    const lands = deck.filter(c => c.types?.includes('land'));
+    const ordered = [...lands.filter(c => c.isFetchCard), ...lands.filter(c => !c.isFetchCard)];
+    const n = Math.max(0, Math.floor(Number(fetchCount) || 0));
+    for (const c of deck) c.isFetch = false;
+    ordered.slice(0, n).forEach(c => { c.isFetch = true; });
+    return deck;
 }
 
 /**
- * Update chart visualization
+ * Play one game to Lumra: see the opening hand plus a draw a turn, make a land
+ * drop each turn you can (cracking fetch lands first), then mill.
+ *
+ * @param {Array<{name:string, types:string[], isFetch?:boolean}>} library - shuffled, not modified
+ * @param {{turn:number, multiplier?:number, openingHand?:number}} opts
+ * @returns {{drops:number, cracked:number, landsMilled:number, milled:Array}}
  */
-function updateChart(config, distribution) {
-    const labels = distribution.map(d => `${d.count} Land${d.count !== 1 ? 's' : ''}`);
-    const data = distribution.map(d => d.probability * 100);
-    
-    // Highlight the most likely outcome
-    const maxProb = Math.max(...data);
-    const backgroundColors = data.map(p => p === maxProb ? '#7d8f6a' : 'rgba(139, 156, 120, 0.4)');
+export function playToLumra(library, { turn, multiplier = 1, openingHand = OPENING_HAND }) {
+    const lib = Array.isArray(library) ? library : [];
+    const seen = Math.min(lib.length, openingHand + Math.max(0, turn));
+    let landsSeen = 0;
+    let fetchesSeen = 0;
+    for (let i = 0; i < seen; i++) {
+        if (lib[i].types?.includes('land')) {
+            landsSeen++;
+            if (lib[i].isFetch) fetchesSeen++;
+        }
+    }
+    const drops = Math.min(turn, landsSeen);
+    const cracked = Math.min(fetchesSeen, drops);
 
+    const milled = lib.slice(seen, seen + MILL_PER_TRIGGER * Math.max(1, multiplier));
+    const landsMilled = milled.filter(c => c.types?.includes('land')).length;
+    return { drops, cracked, landsMilled, milled };
+}
+
+/** Nearest-rank quantile of an ascending-sorted array (0 when empty). */
+function quantile(sorted, q) {
+    if (!sorted.length) return 0;
+    const rank = Math.ceil(Math.min(1, Math.max(0, q)) * sorted.length) - 1;
+    return sorted[Math.min(sorted.length - 1, Math.max(0, rank))];
+}
+
+/**
+ * Lumra's size across simulated games: percentiles (never the sampled
+ * extremes), the size distribution, and how often the mill hits nothing.
+ *
+ * @param {Array<{drops:number, cracked:number, landsMilled:number}>} games
+ * @param {number} gyLands
+ */
+export function summariseSizes(games, gyLands = 0) {
+    const list = Array.isArray(games) ? games : [];
+    const sizes = list.map(g => g.drops + g.cracked + g.landsMilled + gyLands).sort((a, b) => a - b);
+    const counts = [];
+    for (const s of sizes) counts[s] = (counts[s] || 0) + 1;
+    for (let i = 0; i < counts.length; i++) if (!counts[i]) counts[i] = 0;
+    return {
+        games: list.length,
+        p10: quantile(sizes, 0.1),
+        p25: quantile(sizes, 0.25),
+        p50: quantile(sizes, 0.5),
+        p75: quantile(sizes, 0.75),
+        p90: quantile(sizes, 0.9),
+        counts,
+        noLandsMilled: list.length ? list.filter(g => g.landsMilled === 0).length / list.length : 0
+    };
+}
+
+const one = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
+const pct = v => `${Math.round((Number.isFinite(v) ? v : 0) * 100)}%`;
+const pt = s => `${s}/${s}`;
+
+/** Tone for the lands Lumra brings back. */
+export function returnTone(returned) {
+    if (returned >= 3) return 'good';
+    if (returned >= 1) return 'warn';
+    return 'bad';
+}
+
+/**
+ * The plain-English answer to "How big is Lumra, and how many lands come back
+ * when it enters?".
+ *
+ * @param {{turn:number, multiplier:number, gyLands:number, drops:number, milled:number, fetches:number, returned:number, sizes:Object|null, pNoLands:number}} r
+ * @returns {{html:string, tone:string}}
+ */
+export function summarize(r) {
+    if (!r || !Number.isFinite(r.returned)) {
+        return { tone: 'flat', html: 'Import a decklist to see how big Lumra gets.' };
+    }
+    const mill = MILL_PER_TRIGGER * (r.multiplier ?? 1);
+    const size = r.sizes ? r.sizes.p50 : Math.round(r.drops + r.returned);
+    const range = r.sizes && r.sizes.p25 !== r.sizes.p75 ? ` (half of games between ${pt(r.sizes.p25)} and ${pt(r.sizes.p75)})` : '';
+
+    const parts = [`${one(r.milled)} milled from the top ${mill}`];
+    if (r.fetches > 0.05) parts.push(`${one(r.fetches)} cracked fetch land${r.fetches >= 1.05 ? 's' : ''}`);
+    if (r.gyLands > 0) parts.push(`${r.gyLands} already in your graveyard`);
+
+    let html = `Cast on turn ${r.turn}, Lumra typically enters as a <strong>${pt(size)}</strong>${range}. `
+        + `About ${one(r.drops)} of that is your land drops; the trigger brings back <strong>${one(r.returned)}</strong> more on average — ${parts.join(', ')}.`;
+    if (r.pNoLands >= 0.05) html += ` ${pct(r.pNoLands)} of the time the mill finds no lands.`;
+    return { html, tone: returnTone(r.returned) };
+}
+
+// ==================== STATE ====================
+
+const sim = { deckRef: null, deck: null, libraries: null, fetchCount: null };
+let lastFetchDeckRef = null;
+
+function intInput(id, fallback, min, max) {
+    const raw = parseInt(document.getElementById(id)?.value, 10);
+    return Math.max(min, Math.min(max, Number.isFinite(raw) ? raw : fallback));
+}
+
+/** Re-detect fetch lands when the deck changes (keeps a manual override until then). */
+function syncFetchDetection() {
+    const cardsByName = DeckConfig.getImportedCardData()?.cardsByName;
+    if (!cardsByName || cardsByName === lastFetchDeckRef) return;
+    const input = document.getElementById('lumra-fetchLands');
+    const detected = countFetchLands(cardsByName);
+    if (input) input.value = String(detected);
+    const hint = document.getElementById('lumra-fetch-hint');
+    if (hint) hint.textContent = detected ? `Found ${detected} in your deck. Change it to see what more or fewer would do.` : 'None found in your deck.';
+    lastFetchDeckRef = cardsByName;
+}
+
+/**
+ * Current deck and inputs.
+ * @returns {{deckSize:number, landCount:number, gyLands:number, multiplier:number, cardData:Object, fetchCount:number, turn:number, fetchSetup:Object}}
+ */
+export function getDeckConfig() {
+    const config = DeckConfig.getDeckConfig();
+    const cardData = DeckConfig.getImportedCardData();
+    const deckSize = DeckConfig.getDeckSize(true);
+    syncFetchDetection();
+
+    const fetchCount = intInput('lumra-fetchLands', 0, 0, deckSize);
+    const turn = intInput('lumra-turn', DEFAULTS.turn, 1, 30);
+    return {
+        deckSize,
+        landCount: config.lands ?? 0,
+        gyLands: intInput('lumra-gyLands', DEFAULTS.gyLands, 0, 100),
+        multiplier: intInput('lumra-multiplier', DEFAULTS.multiplier, 1, 10),
+        cardData,
+        fetchCount,
+        turn,
+        fetchSetup: calculateFetchLandSetup(deckSize, fetchCount, turn)
+    };
+}
+
+/** The library as cards with roles; a stand-in built from counts when there is no list. */
+function buildLibrary(config) {
+    const cardsByName = config.cardData?.cardsByName;
+    if (cardsByName && Object.keys(cardsByName).length) {
+        const fetchNames = new Set(Object.values(cardsByName).filter(isFetchLand).map(c => c.name));
+        return buildDeckFromCardData({ cardsByName }).map(c => ({ ...c, isFetchCard: fetchNames.has(c.name) }));
+    }
+    const deck = [];
+    for (let i = 0; i < config.deckSize; i++) {
+        const isLand = i < config.landCount;
+        deck.push({ name: isLand ? 'Land' : 'Spell', types: isLand ? ['land'] : [], isFetchCard: false, generic: true });
+    }
+    return deck;
+}
+
+/** Shuffled libraries for the current deck, made once per deck (or on demand). */
+function ensureLibraries(config, force = false) {
+    const ref = config.cardData?.cardsByName && Object.keys(config.cardData.cardsByName).length
+        ? config.cardData.cardsByName
+        : `${config.deckSize}:${config.landCount}`;
+    if (force || sim.deckRef !== ref || !sim.libraries) {
+        sim.deck = buildLibrary(config);
+        sim.libraries = Array.from({ length: SIM_GAMES }, () => shuffleDeck([...sim.deck]));
+        sim.deckRef = ref;
+        sim.fetchCount = null;
+    }
+    if (sim.fetchCount !== config.fetchCount) {
+        assignFetchRoles(sim.deck, config.fetchCount);
+        sim.fetchCount = config.fetchCount;
+    }
+    return sim.libraries;
+}
+
+export function calculate() {
+    const config = getDeckConfig();
+    const { deckSize, landCount, gyLands, multiplier, turn } = config;
+    if (deckSize === 0) return { config, results: null };
+
+    const results = calculateLumraStats(deckSize, landCount, gyLands, multiplier, config.fetchSetup.expectedCracked);
+    const drops = expectedLandDrops(deckSize, landCount, turn);
+    const games = ensureLibraries(config).map(lib => playToLumra(lib, { turn, multiplier }));
+    const sizes = summariseSizes(games, gyLands);
+    return { config, ...results, drops, games, sizes };
+}
+
+// ==================== RENDERING ====================
+
+function renderHero(r) {
+    const el = document.getElementById('lumra-stats');
+    if (!el) return;
+    const { config, sizes } = r;
+    const mill = MILL_PER_TRIGGER * config.multiplier;
+    const pNone = r.distribution[0]?.probability ?? 0;
+    el.innerHTML = renderHeroStats([
+        {
+            label: 'Lumra’s size',
+            value: pt(sizes.p50),
+            sub: sizes.p25 === sizes.p75 ? `typical game, cast turn ${config.turn}` : `typical · half of games ${sizes.p25}–${sizes.p75}`,
+            size: 'big',
+            color: 'var(--tx-good)',
+            term: 'p50'
+        },
+        {
+            label: 'Lands brought back',
+            value: one(r.totalReturned),
+            sub: 'average, onto the battlefield tapped',
+            color: `var(--tx-${returnTone(r.totalReturned)})`,
+            term: 'ev'
+        },
+        {
+            label: 'Lands milled',
+            value: one(r.expectedMilled),
+            sub: `of the top ${mill} · none ${pct(pNone)} of the time`,
+            tip: 'Exact: the chance of each number of lands among the cards milled, from your land count.'
+        },
+        {
+            label: 'Fetch lands back',
+            value: one(config.fetchSetup.expectedCracked),
+            sub: config.fetchCount ? `${pct(config.fetchSetup.probabilityAtLeastOne)} chance you’ve seen one` : 'no fetch lands counted',
+            tip: 'Fetch lands you have played and cracked by this turn are in your graveyard, so Lumra returns them too.'
+        }
+    ]);
+}
+
+function renderSources(r) {
+    const el = document.getElementById('lumra-sources');
+    if (!el) return;
+    const parts = [
+        { key: 'drops', label: 'Land drops', value: r.drops },
+        { key: 'gy', label: 'Already in graveyard', value: r.config.gyLands },
+        { key: 'fetch', label: 'Fetch lands', value: r.config.fetchSetup.expectedCracked },
+        { key: 'mill', label: 'Milled', value: r.expectedMilled }
+    ].filter(p => p.value > 0.005);
+    const total = parts.reduce((s, p) => s + p.value, 0) || 1;
+    el.innerHTML = `
+        <div class="lm-band" role="img" aria-label="${parts.map(p => `${p.label} ${one(p.value)}`).join(', ')}">
+            ${parts.map(p => `<span class="lm-band-seg is-${p.key}" style="width:${(p.value / total * 100).toFixed(2)}%"></span>`).join('')}
+        </div>
+        <ul class="lm-legend">
+            ${parts.map(p => `<li><span class="lm-swatch is-${p.key}"></span>${p.label}<strong>${one(p.value)}</strong></li>`).join('')}
+            <li class="lm-legend-total">Average size<strong>${one(total)}</strong></li>
+        </ul>`;
+}
+
+function updateChart(sizes) {
+    if (!document.getElementById('lumra-chart')) return;
+    const first = sizes.counts.findIndex(c => c > 0);
+    const labels = [];
+    const data = [];
+    for (let s = Math.max(0, first); s < sizes.counts.length; s++) {
+        labels.push(String(s));
+        data.push(Math.round((sizes.counts[s] / sizes.games) * 1000) / 10);
+    }
+    const start = Math.max(0, first);
     chart = createOrUpdateChart(chart, 'lumra-chart', {
         type: 'bar',
         data: {
             labels,
             datasets: [{
-                label: 'Probability (%)',
+                label: 'Share of games',
                 data,
-                backgroundColor: backgroundColors,
-                borderColor: '#7d8f6a',
-                borderWidth: 1
+                backgroundColor: labels.map((_, i) => (i + start === sizes.p50 ? TX.green : TX.greenFill)),
+                borderColor: TX.green,
+                borderWidth: 1,
+                borderRadius: 3,
+                maxBarThickness: 48
             }]
         },
         options: {
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: { display: true, text: 'Probability (%)', color: '#7d8f6a' },
-                    grid: { color: 'rgba(139, 156, 120, 0.2)' },
-                    ticks: { color: '#7d8f6a' }
-                },
-                x: {
-                    grid: { color: 'rgba(139, 156, 120, 0.2)' },
-                    ticks: { color: TX.dim, font: { size: 9 } }
-                }
-            },
             plugins: {
                 tooltip: {
                     callbacks: {
-                        label: ctx => `Probability: ${ctx.parsed.y.toFixed(2)}%`
+                        title: items => `Enters as a ${pt(items[0]?.label ?? '')}`,
+                        label: ctx => ` ${ctx.parsed.y.toFixed(1)}% of games`
                     }
                 }
+            },
+            scales: {
+                x: { title: { display: true, text: 'Lumra’s power and toughness', color: TX.dim } },
+                y: { beginAtZero: true, ticks: { callback: v => `${v}%` }, title: { display: true, text: 'Share of games', color: TX.dim } }
             }
         }
     });
 }
 
-/**
- * Update stats panel
- */
-function updateStats(config, expectedMilled, totalReturned) {
-    const statsPanel = document.getElementById('lumra-stats');
-    
-    if (!statsPanel) return;
-
-    // Verdict tier from total lands returned to the battlefield
-    let verdict;
-    if (totalReturned >= 5) verdict = { label: 'MASSIVE', color: 'var(--tx-green)', advice: `Returning ${formatNumber(totalReturned, 1)} lands is game-changing ramp.` };
-    else if (totalReturned >= 3) verdict = { label: 'SOLID', color: 'var(--tx-green)', advice: 'Good ramp and a sizeable body.' };
-    else verdict = { label: 'MODERATE', color: 'var(--tx-amber)', advice: 'Fill your graveyard more to grow the bear.' };
-
-    const density = config.deckSize > 0 ? (config.landCount / config.deckSize) * 100 : 0;
-
-    const hero = renderHeroStats([
-        { label: 'LANDS RETURNED', value: formatNumber(totalReturned, 1), sub: 'onto the battlefield', color: 'var(--tx-green)', size: 'big' },
-        { label: 'FETCHES IN GY', value: formatNumber(config.fetchSetup.expectedCracked, 2), sub: `expected by turn ${config.turn}`, color: 'var(--tx-blue)' },
-        { label: 'P(SEE A FETCH)', value: formatNumber(config.fetchSetup.probabilityAtLeastOne * 100, 0) + '%', sub: `${config.fetchSetup.cardsSeen} cards seen`, color: 'var(--tx-amber)' },
-        { label: 'MILLED LANDS', value: formatNumber(expectedMilled, 2), sub: `from top ${4 * config.multiplier}`, color: 'var(--tx-mid)' }
-    ]);
-
-    const insight = renderInsightBox('', `With ${config.fetchCount} fetch land${config.fetchCount === 1 ? '' : 's'}, you expect to see ${formatNumber(config.fetchSetup.expectedSeen, 2)} and crack ${formatNumber(config.fetchSetup.expectedCracked, 2)} by turn ${config.turn}. Add ${config.gyLands} other graveyard land${config.gyLands === 1 ? '' : 's'} plus ${formatNumber(expectedMilled, 2)} expected from mill ${4 * config.multiplier}. Library land density is ${density.toFixed(0)}%. ${renderVerdictBadge(verdict)} ${verdict.advice}`);
-
-    statsPanel.innerHTML = hero + insight;
+function cardName(card) {
+    return card.generic ? card.name : cardRef(card.name);
 }
 
-/**
- * Run sample Lumra simulations
- * @param {Object} [passedConfig] - Optional config object to avoid re-fetching
- */
-export function runSampleReveals(passedConfig) {
-    const config = passedConfig || getDeckConfig();
-    const cardData = config.cardData;
-
-    if (!cardData || !cardData.cardsByName || Object.keys(cardData.cardsByName).length === 0) {
-        document.getElementById('lumra-reveals-display').innerHTML = '<p style="color: var(--text-dim);">Please import a decklist to run simulations.</p>';
+/** Render sample games from the shared shuffles. */
+export function runSampleReveals(passed) {
+    const display = document.getElementById('lumra-reveals-display');
+    if (!display) return;
+    const r = passed?.games ? passed : calculate();
+    if (!r.games?.length) {
+        display.innerHTML = '<div class="tx-empty">Import a decklist to see sample games.</div>';
         return;
     }
-
-    const countInput = document.getElementById('lumra-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || 20);
-    
-    // Ensure we have stable samples
-    if (stableSamples.length < numSims) {
-        const deck = buildDeckFromCardData(cardData);
-        generateStableSamples(deck, numSims);
-    }
-
-    const millAmount = 4 * config.multiplier;
-
-    // 1. STATS LOOP (Full Simulation)
-    let totalLandsMilled = 0;
-    let totalLandsReturned = 0;
-    // Map of land count -> frequency
-    const landDistribution = {}; 
-    let maxLandsFound = 0;
-
-    for (let i = 0; i < numSims; i++) {
-        const shuffled = stableSamples[i];
-        
-        // Optimized counting loop (avoids array allocation for statistics)
-        let landCount = 0;
-        // Safety check for deck size smaller than mill amount
-        const limit = Math.min(millAmount, shuffled.length);
-        
-        for (let j = 0; j < limit; j++) {
-            const card = shuffled[j];
-            if (card.types && card.types.includes('land')) {
-                landCount++;
-            }
-        }
-        
-        totalLandsMilled += landCount;
-        totalLandsReturned += (config.gyLands + config.fetchSetup.expectedCracked + landCount);
-        landDistribution[landCount] = (landDistribution[landCount] || 0) + 1;
-        if (landCount > maxLandsFound) maxLandsFound = landCount;
-    }
-
-    // Convert map to array for chart
-    const distributionArray = new Array(maxLandsFound + 1).fill(0);
-    for (const [count, freq] of Object.entries(landDistribution)) {
-        distributionArray[parseInt(count)] = freq;
-    }
-
-    // 2. Build Summary UI (Distribution Chart)
-    const avgLands = (totalLandsMilled / numSims).toFixed(2);
-    const avgReturned = (totalLandsReturned / numSims).toFixed(2);
-    
-    let distributionHTML = '<div class="tx-sim">';
-    distributionHTML += '<div class="tx-h"><span>Lands milled — distribution</span></div>';
-    distributionHTML += '<div class="tx-sim-block">';
-
-    distributionHTML += renderDistributionChart(
-        distributionArray,
-        numSims,
-        (count) => `${count} land${count !== 1 ? 's' : ''}`,
-        (idx) => (idx === 0 ? ' ✗' : (idx >= 4 ? ' ▲' : '')) 
-    );
-
-    distributionHTML += '</div><div class="tx-sim-block">';
-    distributionHTML += `<div><small style="color:var(--text-dim)">Avg Milled</small><br><strong>${avgLands}</strong></div>`;
-    distributionHTML += `<div><small style="color:var(--text-dim)">Avg Returned</small><br><strong style="color: var(--lumra-primary);">${avgReturned}</strong></div>`;
-    distributionHTML += '</div></div>';
-
-    // 3. Prepare List Container
-    const listId = 'lumra-samples-list';
-    const btnId = 'lumra-load-more';
-    const listHTML = `<div id="${listId}"></div><button id="${btnId}" class="import-btn" style="width: 100%; margin-top: 12px; display: none;">Load More (50)</button>`;
-
-    const revealsSectionHTML = createCollapsibleSection(
-        `Show/Hide Sample Mills (Mill ${millAmount})`,
-        listHTML,
-        true
-    );
-
-    document.getElementById('lumra-reveals-display').innerHTML = distributionHTML + revealsSectionHTML;
-
-    // 4. Render Batch Function
-    const listContainer = document.getElementById(listId);
-    const loadMoreBtn = document.getElementById(btnId);
-    renderedCount = 0;
-
-    const renderBatch = (batchSize) => {
-        const start = renderedCount;
-        const end = Math.min(start + batchSize, numSims);
-        let html = '';
-
-        for (let i = start; i < end; i++) {
-            const shuffled = stableSamples[i];
-
-            // Count lands efficiently without creating intermediate array
-            let landCount = 0;
-            const limit = Math.min(millAmount, shuffled.length);
-            for (let j = 0; j < limit; j++) {
-                if (shuffled[j].types && shuffled[j].types.includes('land')) {
-                    landCount++;
-                }
-            }
-
-            const totalReturned = config.gyLands + config.fetchSetup.expectedCracked + landCount;
-            const isGood = landCount >= (2 * config.multiplier);
-
-            html += `<div class="sample-reveal ${isGood ? 'free-spell' : 'whiff'}">`;
-            html += `<div><strong>Sample ${i + 1}:</strong> Milled ${landCount} land${landCount !== 1 ? 's' : ''} (Expected Return: ${totalReturned.toFixed(2)}, including ${config.fetchSetup.expectedCracked.toFixed(2)} fetches)</div>`;
-            html += '<div style="margin: 8px 0;">';
-
-            // Render cards
-            for (let j = 0; j < limit; j++) {
-                const card = shuffled[j];
-                const isLand = card.types && card.types.includes('land');
-                const color = isLand ? 'var(--type-land)' : 'var(--tx-panel-alt)';
-                const textColor = isLand ? '#0a0b0a' : 'var(--tx-mid)';
-                html += `<span class="reveal-card" style="background: ${color}; color: ${textColor};">${card.name}</span>`;
-            }
-
-            html += '</div></div>';
-        }
-
-        if (listContainer) {
-            listContainer.insertAdjacentHTML('beforeend', html);
-        }
-        
-        renderedCount = end;
-        
-        if (loadMoreBtn) {
-            if (renderedCount < numSims) {
-                loadMoreBtn.style.display = 'block';
-                loadMoreBtn.textContent = `Load More (Showing ${renderedCount}/${numSims})`;
-            } else {
-                loadMoreBtn.style.display = 'none';
-            }
-        }
-    };
-
-    // Initial Render
-    renderBatch(50);
-
-    if (loadMoreBtn) {
-        loadMoreBtn.addEventListener('click', () => renderBatch(50));
-    }
+    const { turn, gyLands } = r.config;
+    const rows = r.games.slice(0, SHOWN_GAMES).map((g, i) => {
+        const size = g.drops + g.cracked + g.landsMilled + gyLands;
+        const back = g.cracked + g.landsMilled + gyLands;
+        const how = [
+            `${g.drops} land drop${g.drops === 1 ? '' : 's'}`,
+            g.cracked ? `${g.cracked} fetch cracked` : null
+        ].filter(Boolean).join(', ');
+        const chips = g.milled.map(c => {
+            const isLand = c.types?.includes('land');
+            return `<li class="lm-mill${isLand ? ' is-land' : ''}">${cardName(c)}</li>`;
+        }).join('');
+        return `
+            <div class="lm-game">
+                <div class="lm-game-head">
+                    <span>Game ${i + 1}</span>
+                    <span><span class="lm-game-back">${back} land${back === 1 ? '' : 's'} back</span> <span class="lm-game-size">${pt(size)}</span></span>
+                </div>
+                <div class="lm-game-body">
+                    <span class="lm-game-how">${how} by turn ${turn}. Milled:</span>
+                    <ol class="lm-mills">${chips}</ol>
+                </div>
+            </div>`;
+    }).join('');
+    display.innerHTML = `
+        <div class="lm-games">${rows}</div>
+        <p class="lm-caption">${SHOWN_GAMES} of ${r.games.length.toLocaleString('en-US')} shuffles of your list. Highlighted cards are lands the trigger returns${gyLands ? `; the ${gyLands} graveyard land${gyLands === 1 ? '' : 's'} you set count in every game` : ''}.</p>`;
 }
 
-// Debounced version of sample generator for UI updates
-const runSampleRevealsDebounced = debounce(runSampleReveals, 300);
+function renderDetails(r) {
+    const millEl = document.getElementById('lumra-mill-dist');
+    if (millEl) {
+        const mill = MILL_PER_TRIGGER * r.config.multiplier;
+        millEl.innerHTML = `
+            <p class="lm-caption">Exact chance of each number of lands among the ${mill} cards milled.</p>
+            ${renderDistributionChart(r.distribution.map(d => d.probability), 1, k => `${k} land${k === 1 ? '' : 's'}`, () => null, k => (k === 0 ? 'bad' : null))}`;
+    }
 
-/**
- * Update all UI elements
- */
+    const { deckSize, landCount, gyLands, multiplier, fetchCount, turn } = r.config;
+    const rows = [];
+    for (let t = 3; t <= 12; t++) {
+        const fetch = calculateFetchLandSetup(deckSize, fetchCount, t).expectedCracked;
+        const back = calculateLumraStats(deckSize, landCount, gyLands, multiplier, fetch).totalReturned;
+        const drops = expectedLandDrops(deckSize, landCount, t);
+        rows.push({ x: t, drops, back, size: drops + back });
+    }
+    renderSweepTable('lumra-turn-table', {
+        rows,
+        current: turn,
+        columns: [
+            { label: 'Cast on turn', align: 'left', render: row => String(row.x) },
+            { label: 'Land drops', render: row => one(row.drops) },
+            { label: 'Brought back', render: row => one(row.back) },
+            { label: 'Average size', render: row => `<strong>${one(row.size)}</strong>` }
+        ]
+    });
+}
+
 export function updateUI() {
-    const { config, distribution, expectedMilled, totalReturned } = calculate();
-
-    if (!distribution) {
-        if (chart) chart.destroy();
+    const r = calculate();
+    const bottom = document.getElementById('lumra-bottom-line');
+    if (!r.distribution) {
+        if (bottom) bottom.innerHTML = renderBottomLine(summarize(null));
+        if (chart) { chart.destroy(); chart = null; }
         return;
     }
 
-    updateChart(config, distribution);
-    updateStats(config, expectedMilled, totalReturned);
-
-    // Run samples if we have data (debounced for performance)
-    if (config.cardData && config.cardData.cardsByName) {
-        runSampleRevealsDebounced(config);
+    if (bottom) {
+        bottom.innerHTML = renderBottomLine(summarize({
+            turn: r.config.turn,
+            multiplier: r.config.multiplier,
+            gyLands: r.config.gyLands,
+            drops: r.drops,
+            milled: r.expectedMilled,
+            fetches: r.config.fetchSetup.expectedCracked,
+            returned: r.totalReturned,
+            sizes: r.sizes,
+            pNoLands: r.distribution[0]?.probability ?? 0
+        }));
     }
-    
-    // Update dynamic headers
-    const millAmount = 4 * config.multiplier;
-    const chartHeader = document.getElementById('lumra-chart-header');
-    if (chartHeader) {
-        chartHeader.textContent = `Lands Milled Distribution (Mill ${millAmount})`;
-    }
-    
-    // Update sample reveals header if it exists
-    const samplesHeader = document.querySelector('#lumra-reveals-display .collapsible-header h3');
-    if (samplesHeader) {
-        // Only update the text part, keep the collapse icon if it's there (usually handled by CSS or separate span)
-        // The collapsible component structure: <h3>Title <span class="collapse-icon">...</span></h3>
-        // We need to be careful not to wipe the icon if it's inside the h3. 
-        // Let's check createCollapsibleSection in sampleSimulator.js...
-        // It creates: <div class="collapsible-header"><h3>${title}</h3><span...>...</span></div>
-        // So safe to update textContent of h3? No, h3 contains just text.
-        
-        // However, we are re-generating the whole section in runSampleReveals.
-        // We just need to make sure runSampleReveals uses the correct title.
-    }
+    renderHero(r);
+    renderSources(r);
+    updateChart(r.sizes);
+    runSampleReveals(r);
+    renderDetails(r);
 }
 
-/**
- * Initialize Lumra calculator
- */
+/** Keep a slider and its number box in step, then re-render (debounced). */
+function pair(sliderId, numberId, update) {
+    const slider = document.getElementById(sliderId);
+    const number = document.getElementById(numberId);
+    if (!slider || !number) return;
+    slider.addEventListener('input', () => { number.value = slider.value; update(); });
+    number.addEventListener('input', () => {
+        const v = parseInt(number.value, 10);
+        if (Number.isFinite(v)) slider.value = String(Math.max(+slider.min, Math.min(+slider.max, v)));
+        update();
+    });
+}
+
 export function init() {
-    registerCalculator({
-        name: 'lumra',
-        calculate,
-        updateUI,
-        init: () => {
-            const container = document.getElementById('lumra-sample-reveals');
-            if (container) {
-                // Initial render with default text, will be updated by updateUI/runSampleReveals
-                container.innerHTML = generateSampleRevealsHTML('lumra', 'Sample Mill 4');
-            }
-            const btn = document.getElementById('lumra-draw-reveals-btn');
-            if (btn) btn.addEventListener('click', refreshSamples);
-            
-            // Sync slider and input
-            const slider = document.getElementById('lumra-gySlider');
-            const number = document.getElementById('lumra-gyLands');
-            
-            if (slider && number) {
-                slider.addEventListener('input', () => {
-                    number.value = slider.value;
-                    updateUI();
-                });
-                number.addEventListener('input', () => {
-                    slider.value = number.value;
-                    updateUI();
-                });
-            }
-
-            // Sync multiplier slider and input
-            const multSlider = document.getElementById('lumra-multSlider');
-            const multNumber = document.getElementById('lumra-multiplier');
-            
-            if (multSlider && multNumber) {
-                multSlider.addEventListener('input', () => {
-                    multNumber.value = multSlider.value;
-                    updateUI();
-                });
-                multNumber.addEventListener('input', () => {
-                    multSlider.value = multNumber.value;
-                    updateUI();
-                });
-            }
-
-            const turnSlider = document.getElementById('lumra-turnSlider');
-            const turnNumber = document.getElementById('lumra-turn');
-            if (turnSlider && turnNumber) {
-                turnSlider.addEventListener('input', () => {
-                    turnNumber.value = turnSlider.value;
-                    updateUI();
-                });
-                turnNumber.addEventListener('input', () => {
-                    turnSlider.value = turnNumber.value;
-                    updateUI();
-                });
-            }
-
-            document.getElementById('lumra-fetchLands')?.addEventListener('input', updateUI);
-        }
+    const { updateUI: debouncedUpdate } = registerCalculator({ name: 'lumra', calculate, updateUI });
+    // Detect fetch lands now, so a share link applied after mount keeps its override.
+    syncFetchDetection();
+    pair('lumra-gySlider', 'lumra-gyLands', debouncedUpdate);
+    pair('lumra-multSlider', 'lumra-multiplier', debouncedUpdate);
+    pair('lumra-turnSlider', 'lumra-turn', debouncedUpdate);
+    document.getElementById('lumra-fetchLands')?.addEventListener('input', debouncedUpdate);
+    document.getElementById('lumra-draw-reveals-btn')?.addEventListener('click', () => {
+        if (!isCalculatorActive('lumra')) return;
+        ensureLibraries(getDeckConfig(), true);
+        updateUI();
     });
 }

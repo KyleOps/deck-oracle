@@ -1,84 +1,53 @@
 /**
- * Dream Harvest Calculator
- * Simulates Dream Harvest outcomes for opponent decks
+ * Dream Harvest — {5}{U/B}{U/B} sorcery.
  *
- * Card Effect:
  * Each opponent exiles cards from the top of their library until they have
  * exiled cards with total mana value 5 or greater this way. Until end of turn,
  * you may cast cards exiled this way without paying their mana costs.
+ *
+ * Simulated: each opponent's real list is shuffled 20,000 times (seeded by the
+ * list itself, so the same deck always gives the same numbers) and only as many
+ * cards as the exile reaches are shuffled each time.
  */
 
-import { createCache } from '../utils/simulation.js';
 import { registerCalculator, updateCalculatorIfActive } from '../utils/calculatorBase.js';
-import { generateSampleRevealsHTML, renderHeroStats } from '../utils/components.js';
-import { shuffleDeck, renderCardBadge, createCollapsibleSection, buildDeckFromCardData } from '../utils/sampleSimulator.js';
+import { renderBottomLine, renderHeroStats } from '../utils/components.js';
+import { cardRef, escapeHtml } from '../data/glossary.js';
 import * as OpponentState from '../utils/opponentState.js';
+import {
+    libraryOf, isLandCard, createRevealer, seededRandom, deckSeed, typicalRange, formatRange, formatPct, fmt1,
+    countWord, objectId, readOpponents, frameScheduler, opponentLabel, cardChip, miniBars,
+    renderOpponentPlaceholder, renderLoadingNote, bindOpponentActions, renderDisclosure, hasRoom
+} from '../utils/opponentPages.js';
 
-const CONFIG = {
-    DEFAULT_SAMPLE_SIZE: 500,
-    DEFAULT_SIM_COUNT: 5000,
-    MV_THRESHOLD: 5 // Exile until total MV >= 5
-};
+/** Dream Harvest's own mana value — what the stolen spells are measured against. */
+export const DREAM_HARVEST_COST = 7;
+/** Exile until the pile's total mana value reaches this. */
+export const MV_THRESHOLD = 5;
+/** "Big" stolen spell called out in the table. */
+const BIG_SPELL_MV = 5;
+const SIM_RUNS = 20000;
 
-let simulationCache = createCache(50);
+const SAMPLE_BATCH = 3;
+const SAMPLE_MAX = 24;
 
-// Stable samples for each opponent
-const stableSamples = {
-    opponent1: [],
-    opponent2: [],
-    opponent3: []
-};
-
-// Track rendered count for batch rendering per opponent
-const renderedCounts = {
-    opponent1: 0,
-    opponent2: 0,
-    opponent3: 0
-};
+// ── Mechanics ───────────────────────────────────────────────────────────────
 
 /**
- * Render a compact horizontal bar chart (no gaps, shows all values)
+ * Resolve Dream Harvest against one opponent, revealing cards from a source.
+ * @param {() => (Object|null)} nextCard - returns the next card from the top, or null when empty
+ * @returns {{cardsExiled:number, totalMV:number, exiledCards:Array, castableSpells:Array, numCastable:number, totalCastableMV:number}}
  */
-function renderCompactChart(data, totalSims, labelFn, barColor = '#5b8db8', labelWidth = 28) {
-    let html = '<div class="compact-dist-chart" style="display: flex; flex-direction: column; gap: 2px;">';
-
-    for (let i = 0; i < data.length; i++) {
-        const count = data[i] || 0;
-        const pct = (count / totalSims * 100);
-        const pctStr = pct.toFixed(1) + '%';
-
-        html += `
-            <div style="display: flex; align-items: center; gap: 6px; font-size: 0.8em;">
-                <div style="width: ${labelWidth}px; text-align: right; color: var(--text-dim); white-space: nowrap;">${labelFn(i)}</div>
-                <div style="flex: 1; height: 14px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
-                    <div style="width: ${pct}%; height: 100%; background: ${barColor}; border-radius: 2px;"></div>
-                </div>
-                <div style="width: 42px; text-align: right; color: var(--text-secondary);">${pctStr}</div>
-            </div>
-        `;
-    }
-
-    html += '</div>';
-    return html;
-}
-
-/**
- * Simulate Dream Harvest: Exile until total MV >= 5
- * @param {Array} deck - Shuffled deck array
- * @returns {Object} - { cardsExiled, totalMV, exiledCards, castableSpells }
- */
-export function simulateDreamHarvest(deck) {
+export function resolveDreamHarvest(nextCard) {
     let totalMV = 0;
     const exiledCards = [];
-
-    for (const card of deck) {
+    while (totalMV < MV_THRESHOLD) {
+        const card = nextCard();
+        if (!card) break;
         exiledCards.push(card);
         totalMV += card.cmc || 0;
-        if (totalMV >= CONFIG.MV_THRESHOLD) break;
     }
-
-    const castableSpells = exiledCards.filter(c => !c.types.includes('land'));
-
+    const castableSpells = exiledCards.filter(c => !isLandCard(c));
     return {
         cardsExiled: exiledCards.length,
         totalMV,
@@ -90,406 +59,378 @@ export function simulateDreamHarvest(deck) {
 }
 
 /**
- * Calculate Dream Harvest statistics for an opponent deck
- * @param {Object} opponentData - Opponent deck data with cardsByName
- * @param {number} numSims - Number of simulations
- * @returns {Object} - Statistics
+ * Dream Harvest on a shuffled library (top first).
+ * @param {Array} deck
  */
-export function calculateDreamHarvestStats(opponentData, numSims = CONFIG.DEFAULT_SIM_COUNT) {
-    if (!opponentData?.cardsByName || Object.keys(opponentData.cardsByName).length === 0) {
-        return null;
-    }
+export function simulateDreamHarvest(deck) {
+    let i = 0;
+    return resolveDreamHarvest(() => (i < deck.length ? deck[i++] : null));
+}
 
-    // Build deck directly from passed data (works for both tests and app)
-    const deck = buildDeckFromCardData(opponentData);
+function bump(arr, i, by = 1) {
+    arr[i] = (arr[i] ?? 0) + by;
+}
 
-    if (!deck || deck.length === 0) return null;
+function normalise(counts, runs) {
+    return Array.from(counts, c => (c ?? 0) / runs);
+}
 
+/**
+ * Statistics for one opponent list.
+ * @param {Object} opponentData - deck data with cardsByName
+ * @param {number} [numSims=20000]
+ * @param {number} [seed] - defaults to a hash of the list, so results are repeatable
+ * @returns {Object|null}
+ */
+export function calculateDreamHarvestStats(opponentData, numSims = SIM_RUNS, seed = undefined) {
+    if (!opponentData?.cardsByName || Object.keys(opponentData.cardsByName).length === 0) return null;
+    const library = libraryOf(opponentData);
+    if (library.length === 0) return null;
+    const runs = Math.max(1, Math.floor(numSims) || 1);
+
+    const revealer = createRevealer(library, seededRandom(seed ?? deckSeed(library)));
     let totalCardsExiled = 0;
     let totalMV = 0;
     let totalCastable = 0;
     let totalCastableMV = 0;
-    const cardsExiledDist = {};
-    const totalMVDist = {};
+    let bigRuns = 0;
+    const spellCounts = [];
+    const manaCounts = [];
+    const exiledCounts = [];
 
-    for (let i = 0; i < numSims; i++) {
-        const shuffled = shuffleDeck([...deck]);
-        const result = simulateDreamHarvest(shuffled);
-
-        totalCardsExiled += result.cardsExiled;
-        totalMV += result.totalMV;
-        totalCastable += result.numCastable;
-        totalCastableMV += result.totalCastableMV;
-
-        cardsExiledDist[result.cardsExiled] = (cardsExiledDist[result.cardsExiled] || 0) + 1;
-        totalMVDist[result.totalMV] = (totalMVDist[result.totalMV] || 0) + 1;
+    for (let i = 0; i < runs; i++) {
+        revealer.reset();
+        const r = resolveDreamHarvest(revealer.reveal);
+        totalCardsExiled += r.cardsExiled;
+        totalMV += r.totalMV;
+        totalCastable += r.numCastable;
+        totalCastableMV += r.totalCastableMV;
+        if (r.castableSpells.some(c => c.cmc >= BIG_SPELL_MV)) bigRuns += 1;
+        bump(spellCounts, r.numCastable);
+        bump(manaCounts, Math.round(r.totalCastableMV));
+        bump(exiledCounts, r.cardsExiled);
     }
 
+    const spellsProbs = normalise(spellCounts, runs);
+    const manaProbs = normalise(manaCounts, runs);
     return {
-        avgCardsExiled: totalCardsExiled / numSims,
-        avgTotalMV: totalMV / numSims,
-        avgCastable: totalCastable / numSims,
-        avgCastableMV: totalCastableMV / numSims,
-        cardsExiledDist,
-        totalMVDist,
-        numSims,
-        deckSize: deck.length
+        avgCardsExiled: totalCardsExiled / runs,
+        avgTotalMV: totalMV / runs,
+        avgCastable: totalCastable / runs,
+        avgCastableMV: totalCastableMV / runs,
+        pBigSpell: bigRuns / runs,
+        spellsProbs,
+        manaProbs,
+        exiledProbs: normalise(exiledCounts, runs),
+        typicalSpells: typicalRange(spellsProbs),
+        typicalMana: typicalRange(manaProbs),
+        numSims: runs,
+        deckSize: library.length,
+        landCount: library.filter(c => c.land).length
     };
 }
 
-/**
- * Generate stable samples for an opponent
- */
-function generateStableSamples(opponentKey, count) {
-    const deck = OpponentState.buildOpponentDeck(opponentKey);
-    if (!deck) {
-        stableSamples[opponentKey] = [];
-        return;
-    }
+const statsCache = new WeakMap();
+function statsFor(data) {
+    if (!statsCache.has(data)) statsCache.set(data, calculateDreamHarvestStats(data));
+    return statsCache.get(data);
+}
 
-    stableSamples[opponentKey] = [];
-    for (let i = 0; i < count; i++) {
-        stableSamples[opponentKey].push(shuffleDeck([...deck]));
-    }
+// ── Plain-language answer ───────────────────────────────────────────────────
+
+function spread(values, unit) {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+    return values.length > 1 && hi - lo >= 0.5
+        ? `${fmt1(lo)}–${fmt1(hi)} ${unit}`
+        : `about ${fmt1(mean)} ${unit}`;
+}
+
+function versusCost(total) {
+    if (total >= 2 * DREAM_HARVEST_COST) return `more than twice its ${DREAM_HARVEST_COST}-mana cost`;
+    if (total >= DREAM_HARVEST_COST) return `more than its ${DREAM_HARVEST_COST}-mana cost`;
+    return `less than its ${DREAM_HARVEST_COST}-mana cost`;
+}
+
+/** Average several probability arrays into one (the "typical opponent"). */
+export function poolDistributions(dists) {
+    const length = Math.max(0, ...dists.map(d => d.length));
+    const pooled = new Array(length).fill(0);
+    for (const d of dists) d.forEach((p, i) => { pooled[i] += (p || 0) / dists.length; });
+    return pooled;
 }
 
 /**
- * Force refresh samples for all opponents and re-render
+ * The bottom line for a table of opponents.
+ * @param {Array<{name:string, stats:Object}>} rows
+ * @returns {{html:string, tone:'good'|'warn'|'flat'}}
  */
-function refreshSamples() {
-    const countInput = document.getElementById('dreamharvest-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
+export function summarizeDreamHarvest(rows) {
+    const valid = (rows ?? []).filter(r => r?.stats);
+    if (valid.length === 0) return { html: '', tone: 'flat' };
+    const totalMana = valid.reduce((a, r) => a + r.stats.avgCastableMV, 0);
+    const range = typicalRange(poolDistributions(valid.map(r => r.stats.spellsProbs)));
+    const spells = `${formatRange(range)} ${range[1] === 1 ? 'spell' : 'spells'}`;
+    const mana = spread(valid.map(r => r.stats.avgCastableMV), 'mana');
+    const tone = totalMana >= DREAM_HARVEST_COST ? 'good' : 'warn';
 
-    for (const opp of OpponentState.getActiveOpponents()) {
-        if (OpponentState.getOpponentData(opp)?.cardsByName &&
-            Object.keys(OpponentState.getOpponentData(opp).cardsByName).length > 0) {
-            generateStableSamples(opp, numSims);
-        }
-    }
-
-    runSampleReveals();
-}
-
-/**
- * Render results for all active opponents
- */
-function renderResults() {
-    const resultsContainer = document.getElementById('dreamharvest-results');
-    if (!resultsContainer) return;
-
-    const opponentsWithData = OpponentState.getOpponentsWithData();
-
-    if (opponentsWithData.length === 0) {
-        resultsContainer.innerHTML = `
-            <h2>Results</h2>
-            <p style="color: var(--text-dim); text-align: center; padding: 20px;">
-                Import at least one opponent's decklist to see analysis.
-            </p>
-        `;
-        return;
-    }
-
-    // Calculate totals for summary
-    let totalFreeSpells = 0;
-    let totalValueGained = 0;
-    const allStats = [];
-
-    for (const opp of opponentsWithData) {
-        const data = OpponentState.getOpponentData(opp);
-        const stats = calculateDreamHarvestStats(data);
-        if (stats) {
-            allStats.push({ opp, data, stats });
-            totalFreeSpells += stats.avgCastable;
-            totalValueGained += stats.avgCastableMV;
-        }
-    }
-
-    let html = '<h2>Dream Harvest Analysis</h2>';
-
-    // Summary section
-    if (allStats.length > 0) {
-        html += `<div class="tx-h"><span>SUMMARY · EXPECTED GAINS</span><span class="tx-h-r">across ${allStats.length} opponent${allStats.length > 1 ? 's' : ''}</span></div>`;
-        html += renderHeroStats([
-            { label: 'TOTAL FREE SPELLS', value: totalFreeSpells.toFixed(1), sub: 'spells cast free', color: 'var(--tx-blue)', size: 'big' },
-            { label: 'TOTAL VALUE GAINED', value: totalValueGained.toFixed(1), sub: 'mana value', color: 'var(--tx-green)', size: 'big' }
-        ]);
-    }
-
-    // Individual opponent results
-    for (const { data, stats } of allStats) {
-        html += `
-            <div class="opponent-results">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-sm);">
-                    <h3 style="color: var(--dreamharvest-primary, #5b8db8);">${data.name}</h3>
-                    <span style="color: var(--text-dim); font-size: 0.85em;">${stats.deckSize} cards</span>
-                </div>
-
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-sm); margin-bottom: var(--spacing-md);">
-                    <div class="choice-card choice-blue" style="text-align: center;">
-                        <div style="font-size: 0.75em; color: var(--text-dim);">Cards Exiled</div>
-                        <div style="font-size: 1.3em; font-weight: bold; color: #5b8db8;">${stats.avgCardsExiled.toFixed(1)}</div>
-                    </div>
-                    <div class="choice-card choice-blue" style="text-align: center;">
-                        <div style="font-size: 0.75em; color: var(--text-dim);">Total MV</div>
-                        <div style="font-size: 1.3em; font-weight: bold; color: #5b8db8;">${stats.avgTotalMV.toFixed(1)}</div>
-                    </div>
-                    <div class="choice-card choice-blue" style="text-align: center;">
-                        <div style="font-size: 0.75em; color: var(--text-dim);">Free Spells</div>
-                        <div style="font-size: 1.3em; font-weight: bold; color: #5b8db8;">${stats.avgCastable.toFixed(1)}</div>
-                    </div>
-                    <div class="choice-card choice-blue" style="text-align: center;">
-                        <div style="font-size: 0.75em; color: var(--text-dim);">Value Gained</div>
-                        <div style="font-size: 1.3em; font-weight: bold; color: #5b8db8;">${stats.avgCastableMV.toFixed(1)}</div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    resultsContainer.innerHTML = html;
-}
-
-/**
- * Run sample reveals
- */
-export function runSampleReveals() {
-    const displayContainer = document.getElementById('dreamharvest-reveals-display');
-    if (!displayContainer) return;
-
-    const opponentsWithData = OpponentState.getOpponentsWithData();
-
-    if (opponentsWithData.length === 0) {
-        displayContainer.innerHTML = '<p style="color: var(--text-dim);">Please import opponent decklists to run simulations.</p>';
-        return;
-    }
-
-    const countInput = document.getElementById('dreamharvest-sample-count');
-    const numSims = Math.max(1, parseInt(countInput?.value) || CONFIG.DEFAULT_SAMPLE_SIZE);
-
-    for (const opp of opponentsWithData) {
-        if (!stableSamples[opp] || stableSamples[opp].length < numSims) {
-            generateStableSamples(opp, numSims);
-        }
-    }
-
-    let fullHTML = '';
-
-    for (const opp of opponentsWithData) {
-        const data = OpponentState.getOpponentData(opp);
-        const samples = stableSamples[opp];
-
-        // Stats loop
-        let totalCardsExiled = 0;
-        let totalMV = 0;
-        let totalCastable = 0;
-        const cardsExiledDist = {};
-        let maxCards = 0;
-
-        for (let i = 0; i < numSims; i++) {
-            const shuffled = samples[i];
-            const result = simulateDreamHarvest(shuffled);
-
-            totalCardsExiled += result.cardsExiled;
-            totalMV += result.totalMV;
-            totalCastable += result.numCastable;
-
-            cardsExiledDist[result.cardsExiled] = (cardsExiledDist[result.cardsExiled] || 0) + 1;
-            if (result.cardsExiled > maxCards) maxCards = result.cardsExiled;
-        }
-
-        // Convert to array
-        const cardsDistArray = new Array(Math.min(maxCards + 1, 10)).fill(0);
-        for (const [cards, freq] of Object.entries(cardsExiledDist)) {
-            const idx = Math.min(parseInt(cards), 9);
-            cardsDistArray[idx] = (cardsDistArray[idx] || 0) + freq;
-        }
-
-        const avgCards = (totalCardsExiled / numSims).toFixed(1);
-        const avgMV = (totalMV / numSims).toFixed(1);
-        const avgCastable = (totalCastable / numSims).toFixed(1);
-
-        let oppHTML = `<div class="tx-opp-card">`;
-        oppHTML += `<h4 style="margin-top: 0; color: var(--dreamharvest-primary, #5b8db8);">${data.name}</h4>`;
-
-        // Stats summary
-        oppHTML += `<div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-sm); margin-bottom: var(--spacing-md);">`;
-        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(91, 141, 184, 0.1); border-radius: var(--radius-sm);">`;
-        oppHTML += `<small style="color: var(--text-dim);">Avg Cards</small><br>`;
-        oppHTML += `<strong style="color: #5b8db8; font-size: 1.2em;">${avgCards}</strong>`;
-        oppHTML += `</div>`;
-        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(91, 141, 184, 0.1); border-radius: var(--radius-sm);">`;
-        oppHTML += `<small style="color: var(--text-dim);">Avg MV</small><br>`;
-        oppHTML += `<strong style="color: #5b8db8; font-size: 1.2em;">${avgMV}</strong>`;
-        oppHTML += `</div>`;
-        oppHTML += `<div style="text-align: center; padding: var(--spacing-sm); background: rgba(91, 141, 184, 0.1); border-radius: var(--radius-sm);">`;
-        oppHTML += `<small style="color: var(--text-dim);">Free Spells</small><br>`;
-        oppHTML += `<strong style="color: #5b8db8; font-size: 1.2em;">${avgCastable}</strong>`;
-        oppHTML += `</div></div>`;
-
-        // Cards exiled distribution
-        oppHTML += `<div style="margin-bottom: var(--spacing-md);">`;
-        oppHTML += `<h5 style="margin: 0 0 var(--spacing-sm) 0; color: #5b8db8;">Cards Exiled Distribution</h5>`;
-        oppHTML += renderCompactChart(cardsDistArray, numSims, (idx) => `${idx}`, '#5b8db8');
-        oppHTML += `</div>`;
-
-        // Sample list
-        const listId = `dreamharvest-${opp}-samples-list`;
-        const btnId = `dreamharvest-${opp}-load-more`;
-        const listHTML = `<div id="${listId}"></div><button id="${btnId}" class="import-btn" style="width: 100%; margin-top: var(--spacing-md); display: none;">Load More</button>`;
-
-        oppHTML += createCollapsibleSection('Show/Hide Sample Simulations', listHTML, false);
-        oppHTML += `</div>`;
-        fullHTML += oppHTML;
-    }
-
-    displayContainer.innerHTML = fullHTML;
-
-    // Batch render samples
-    for (const opp of opponentsWithData) {
-        const listContainer = document.getElementById(`dreamharvest-${opp}-samples-list`);
-        const loadMoreBtn = document.getElementById(`dreamharvest-${opp}-load-more`);
-        const samples = stableSamples[opp];
-
-        renderedCounts[opp] = 0;
-
-        const renderBatch = (batchSize) => {
-            const start = renderedCounts[opp];
-            const end = Math.min(start + batchSize, numSims);
-            let html = '';
-
-            for (let i = start; i < end; i++) {
-                const shuffled = samples[i];
-                const result = simulateDreamHarvest(shuffled);
-
-                const exiledHtml = result.exiledCards.map(card => renderCardBadge(card)).join(' ');
-                const castableNames = result.castableSpells.map(c => c.name).join(', ');
-                const isGood = result.numCastable >= 2 || result.totalCastableMV >= 5;
-
-                html += `<div class="sample-reveal ${isGood ? 'free-spell' : 'whiff'}" style="padding: var(--spacing-sm); margin-bottom: var(--spacing-xs); background: rgba(255,255,255,0.02); border-radius: var(--radius-sm); font-size: 0.85em;">`;
-                html += `<div style="margin-bottom: var(--spacing-xs);"><strong>Sample ${i + 1}:</strong> Exiled ${result.cardsExiled} cards (MV ${result.totalMV})</div>`;
-                html += `<div style="margin-bottom: var(--spacing-xs);">${exiledHtml}</div>`;
-                if (result.numCastable > 0) {
-                    html += `<div style="color: #5b8db8;"><strong>Cast free:</strong> ${castableNames} <span style="color: var(--text-dim);">(${result.totalCastableMV} MV value)</span></div>`;
-                } else {
-                    html += `<div style="color: var(--danger);">No castable spells (all lands)</div>`;
-                }
-                html += `</div>`;
-            }
-
-            if (listContainer) {
-                listContainer.insertAdjacentHTML('beforeend', html);
-            }
-
-            renderedCounts[opp] = end;
-
-            if (loadMoreBtn) {
-                if (renderedCounts[opp] < numSims) {
-                    loadMoreBtn.style.display = 'block';
-                    loadMoreBtn.textContent = `Load More (Showing ${renderedCounts[opp]}/${numSims})`;
-                } else {
-                    loadMoreBtn.style.display = 'none';
-                }
-            }
+    if (valid.length === 1) {
+        return {
+            tone,
+            html: `Against ${escapeHtml(valid[0].name)}, Dream Harvest usually steals <strong>${spells}</strong> worth <strong>${mana}</strong> in all — ${versusCost(totalMana)}.`
         };
-
-        renderBatch(20);
-
-        if (loadMoreBtn) {
-            loadMoreBtn.addEventListener('click', () => renderBatch(50));
-        }
     }
+    return {
+        tone,
+        html: `Against these ${countWord(valid.length)} decks, Dream Harvest usually steals <strong>${spells}</strong> worth <strong>${mana}</strong> from each opponent — <strong>${fmt1(totalMana)} mana</strong> of free spells in all, ${versusCost(totalMana)}.`
+    };
+}
+
+// ── Rendering ───────────────────────────────────────────────────────────────
+
+const PLACEHOLDER = {
+    title: 'How much will you steal?',
+    lead: `${cardRef('Dream Harvest')} raids every opponent’s library at once. Load their decklists and this page shows how many spells you get from each of them, and how much they are worth.`,
+    steps: [
+        {
+            kicker: 'They exile',
+            text: 'Each opponent exiles cards from the top of their library until the exiled cards’ mana values add up to 5 or more.',
+            demo: '<span class="opp-demo-card is-land">0</span><span class="opp-demo-card">2</span><span class="opp-demo-card is-land">0</span><span class="opp-demo-card">4</span><span class="opp-demo-arrow">=</span><span class="opp-demo-card">6 · stop</span>'
+        },
+        {
+            kicker: 'You cast',
+            text: 'Until end of turn you may cast any of those cards without paying their mana costs.',
+            demo: '<span class="opp-demo-card is-hit">2-drop, free</span><span class="opp-demo-card is-hit">4-drop, free</span>'
+        },
+        {
+            kicker: 'Lands miss',
+            text: 'Lands are exiled too, but they count as 0 and can’t be cast — so land-heavy decks hand over fewer spells.'
+        }
+    ]
+};
+
+function heroStats(rows) {
+    const n = rows.length;
+    const sum = f => rows.reduce((a, r) => a + f(r.stats), 0);
+    const anyBig = 1 - rows.reduce((a, r) => a * (1 - r.stats.pBigSpell), 1);
+    return renderHeroStats([
+        {
+            label: 'Mana stolen', size: 'big', value: fmt1(sum(s => s.avgCastableMV)),
+            sub: n > 1 ? `in free spells from all ${countWord(n)}` : 'in free spells',
+            tip: 'The total mana value of the spells you can cast for free, added up across opponents. Lands are exiled too but are worth nothing.'
+        },
+        {
+            label: 'Spells stolen', value: fmt1(sum(s => s.avgCastable)), sub: 'you can cast this turn',
+            tip: 'Average number of nonland cards exiled — each one is a spell you may cast without paying its mana cost.'
+        },
+        {
+            label: 'Cards exiled', value: fmt1(sum(s => s.avgCardsExiled) / n), sub: n > 1 ? 'per opponent, lands included' : 'lands included',
+            tip: 'How deep the exile digs into each library before the pile reaches mana value 5.'
+        },
+        {
+            label: `A ${BIG_SPELL_MV}+ spell`, value: formatPct(anyBig), sub: n > 1 ? 'from at least one opponent' : 'in the pile',
+            tip: `Chance that at least one stolen spell has mana value ${BIG_SPELL_MV} or more.`
+        }
+    ]);
+}
+
+function tableHtml(rows) {
+    const body = rows.map(r => {
+        const s = r.stats;
+        return `<tr>
+            <td>${opponentLabel(r.opp, `${s.landCount} lands`)}</td>
+            <td data-label="Cards exiled">${fmt1(s.avgCardsExiled)}</td>
+            <td data-label="Spells">${fmt1(s.avgCastable)}<span class="opp-cell-sub">usually ${formatRange(s.typicalSpells)}</span></td>
+            <td data-label="Mana stolen">${fmt1(s.avgCastableMV)}<span class="opp-cell-sub">usually ${formatRange(s.typicalMana)}</span></td>
+            <td data-label="A ${BIG_SPELL_MV}+ spell">${formatPct(s.pBigSpell)}</td>
+        </tr>`;
+    }).join('');
+    const sum = f => rows.reduce((a, r) => a + f(r.stats), 0);
+    const anyBig = 1 - rows.reduce((a, r) => a * (1 - r.stats.pBigSpell), 1);
+    const foot = rows.length > 1 ? `<tfoot><tr>
+            <td>All ${countWord(rows.length)} opponents</td>
+            <td data-label="Cards exiled">${fmt1(sum(s => s.avgCardsExiled))}</td>
+            <td data-label="Spells">${fmt1(sum(s => s.avgCastable))}</td>
+            <td data-label="Mana stolen">${fmt1(sum(s => s.avgCastableMV))}</td>
+            <td data-label="A ${BIG_SPELL_MV}+ spell">${formatPct(anyBig)}<span class="opp-cell-sub">from at least one</span></td>
+        </tr></tfoot>` : '';
+    return `<div class="opp-table-wrap"><table class="opp-table">
+        <thead><tr>
+            <th scope="col">Opponent</th>
+            <th scope="col">Cards exiled</th>
+            <th scope="col">Spells</th>
+            <th scope="col">Mana stolen</th>
+            <th scope="col">A ${BIG_SPELL_MV}+ spell</th>
+        </tr></thead>
+        <tbody>${body}</tbody>${foot}
+    </table></div>`;
+}
+
+const SPELL_CAP = 5;
+const MANA_LO = MV_THRESHOLD;
+const MANA_HI = 10;
+
+/** Mana-stolen buckets: "under 5" (only when it happens), 5…9, "10+". */
+function manaBuckets(probs, withUnder) {
+    const out = [];
+    if (withUnder) out.push(probs.slice(0, MANA_LO).reduce((a, p) => a + (p || 0), 0));
+    for (let v = MANA_LO; v < MANA_HI; v++) out.push(probs[v] || 0);
+    out.push(probs.slice(MANA_HI).reduce((a, p) => a + (p || 0), 0));
+    return out;
+}
+
+function multiplesHtml(rows) {
+    const spellDists = rows.map(r => {
+        const d = new Array(SPELL_CAP + 1).fill(0);
+        r.stats.spellsProbs.forEach((p, i) => { d[Math.min(i, SPELL_CAP)] += p; });
+        return d;
+    });
+    const withUnder = rows.some(r => r.stats.manaProbs.slice(0, MANA_LO).some(p => p > 0));
+    const manaDists = rows.map(r => manaBuckets(r.stats.manaProbs, withUnder));
+    const manaLabel = i => {
+        const v = i + MANA_LO - (withUnder ? 1 : 0);
+        if (withUnder && i === 0) return `<${MANA_LO}`;
+        return v >= MANA_HI ? `${MANA_HI}+` : `${v}`;
+    };
+    const spellMax = Math.max(...spellDists.flat());
+    const manaMax = Math.max(...manaDists.flat());
+    const cells = rows.map((r, i) => `
+        <div class="opp-multiple">
+            <div class="opp-multiple-head">${opponentLabel(r.opp)}</div>
+            ${miniBars({ title: 'Spells you can cast', probs: spellDists[i], label: v => (v === SPELL_CAP ? `${v}+` : `${v}`), scaleMax: spellMax, color: r.opp.color, dimFn: v => v === 0 })}
+            ${miniBars({ title: 'Mana stolen', probs: manaDists[i], label: manaLabel, scaleMax: manaMax, color: r.opp.color })}
+        </div>`).join('');
+    return `<div class="opp-multiples">${cells}</div>
+        <p class="opp-caption">How often each outcome happens, on the same scale for every opponent. The pile always reaches mana value 5, so what varies is whether it arrives as one big spell or several small ones.</p>`;
+}
+
+let lastSignature = null;
+let sampleRound = 0;
+let samplesShown = SAMPLE_BATCH;
+const sampleCache = new Map();
+
+function samplesFor(opp) {
+    const key = `${objectId(opp.data)}:${sampleRound}`;
+    if (!sampleCache.has(key)) {
+        const revealer = createRevealer(libraryOf(opp.data));
+        sampleCache.set(key, Array.from({ length: SAMPLE_MAX }, () => {
+            revealer.reset();
+            return resolveDreamHarvest(revealer.reveal);
+        }));
+    }
+    return sampleCache.get(key);
+}
+
+function gameRow(opp, result) {
+    const chips = result.exiledCards.map(c => cardChip(c, { mvText: String(c.cmc), dim: c.land })).join('');
+    const summary = result.numCastable
+        ? `${result.numCastable} ${result.numCastable === 1 ? 'spell' : 'spells'} · ${result.totalCastableMV} mana`
+        : 'Nothing to cast';
+    return `<div class="dh-game-row">
+        <div class="dh-game-who">${opponentLabel(opp)}</div>
+        <div class="dh-game-result">${summary}</div>
+        <div class="opp-flow">${chips}</div>
+    </div>`;
+}
+
+function renderSamples(state) {
+    const panel = document.getElementById('dreamharvest-sample-reveals');
+    if (!panel) return;
+    if (state.opponents.length === 0) {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        return;
+    }
+    panel.hidden = false;
+    const results = state.opponents.map(opp => samplesFor(opp));
+    const games = Array.from({ length: samplesShown }, (_, g) => {
+        const total = results.reduce((a, r) => a + r[g].totalCastableMV, 0);
+        return `
+        <div class="opp-game">
+            <div class="opp-game-head">Cast ${g + 1}${state.opponents.length > 1 ? ` · ${total} mana stolen in all` : ''}</div>
+            ${state.opponents.map((opp, i) => gameRow(opp, results[i][g])).join('')}
+        </div>`;
+    }).join('');
+    panel.innerHTML = `
+        <div class="opp-section-head">
+            <div>
+                <h2 class="opp-section-title">Sample casts</h2>
+                <p class="opp-section-sub">Real shuffles of each list, in the order the cards come off the top. Lands are dimmed.</p>
+            </div>
+            <div class="opp-section-actions"><button type="button" class="btn btn-ghost btn-sm" data-dh-action="reshuffle">Reshuffle</button></div>
+        </div>
+        <div class="opp-games">${games}</div>
+        ${samplesShown < SAMPLE_MAX ? '<div class="opp-more"><button type="button" class="btn btn-ghost btn-sm" data-dh-action="more">Show more casts</button></div>' : ''}`;
+}
+
+function renderResults(state) {
+    const panel = document.getElementById('dreamharvest-results');
+    if (!panel) return;
+    if (state.opponents.length === 0) {
+        panel.innerHTML = renderOpponentPlaceholder(PLACEHOLDER, state);
+        return;
+    }
+    const rows = state.opponents.map(opp => ({ opp, name: opp.name, stats: statsFor(opp.data) })).filter(r => r.stats);
+    panel.innerHTML = `
+        ${renderLoadingNote(state)}
+        ${renderBottomLine(summarizeDreamHarvest(rows))}
+        ${heroStats(rows)}
+        <div class="opp-section-head">
+            <h2 class="opp-section-title">Opponent by opponent</h2>
+            <span class="opp-section-sub">${SIM_RUNS.toLocaleString('en-US')} simulated casts per list</span>
+        </div>
+        ${tableHtml(rows)}
+        ${renderDisclosure({ id: 'dreamharvest-spread', title: 'How often each outcome happens', body: multiplesHtml(rows), open: hasRoom(panel) })}`;
 }
 
 /**
- * Main calculation function
+ * Stats for every active opponent with a deck, keyed by seat.
+ * @returns {Object<string, Object>}
  */
 export function calculate() {
     const results = {};
-
-    for (const opp of OpponentState.getActiveOpponents()) {
-        const data = OpponentState.getOpponentData(opp);
-        if (data?.cardsByName && Object.keys(data.cardsByName).length > 0) {
-            const cacheKey = `dreamharvest-${opp}-${data.deckSize}-${Object.keys(data.cardsByName).length}`;
-            const cached = simulationCache.get(cacheKey);
-            if (cached) {
-                results[opp] = cached;
-            } else {
-                const stats = calculateDreamHarvestStats(data);
-                if (stats) {
-                    simulationCache.set(cacheKey, stats);
-                    results[opp] = stats;
-                }
-            }
-        }
+    for (const opp of readOpponents().opponents) {
+        const stats = statsFor(opp.data);
+        if (stats) results[opp.key] = stats;
     }
-
     return results;
 }
 
-/**
- * Update UI
- */
+/** Render — only when the opponents (or their import state) changed. */
 export function updateUI() {
-    renderResults();
-
-    const hasAnyDeckData = OpponentState.hasAnyDeckData();
-
-    const sampleBtn = document.getElementById('dreamharvest-draw-reveals-btn');
-    const importNote = document.querySelector('#dreamharvest-sample-reveals .sim-import-note');
-    if (sampleBtn) {
-        sampleBtn.disabled = !hasAnyDeckData;
-    }
-    if (importNote) {
-        importNote.style.display = hasAnyDeckData ? 'none' : 'inline';
-    }
-
-    if (hasAnyDeckData) {
-        runSampleReveals();
-    }
+    const state = readOpponents();
+    if (state.signature === lastSignature && document.getElementById('dreamharvest-results')?.firstElementChild) return;
+    lastSignature = state.signature;
+    samplesShown = SAMPLE_BATCH;
+    const live = new Set(state.opponents.map(o => String(objectId(o.data))));
+    for (const key of sampleCache.keys()) if (!live.has(key.split(':')[0])) sampleCache.delete(key);
+    renderResults(state);
+    renderSamples(state);
 }
 
-/**
- * Initialize the calculator
- */
 export function init() {
-    // Register for opponent data changes
-    OpponentState.onOpponentChange(() => {
-        simulationCache.clear();
-        // Clear stable samples when opponent data changes
-        for (const key of Object.keys(stableSamples)) {
-            stableSamples[key] = [];
-        }
-        updateCalculatorIfActive('dreamharvest', updateUI);
-    });
+    const scheduleRender = frameScheduler(() => updateCalculatorIfActive('dreamharvest', updateUI));
+    OpponentState.onOpponentChange(scheduleRender);
 
     registerCalculator({
         name: 'dreamharvest',
         calculate,
         updateUI,
         init: () => {
-            const sampleContainer = document.getElementById('dreamharvest-sample-reveals');
-            if (sampleContainer) {
-                sampleContainer.innerHTML = generateSampleRevealsHTML('dreamharvest', 'Sample Dream Harvest', { requiresImport: true });
-            }
-
-            const sampleBtn = document.getElementById('dreamharvest-draw-reveals-btn');
-            if (sampleBtn) {
-                sampleBtn.addEventListener('click', refreshSamples);
-            }
+            const root = document.getElementById('dreamharvest-tab');
+            bindOpponentActions(root);
+            root?.addEventListener('click', e => {
+                const action = e.target.closest('[data-dh-action]')?.dataset.dhAction;
+                if (action === 'reshuffle') {
+                    sampleRound += 1;
+                    sampleCache.clear();
+                    renderSamples(readOpponents());
+                } else if (action === 'more') {
+                    samplesShown = Math.min(SAMPLE_MAX, samplesShown + SAMPLE_BATCH);
+                    renderSamples(readOpponents());
+                }
+            });
         }
     });
-}
-
-/**
- * Get opponent deck URLs (for share.js) - delegates to shared state
- */
-export function getOpponentUrls() {
-    return OpponentState.getOpponentUrls();
-}
-
-/**
- * Set opponent deck URL (for share.js restore) - delegates to shared state
- */
-export async function setOpponentUrl(opponentKey, url) {
-    return OpponentState.setOpponentUrl(opponentKey, url);
 }

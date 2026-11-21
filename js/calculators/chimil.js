@@ -1,5 +1,5 @@
 /**
- * Chimil, the Inner Sun Calculator
+ * Chimil, the Inner Sun
  *
  * {6} Legendary Artifact — "Spells you control can't be countered. At the
  * beginning of your end step, discover 5."
@@ -8,38 +8,32 @@
  * with mana value 5 or less, casts that card free (or puts it in hand), and puts
  * the rest on the bottom in a random order.
  *
- * Unlike Monstrous Vortex — which also discovers, but only when you cast a
- * qualifying creature — Chimil triggers unconditionally at every one of your end
- * steps. That makes the interesting question cumulative rather than conditional:
- * not "will it trigger?" but "how much mana does it cheat over a game, and what
- * does it hit?"
+ * Chimil triggers unconditionally at every one of your end steps, so the
+ * question is cumulative: how much free mana does it add up to, how soon does
+ * that repay its own six mana, and what do the hits actually look like?
  *
- * The math here is exact, not simulated. Two observations make that possible:
+ * Two layers answer it:
  *
- *   1. In a uniformly random library, the FIRST hit encountered is a uniformly
- *      random member of the hit set. So the expected mana value of the discovered
- *      card is simply the mean mana value of all eligible cards — no ordering
- *      needs to be simulated.
+ *   1. Exact, per end step. In a uniformly random library the FIRST hit is a
+ *      uniformly random member of the hit set, so the expected mana value of a
+ *      discover is the mean mana value of the eligible cards; the cards passed
+ *      over follow a negative hypergeometric distribution with mean
+ *      (N - H) / (H + 1).
+ *   2. Simulated, per game. Real shuffles of the decklist resolve discover end
+ *      step by end step (removing each hit, bottoming the rest), which gives the
+ *      spread of whole games, the payback turn, and sample games to read.
  *
- *   2. The number of cards passed over before the first hit follows a negative
- *      hypergeometric distribution, whose mean is (N - H) / (H + 1) for H hits
- *      among N cards.
- *
- * Both are closed form, so results are instant and free of Monte Carlo noise.
+ * The simulation runs once per deck at the longest horizon the slider allows;
+ * a shorter horizon is just a prefix of the same games, so dragging the slider
+ * never re-simulates.
  */
 
-import { formatNumber, formatPercentage } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART as TX } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
-import { registerCalculator } from '../utils/calculatorBase.js';
-import {
-    renderHeroStats, renderRecommendation,
-    renderSweepTable, renderSimulationSummary, generateSampleRevealsHTML
-} from '../utils/components.js';
-import { formatDelta, deltaColor } from '../utils/analysis.js';
-import {
-    buildDeckFromCardData, shuffleDeck, createCollapsibleSection
-} from '../utils/sampleSimulator.js';
+import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
+import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
+import { buildDeckFromCardData, shuffleDeck, renderDistributionChart } from '../utils/sampleSimulator.js';
+import { cardRef } from '../data/glossary.js';
 
 /** Discover value printed on Chimil. */
 export const DISCOVER_N = 5;
@@ -47,25 +41,25 @@ export const DISCOVER_N = 5;
 /** Chimil's own mana cost — the bar its output has to clear to be worth a slot. */
 export const CHIMIL_COST = 6;
 
-/** Default number of end steps with Chimil on the battlefield.
- *
- *  Note this is a real control now, not the cosmetic one it replaced. The
- *  closed-form projection is linear in turns, so dragging a horizon over *that*
- *  only stretched a straight line. Simulated games are different: more end steps
- *  means more draws from the hit distribution, a wider spread of outcomes, and a
- *  real chance of the eligible pool running dry — so the answer genuinely
- *  changes with the horizon. */
+/** Default number of end steps with Chimil on the battlefield. */
 export const PROJECTION_TURNS = 10;
 
-/** Games to simulate automatically when the calculator is opened. */
-export const AUTO_SIM_GAMES = 500;
+/** Longest horizon the slider offers; games are simulated to this length once. */
+export const MAX_TURNS = 20;
+
+/** Games simulated (once per deck) when the page opens. */
+export const AUTO_SIM_GAMES = 2000;
 
 /** A hit at or below this mana value is the "just a mana dork" outcome. */
 export const SMALL_HIT_MV = 2;
 
+/** Sample games listed on the page (fewer on a phone, where each one wraps tall). */
+const SHOWN_GAMES = 6;
+const NARROW_GAMES = 3;
+
 let chart = null;
 
-// ==================== PURE MATH ====================
+// ==================== PURE MATH: ONE END STEP (EXACT) ====================
 
 /**
  * Split a library into the three groups discover cares about.
@@ -100,10 +94,8 @@ export function partitionLibrary(cardDetails, lands, discoverN = DISCOVER_N) {
 }
 
 /**
- * Expected number of cards exiled before the first hit.
- *
- * Negative hypergeometric: with H hits among N cards in random order, the
- * expected number of non-hits preceding the first hit is (N - H) / (H + 1).
+ * Expected number of cards exiled before the first hit (negative
+ * hypergeometric): with H hits among N cards, (N - H) / (H + 1).
  *
  * @param {number} total - Library size N
  * @param {number} hits - Eligible cards H
@@ -117,11 +109,7 @@ export function expectedCardsDug(total, hits) {
 }
 
 /**
- * Expected mana value of the card discover finds.
- *
- * The first eligible card in a random permutation is a uniformly random member
- * of the eligible set, so this is just their mean mana value.
- *
+ * Expected mana value of the card discover finds: the mean of the eligible set.
  * @param {number[]} hitCmcs
  * @returns {number}
  */
@@ -133,7 +121,6 @@ export function expectedHitMV(hitCmcs) {
 
 /**
  * Distribution of the discovered card's mana value, as counts indexed by MV.
- *
  * @param {number[]} hitCmcs
  * @param {number} [discoverN=DISCOVER_N]
  * @returns {number[]} counts[mv]
@@ -150,12 +137,8 @@ export function hitMVDistribution(hitCmcs, discoverN = DISCOVER_N) {
 
 /**
  * Full per-trigger analysis for one Chimil end step.
- *
- * @param {Object} opts
- * @param {Array} opts.cardDetails
- * @param {number} opts.lands
- * @param {number} [opts.discoverN=DISCOVER_N]
- * @returns {Object} stats
+ * @param {{cardDetails:Array, lands:number, discoverN?:number}} opts
+ * @returns {Object}
  */
 export function analyzeTrigger({ cardDetails, lands, discoverN = DISCOVER_N }) {
     const part = partitionLibrary(cardDetails, lands, discoverN);
@@ -168,8 +151,6 @@ export function analyzeTrigger({ cardDetails, lands, discoverN = DISCOVER_N }) {
         hitRate,
         avgMV,
         expectedDug: expectedCardsDug(part.total, part.hits),
-        // Value cheated per trigger. With a non-empty pool discover always finds
-        // something, so this is simply the mean eligible mana value.
         expectedFreeMV: hitRate * avgMV,
         eligibleShare: part.total > 0 ? part.hits / part.total : 0,
         distribution: hitMVDistribution(part.hitCmcs, discoverN)
@@ -177,55 +158,35 @@ export function analyzeTrigger({ cardDetails, lands, discoverN = DISCOVER_N }) {
 }
 
 /**
- * Project cumulative value across successive end steps.
- *
- * Each trigger removes one card from the library (the discovered card) and
- * rotates the passed-over cards to the bottom, so the eligible pool shrinks
- * slowly. Modelling that depletion matters over a long game: assuming a constant
- * per-turn rate overstates a deck with a thin eligible pool.
+ * Project expected cumulative value across successive end steps. Each trigger
+ * removes the discovered card, so the eligible pool shrinks by one per turn.
  *
  * @param {Object} trigger - Result of analyzeTrigger
- * @param {number} turns - Number of end steps to project
- * @returns {Array<{turn:number, perTurnMV:number, cumulativeMV:number, hits:number, poolLeft:number}>}
+ * @param {number} turns - Number of end steps to project (capped at 30)
+ * @returns {Array<{x:number, turn:number, perTurnMV:number, cumulativeMV:number, hitRate:number, poolLeft:number}>}
  */
 export function projectTurns(trigger, turns) {
     const rows = [];
     const n = Math.max(0, Math.min(30, Math.floor(Number.isFinite(turns) ? turns : 0)));
 
     let pool = trigger.hits;
-    let total = trigger.total;
     let cumulative = 0;
 
     for (let turn = 1; turn <= n; turn++) {
         const rate = pool > 0 ? 1 : 0;
         const gained = rate * trigger.avgMV;
         cumulative += gained;
-        rows.push({
-            x: turn,
-            turn,
-            perTurnMV: gained,
-            cumulativeMV: cumulative,
-            hitRate: rate,
-            poolLeft: pool
-        });
-        // The discovered card leaves the library; the rest go to the bottom.
-        if (pool > 0) { pool -= 1; total -= 1; }
+        rows.push({ x: turn, turn, perTurnMV: gained, cumulativeMV: cumulative, hitRate: rate, poolLeft: pool });
+        if (pool > 0) pool -= 1;
     }
     return rows;
 }
 
 /**
- * The first end step at which accumulated free mana value has repaid Chimil's
- * own {6} cost.
- *
- * This is the question that actually decides whether the card earns a slot:
- * spending six mana to do nothing on the turn it lands is only worth it if the
- * board pays it back quickly. Reported in whole turns because that is how the
- * decision gets made.
- *
+ * The first end step at which expected free mana has repaid Chimil's {6}.
  * @param {Array<{turn:number, cumulativeMV:number}>} rows - Output of projectTurns
  * @param {number} [cost=CHIMIL_COST]
- * @returns {number|null} Turn number, or null if never repaid within the projection
+ * @returns {number|null}
  */
 export function paybackTurn(rows, cost = CHIMIL_COST) {
     if (!Array.isArray(rows)) return null;
@@ -236,20 +197,12 @@ export function paybackTurn(rows, cost = CHIMIL_COST) {
 }
 
 /**
- * Judge whether Chimil is a good fit for this specific deck.
- *
- * Three things decide it, and they trade off against each other:
- *   - how often discover finds anything worth casting (eligible share),
- *   - how much it is worth when it does (average hit mana value),
- *   - how fast that repays the six mana Chimil costs (payback turn).
- *
- * A deck can fail on any one of them: an all-cheap deck hits constantly but for
- * little, a top-heavy deck hits big but rarely and digs half the library to do
- * it, and a deck with no eligible cards at all does nothing.
+ * Judge whether Chimil fits this deck from how much of the library it can hit,
+ * how much each hit is worth, and how fast that repays six mana.
  *
  * @param {Object} trigger - Result of analyzeTrigger
  * @param {number|null} payback - Result of paybackTurn
- * @returns {{tier:string, label:string, color:string, advice:string}}
+ * @returns {{tier:string, label:string, tone:'good'|'warn'|'bad', advice:string}}
  */
 export function fitVerdict(trigger, payback) {
     const share = trigger?.eligibleShare ?? 0;
@@ -257,62 +210,48 @@ export function fitVerdict(trigger, payback) {
 
     if (!trigger || trigger.hits === 0) {
         return {
-            tier: 'unplayable', label: 'UNPLAYABLE', color: 'var(--tx-bad)',
-            advice: 'No nonland card has mana value 5 or less, so discover finds nothing and exiles your library.'
+            tier: 'unplayable', label: 'Unplayable', tone: 'bad',
+            advice: 'No nonland card has mana value 5 or less, so discover finds nothing.'
         };
     }
     if (payback !== null && payback <= 2 && share >= 0.28 && avgMV >= 3) {
-        return {
-            tier: 'excellent', label: 'EXCELLENT FIT', color: 'var(--tx-good)',
-            advice: 'Repays its cost almost immediately and keeps producing. An easy include.'
-        };
+        return { tier: 'excellent', label: 'Excellent fit', tone: 'good', advice: 'Repays its cost almost immediately and keeps producing.' };
     }
     if (payback !== null && payback <= 3 && share >= 0.20 && avgMV >= 2.4) {
-        return {
-            tier: 'good', label: 'GOOD FIT', color: 'var(--tx-good)',
-            advice: 'Pays for itself quickly and generates real value each turn.'
-        };
+        return { tier: 'good', label: 'Good fit', tone: 'good', advice: 'Pays for itself quickly and adds real value each turn.' };
     }
     if (payback !== null && payback <= 5 && share >= 0.12) {
-        return {
-            tier: 'fair', label: 'FAIR FIT', color: 'var(--tx-accent)',
-            advice: 'Earns its slot if the game goes long, but it is slow to break even.'
-        };
+        return { tier: 'fair', label: 'Fair fit', tone: 'warn', advice: 'Earns its slot if the game goes long, but it is slow to break even.' };
     }
     return {
-        tier: 'poor', label: 'POOR FIT', color: 'var(--tx-bad)',
-        advice: 'Too few cheap spells to convert. Add more nonlands at mana value 5 or less, or cut it.'
+        tier: 'poor', label: 'Poor fit', tone: 'bad',
+        advice: 'Too few spells at mana value 5 or less for it to convert. Add more, or cut it.'
     };
 }
 
+// ==================== SIMULATION: WHOLE GAMES ====================
+
+const isLandCard = card => Array.isArray(card?.types) && card.types.includes('land');
+const isXSpell = card => /\{X\}/i.test(card?.mana_cost ?? '');
+
 /**
- * Play out one game's worth of Chimil triggers against a real shuffled library.
- *
- * Averages hide the thing players actually feel. "3.7 mana per end step" sounds
- * strong, but the lived sequence might be a two-drop then a three-drop — which
- * is a very different card from one that flips a bomb. This walks the library
- * exactly as discover does, so the per-turn results can be shown as they happen.
- *
- * @param {Array<{name:string, cmc:number, types:string[]}>} library - Pre-shuffled
- * @param {number} turns
- * @param {number} [discoverN=DISCOVER_N]
+ * Resolve discover once per end step against a library, mutating it. Uses a
+ * moving head instead of shift() so each card costs O(1).
  * @returns {Array<{turn:number, dug:number, hit:Object|null, cumulative:number}>}
  */
-export function simulateGame(library, turns, discoverN = DISCOVER_N) {
-    const lib = Array.isArray(library) ? [...library] : [];
+function playGame(lib, turns, discoverN) {
     const events = [];
+    let head = 0;
     let cumulative = 0;
-    const n = Math.max(0, Math.floor(Number.isFinite(turns) ? turns : 0));
 
-    for (let turn = 1; turn <= n; turn++) {
+    for (let turn = 1; turn <= turns; turn++) {
         const passed = [];
         let hit = null;
 
-        while (lib.length > 0) {
-            const card = lib.shift();
-            const isLand = Array.isArray(card?.types) && card.types.includes('land');
+        while (head < lib.length) {
+            const card = lib[head++];
             const cmc = Number.isFinite(card?.cmc) ? card.cmc : 0;
-            if (!isLand && cmc <= discoverN) { hit = card; break; }
+            if (!isLandCard(card) && cmc <= discoverN) { hit = card; break; }
             passed.push(card);
         }
 
@@ -321,7 +260,7 @@ export function simulateGame(library, turns, discoverN = DISCOVER_N) {
             const j = Math.floor(Math.random() * (i + 1));
             [passed[i], passed[j]] = [passed[j], passed[i]];
         }
-        lib.push(...passed);
+        for (const card of passed) lib.push(card);
 
         if (hit) cumulative += Number.isFinite(hit.cmc) ? hit.cmc : 0;
         events.push({ turn, dug: passed.length, hit, cumulative });
@@ -331,20 +270,71 @@ export function simulateGame(library, turns, discoverN = DISCOVER_N) {
 }
 
 /**
- * Summarise a set of simulated games into the numbers a player actually asks
- * about: how often the hit was a cheap creature, and how the total compares to
- * simply casting a good six-drop instead.
+ * Play out one game's worth of Chimil triggers against a pre-shuffled library.
+ * The library passed in is not modified.
  *
- * @param {Array<Array>} games - Output of simulateGame per game
- * @param {number} [cost=CHIMIL_COST]
- * @returns {Object}
+ * @param {Array<{name:string, cmc:number, types:string[]}>} library
+ * @param {number} turns
+ * @param {number} [discoverN=DISCOVER_N]
+ * @returns {Array<{turn:number, dug:number, hit:Object|null, cumulative:number}>}
  */
+export function simulateGame(library, turns, discoverN = DISCOVER_N) {
+    const lib = Array.isArray(library) ? [...library] : [];
+    const n = Math.max(0, Math.floor(Number.isFinite(turns) ? turns : 0));
+    return playGame(lib, n, discoverN);
+}
+
 /**
- * Distribution of total mana cheated across simulated games, bucketed by whole
- * mana value. The average alone says nothing about spread — two decks can share
- * a mean while one is reliable and the other swings between whiffing and
- * cheating out half a game's worth of mana.
- *
+ * Simulate many games from a deck, each from its own shuffle.
+ * @param {Array} deck - buildDeckFromCardData output
+ * @param {number} games
+ * @param {number} [turns=MAX_TURNS]
+ * @returns {Array<Array>} one event list per game
+ */
+export function simulateGames(deck, games, turns = MAX_TURNS) {
+    const base = Array.isArray(deck) ? deck : [];
+    const n = Math.max(0, Math.floor(Number.isFinite(games) ? games : 0));
+    const out = new Array(n);
+    for (let g = 0; g < n; g++) out[g] = playGame(shuffleDeck([...base]), turns, DISCOVER_N);
+    return out;
+}
+
+/**
+ * Cut simulated games down to a shorter horizon. A game simulated for 20 end
+ * steps, read to step 8, is exactly a game simulated for 8.
+ * @param {Array<Array>} games
+ * @param {number} turns
+ * @returns {Array<Array>}
+ */
+export function truncateGames(games, turns) {
+    const list = Array.isArray(games) ? games : [];
+    const n = Math.max(0, Math.floor(Number.isFinite(turns) ? turns : 0));
+    return list.map(g => (g.length <= n ? g : g.slice(0, n)));
+}
+
+/** Nearest-rank quantile of an ascending-sorted array (0 when empty). */
+export function quantile(sorted, q) {
+    if (!Array.isArray(sorted) || sorted.length === 0) return 0;
+    const rank = Math.ceil(Math.min(1, Math.max(0, q)) * sorted.length) - 1;
+    return sorted[Math.min(sorted.length - 1, Math.max(0, rank))];
+}
+
+const finalOf = g => (g.length ? (g[g.length - 1].cumulative ?? 0) : 0);
+
+/** Cumulative free mana by end step `t`, holding a game that ran dry at its last total. */
+function cumulativeAt(g, t) {
+    if (!g.length) return 0;
+    return g[Math.min(t, g.length) - 1].cumulative ?? 0;
+}
+
+/** First end step at which a game has cast at least `cost`, or Infinity. */
+function gamePayback(g, cost) {
+    for (const e of g) if ((e.cumulative ?? 0) >= cost) return e.turn;
+    return Infinity;
+}
+
+/**
+ * Distribution of total mana cheated across games, bucketed by whole mana value.
  * @param {Array<Array>} games
  * @returns {number[]} counts indexed by total mana cheated
  */
@@ -352,45 +342,142 @@ export function cheatedDistribution(games) {
     const list = Array.isArray(games) ? games : [];
     const counts = [];
     for (const g of list) {
-        const final = g.length ? (g[g.length - 1].cumulative ?? 0) : 0;
-        const bucket = Math.max(0, Math.round(final));
+        const bucket = Math.max(0, Math.round(finalOf(g)));
         counts[bucket] = (counts[bucket] || 0) + 1;
     }
     for (let i = 0; i < counts.length; i++) if (!counts[i]) counts[i] = 0;
     return counts;
 }
 
+/**
+ * Summarise simulated games into what a player asks: the typical total and its
+ * spread (percentiles, never the sampled extremes), how often a hit is a cheap
+ * card, and when the typical game has repaid Chimil's cost.
+ *
+ * @param {Array<Array>} games
+ * @param {number} [cost=CHIMIL_COST]
+ * @returns {Object}
+ */
 export function summariseGames(games, cost = CHIMIL_COST) {
     const list = Array.isArray(games) ? games : [];
-    const hits = list.flat().filter(e => e.hit);
-    const totalHits = hits.length;
+    let totalHits = 0;
+    let hitMV = 0;
+    let smallHits = 0;
+    for (const g of list) {
+        for (const e of g) {
+            if (!e.hit) continue;
+            const mv = e.hit.cmc ?? 0;
+            totalHits += 1;
+            hitMV += mv;
+            if (mv <= SMALL_HIT_MV) smallHits += 1;
+        }
+    }
 
-    const smallHits = hits.filter(e => (e.hit.cmc ?? 0) <= SMALL_HIT_MV).length;
-    const finals = list.map(g => (g.length ? g[g.length - 1].cumulative : 0));
-    const beatCost = finals.filter(v => v >= cost).length;
+    const finals = list.map(finalOf).sort((a, b) => a - b);
+    const paybacks = list.map(g => gamePayback(g, cost)).sort((a, b) => a - b);
+    const medianPayback = quantile(paybacks, 0.5);
 
     return {
         games: list.length,
         totalHits,
-        avgHitMV: totalHits ? hits.reduce((a, e) => a + (e.hit.cmc ?? 0), 0) / totalHits : 0,
+        avgHitMV: totalHits ? hitMV / totalHits : 0,
         smallHitRate: totalHits ? smallHits / totalHits : 0,
         avgFinal: list.length ? finals.reduce((a, b) => a + b, 0) / list.length : 0,
-        bestFinal: finals.length ? Math.max(...finals) : 0,
-        worstFinal: finals.length ? Math.min(...finals) : 0,
-        beatCostRate: list.length ? beatCost / list.length : 0
+        p10: quantile(finals, 0.1),
+        p25: quantile(finals, 0.25),
+        p50: quantile(finals, 0.5),
+        p75: quantile(finals, 0.75),
+        p90: quantile(finals, 0.9),
+        beatCostRate: list.length ? finals.filter(v => v >= cost).length / list.length : 0,
+        medianPayback: Number.isFinite(medianPayback) ? medianPayback : null
     };
 }
 
-// ==================== CONFIG ====================
+/**
+ * Per-end-step bands across games: typical total, the middle 80%, the average,
+ * and the share of games that have repaid Chimil's cost by then.
+ *
+ * @param {Array<Array>} games
+ * @param {number} turns
+ * @param {number} [cost=CHIMIL_COST]
+ * @returns {Array<{x:number, turn:number, p10:number, p50:number, p90:number, mean:number, repaid:number}>}
+ */
+export function turnBands(games, turns, cost = CHIMIL_COST) {
+    const list = Array.isArray(games) ? games : [];
+    const n = Math.max(0, Math.floor(Number.isFinite(turns) ? turns : 0));
+    const rows = [];
+    for (let t = 1; t <= n; t++) {
+        const values = list.map(g => cumulativeAt(g, t)).sort((a, b) => a - b);
+        const sum = values.reduce((a, b) => a + b, 0);
+        rows.push({
+            x: t,
+            turn: t,
+            p10: quantile(values, 0.1),
+            p50: quantile(values, 0.5),
+            p90: quantile(values, 0.9),
+            mean: values.length ? sum / values.length : 0,
+            repaid: values.length ? values.filter(v => v >= cost).length / values.length : 0
+        });
+    }
+    return rows;
+}
+
+const pct = v => `${Math.round((Number.isFinite(v) ? v : 0) * 100)}%`;
+const one = v => (Number.isFinite(v) ? v.toFixed(1) : '—');
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**
- * Read the calculator's inputs and the shared deck state.
- * @returns {Object}
+ * The plain-English answer to "what does Chimil discover each end step, and how
+ * soon does it pay off?" for this deck.
+ *
+ * @param {{turns:number, trigger:Object, payback:number|null, fit:Object, sim:Object|null}} result
+ * @returns {{html:string, tone:'good'|'warn'|'bad'|'flat'}}
+ */
+export function summarize(result) {
+    const { turns = PROJECTION_TURNS, trigger, payback = null, fit, sim = null } = result ?? {};
+    if (!trigger || trigger.hits === 0) {
+        return {
+            tone: 'bad',
+            html: 'Chimil finds nothing in this deck: there are no nonland cards with mana value 5 or less, so every discover runs through your whole library and whiffs.'
+        };
+    }
+
+    const steps = plural(turns, 'end step');
+    const tone = fit?.tone ?? 'flat';
+    const repay = sim ? sim.medianPayback : payback;
+
+    let html;
+    if (sim && sim.games > 0) {
+        const range = sim.p25 === sim.p75 ? '' : ` (half of games ${sim.p25}–${sim.p75})`;
+        html = `Over ${steps}, Chimil typically casts <strong>${sim.p50} mana</strong> of free spells${range}, about <strong>${one(trigger.avgMV)}</strong> per end step. `;
+    } else {
+        html = `Chimil casts about <strong>${one(trigger.avgMV)} mana</strong> of free spells per end step — roughly <strong>${Math.round(trigger.avgMV * turns)}</strong> over ${steps}. `;
+    }
+
+    html += repay === null
+        ? `The typical game never earns back its own ${CHIMIL_COST} mana within ${steps}.`
+        : `It has usually earned back its own ${CHIMIL_COST} mana by <strong>end step ${repay}</strong>.`;
+
+    if (sim && sim.totalHits > 0) {
+        html += ` <strong>${pct(sim.smallHitRate)}</strong> of hits are cheap cards (mana value ${SMALL_HIT_MV} or less).`;
+    }
+    return { html, tone };
+}
+
+// ==================== STATE ====================
+
+/** Simulated games for the current deck, at MAX_TURNS. Keyed on the deck object. */
+const simState = { deckRef: null, games: null };
+
+/**
+ * Read the horizon and the shared deck state.
+ * @returns {{turns:number, lands:number, cardDetails:Array, deckSize:number}}
  */
 export function getConfig() {
     const deck = DeckConfig.getDeckConfig();
-    const turnsEl = document.getElementById('chimil-turnsValue');
-    const turns = Math.max(1, Math.min(20, parseInt(turnsEl?.value, 10) || PROJECTION_TURNS));
+    const slider = document.getElementById('chimil-turnsSlider');
+    const raw = parseInt(slider?.value, 10);
+    const turns = Math.max(1, Math.min(MAX_TURNS, Number.isFinite(raw) ? raw : PROJECTION_TURNS));
 
     return {
         turns,
@@ -400,336 +487,279 @@ export function getConfig() {
     };
 }
 
+/** Simulate (once per deck) and return the full-length games, or null without a decklist. */
+function ensureGames({ force = false } = {}) {
+    const cardsByName = DeckConfig.getImportedCardData()?.cardsByName;
+    if (!cardsByName || Object.keys(cardsByName).length === 0) {
+        simState.deckRef = null;
+        simState.games = null;
+        return null;
+    }
+    if (force || simState.deckRef !== cardsByName || !simState.games) {
+        const deck = buildDeckFromCardData({ cardsByName });
+        simState.games = simulateGames(deck, AUTO_SIM_GAMES, MAX_TURNS);
+        simState.deckRef = cardsByName;
+    }
+    return simState.games;
+}
+
 /**
- * Run the analysis for the current config.
- * @returns {{config:Object, trigger:Object, rows:Array}}
+ * Run the analysis for the current deck and horizon.
+ * @returns {{config:Object, trigger:Object, rows:Array, payback:number|null, fit:Object, games:Array|null, sim:Object|null, bands:Array}}
  */
 export function calculate() {
     const config = getConfig();
     const trigger = analyzeTrigger({ cardDetails: config.cardDetails, lands: config.lands });
-    // Project past the display horizon so payback is found even if it is late.
+    // Project past the horizon so payback is found even when it is late.
     const payback = paybackTurn(projectTurns(trigger, 30));
     const rows = projectTurns(trigger, config.turns);
-    return { config, trigger, rows, payback, fit: fitVerdict(trigger, payback) };
+
+    const all = ensureGames();
+    const games = all ? truncateGames(all, config.turns) : null;
+    const sim = games ? summariseGames(games) : null;
+    const bands = games ? turnBands(games, config.turns) : [];
+
+    return { config, trigger, rows, payback, fit: fitVerdict(trigger, payback), games, sim, bands };
 }
 
-// ==================== UI ====================
+// ==================== RENDERING ====================
 
-function updateChart(rows) {
+function setText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+
+function renderHero(result) {
+    const el = document.getElementById('chimil-hero');
+    if (!el) return;
+    const { config, trigger, sim, payback } = result;
+    const repay = sim ? sim.medianPayback : payback;
+    const steps = plural(config.turns, 'end step');
+
+    el.innerHTML = renderHeroStats([
+        {
+            label: 'Each end step',
+            value: one(trigger.avgMV),
+            sub: 'average mana of the free spell',
+            size: 'big',
+            color: trigger.hits > 0 ? 'var(--tx-good)' : 'var(--tx-bad)',
+            tip: 'The average mana value of the card one discover finds. Exact: every eligible card is equally likely to be the first one hit.'
+        },
+        {
+            label: `Over ${steps}`,
+            value: sim ? String(sim.p50) : String(Math.round(trigger.avgMV * config.turns)),
+            sub: sim ? (sim.p25 === sim.p75 ? 'mana in a typical game' : `mana · half of games ${sim.p25}–${sim.p75}`) : 'mana on average',
+            term: sim ? 'p50' : 'ev'
+        },
+        {
+            label: 'Paid off by end step',
+            value: repay === null ? '—' : String(repay),
+            sub: repay === null ? `not within ${steps}` : `earns back its ${CHIMIL_COST} mana`,
+            color: repay === null ? 'var(--tx-bad)' : repay <= 2 ? 'var(--tx-good)' : repay <= 4 ? 'var(--tx-warn)' : 'var(--tx-bad)',
+            tip: `The end step by which the typical game has cast at least ${CHIMIL_COST} mana of free spells — Chimil’s own cost.`
+        },
+        {
+            label: 'Cheap hits',
+            value: sim ? pct(sim.smallHitRate) : '—',
+            sub: `free spells of mana value ${SMALL_HIT_MV} or less`,
+            color: sim && sim.smallHitRate > 0.4 ? 'var(--tx-warn)' : 'var(--tx-bright)',
+            tip: 'The hits that feel like a waste off a six-mana artifact: a mana dork or a cantrip.'
+        }
+    ]);
+}
+
+function renderRail(result) {
+    const { config, trigger } = result;
+    setText('chimil-turns-display', String(config.turns));
+    setText('chimil-pool-display', `${trigger.hits} of ${trigger.total}`);
+    setText('chimil-share-display', pct(trigger.eligibleShare));
+    setText('chimil-dug-display', trigger.hits > 0 ? one(trigger.expectedDug) : '—');
+}
+
+function updateChart(bands) {
+    const meta = document.getElementById('chimil-chart-meta');
+    if (meta) meta.textContent = bands.length ? `${AUTO_SIM_GAMES.toLocaleString('en-US')} simulated games` : '';
     if (!document.getElementById('chimil-chart')) return;
+    if (!bands.length) {
+        if (chart) { chart.destroy(); chart = null; }
+        return;
+    }
 
     chart = createOrUpdateChart(chart, 'chimil-chart', {
         type: 'line',
         data: {
-            labels: rows.map(r => `T${r.turn}`),
+            labels: bands.map(r => String(r.turn)),
             datasets: [
                 {
-                    label: 'Cumulative free mana value',
-                    data: rows.map(r => r.cumulativeMV),
-                    borderColor: TX.green,
-                    backgroundColor: TX.greenFill,
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0,
+                    label: '8 games in 10',
+                    data: bands.map(r => r.p90),
+                    borderWidth: 0,
                     pointRadius: 0,
-                    pointHoverRadius: 4
+                    pointHoverRadius: 0,
+                    backgroundColor: TX.greenFill,
+                    fill: '+1',
+                    tension: 0
                 },
                 {
-                    label: 'Per-turn free mana value',
-                    data: rows.map(r => r.perTurnMV),
-                    borderColor: TX.accent || TX.amber,
-                    backgroundColor: 'transparent',
-                    borderWidth: 1,
-                    borderDash: [4, 3],
-                    fill: false,
-                    tension: 0,
+                    label: 'low',
+                    data: bands.map(r => r.p10),
+                    borderWidth: 0,
                     pointRadius: 0,
-                    pointHoverRadius: 3,
-                    yAxisID: 'yPer'
+                    pointHoverRadius: 0,
+                    fill: false,
+                    tension: 0
+                },
+                {
+                    label: 'Typical game',
+                    data: bands.map(r => r.p50),
+                    borderColor: TX.green,
+                    backgroundColor: TX.green,
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                    fill: false,
+                    tension: 0
+                },
+                {
+                    label: `Chimil’s cost (${CHIMIL_COST})`,
+                    data: bands.map(() => CHIMIL_COST),
+                    borderColor: TX.mid,
+                    borderWidth: 1,
+                    borderDash: [5, 4],
+                    pointRadius: 0,
+                    pointHoverRadius: 0,
+                    fill: false
                 }
             ]
         },
         options: {
             plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: { color: TX.mid, font: { size: 10 }, boxWidth: 10, boxHeight: 2 }
+                tooltip: {
+                    filter: item => item.datasetIndex !== 1,
+                    callbacks: {
+                        title: items => `End step ${items[0]?.label ?? ''}`,
+                        label: (ctx) => {
+                            const row = bands[ctx.dataIndex];
+                            if (!row) return '';
+                            if (ctx.datasetIndex === 0) return ` 8 games in 10: ${row.p10}–${row.p90} mana`;
+                            if (ctx.datasetIndex === 2) return ` Typical game: ${row.p50} mana`;
+                            return ` Repaid ${CHIMIL_COST} mana: ${pct(row.repaid)} of games`;
+                        }
+                    }
                 }
             },
             scales: {
-                y: {
-                    beginAtZero: true,
-                    title: { display: true, text: 'Cumulative MV', color: TX.dim, font: { size: 9 } },
-                    grid: { color: TX.rule },
-                    ticks: { color: TX.dim, font: { size: 9 } }
-                },
-                yPer: {
-                    type: 'linear',
-                    position: 'right',
-                    beginAtZero: true,
-                    title: { display: true, text: 'Per turn', color: TX.dim, font: { size: 9 } },
-                    grid: { display: false },
-                    ticks: { color: TX.dim, font: { size: 9 } }
-                },
-                x: { grid: { color: TX.rule }, ticks: { color: TX.dim, font: { size: 9 } } }
+                x: { title: { display: true, text: 'End steps with Chimil out', color: TX.dim } },
+                y: { beginAtZero: true, title: { display: true, text: 'Free mana cast, total', color: TX.dim } }
             }
         }
     });
 }
 
-function updateSweep(rows, turns, payback) {
-    renderSweepTable('chimil-sweepTable', {
-        columns: [
-            { label: 'TURN', align: 'left', render: r => `T${r.turn}` },
-            { label: 'PER TURN', render: r => formatNumber(r.perTurnMV, 2) },
-            { label: 'CUMULATIVE', render: r => `<strong style="color:var(--tx-good);">${formatNumber(r.cumulativeMV, 1)}</strong>` },
-            {
-                label: 'Δ VS PREV',
-                render: (r, ctx) => {
-                    const prev = rows[rows.indexOf(r) - 1];
-                    if (!prev) return '<span style="color:var(--tx-dim);">—</span>';
-                    const d = r.cumulativeMV - prev.cumulativeMV;
-                    return `<span style="color:${deltaColor(d, 0.001)};">${formatDelta(d, 2)}</span>`;
-                }
-            },
-            { label: 'POOL LEFT', render: r => r.poolLeft }
-        ],
-        rows,
-        current: turns,
-        recommended: payback ?? null,
-        emptyText: 'Import a deck to project Chimil\'s output.'
-    });
-}
-
-export function updateUI() {
-    const { config, trigger, rows, payback, fit } = calculate();
-    const last = rows[rows.length - 1];
-
-    // Headline numbers
-    const heroEl = document.getElementById('chimil-hero');
-    if (heroEl) {
-        heroEl.innerHTML = renderHeroStats([
-            {
-                label: 'FREE MV / TURN',
-                value: formatNumber(trigger.expectedFreeMV, 2),
-                sub: 'mana cheated each end step',
-                size: 'big',
-                color: 'var(--tx-good)'
-            },
-            {
-                label: `OVER ${PROJECTION_TURNS} TURNS`,
-                value: formatNumber(last ? last.cumulativeMV : 0, 1),
-                sub: 'total mana value',
-                color: 'var(--tx-accent)'
-            },
-            {
-                label: 'PAYS FOR ITSELF',
-                value: payback === null ? '—' : `T${payback}`,
-                sub: payback === null ? `never repays {${CHIMIL_COST}}` : `end steps to repay {${CHIMIL_COST}}`,
-                color: payback === null ? 'var(--tx-bad)'
-                     : payback <= 2 ? 'var(--tx-good)'
-                     : payback <= 4 ? 'var(--tx-accent)' : 'var(--tx-bad)'
-            },
-            {
-                label: 'CARDS DUG',
-                value: formatNumber(trigger.expectedDug, 1),
-                sub: 'passed over per trigger',
-                color: 'var(--tx-mid)'
-            },
-            {
-                // No verdict badge here: probabilityVerdict's tiers answer "how
-                // often does this happen", which is not what an eligible-library
-                // share means. 41% eligible is healthy for Chimil but would read
-                // as WEAK on that scale. The fit verdict below is the judgement.
-                label: 'ELIGIBLE POOL',
-                value: `${trigger.hits}`,
-                sub: `${formatPercentage(trigger.eligibleShare, 0)} of library, MV ≤ ${trigger.discoverN}`,
-                color: 'var(--tx-mid)'
-            }
-        ]);
-    }
-
-    // Verdict first: is this card worth a slot in THIS deck?
-    const fitEl = document.getElementById('chimil-fit');
-    if (fitEl) {
-        const paybackText = payback === null
-            ? `it never repays its own {${CHIMIL_COST}} within 30 turns`
-            : `it repays its own {${CHIMIL_COST}} by <strong>turn ${payback}</strong>`;
-        fitEl.innerHTML = `
-            <div class="chimil-fit">
-                <div class="chimil-fit-badge" style="color:${fit.color}; border-color:${fit.color};">${fit.label}</div>
-                <div class="chimil-fit-body">
-                    <div class="chimil-fit-advice">${fit.advice}</div>
-                    <div class="chimil-fit-detail">At ${formatNumber(trigger.expectedFreeMV, 2)} mana per end step, ${paybackText}.</div>
-                    <div class="chimil-fit-caveat">This counts mana cheated, not board impact. Chimil does nothing the turn it lands, and a six-drop that affects the board immediately can be worth more than the raw mana here suggests — check the sample games for what the hits actually look like.</div>
-                </div>
-            </div>`;
-    }
-
-    // Plain-English read
-    const recEl = document.getElementById('chimil-recommendation');
-    if (recEl) {
-        let text;
-        if (trigger.hits === 0) {
-            text = 'No nonland cards with mana value 5 or less — Chimil would exile your whole library and find nothing. Add cheap spells before running it.';
-        } else {
-            const perTurn = formatNumber(trigger.expectedFreeMV, 2);
-            const share = formatPercentage(trigger.eligibleShare, 0);
-            text = `Chimil cheats <strong>${perTurn} mana</strong> every end step. ${trigger.hits} of your ${trigger.total} library cards are eligible (${share}), so it digs about ${formatNumber(trigger.expectedDug, 1)} cards to find one. Cards with mana value 6+ are passed over — a top-heavy deck raises the dig but not the payoff.`;
-        }
-        recEl.innerHTML = renderRecommendation(text);
-    }
-
-    // Distribution of what it actually finds
-    const distEl = document.getElementById('chimil-distribution');
-    if (distEl) {
-        distEl.innerHTML = trigger.hits > 0
-            ? renderSimulationSummary({
-                title: 'What Chimil finds',
-                metrics: [
-                    { label: 'Avg hit MV', value: formatNumber(trigger.avgMV, 2), sub: 'mana value discovered', color: 'var(--tx-good)' },
-                    { label: 'Eligible', value: trigger.hits, sub: `MV ≤ ${trigger.discoverN}, nonland`, color: 'var(--tx-accent)' },
-                    { label: 'Passed over', value: trigger.misses + trigger.lands, sub: `${trigger.lands} lands + ${trigger.misses} MV 6+`, color: 'var(--tx-mid)' }
-                ],
-                distribution: {
-                    title: `Discovered card mana value (${trigger.hits} eligible cards)`,
-                    counts: trigger.distribution,
-                    totalSims: trigger.hits,
-                    labelFn: (i) => `MV ${i}`,
-                    markerFn: (i) => (i === trigger.discoverN ? 'MAX' : null)
-                }
-            })
-            : '<div class="tx-empty">Import a deck with nonland cards of mana value 5 or less.</div>';
-    }
-
-    updateChart(rows);
-    updateSweep(rows, config.turns, payback);
-
-    // Left-rail readout
-    const poolPct = document.getElementById('chimil-share-display');
-    if (poolPct) poolPct.textContent = formatPercentage(trigger.eligibleShare, 0);
-    const turnsOut = document.getElementById('chimil-turns-display');
-    if (turnsOut) turnsOut.textContent = config.turns;
-
-    maybeAutoRun(config);
-    const poolEl = document.getElementById('chimil-pool-display');
-    if (poolEl) poolEl.textContent = `${trigger.hits} / ${trigger.total}`;
-}
-
-/**
- * Run and render sample games. Each row is one game's actual sequence of
- * discovers, so a player can see the shape of a real game rather than only its
- * mean — the difference between "3.7 mana a turn" and "a two-drop, then a
- * three-drop" is the whole question.
- */
-let lastSimKey = '';
-
-/**
- * Simulate automatically when the calculator is opened with a deck loaded, so
- * the sample games are there to read rather than behind a button press. Keyed on
- * deck and horizon so switching tabs does not re-run the same simulation.
- */
-function maybeAutoRun(config) {
-    const cardData = DeckConfig.getImportedCardData();
-    const names = Object.keys(cardData?.cardsByName || {});
-    if (names.length === 0) return;
-
-    const key = `${names.length}-${config.turns}-${config.lands}`;
-    if (key === lastSimKey) return;
-    lastSimKey = key;
-    runSampleReveals();
-}
-
-export function runSampleReveals() {
+function renderSamples(games, turns) {
     const display = document.getElementById('chimil-reveals-display');
     if (!display) return;
-
-    const cardData = DeckConfig.getImportedCardData();
-    if (!cardData?.cardsByName || Object.keys(cardData.cardsByName).length === 0) {
-        display.innerHTML = '<div class="tx-empty">Import a decklist to simulate games.</div>';
+    if (!games) {
+        display.innerHTML = '<div class="tx-empty">Import a decklist to see sample games.</div>';
         return;
     }
 
-    const countEl = document.getElementById('chimil-sample-count');
-    const games = Math.max(1, Math.min(5000, parseInt(countEl?.value, 10) || AUTO_SIM_GAMES));
-    const shown = Math.min(games, 8);
-    const turns = getConfig().turns;
+    const rows = games.slice(0, SHOWN_GAMES).map((g, i) => {
+        const total = finalOf(g);
+        const chips = g.map(e => {
+            if (!e.hit) return `<li class="ch-hit is-miss"><span class="ch-hit-step">${e.turn}</span>nothing left</li>`;
+            const mv = Number.isFinite(e.hit.cmc) ? e.hit.cmc : 0;
+            const small = mv <= SMALL_HIT_MV;
+            // Cast free, an X spell resolves with X = 0 — usually close to nothing.
+            const xTag = isXSpell(e.hit) ? '<span class="ch-hit-x" data-tip="Cast free, an X spell resolves with X = 0." tabindex="0">X=0</span>' : '';
+            return `<li class="ch-hit${small ? ' is-small' : ''}"><span class="ch-hit-step">${e.turn}</span>${cardRef(e.hit.name)}${xTag}<span class="ch-hit-mv">${mv}</span></li>`;
+        }).join('');
+        return `
+            <div class="ch-game">
+                <div class="ch-game-head">
+                    <span>Game ${i + 1}</span>
+                    <span class="ch-game-total ${total >= CHIMIL_COST ? 'is-good' : 'is-bad'}">${total} mana</span>
+                </div>
+                <ol class="ch-game-hits">${chips}</ol>
+            </div>`;
+    }).join('');
 
-    const base = buildDeckFromCardData(cardData);
-    const played = [];
-    for (let g = 0; g < games; g++) {
-        played.push(simulateGame(shuffleDeck([...base]), turns));
-    }
-    const summary = summariseGames(played);
+    display.innerHTML = `
+        <p class="ch-caption">Each chip is one end step: the step number, the card discover cast, and its mana value. <span class="ch-key-small">Amber</span> chips are cheap hits (mana value ${SMALL_HIT_MV} or less); X spells cast free resolve with X&nbsp;=&nbsp;0.</p>
+        <div class="ch-games">${rows}</div>
+        <p class="ch-caption ch-caption-foot"><span class="ch-shown-wide">${SHOWN_GAMES}</span><span class="ch-shown-narrow">${NARROW_GAMES}</span> of ${AUTO_SIM_GAMES.toLocaleString('en-US')} simulated games, ${plural(turns, 'end step')} each.</p>`;
+}
 
-    // Headline: the "is this actually good" read, from played games not formulas.
-    const summaryHTML = renderSimulationSummary({
-        title: `${games.toLocaleString('en-US')} simulated games · ${turns} end step${turns === 1 ? '' : 's'} each`,
-        runs: games,
-        distribution: {
-            title: `Total mana cheated per game, over ${turns} end step${turns === 1 ? '' : 's'}`,
-            counts: cheatedDistribution(played),
-            totalSims: games,
-            labelFn: (i) => `${i} mana`,
-            markerFn: (i) => (i === Math.round(summary.avgFinal) ? 'AVG' : (i === CHIMIL_COST ? `= {${CHIMIL_COST}} COST` : null)),
-            toneFn: (i) => (i < CHIMIL_COST ? 'bad' : null)
-        },
-        metrics: [
-            { label: 'Avg total cheated', value: formatNumber(summary.avgFinal, 1), sub: `over ${turns} turn${turns === 1 ? '' : 's'}`, color: 'var(--tx-good)' },
-            { label: 'Hits of MV ≤ 2', value: formatPercentage(summary.smallHitRate, 0), sub: 'the "just a mana dork" outcome', color: summary.smallHitRate > 0.4 ? 'var(--tx-bad)' : 'var(--tx-mid)' },
-            { label: `Beat its own {${CHIMIL_COST}}`, value: formatPercentage(summary.beatCostRate, 0), sub: 'of games', color: summary.beatCostRate > 0.9 ? 'var(--tx-good)' : 'var(--tx-accent)' },
-            { label: 'Range', value: `${formatNumber(summary.worstFinal, 0)}–${formatNumber(summary.bestFinal, 0)}`, sub: 'worst to best game', color: 'var(--tx-mid)' }
-        ]
+function renderDetails(result) {
+    const { config, trigger, bands, games } = result;
+
+    renderSweepTable('chimil-sweepTable', {
+        columns: [
+            { label: 'End step', align: 'left', render: r => String(r.turn) },
+            { label: 'Typical total', render: r => `<strong>${r.p50}</strong>` },
+            { label: '8 games in 10', render: r => (r.p10 === r.p90 ? String(r.p50) : `${r.p10}–${r.p90}`) },
+            { label: 'Average', render: r => one(r.mean) },
+            { label: `Repaid ${CHIMIL_COST} mana`, render: r => `<span class="${r.repaid >= 0.5 ? 'ch-good' : 'ch-dim'}">${pct(r.repaid)}</span>` }
+        ],
+        rows: bands,
+        current: config.turns,
+        recommended: result.sim?.medianPayback ?? null,
+        emptyText: 'Import a decklist to simulate games.'
     });
 
-    // Individual games, so the sequence is visible.
-    let listHTML = '';
-    for (let i = 0; i < shown; i++) {
-        const g = played[i];
-        const final = g.length ? g[g.length - 1].cumulative : 0;
-        const chips = g.map(e => {
-            if (!e.hit) return `<span class="chimil-hit is-miss" title="No eligible card left">T${e.turn}: nothing</span>`;
-            const mv = Number.isFinite(e.hit.cmc) ? e.hit.cmc : 0;
-            const cls = mv <= SMALL_HIT_MV ? ' is-small' : '';
-            return `<span class="chimil-hit${cls}" title="Turn ${e.turn} · dug ${e.dug} card${e.dug === 1 ? '' : 's'}">
-                        <span class="chimil-hit-turn">T${e.turn}</span>
-                        <span class="chimil-hit-name">${e.hit.name}</span>
-                        <span class="chimil-hit-mv">${mv}</span>
-                    </span>`;
-        }).join('');
-        listHTML += `
-            <div class="chimil-game">
-                <div class="chimil-game-head">
-                    <span>Game ${i + 1}</span>
-                    <span class="chimil-game-total" style="color:${final >= CHIMIL_COST ? 'var(--tx-good)' : 'var(--tx-bad)'};">
-                        ${formatNumber(final, 0)} mana cheated
-                    </span>
-                </div>
-                <div class="chimil-game-chips">${chips}</div>
-            </div>`;
+    const findsEl = document.getElementById('chimil-distribution');
+    if (findsEl) {
+        findsEl.innerHTML = trigger.hits > 0 ? `
+            <dl class="ch-facts ch-facts-row">
+                <div><dt>Cards discover can hit</dt><dd>${trigger.hits}</dd></div>
+                <div><dt>Skipped: lands</dt><dd>${trigger.lands}</dd></div>
+                <div><dt>Skipped: mana value 6+</dt><dd>${trigger.misses}</dd></div>
+                <div><dt>Cards skipped per discover</dt><dd>${one(trigger.expectedDug)}</dd></div>
+            </dl>
+            <p class="ch-caption">Mana value of the card one discover finds — every eligible card is equally likely, so this is your eligible cards by mana value.</p>
+            ${renderDistributionChart(trigger.distribution, trigger.hits, i => `Mana value ${i}`, () => null, i => (i <= SMALL_HIT_MV ? 'warn' : null))}`
+            : '<div class="tx-empty">No nonland cards with mana value 5 or less.</div>';
     }
 
-    display.innerHTML = summaryHTML + createCollapsibleSection(
-        `Show/hide individual games (${shown} of ${games.toLocaleString('en-US')})`,
-        listHTML,
-        true
-    );
+    const spreadEl = document.getElementById('chimil-spread');
+    if (spreadEl) {
+        spreadEl.innerHTML = games ? `
+            <p class="ch-caption">Total free mana per game over ${plural(config.turns, 'end step')}. Red bars are games that never repaid Chimil’s ${CHIMIL_COST} mana.</p>
+            ${renderDistributionChart(cheatedDistribution(games), games.length, i => `${i} mana`, () => null, i => (i < CHIMIL_COST ? 'bad' : null))}`
+            : '<div class="tx-empty">Import a decklist to simulate games.</div>';
+    }
+}
+
+export function updateUI() {
+    const result = calculate();
+    renderRail(result);
+
+    const bottom = document.getElementById('chimil-bottom-line');
+    if (bottom) bottom.innerHTML = renderBottomLine(summarize({ ...result, turns: result.config.turns }));
+    renderHero(result);
+    updateChart(result.bands);
+    renderSamples(result.games, result.config.turns);
+    renderDetails(result);
+}
+
+/** Reshuffle: simulate a fresh set of games for the same deck. */
+export function runSampleReveals() {
+    ensureGames({ force: true });
+    updateUI();
 }
 
 export function init() {
-    const sampleSection = document.getElementById('chimil-sample-reveals');
-    if (sampleSection) {
-        sampleSection.innerHTML = generateSampleRevealsHTML('chimil', 'Sample games', { requiresImport: false });
-    }
+    const { updateUI: debouncedUpdate } = registerCalculator({ name: 'chimil', calculate, updateUI });
 
-    registerCalculator({
-        name: 'chimil',
-        calculate,
-        updateUI,
-        inputs: ['turns']
+    const slider = document.getElementById('chimil-turnsSlider');
+    slider?.addEventListener('input', () => {
+        // The readout follows the thumb immediately; the page re-renders on the
+        // debounce (no re-simulation — shorter horizons are prefixes).
+        setText('chimil-turns-display', slider.value);
+        debouncedUpdate();
     });
 
-    const btn = document.getElementById('chimil-draw-reveals-btn');
-    if (btn) btn.addEventListener('click', runSampleReveals);
+    document.getElementById('chimil-draw-reveals-btn')?.addEventListener('click', () => {
+        if (isCalculatorActive('chimil')) runSampleReveals();
+    });
 }
