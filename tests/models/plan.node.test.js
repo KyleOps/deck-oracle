@@ -276,7 +276,7 @@ describe('scripted games: Wild Splendor', () => {
         // Five lands, two land drops and the one Karametra found.
         assert.equal(r.board.filter(p => p.name === 'Forest' || p.name === 'Plains').length, 8);
         assert.match(r.log.turns[0].cast[0].notes.join(' '), /Karametra, God of Harvests: Forest \(tapped\)/);
-        assert.equal(r.log.turns[1].drew, 'Plains', 'the found Forest left the library');
+        assert.equal(r.log.turns[1].drew, 'Forest', 'a search takes the deepest copy, so the next draw stays put');
         assert.equal(named(r.board, 'Karametra, God of Harvests')[0].creature, false, 'devotion 3 of 7');
     });
 
@@ -340,7 +340,8 @@ describe('scripted games: Doctor Whostoric', () => {
         const r = play(lib, plan([2, cast({ is: 'commander', names: ['Susan Foreman'] })]), {
             hand: ['Misty Rainforest', 'Forest'], library: ['Grizzly Bears', 'Breeding Pool', 'Island', 'Forest', 'Forest']
         });
-        assert.deepEqual(r.log.turns[0].lands, ['Misty Rainforest → Breeding Pool']);
+        assert.deepEqual(r.log.turns[0].lands, ['Misty Rainforest → Breeding Pool (tapped)'], 'nothing to cast on turn 1: no life paid');
+        assert.equal(r.life[1], 40 - 1, 'the fetchland’s 1 life only');
         assert.equal(r.log.turns[1].drew, 'Island', 'the fetched land left the library');
         assert.deepEqual(r.stepTurns, [2]);
         assert.equal(r.mana[3], 3 + 1, 'Susan taps for {G} the turn after');
