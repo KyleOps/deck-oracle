@@ -208,7 +208,7 @@ const GROUP_LABEL = Object.freeze({
     creature: 'A creature', artifact: 'An artifact', enchantment: 'An enchantment', planeswalker: 'A planeswalker',
     instant: 'An instant', sorcery: 'A sorcery', permanent: 'A permanent', any: 'Any spell'
 });
-const KIND_LABEL = Object.freeze({ cast: 'Cast a card', mana: 'Have mana', package: 'Cast a package' });
+const KIND_LABEL = Object.freeze({ cast: 'Cast a card', mana: 'Have mana', package: 'Cast a package', spend: 'Spend mana on spells', ramp: 'Ramp for next turn' });
 
 const opt = (value, label, selected) => `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
 const numbers = (lo, hi, selected) => Array.from({ length: hi - lo + 1 }, (_, i) => opt(String(lo + i), String(lo + i), lo + i === selected)).join('');
@@ -259,8 +259,16 @@ function afterValue(after, lib) {
 function stepBody(step, k, lib) {
     const r = step.require;
     const label = `Step ${k + 1}`;
+    const atLeast = aria => `<input type="number" class="field field-sm" data-field="atLeast" min="1" max="${MAX_MANA_TARGET}" value="${r.atLeast ?? 1}" aria-label="${label}: ${aria}">`;
     if (r.kind === 'mana') {
-        return `<div class="gp-fields"><span>At least</span><input type="number" class="field field-sm" data-field="atLeast" min="1" max="${MAX_MANA_TARGET}" value="${r.atLeast ?? 1}" aria-label="${label}: mana needed"><span>mana that turn</span></div>`;
+        return `<div class="gp-fields"><span>At least</span>${atLeast('mana needed')}<span>mana that turn</span></div>`;
+    }
+    if (r.kind === 'ramp') {
+        return `<div class="gp-fields"><span>At least</span>${atLeast('mana ready for next turn')}<span>mana ready for next turn (your sources plus a land drop from hand)</span></div>`;
+    }
+    if (r.kind === 'spend') {
+        return `<div class="gp-fields"><span>At least</span>${atLeast('mana to spend')}<span>mana in one turn on</span></div>
+            <div class="gp-fields">${groupFields(r.group ?? { is: 'any' }, 'group', lib, label)}<span>from your hand (X spells count the X you pay)</span></div>`;
     }
     if (r.kind === 'package') {
         const options = r.options ?? [];
@@ -280,14 +288,16 @@ function stepBody(step, k, lib) {
         + opt('named', 'After one of these is out', after === 'named');
     return `<div class="gp-fields">${groupFields(r.group, 'group', lib, label)}</div>
         <div class="gp-fields"><select class="field field-sm" data-field="after" aria-label="${label}: only after">${afterOptions}</select>
-        ${after === 'named' ? `<input type="text" class="field field-sm" data-field="names" data-path="after" list="gp-card-names" value="${escapeHtml((r.after?.names ?? []).join(', '))}" placeholder="Card names, separated by commas" aria-label="${label}: after these cards">` : ''}</div>`;
+        ${after === 'named' ? `<input type="text" class="field field-sm" data-field="names" data-path="after" list="gp-card-names" value="${escapeHtml((r.after?.names ?? []).join(', '))}" placeholder="Card names, separated by commas" aria-label="${label}: after these cards">` : ''}</div>
+        <div class="gp-fields"><span>Paying at least</span><input type="number" class="field field-sm" data-field="paid" min="1" max="${MAX_MANA_TARGET}" value="${r.paid ?? ''}" placeholder="any" aria-label="${label}: mana paid at least">
+        <label class="gp-check"><input type="checkbox" data-field="copied"${r.copied ? ' checked' : ''}> and copied</label></div>`;
 }
 
 /** The step's readback: what the engine checks, or why it can't yet. */
 function stepRead(step) {
     const valid = normalizeRequirement(step.require);
     if (!valid) return '<span class="gp-quiet">Not checked yet: name at least one card.</span>';
-    return `<strong>Checks:</strong> ${GP.stepTitle({ turn: step.turn, require: valid }, { html: true })}`;
+    return `<strong>${step.info ? 'Measures' : 'Checks'}:</strong> ${GP.stepTitle({ turn: step.turn, require: valid }, { html: true })}${step.info ? ' <span class="gp-quiet">(not part of the plan)</span>' : ''}`;
 }
 
 function renderEditor(lib) {
@@ -300,6 +310,7 @@ function renderEditor(lib) {
                 <span class="gp-step-n" aria-hidden="true">${k + 1}</span>
                 <select class="field field-sm" data-field="turn" aria-label="Step ${k + 1}: by turn">${Array.from({ length: MAX_TURN }, (_, i) => opt(String(i + 1), `By turn ${i + 1}`, step.turn === i + 1)).join('')}</select>
                 <select class="field field-sm" data-field="kind" aria-label="Step ${k + 1}: what">${Object.entries(KIND_LABEL).map(([v, t]) => opt(v, t, step.require.kind === v)).join('')}</select>
+                <label class="gp-check"><input type="checkbox" data-field="info"${step.info ? ' checked' : ''} aria-label="Step ${k + 1}: measure only, not part of the plan"> measure only</label>
                 <span class="gp-step-tools">
                     <button type="button" class="gp-icon-btn" data-act="up" aria-label="Move step ${k + 1} up"${k === 0 ? ' disabled' : ''}>↑</button>
                     <button type="button" class="gp-icon-btn" data-act="down" aria-label="Move step ${k + 1} down"${k === steps.length - 1 ? ' disabled' : ''}>↓</button>
@@ -333,6 +344,8 @@ function refreshReadbacks() {
 
 function defaultRequirement(kind, turn) {
     if (kind === 'mana') return { kind: 'mana', atLeast: Math.min(MAX_MANA_TARGET, turn + 2) };
+    if (kind === 'ramp') return { kind: 'ramp', atLeast: Math.min(MAX_MANA_TARGET, turn + 3) };
+    if (kind === 'spend') return { kind: 'spend', atLeast: Math.min(MAX_MANA_TARGET, turn * 2), group: { is: 'any', mv: [4, MAX_MV] } };
     if (kind === 'package') {
         return { kind: 'package', options: [{ count: 2, group: { is: 'any', mv: [4, 4] } }, { count: 1, group: { is: 'any', mv: [7, 9] } }] };
     }
@@ -380,6 +393,18 @@ function applyField(step, field, path, value, lib) {
         case 'turn': step.turn = toInt(value, 1, MAX_TURN, step.turn); return false;
         case 'kind': step.require = defaultRequirement(value, step.turn); return true;
         case 'atLeast': r.atLeast = toInt(value, 1, MAX_MANA_TARGET, r.atLeast ?? 1); return false;
+        case 'info':
+            if (value) step.info = true;
+            else delete step.info;
+            return false;
+        case 'copied':
+            if (value) r.copied = true;
+            else delete r.copied;
+            return false;
+        case 'paid':
+            if (value === '' || value == null) delete r.paid;
+            else r.paid = toInt(value, 1, MAX_MANA_TARGET, 1);
+            return false;
         case 'after':
             if (!value) delete r.after;
             else r.after = value === 'named' ? { is: 'named', names: r.after?.is === 'named' ? r.after.names : [] } : groupFrom(value, null, lib);
@@ -512,11 +537,16 @@ export async function tryPreset(id) {
     return true;
 }
 
+/** A preset's notes as paragraphs (plain text, escaped). */
+function notesHTML(notes) {
+    return (notes ?? []).map(n => `<p class="gp-preset-notes">${escapeHtml(n)}</p>`).join('');
+}
+
 function presetNotes(id) {
     const p = presets.get(id);
     if (!p) return '';
     const size = Object.values(p.snapshot.cardsByName ?? {}).reduce((n, c) => n + (Number(c?.count) || 0), 0) + (p.snapshot.commanders?.length ?? 0);
-    return `<p class="gp-preset-notes">${escapeHtml(p.notes)} Loads its ${size}-card deck as your current deck, saved with your decks.</p>`;
+    return `${notesHTML(p.notes.slice(0, 1))}<p class="gp-preset-notes">Loads its ${size}-card deck as your current deck, saved with your decks.</p>`;
 }
 
 function renderPreset(inputs) {
@@ -526,8 +556,8 @@ function renderPreset(inputs) {
     const match = inputs.preset;
     let html = '';
     if (using) {
-        html += `<p>Plan: <strong>${escapeHtml(using.title)}</strong>.</p>${presets.has(using.id) ? `<p class="gp-preset-notes">${escapeHtml(presets.get(using.id)?.notes ?? '')}</p>` : ''}`;
-        if (!presets.has(using.id)) loadPreset(using.id).then(() => isCalculatorActive(NAME) && renderPreset(readInputs()));
+        html += `<p>Plan: <strong>${escapeHtml(using.title)}</strong> — what it does and why is under “About this plan”.</p>`;
+        if (!presets.has(using.id)) loadPreset(using.id).then(() => isCalculatorActive(NAME) && (renderPreset(readInputs()), renderAbout()));
     } else if (match) {
         html += `<p>This deck looks like <strong>${escapeHtml(match.title)}</strong>, which has a tuned plan.</p>
             <div class="gp-preset-row"><button type="button" class="btn btn-primary btn-sm" data-act="use-preset" data-preset="${escapeHtml(match.id)}">Use its plan</button></div>`;
@@ -697,6 +727,65 @@ function renderMana(result) {
     }
 }
 
+/** A preset's notes, while its plan is the one in use. */
+function renderAbout() {
+    const panel = $('gp-about-panel');
+    const el = $('gp-about');
+    if (!panel || !el) return;
+    const p = source.kind === 'preset' ? presets.get(source.id) : null;
+    panel.hidden = !p?.notes?.length;
+    el.innerHTML = p ? notesHTML(p.notes) : '';
+    const meta = $('gp-about-meta');
+    if (meta) meta.textContent = p ? p.title : '';
+}
+
+/** 100 games as dots for one measured distribution. */
+function measureDots(values, label) {
+    const dots = pmfQuantiles(values.hist, 100).map(value => ({ value, tone: 'flat' }));
+    const words = describeDots(dots, { format: v => String(v) });
+    const rows = GP.valueRows(values).map(r => [`${r.value}${r.plus ? '+' : ''}`, pct(r.share), pct(r.atLeast)]);
+    return dotPlot({
+        dots,
+        label: `${label}, out of 100 games. ${words}`,
+        unit: 'game',
+        format: v => String(v),
+        xLabel: label,
+        maxColumns: 30,
+        table: { summary: `All ${values.games.toLocaleString('en-US')} games measured`, caption: label, head: ['Value', 'Games', 'At least this'], rows }
+    });
+}
+
+/** Steps that measure something (values) and information-only steps. */
+function renderMeasures(result) {
+    const panel = $('gp-measures-panel');
+    const el = $('gp-measures');
+    if (!panel || !el) return;
+    const measured = (result?.steps ?? []).filter(s => s.values);
+    const info = GP.infoRows(result, { html: true });
+    panel.hidden = !measured.length && !info.length;
+    if (panel.hidden) {
+        el.innerHTML = '';
+        return;
+    }
+    const meta = $('gp-measures-meta');
+    if (meta) meta.textContent = info.length ? `${info.length} measured beside the plan` : '';
+    const range = v => (v.p25 === v.p75 ? `most games: ${v.p50}` : `half of games: ${v.p25}–${v.p75}`);
+    const blocks = measured.map(s => {
+        const label = GP.valueLabel(s.step);
+        return `<div class="gp-measure">
+            <div class="gp-measure-head"><span>${label}</span><span class="gp-measure-sub">${range(s.values)} · 1 in 10: ${s.values.p90}+${s.step.require.kind === 'cast' ? ` · ${s.values.games.toLocaleString('en-US')} games that made the step` : ''}</span></div>
+            ${measureDots(s.values, label)}
+        </div>`;
+    });
+    for (const row of info) {
+        blocks.push(`<div class="gp-measure">
+            <div class="gp-measure-head"><span>${row.title} <span class="gp-quiet">(measure only)</span></span><span><strong>${pct(row.onTime)}</strong> on time · ${pct(row.late)} within a turn</span></div>
+            ${row.values && row.label ? `<p class="gp-measure-sub">${row.label}: ${range(row.values)}</p>` : ''}
+        </div>`);
+    }
+    el.innerHTML = blocks.join('');
+}
+
 function describeTurn(e) {
     const bits = [];
     if (e.lands.length) bits.push(e.lands.map(l => l.split(' → ').map(n => cardRef(n)).join(' → ')).join(', '));
@@ -770,9 +859,11 @@ function render(result, inputs) {
     renderSummary(result, inputs);
     afterPaint(() => {
         if (token !== renderToken || !isCalculatorActive(NAME)) return;
+        renderAbout();
         renderFunnel(result);
         renderReasons(result);
         renderMana(result);
+        renderMeasures(result);
         renderSamples(result);
         renderRules(inputs.lib);
     });
@@ -838,12 +929,12 @@ function onChange(e) {
     const step = draft.steps[Number(li.dataset.index)];
     if (!step) return;
     const { lib } = readInputs();
-    edited(applyField(step, t.dataset.field, t.dataset.path ?? 'group', t.value, lib));
+    edited(applyField(step, t.dataset.field, t.dataset.path ?? 'group', t.type === 'checkbox' ? t.checked : t.value, lib));
 }
 
 function onInput(e) {
     const t = e.target;
-    if (!['lo', 'hi', 'atLeast', 'names'].includes(t.dataset?.field)) return;
+    if (!['lo', 'hi', 'atLeast', 'names', 'paid'].includes(t.dataset?.field)) return;
     onChange(e);
 }
 

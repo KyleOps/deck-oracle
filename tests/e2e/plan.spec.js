@@ -98,20 +98,26 @@ test('a preset loads its deck and plan, and a matching deck is offered its plan'
     const tab = page.locator('#plan-tab');
     await expect(tab.locator('.bottom-line')).toContainText('on time in');
 
-    await tab.locator('#gp-preset-select').selectOption('sample-green');
-    await expect(tab.locator('#gp-preset')).toContainText('Loads its 40-card deck');
+    // The example deck is Doctor Whostoric: its tuned plan is offered.
+    await expect(tab.locator('#gp-preset')).toContainText('This deck looks like Doctor Whostoric');
+
+    await tab.locator('#gp-preset-select').selectOption('wild-splendor');
+    await expect(tab.locator('#gp-preset')).toContainText('Loads its 100-card deck');
     await tab.locator('#gp-preset-try').click();
-    await expect(page.locator('#deck-switcher-name')).toHaveText('Sample green ramp');
+    await expect(page.locator('#deck-switcher-name')).toHaveText('Wild Splendor');
     await expect(tab.locator('#gp-plan-meta')).toHaveText('a tuned plan');
-    await expect(tab.locator('.bottom-line')).toContainText('Sample green ramp pulls off its plan');
-    await expect(tab.locator('#gp-steps .gp-step')).toHaveCount(3);
-    // Limited: turn order matters, so the choice shows and changes the answer.
-    await expect(tab.locator('#gp-order-group')).toBeVisible();
-    const onPlay = await answer(tab);
-    await tab.locator('[data-turn-order] [data-play="0"]').click();
-    await expect.poll(() => answer(tab)).not.toBe(onPlay);
+    await expect(tab.locator('.bottom-line')).toContainText('Wild Splendor pulls off its plan');
+    await expect(tab.locator('#gp-steps .gp-step')).toHaveCount(4);
+    await expect(tab.locator('#gp-steps .gp-step-read').nth(2)).toContainText('spend 8+ mana');
+    await expect(tab.locator('#gp-funnel .gp-funnel-row')).toHaveCount(3);
+    // The notes, the measured distributions and the literal "two 4-drops or one 7–9-drop", measured beside the plan.
+    await expect(tab.locator('#gp-about-panel')).toBeVisible();
+    await expect(tab.locator('#gp-about p')).not.toHaveCount(0);
+    await expect(tab.locator('#gp-measures')).toContainText('measure only');
+    await expect(tab.locator('#gp-measures .viz-dot')).not.toHaveCount(0);
+    await expect(tab.locator('#gp-rules')).toContainText('Selvala, Eager Trailblazer');
     const saved = await page.evaluate(async () => (await import('/js/utils/deckLibrary.js')).listDecks().map(d => d.name));
-    expect(saved).toContain('Sample green ramp');
+    expect(saved).toContain('Wild Splendor');
 
     // Start over: the starter plan built from this deck; the preset is offered back.
     await tab.locator('#gp-reset').click();
