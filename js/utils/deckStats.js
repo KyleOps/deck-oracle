@@ -12,6 +12,7 @@ import { asLibrary, commandersOf, isLand, isLibrary, unlistedCopies } from './li
 import { tagDeck } from './cardTags.js';
 import { FORMATS, cardsSeenByTurn } from './format.js';
 import { readCommanders, commanderLabel } from './commanders.js';
+import { pct, plural } from './text.js';
 
 const TYPE_ORDER = ['creatures', 'planeswalkers', 'battles', 'artifacts', 'enchantments', 'instants', 'sorceries', 'lands'];
 
@@ -330,9 +331,9 @@ export function healthChecks(stats, { format = FORMATS.commander } = {}) {
     findings.push({
         id: 'opener',
         status: keep >= 0.72 ? 'good' : keep >= 0.62 ? 'warn' : 'bad',
-        title: `${Math.round(keep * 100)}% of opening hands have 2–4 lands`,
+        title: `${pct(keep)} of opening hands have 2–4 lands`,
         detail: `On average you see ${stats.odds.expectedInHand.toFixed(1)} lands in your opening seven. Hands outside 2–4 lands are usually mulligans.`,
-        value: `${Math.round(keep * 100)}%`
+        value: pct(keep)
     });
 
     // Colours
@@ -343,9 +344,9 @@ export function healthChecks(stats, { format = FORMATS.commander } = {}) {
             id: `color-${c.color}`,
             color: c.color,
             status: p >= 0.88 ? 'good' : p >= 0.78 ? 'warn' : 'bad',
-            title: `${c.sources} ${colorWord(c.color).toLowerCase()} source${c.sources === 1 ? '' : 's'}`,
-            detail: `Your most demanding ${colorWord(c.color).toLowerCase()} card is ${c.heaviest.name} (${c.heaviest.pips} pip${c.heaviest.pips === 1 ? '' : 's'} at mana value ${c.heaviest.mv}). With your lands it has the colours on curve ${Math.round(p * 100)}% of the time${c.needed != null && c.needed > c.sources ? `; about ${c.needed} sources would reach 90%` : ''}.`,
-            value: `${Math.round(p * 100)}%`
+            title: plural(c.sources, `${colorWord(c.color).toLowerCase()} source`),
+            detail: `Your most demanding ${colorWord(c.color).toLowerCase()} card is ${c.heaviest.name} (${plural(c.heaviest.pips, 'pip')} at mana value ${c.heaviest.mv}). With your lands it has the colours on curve ${pct(p)} of the time${c.needed != null && c.needed > c.sources ? `; about ${c.needed} sources would reach 90%` : ''}.`,
+            value: pct(p)
         });
     }
 

@@ -78,27 +78,6 @@ export function formatNumber(value, decimals = 2) {
 }
 
 /**
- * Format percentage
- * @param {number} value - Value between 0 and 1
- * @param {number} decimals - Number of decimal places
- * @returns {string} - Formatted percentage with % sign
- */
-export function formatPercentage(value, decimals = 1) {
-    return `${(value * 100).toFixed(decimals)}%`;
-}
-
-/**
- * Clamp value between min and max
- * @param {number} value - Value to clamp
- * @param {number} min - Minimum value
- * @param {number} max - Maximum value
- * @returns {number} - Clamped value
- */
-export function clamp(value, min, max) {
-    return Math.min(Math.max(value, min), max);
-}
-
-/**
  * Chart.js animation configuration for smooth transitions
  * @returns {Object} - Animation configuration object
  */

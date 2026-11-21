@@ -9,6 +9,7 @@
 import { analyzeDeckStats } from './deckStats.js';
 import { resolveFormat } from './format.js';
 import { readCommanders, commanderLabel, commandZoneExtras } from './commanders.js';
+import { pct, plural } from './text.js';
 
 /**
  * Metric definitions. `better` says which direction is an improvement:
@@ -124,8 +125,6 @@ export function compareDecks(deckA, deckB, { onPlay = true } = {}) {
     };
 }
 
-const PCT = v => `${Math.round(v * 100)}%`;
-
 /**
  * Plain-language summary of the most important differences.
  * @param {ReturnType<typeof compareDecks>} result
@@ -138,7 +137,7 @@ export function summarizeComparison(result, { nameA = 'Deck A', nameB = 'Deck B'
     const judged = result.metrics.filter(m => m.winner);
     if (judged.length === 0) {
         return {
-            html: `<strong>${nameA}</strong> and <strong>${nameB}</strong> play almost identically on every check here${diff.onlyA.length + diff.onlyB.length ? ` — they differ by ${diff.onlyA.length + diff.onlyB.length} card${diff.onlyA.length + diff.onlyB.length === 1 ? '' : 's'}` : ''}.`,
+            html: `<strong>${nameA}</strong> and <strong>${nameB}</strong> play almost identically on every check here${diff.onlyA.length + diff.onlyB.length ? ` — they differ by ${plural(diff.onlyA.length + diff.onlyB.length, 'card')}` : ''}.`,
             tone: 'flat'
         };
     }
@@ -149,10 +148,10 @@ export function summarizeComparison(result, { nameA = 'Deck A', nameB = 'Deck B'
         const who = m.winner === 'B' ? nameB : nameA;
         const [win, lose] = m.winner === 'B' ? [m.b, m.a] : [m.a, m.b];
         switch (m.key) {
-            case 'keepable': return `<strong>${who}</strong> keeps more opening hands (${PCT(win)} vs ${PCT(lose)})`;
-            case 'drop3': return `<strong>${who}</strong> hits its early land drops more often (${PCT(win)} vs ${PCT(lose)} through turn 3)`;
-            case 'drop5': return `<strong>${who}</strong> is likelier to make every land drop to turn 5 (${PCT(win)} vs ${PCT(lose)})`;
-            case 'colors': return `<strong>${who}</strong> has the steadier mana (${PCT(win)} vs ${PCT(lose)} for its weakest colour)`;
+            case 'keepable': return `<strong>${who}</strong> keeps more opening hands (${pct(win)} vs ${pct(lose)})`;
+            case 'drop3': return `<strong>${who}</strong> hits its early land drops more often (${pct(win)} vs ${pct(lose)} through turn 3)`;
+            case 'drop5': return `<strong>${who}</strong> is likelier to make every land drop to turn 5 (${pct(win)} vs ${pct(lose)})`;
+            case 'colors': return `<strong>${who}</strong> has the steadier mana (${pct(win)} vs ${pct(lose)} for its weakest colour)`;
             case 'avgMV': return `<strong>${who}</strong> curves lower (average ${win.toFixed(2)} vs ${lose.toFixed(2)})`;
             case 'landGap': return `<strong>${who}</strong>’s land count is closer to typical for its curve`;
             default: return `<strong>${who}</strong> does better on ${m.label.toLowerCase()}`;
@@ -160,7 +159,7 @@ export function summarizeComparison(result, { nameA = 'Deck A', nameB = 'Deck B'
     };
     const changes = diff.onlyA.length + diff.onlyB.length + diff.changed.length;
     const tail = changes > 0 && changes <= 30
-        ? ` The lists differ by ${changes} card${changes === 1 ? '' : 's'}.`
+        ? ` The lists differ by ${plural(changes, 'card')}.`
         : '';
     return { html: `${top.map(phrase).join('; ')}.${tail}`, tone: 'good' };
 }

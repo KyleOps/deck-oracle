@@ -69,6 +69,13 @@ describe('compareDecks', () => {
         assert.match(summary.html, /differ by 2 cards/);
     });
 
+    it('never rounds a near-certain chance up to 100%', () => {
+        const metric = { key: 'keepable', label: 'Keepable', fmt: 'pct', winner: 'A', a: 0.998, b: 0.6, delta: -0.398 };
+        const summary = summarizeComparison({ metrics: [metric], diff: { onlyA: [{}], onlyB: [], changed: [] } });
+        assert.match(summary.html, /\(>99% vs 60%\)/);
+        assert.match(summary.html, /differ by 1 card\./);
+    });
+
     it('defines a label and direction for every metric', () => {
         METRICS.forEach(m => {
             assert.ok(m.label);

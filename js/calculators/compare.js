@@ -11,6 +11,7 @@ import { renderBottomLine } from '../utils/components.js';
 import { DEFAULT_DECK_DATA } from '../utils/defaultDeckData.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
 import { dumbbell } from '../utils/viz.js';
+import { pct } from '../utils/text.js';
 
 const NAME = 'compare';
 const CURRENT = 'current';
@@ -70,7 +71,7 @@ function syncPickers(opts) {
 const fmtValue = (m, v) => {
     if (v === null || v === undefined || Number.isNaN(v)) return '—';
     switch (m.fmt) {
-        case 'pct': return `${Math.round(v * 100)}%`;
+        case 'pct': return pct(v);
         case 'dec2': return v.toFixed(2);
         case 'signed': return v > 0 ? `+${v}` : String(v);
         default: return String(Math.round(v));

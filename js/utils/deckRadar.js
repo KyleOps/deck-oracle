@@ -15,6 +15,7 @@
 
 import { CALCULATORS } from './calculatorRegistry.js';
 import { readCommanders } from './commanders.js';
+import { pct } from './text.js';
 
 // ==================== SCORING CONSTANTS ====================
 
@@ -242,10 +243,10 @@ const STRUCTURAL_SIGNALS = {
 
     lands: (f) => {
         if (f.counts.lands <= 0) return null;
-        const pct = f.total > 0 ? Math.round((f.counts.lands / f.total) * 100) : 0;
+        const share = f.total > 0 ? f.counts.lands / f.total : 0;
         return {
             score: SCORE.BASELINE,
-            reason: `${f.counts.lands} lands (${pct}% of deck) — check land-drop consistency`
+            reason: `${f.counts.lands} lands (${pct(share)} of deck) — check land-drop consistency`
         };
     },
 
@@ -265,7 +266,7 @@ const STRUCTURAL_SIGNALS = {
         if (f.permanentRatio >= 0.75 && f.avgCmc <= 4.5) {
             return {
                 score: SCORE.STRUCTURAL,
-                reason: `${Math.round(f.permanentRatio * 100)}% permanents at avg MV ${f.avgCmc.toFixed(1)} — strong X-spell target density`
+                reason: `${pct(f.permanentRatio)} permanents at avg MV ${f.avgCmc.toFixed(1)} — strong X-spell target density`
             };
         }
         return null;
@@ -319,7 +320,7 @@ const STRUCTURAL_SIGNALS = {
         if (eligible <= 0) return null;
         const share = f.total > 0 ? eligible / f.total : 0;
         if (share >= 0.30) {
-            return { score: SCORE.STRUCTURAL, reason: `${eligible} nonlands at MV 5 or less (${Math.round(share * 100)}%) — dense enough for discover 5 every turn` };
+            return { score: SCORE.STRUCTURAL, reason: `${eligible} nonlands at MV 5 or less (${pct(share)}) — dense enough for discover 5 every turn` };
         }
         if (share >= 0.18) {
             return { score: SCORE.WEAK, reason: `${eligible} nonlands at MV 5 or less — discover 5 converts, but digs to find them` };

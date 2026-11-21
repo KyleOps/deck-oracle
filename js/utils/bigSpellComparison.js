@@ -204,7 +204,7 @@ function tally(cards, waveX) {
 function generateDeckInsight(spells, { permanentCount, legendaryPermanentCount, surgeNonPerms, surgePerms }) {
     const best = spells.find(s => s.affordable) ?? spells[0];
     const legendaryRatio = permanentCount > 0 ? legendaryPermanentCount / permanentCount : 0;
-    const share = `${Math.round(legendaryRatio * 100)}%`;
+    const share = pct(legendaryRatio);
 
     switch (best?.key) {
         case 'surge':
