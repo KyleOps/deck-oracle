@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { assertClose } from '../node-test-helper.js';
-import { analyze, buildWaveLibrary, simulateGenesisWave, summarize, waveOutcome } from '../../js/calculators/wave.js';
+import { analyze, buildWaveLibrary, simulateGenesisWave, summarize, waveCastPlan, waveDots, waveOutcome, waveSpread } from '../../js/calculators/wave.js';
 import { calculateFixedDrawPayback } from '../../js/utils/payback.js';
 
 describe('Genesis Wave Calculator', () => {
@@ -84,5 +84,58 @@ describe('Genesis Wave outcomes', () => {
         // The reliable X is the first to pay back 3 times in 4.
         const reliable = Object.values(sweep).find(o => o.payback.paybackProbability >= 0.75);
         assert.strictEqual(a.reliableX, reliable?.x ?? null);
+    });
+});
+
+describe('Genesis Wave out of 100 casts', () => {
+    const cards = [
+        { name: 'Forest', type_line: 'Basic Land — Forest', cmc: 0, count: 35 },
+        { name: 'Bear', type_line: 'Creature — Bear', cmc: 2, count: 30 },
+        { name: 'Giant', type_line: 'Creature — Giant', cmc: 9, count: 10 },
+        { name: 'Bolt', type_line: 'Instant', cmc: 1, count: 24 }
+    ];
+    const library = buildWaveLibrary(cards);
+    const settings = { landValue: 1, cardValue: 0.25 };
+
+    it('agrees with the exact payback chance, in both views', () => {
+        const outcome = waveOutcome(library, 7, settings, 'test-deck');
+        const spread = waveSpread(library, 7, settings, 'test-deck');
+        const dots = waveDots(outcome, spread);
+        assert.strictEqual(dots.value.length, 100);
+        assert.strictEqual(dots.permanents.length, 100);
+        const good = dots.value.filter(d => d.tone === 'good').length;
+        assert.ok(Math.abs(good - outcome.payback.paybackProbability * 100) <= 1, `${good} vs ${outcome.payback.paybackProbability}`);
+        assert.strictEqual(dots.permanents.filter(d => d.tone === 'good').length, good);
+        assert.ok(dots.value.every(d => (d.value >= outcome.mana) === (d.tone === 'good')));
+    });
+
+    it('shows neutral permanents without a card list', () => {
+        const counts = buildWaveLibrary([], { lands: 35, creatures: 40, instants: 24 });
+        const outcome = waveOutcome(counts, 7, settings, 'counts');
+        const dots = waveDots(outcome, waveSpread(counts, 7, settings, 'counts'));
+        assert.strictEqual(dots.value, null);
+        assert.ok(dots.permanents.every(d => d.tone === 'flat'));
+    });
+});
+
+describe('Genesis Wave cast animation plan', () => {
+    const card = (name, cmc, types) => ({ name, cmc, types });
+    const library = [
+        card('Forest', 0, ['land']),
+        card('Giant', 9, ['creature']),
+        card('Bolt', 1, ['instant']),
+        card('Bear', 2, ['creature']),
+        card('Elk', 3, ['creature'])
+    ];
+
+    it('reveals exactly X cards and keeps only permanents with mana value X or less', () => {
+        const plan = waveCastPlan(library, 4, { landValue: 1, cardValue: 0.25 });
+        assert.deepStrictEqual(plan.steps.map(s => s.fate), ['battlefield', 'graveyard', 'graveyard', 'battlefield']);
+        assert.match(plan.steps[1].note, /more than X \(4\)/);
+        assert.match(plan.steps[2].note, /not a permanent/);
+        assert.strictEqual(plan.permanents, 2);
+        assert.strictEqual(plan.value, 1.25 + 2.25);
+        assert.strictEqual(plan.paidBack, false, '3.5 value against 7 mana');
+        assert.match(plan.summary, /4 cards revealed, 2 permanents/);
     });
 });

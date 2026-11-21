@@ -16,9 +16,14 @@ import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats, renderSweepTable, pBarCell } from '../utils/components.js';
-import { calculateFixedDrawPayback, scoreBattlefieldValue } from '../utils/payback.js';
+import { calculateFixedDrawPayback, fixedDrawValuePmf, paybackShareByHits, scoreBattlefieldValue } from '../utils/payback.js';
+import { describeDots, dotPlot, pmfQuantiles, splitDots } from '../utils/viz.js';
+import { escapeHtml } from '../data/glossary.js';
+import { cardImageUrl, findCard } from '../data/images.js';
+import { closeCast, playCast, syncCast } from '../utils/castAnimation.js';
+import { shuffle } from '../utils/simulation.js';
 import {
-    avg, barsHTML, bindXPresets, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList,
+    avg, bindXPresets, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList,
     expandCards, fade, hypergeometricPmf, isPermanentTypeLine, listSize, noticeHTML, pct, plural,
     quantileOf, readX, renderHowItCompares, sampleCardHTML, syncXControl, toneColor
 } from '../utils/bigSpells.js';
@@ -36,6 +41,9 @@ const CONFIG = Object.freeze({
 });
 
 const paybackCache = createCache(256);
+const spreadCache = createCache(32);
+/** Which quantity the "out of 100 casts" dots are stacked by. */
+let dotView = 'value';
 const sampler = createSampler(CONFIG.SAMPLE_COUNT);
 let chart = null;
 
@@ -273,6 +281,126 @@ function renderAnswer(config, a) {
     if (target) target.textContent = `${a.mana} value at X=${a.x}`;
 }
 
+// ── Out of 100 casts ─────────────────────────────────────────────────────────
+
+/**
+ * The exact spread of one cast at X: the value it puts into play, and for
+ * each number of hits the share of casts that pay for themselves. Cached per
+ * deck, X and value settings.
+ */
+export function waveSpread(library, x, settings = {}, deckKey = 'deck') {
+    if (!library?.hasList) return null;
+    const landValue = settings.landValue ?? CONFIG.DEFAULT_LAND_VALUE;
+    const cardValue = settings.cardValue ?? CONFIG.DEFAULT_CARD_VALUE;
+    const key = `${deckKey}|${x}|${landValue}|${cardValue}`;
+    let spread = spreadCache.get(key);
+    if (!spread) {
+        const entries = library.entries.map(e => ({ ...e, eligible: e.isPermanent && e.cmc <= x }));
+        const revealed = Math.min(x, library.deckSize);
+        const model = { landValue, cardValue, threshold: x + CONFIG.EXTRA_MANA };
+        spread = {
+            valuePmf: fixedDrawValuePmf(entries, revealed, model),
+            paidByHits: paybackShareByHits(entries, revealed, model)
+        };
+        spreadCache.set(key, spread);
+    }
+    return spread;
+}
+
+/**
+ * The 100 dots for both views. Value: stacked by value, split at the mana
+ * spent. Permanents: stacked by hits, each run length split by its exact
+ * payback share, with the same number of solid dots as the value view.
+ * @param {{pmf:number[], mana:number}} outcome - waveOutcome() at X
+ * @param {{valuePmf:Array, paidByHits:number[]}|null} spread
+ */
+export function waveDots(outcome, spread) {
+    const hits = pmfQuantiles(outcome?.pmf ?? [], 100);
+    if (!spread) return { permanents: hits.map(k => ({ value: k, tone: 'flat' })), value: null };
+    const threshold = outcome.mana;
+    const value = pmfQuantiles(spread.valuePmf, 100).map(v => ({ value: v, tone: v >= threshold - 1e-9 ? 'good' : 'bad' }));
+    const good = value.filter(d => d.tone === 'good').length;
+    return { permanents: splitDots(hits, k => spread.paidByHits[k] ?? 0, good), value };
+}
+
+const DOT_LEGEND = Object.freeze([
+    { tone: 'good', label: 'paid for itself' },
+    { tone: 'bad', label: 'fell short' }
+]);
+const valueText = v => (v % 1 ? v.toFixed(2).replace(/0$/, '') : String(v));
+
+function renderDots(config, a) {
+    const el = document.getElementById('wave-dots');
+    if (!el) return;
+    const spread = waveSpread(config.library, config.x, config.settings, config.deckKey);
+    const dots = waveDots(a, spread);
+    const hasValue = Boolean(dots.value);
+    // Without values (counts-only deck) show permanents, but keep the choice for the next deck.
+    const byValue = dotView === 'value' && hasValue;
+    document.querySelectorAll('#wave-tab [data-wave-view]').forEach(btn => {
+        const on = btn.dataset.waveView === (byValue ? 'value' : 'permanents');
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+    });
+    const toggle = document.getElementById('wave-dots-view');
+    if (toggle) toggle.hidden = !hasValue;
+    const title = document.getElementById('wave-dots-title');
+    if (title) title.textContent = `Out of 100 casts at X=${config.x}`;
+
+    const legend = hasValue ? DOT_LEGEND : [];
+    const shown = byValue ? dots.value : dots.permanents;
+    const format = byValue ? valueText : v => String(v);
+    const label = `${byValue ? 'Value put into play' : 'Permanents put into play'} by Genesis Wave at X=${config.x}, out of 100 casts. ${describeDots(shown, { unit: 'cast', format, legend })}`;
+
+    let table;
+    if (byValue) {
+        const mana = a.mana;
+        const step = mana;
+        const bands = [{ lo: 0, hi: mana, label: `Under ${mana} (falls short)` }];
+        for (let lo = mana; lo < mana * 4; lo += step) bands.push({ lo, hi: lo + step, label: `${lo} to under ${lo + step}` });
+        bands.push({ lo: mana * 4, hi: Infinity, label: `${mana * 4} or more` });
+        const chance = b => spread.valuePmf.reduce((s, e) => s + (e.value >= b.lo - 1e-9 && e.value < b.hi - 1e-9 ? e.p : 0), 0);
+        table = {
+            summary: 'Exact chances', caption: 'Exact chance of each value range',
+            head: ['Value put into play', 'Chance'],
+            rows: bands.map(b => [escapeHtml(b.label), pct(chance(b))])
+        };
+    } else {
+        const pmf = a.pmf ?? [];
+        let atLeast = 1;
+        const rows = [];
+        pmf.forEach((p, k) => {
+            if (p >= 0.0005) {
+                rows.push([String(k), pct(p), pct(atLeast), ...(hasValue ? [pct(spread.paidByHits[k] ?? 0)] : [])]);
+            }
+            atLeast -= p;
+        });
+        table = {
+            summary: 'Exact chances', caption: 'Exact chance of each number of permanents',
+            head: ['Permanents', 'Exactly', 'At least', ...(hasValue ? ['Pays for itself'] : [])],
+            rows
+        };
+    }
+    el.innerHTML = dotPlot({
+        dots: shown,
+        label,
+        unit: 'cast',
+        format,
+        xLabel: byValue ? 'Value put into play (mana value + credits)' : 'Permanents put onto the battlefield',
+        threshold: byValue ? a.mana : null,
+        thresholdLabel: byValue ? `${a.mana}+ pays for itself` : '',
+        legend,
+        maxColumns: 28,
+        table
+    });
+    const caption = document.getElementById('wave-dots-caption');
+    if (caption) {
+        caption.textContent = byValue
+            ? `Each dot is one cast in a hundred, stacked by the value it puts into play. Solid dots reach the ${a.mana} mana you spent; rings fall short. Exact, not simulated.`
+            : `Each dot is one cast in a hundred, stacked by how many permanents it puts onto the battlefield.${hasValue ? ' Solid dots paid for themselves; rings fell short.' : ' Counts only: every permanent is assumed cheap enough.'} Exact, not simulated.`;
+    }
+}
+
 function renderChart(config, results) {
     const top = Math.min(config.maxX, Math.max(15, config.x + 5));
     const xs = Array.from({ length: top }, (_, i) => i + 1);
@@ -349,11 +477,84 @@ function renderChart(config, results) {
     document.querySelectorAll('#wave-tab [data-payback-key]').forEach(key => { key.hidden = !hasPayback; });
 }
 
+/**
+ * One Genesis Wave resolution, card by card, for the "Cast it" animation:
+ * the top X cards are revealed; permanents with mana value X or less go to
+ * the battlefield, everything else to the graveyard. Pure.
+ *
+ * @param {Array<{name:string, cmc:number, types:string[]}>} library - shuffled
+ * @param {number} x
+ * @param {{landValue:number, cardValue:number}} settings
+ */
+export function waveCastPlan(library, x, settings = {}) {
+    const threshold = x + CONFIG.EXTRA_MANA;
+    const revealed = (library ?? []).slice(0, Math.max(0, x));
+    let permanents = 0;
+    let manaValue = 0;
+    let lands = 0;
+    const totals = () => {
+        const scored = scoreBattlefieldValue({ manaValue, lands, cards: permanents }, { ...settings, threshold });
+        return {
+            scored,
+            list: [
+                { label: 'Permanents', value: String(permanents) },
+                { label: 'Value', value: `${avg(scored.effectiveValue)} <small>of ${threshold}</small>`, tone: scored.paidForItself ? 'good' : undefined }
+            ]
+        };
+    };
+    const steps = revealed.map((card, i) => {
+        const types = card.types ?? [];
+        const permanent = types.some(t => t !== 'instant' && t !== 'sorcery');
+        const mv = card.cmc || 0;
+        const hit = permanent && mv <= x;
+        if (hit) {
+            permanents += 1;
+            manaValue += mv;
+            if (types.includes('land')) lands += 1;
+        }
+        const count = `${i + 1} of ${x}: `;
+        const note = hit
+            ? `${count}${types.includes('land') ? 'a land' : `a permanent with mana value ${mv}`} — X is ${x}, so onto the battlefield.`
+            : permanent
+                ? `${count}mana value ${mv} is more than X (${x}) — to the graveyard.`
+                : `${count}${types.includes('instant') ? 'an instant' : 'a sorcery'}, not a permanent — to the graveyard.`;
+        return { name: card.name, fate: hit ? 'battlefield' : 'graveyard', note, totals: totals().list };
+    });
+    const end = totals().scored;
+    const summary = `${plural(revealed.length, 'card')} revealed, ${plural(permanents, 'permanent')} onto the battlefield worth ${avg(end.effectiveValue)} — ${end.paidForItself ? '<strong>pays for itself</strong>' : '<strong>falls short</strong>'} of the ${threshold} mana spent.`;
+    return {
+        steps, permanents, value: end.effectiveValue, paidBack: end.paidForItself, summary,
+        startTotals: [{ label: 'Permanents', value: '0' }, { label: 'Value', value: `0 <small>of ${threshold}</small>` }]
+    };
+}
+
+function imageFor(name) {
+    const record = findCard(DeckConfig.getImportedCardData()?.cardsByName ?? {}, name);
+    return cardImageUrl(record ?? name, 'small');
+}
+
+/** What a cast depends on: a different deck, X or setting closes an open cast. */
+const castKey = config => `${config.deckKey}|${config.x}|${JSON.stringify(config.settings)}`;
+
+/** "Cast it": a fresh shuffle resolved at the chosen X, card by card. */
+function castIt() {
+    const config = getDeckConfig();
+    const stage = document.getElementById('wave-cast');
+    if (!stage || !config.cards.length) return;
+    const library = expandCards(config.cards);
+    shuffle(library);
+    const plan = waveCastPlan(library, config.x, config.settings);
+    playCast(stage, { ...plan, outLabel: 'Graveyard', librarySize: library.length, imageFor, key: castKey(config) }, castIt);
+}
+
 function renderSamples(config) {
     const el = document.getElementById('wave-samples');
     const header = document.getElementById('wave-samples-title');
     if (header) header.textContent = `Sample casts at X=${config.x}`;
     if (!el) return;
+    const castBtn = document.getElementById('wave-cast-btn');
+    if (castBtn) castBtn.hidden = !config.cards.length;
+    syncCast(document.getElementById('wave-cast'), config.cards.length ? castKey(config) : null);
     if (!config.cards.length) {
         el.innerHTML = noticeHTML('Sample casts need a decklist with card names — import one from the deck menu.', 'flat');
         return;
@@ -416,21 +617,6 @@ function renderDetails(config, results, a) {
             { label: 'Pays for itself', render: row => hasPayback ? `<span style="color:${toneColor(chanceTone(row.r.payback.paybackProbability))}">${pct(row.r.payback.paybackProbability)}</span>` : '—' }
         ]
     });
-
-    const distEl = document.getElementById('wave-dist');
-    const sub = document.getElementById('wave-dist-sub');
-    if (sub) sub.textContent = `at X=${config.x}`;
-    if (distEl) {
-        const pmf = a.pmf ?? [];
-        const peak = Math.max(...pmf, 0.0001);
-        const bars = pmf.map((p, k) => ({ k, p })).filter(({ p }) => p >= 0.0005).map(({ k, p }) => ({
-            label: plural(k, 'permanent'),
-            value: p,
-            tone: k === quantileOf(pmf, 0.5) ? 'accent' : 'flat'
-        }));
-        distEl.innerHTML = `<p class="bs-caption">Exact odds of each result from your card counts. The highlighted bar is the typical cast.${a.mvKnown ? '' : ' Counts only: assumes every permanent costs X or less.'}</p>`
-            + barsHTML(bars, { scale: peak });
-    }
 }
 
 function setX(x) {
@@ -448,6 +634,9 @@ export function updateUI() {
     if (config.deckSize === 0 || !results[config.x]) {
         const el = document.getElementById('wave-stats');
         if (el) el.innerHTML = renderBottomLine({ html: 'Add cards to your deck to see what Genesis Wave does.', tone: 'flat' });
+        const dots = document.getElementById('wave-dots');
+        if (dots) dots.innerHTML = '';
+        closeCast(document.getElementById('wave-cast'));
         chart?.destroy?.();
         chart = null;
         return;
@@ -455,6 +644,7 @@ export function updateUI() {
 
     const a = analyze(results, config.x);
     renderAnswer(config, a);
+    renderDots(config, a);
     renderChart(config, results);
     renderSamples(config);
     renderDetails(config, results, a);
@@ -475,6 +665,16 @@ export function init() {
             document.getElementById('wave-reshuffle-btn')?.addEventListener('click', () => {
                 sampler.reshuffle();
                 renderSamples(getDeckConfig());
+            });
+            document.getElementById('wave-cast-btn')?.addEventListener('click', castIt);
+            document.getElementById('wave-cast')?.addEventListener('cast-closed', () => {
+                document.getElementById('wave-cast-btn')?.focus({ preventScroll: true });
+            });
+            document.getElementById('wave-dots-view')?.addEventListener('click', e => {
+                const view = e.target.closest('[data-wave-view]')?.dataset.waveView;
+                if (!view || view === dotView) return;
+                dotView = view;
+                updateUI();
             });
         }
     });

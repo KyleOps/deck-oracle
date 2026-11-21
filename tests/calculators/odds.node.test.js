@@ -119,3 +119,17 @@ describe('Draw Odds view', () => {
         assert.ok(guide.intro && guide.method && guide.howToRead.length && guide.assumptions.length);
     });
 });
+
+describe('Draw Odds heat map columns', () => {
+    it('offers need 1 to 4, bounded by the copies in the group', () => {
+        assert.deepStrictEqual(Odds.heatNeeds({ copies: 18, need: 1 }), [1, 2, 3, 4]);
+        assert.deepStrictEqual(Odds.heatNeeds({ copies: 2, need: 1 }), [1, 2]);
+        assert.deepStrictEqual(Odds.heatNeeds({ copies: 1, need: 1 }), [1]);
+    });
+
+    it('widens to keep a larger chosen need visible, up to the maximum', () => {
+        assert.deepStrictEqual(Odds.heatNeeds({ copies: 20, need: 6 }), [1, 2, 3, 4, 5, 6]);
+        assert.strictEqual(Odds.heatNeeds({ copies: 40, need: 99 }).length, MAX_NEED);
+        assert.deepStrictEqual(Odds.heatNeeds({ copies: 0, need: 1 }), []);
+    });
+});

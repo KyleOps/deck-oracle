@@ -34,6 +34,8 @@ import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.
 import { renderHeroStats, renderBottomLine, renderSweepTable } from '../utils/components.js';
 import { buildDeckFromCardData, shuffleDeck, renderDistributionChart } from '../utils/sampleSimulator.js';
 import { cardRef } from '../data/glossary.js';
+import { tailRows } from '../utils/discover.js';
+import { describeDots, dotPlot, sampleQuantiles } from '../utils/viz.js';
 
 /** Discover value printed on Chimil. */
 export const DISCOVER_N = 5;
@@ -347,6 +349,18 @@ export function cheatedDistribution(games) {
     }
     for (let i = 0; i < counts.length; i++) if (!counts[i]) counts[i] = 0;
     return counts;
+}
+
+/**
+ * "Out of 100 games": quantile dots of the total free mana per game, solid
+ * once a game has cast at least Chimil's own cost.
+ * @param {Array<Array>} games - already cut to the horizon
+ * @param {number} [cost=CHIMIL_COST]
+ * @returns {Array<{value:number, tone:'good'|'bad'}>}
+ */
+export function chimilDots(games, cost = CHIMIL_COST) {
+    const finals = (Array.isArray(games) ? games : []).map(finalOf);
+    return sampleQuantiles(finals, 100).map(value => ({ value, tone: value >= cost ? 'good' : 'bad' }));
 }
 
 /**
@@ -720,14 +734,46 @@ function renderDetails(result) {
             ${renderDistributionChart(trigger.distribution, trigger.hits, i => `Mana value ${i}`, () => null, i => (i <= SMALL_HIT_MV ? 'warn' : null))}`
             : '<div class="tx-empty">No nonland cards with mana value 5 or less.</div>';
     }
+}
 
-    const spreadEl = document.getElementById('chimil-spread');
-    if (spreadEl) {
-        spreadEl.innerHTML = games ? `
-            <p class="ch-caption">Total free mana per game over ${plural(config.turns, 'end step')}. Red bars are games that never repaid Chimil’s ${CHIMIL_COST} mana.</p>
-            ${renderDistributionChart(cheatedDistribution(games), games.length, i => `${i} mana`, () => null, i => (i < CHIMIL_COST ? 'bad' : null))}`
-            : '<div class="tx-empty">Import a decklist to simulate games.</div>';
+const DOT_LEGEND = Object.freeze([
+    { tone: 'good', label: `paid back its ${CHIMIL_COST} mana` },
+    { tone: 'bad', label: 'never did' }
+]);
+
+/** "Out of 100 games" at the chosen horizon. */
+function renderDots(result) {
+    const el = document.getElementById('chimil-dots');
+    const title = document.getElementById('chimil-dots-title');
+    const { config, games } = result;
+    if (title) title.textContent = `Out of 100 games, over ${plural(config.turns, 'end step')}`;
+    if (!el) return;
+    if (!games || games.length === 0) {
+        el.innerHTML = '<div class="tx-empty">Import a decklist to simulate games.</div>';
+        return;
     }
+    const dots = chimilDots(games);
+    const counts = cheatedDistribution(games);
+    // The top 1% is one "N+ mana" row: the table never ends on the sampled maximum.
+    const rows = tailRows(counts, games.length)
+        .map(r => [`${r.value}${r.plus ? '+' : ''} mana`, pct(r.share), pct(r.atLeast)]);
+    el.innerHTML = dotPlot({
+        dots,
+        label: `Total free mana Chimil casts over ${plural(config.turns, 'end step')}, out of 100 games. ${describeDots(dots, { format: v => `${v} mana`, legend: DOT_LEGEND })}`,
+        unit: 'game',
+        format: v => String(v),
+        xLabel: `Free mana cast over ${plural(config.turns, 'end step')}`,
+        threshold: CHIMIL_COST,
+        thresholdLabel: `${CHIMIL_COST}+ paid back`,
+        legend: DOT_LEGEND,
+        maxColumns: 30,
+        table: {
+            summary: `All ${games.length.toLocaleString('en-US')} games`,
+            caption: 'Share of simulated games by total free mana',
+            head: ['Total', 'Games', 'At least this'],
+            rows
+        }
+    });
 }
 
 export function updateUI() {
@@ -738,6 +784,7 @@ export function updateUI() {
     if (bottom) bottom.innerHTML = renderBottomLine(summarize({ ...result, turns: result.config.turns }));
     renderHero(result);
     updateChart(result.bands);
+    renderDots(result);
     renderSamples(result.games, result.config.turns);
     renderDetails(result);
 }

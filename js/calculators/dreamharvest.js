@@ -13,6 +13,7 @@
 import { registerCalculator, updateCalculatorIfActive } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { cardRef, escapeHtml } from '../data/glossary.js';
+import { describeDots, dotPlot, pmfQuantiles } from '../utils/viz.js';
 import * as OpponentState from '../utils/opponentState.js';
 import {
     libraryOf, isLandCard, createRevealer, seededRandom, deckSeed, typicalRange, formatRange, formatPct, fmt1,
@@ -268,17 +269,6 @@ function tableHtml(rows) {
 }
 
 const SPELL_CAP = 5;
-const MANA_LO = MV_THRESHOLD;
-const MANA_HI = 10;
-
-/** Mana-stolen buckets: "under 5" (only when it happens), 5…9, "10+". */
-function manaBuckets(probs, withUnder) {
-    const out = [];
-    if (withUnder) out.push(probs.slice(0, MANA_LO).reduce((a, p) => a + (p || 0), 0));
-    for (let v = MANA_LO; v < MANA_HI; v++) out.push(probs[v] || 0);
-    out.push(probs.slice(MANA_HI).reduce((a, p) => a + (p || 0), 0));
-    return out;
-}
 
 function multiplesHtml(rows) {
     const spellDists = rows.map(r => {
@@ -286,23 +276,84 @@ function multiplesHtml(rows) {
         r.stats.spellsProbs.forEach((p, i) => { d[Math.min(i, SPELL_CAP)] += p; });
         return d;
     });
-    const withUnder = rows.some(r => r.stats.manaProbs.slice(0, MANA_LO).some(p => p > 0));
-    const manaDists = rows.map(r => manaBuckets(r.stats.manaProbs, withUnder));
-    const manaLabel = i => {
-        const v = i + MANA_LO - (withUnder ? 1 : 0);
-        if (withUnder && i === 0) return `<${MANA_LO}`;
-        return v >= MANA_HI ? `${MANA_HI}+` : `${v}`;
-    };
     const spellMax = Math.max(...spellDists.flat());
-    const manaMax = Math.max(...manaDists.flat());
     const cells = rows.map((r, i) => `
         <div class="opp-multiple">
             <div class="opp-multiple-head">${opponentLabel(r.opp)}</div>
             ${miniBars({ title: 'Spells you can cast', probs: spellDists[i], label: v => (v === SPELL_CAP ? `${v}+` : `${v}`), scaleMax: spellMax, color: r.opp.color, dimFn: v => v === 0 })}
-            ${miniBars({ title: 'Mana stolen', probs: manaDists[i], label: manaLabel, scaleMax: manaMax, color: r.opp.color })}
         </div>`).join('');
     return `<div class="opp-multiples">${cells}</div>
-        <p class="opp-caption">How often each outcome happens, on the same scale for every opponent. The pile always reaches mana value 5, so what varies is whether it arrives as one big spell or several small ones.</p>`;
+        <p class="opp-caption">How many spells each opponent’s pile hands you, on the same scale for every opponent. The pile always reaches mana value 5, so what varies is whether it arrives as one big spell or several small ones.</p>`;
+}
+
+/**
+ * The distribution of the TOTAL mana stolen across every opponent: each
+ * opponent's pile is independent, so the per-opponent distributions convolve.
+ * @param {number[][]} dists - probabilities by whole mana value, one per opponent
+ * @returns {number[]} index = total mana stolen
+ */
+export function totalStolenDistribution(dists) {
+    let total = [1];
+    for (const d of dists ?? []) {
+        const next = new Array(total.length + Math.max(0, (d?.length ?? 1) - 1)).fill(0);
+        total.forEach((a, i) => {
+            if (!a) return;
+            (d ?? []).forEach((b, j) => { if (b) next[i + j] += a * b; });
+        });
+        total = next;
+    }
+    return total;
+}
+
+/**
+ * "Out of 100 casts": quantile dots of the total mana stolen, solid when the
+ * free spells add up to at least Dream Harvest's own cost.
+ * @param {number[]} totalDist - from totalStolenDistribution
+ * @returns {Array<{value:number, tone:'good'|'bad'}>}
+ */
+export function harvestDots(totalDist) {
+    return pmfQuantiles(totalDist ?? [], 100).map(value => ({ value, tone: value >= DREAM_HARVEST_COST ? 'good' : 'bad' }));
+}
+
+const DOT_LEGEND = Object.freeze([
+    { tone: 'good', label: `steal ${DREAM_HARVEST_COST}+ mana` },
+    { tone: 'bad', label: 'steal less than it costs' }
+]);
+
+function dotsHtml(rows) {
+    const total = totalStolenDistribution(rows.map(r => r.stats.manaProbs));
+    const dots = harvestDots(total);
+    if (dots.length === 0) return '';
+    const who = rows.length > 1 ? `from all ${countWord(rows.length)} opponents` : `from ${escapeHtml(rows[0].name)}`;
+    const tableRows = [];
+    let atLeast = 1;
+    total.forEach((p, mana) => {
+        if (p >= 0.0005) tableRows.push([`${mana} mana`, formatPct(p), formatPct(atLeast)]);
+        atLeast -= p;
+    });
+    return `
+        <div class="opp-section-head">
+            <h2 class="opp-section-title">Out of 100 casts</h2>
+            <span class="opp-section-sub">mana stolen ${who}</span>
+        </div>
+        ${dotPlot({
+            dots,
+            label: `Total mana value of the spells stolen ${rows.length > 1 ? 'from all opponents' : ''}, out of 100 casts. ${describeDots(dots, { unit: 'cast', format: v => `${v} mana`, legend: DOT_LEGEND })}`,
+            unit: 'cast',
+            format: v => String(v),
+            xLabel: rows.length > 1 ? 'Mana stolen in all, added up across opponents' : 'Mana stolen',
+            threshold: DREAM_HARVEST_COST,
+            thresholdLabel: `${DREAM_HARVEST_COST}+ = its own cost`,
+            legend: DOT_LEGEND.filter(l => dots.some(d => d.tone === l.tone)),
+            maxColumns: 30,
+            table: {
+                summary: 'Shares of simulated casts',
+                caption: 'Share of simulated casts by total mana stolen',
+                head: ['Mana stolen', 'Casts', 'At least this'],
+                rows: tableRows
+            }
+        })}
+        <p class="opp-caption">Each dot is one cast in a hundred, stacked by the mana value of everything you may cast for free${rows.length > 1 ? ', added up across opponents' : ''}. Solid dots steal at least the ${DREAM_HARVEST_COST} mana Dream Harvest costs.</p>`;
 }
 
 let lastSignature = null;
@@ -381,7 +432,8 @@ function renderResults(state) {
             <span class="opp-section-sub">${SIM_RUNS.toLocaleString('en-US')} simulated casts per list</span>
         </div>
         ${tableHtml(rows)}
-        ${renderDisclosure({ id: 'dreamharvest-spread', title: 'How often each outcome happens', body: multiplesHtml(rows), open: hasRoom(panel) })}`;
+        ${dotsHtml(rows)}
+        ${renderDisclosure({ id: 'dreamharvest-spread', title: 'Spells from each opponent', body: multiplesHtml(rows), open: hasRoom(panel) })}`;
 }
 
 /**

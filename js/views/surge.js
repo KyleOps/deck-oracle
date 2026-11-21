@@ -29,13 +29,16 @@ export const template = `
 
     <section class="panel bs-answer" id="surge-stats" aria-label="Answer"></section>
 
-    <section class="panel" aria-labelledby="surge-odds-title">
+    <section class="panel" aria-labelledby="surge-dots-title">
         <div class="tx-h">
-            <h2 class="bs-h" id="surge-odds-title">How far it gets</h2>
-            <span class="tx-h-r">exact odds</span>
+            <h2 class="bs-h" id="surge-dots-title">Out of 100 casts</h2>
+            <div class="seg seg-sm" role="group" aria-label="Stack the casts by" id="surge-dots-view">
+                <button class="seg-btn active" type="button" data-surge-view="permanents" aria-pressed="true">Permanents</button>
+                <button class="seg-btn" type="button" data-surge-view="value" aria-pressed="false">Value</button>
+            </div>
         </div>
-        <div id="surge-odds"></div>
-        <p class="bs-caption">The chance Primal Surge puts at least this many permanents onto the battlefield before an instant or sorcery stops it.</p>
+        <div id="surge-dots"></div>
+        <p class="bs-caption" id="surge-dots-caption"></p>
     </section>
 
     <section class="panel" aria-labelledby="surge-chart-title">
@@ -55,8 +58,12 @@ export const template = `
     <section class="panel" aria-labelledby="surge-samples-title">
         <div class="tx-h">
             <h2 class="bs-h" id="surge-samples-title">Sample casts</h2>
-            <button class="btn btn-ghost btn-sm" type="button" id="surge-reshuffle-btn">Reshuffle</button>
+            <span class="bs-actions">
+                <button class="btn btn-sm bs-cast-btn" type="button" id="surge-cast-btn" aria-controls="surge-cast">Cast it</button>
+                <button class="btn btn-ghost btn-sm" type="button" id="surge-reshuffle-btn">Reshuffle</button>
+            </span>
         </div>
+        <div class="bs-cast-stage" id="surge-cast" hidden></div>
         <div class="bs-samples" id="surge-samples"></div>
         <p class="bs-caption">Real shuffles of your list, without the Primal Surge being cast. Each run ends at the dimmed card that stops it.</p>
     </section>
@@ -68,20 +75,11 @@ export const template = `
         </div>
         <div id="big-spell-comparison-surge"><p class="bsc-empty">Comparing with the other big spells…</p></div>
     </section>
-
-    <section class="panel bs-details" aria-label="More detail">
-        <details class="tx-collapse">
-            <summary class="tx-collapse-head">How big the wins and misses are</summary>
-            <div class="tx-collapse-body" id="surge-spread"></div>
-        </details>
-    </section>
 </div>
 `;
 
 export const styles = `
 ${sharedStyles('#surge-tab')}
-#surge-tab .srg-spread { padding: 0 18px 10px; }
-#surge-tab .srg-spread .surge-range-band { border-radius: var(--radius-full); overflow: hidden; }
 `;
 
 export const guide = {
@@ -89,11 +87,12 @@ export const guide = {
     howToRead: [
         '<strong>Pays for itself</strong> is the chance a run’s value reaches your target. Value is each permanent’s mana value plus the land and per-permanent credits on the left.',
         '<strong>Permanents</strong> is the average run length; the median under it (“half the time … or fewer”) is the more honest typical cast, because a few huge runs pull the average up.',
-        '<strong>How far it gets</strong> gives the exact chance of reaching 1, 3, 5, 10 or 20 permanents, or the whole library.',
+        '<strong>Out of 100 casts</strong> shows every outcome at once: each dot is one cast in a hundred, stacked by how many permanents it put into play (or, switched to <strong>Value</strong>, by what they were worth). Solid dots paid for themselves; rings fell short. Hover a column, or open “Exact chances”, for the numbers.',
+        '<strong>Cast it</strong> plays one fresh shuffle card by card: each permanent goes to the battlefield and Surge exiles the next, until an instant or sorcery stops it. Skip jumps to the end; with reduced motion it shows the result at once.',
         'The <strong>chart</strong> is a deck-building what-if: the same permanents with more or fewer instants and sorceries.',
         '<strong>How it compares</strong> puts Primal Surge beside the other big spells at 10 mana.'
     ],
-    method: 'Exact, no simulation. The chance Surge gets at least k permanents deep is the chance the top k cards are all permanents — a product of draw-without-replacement fractions. Because a run of k permanents is an equally likely pick of any k of your permanents, the payback chance counts, for every run length, how many of those picks reach your value target (a subset-sum count in quarter-mana steps). The value spread at the bottom is the only simulated part.',
+    method: 'Exact, no simulation. The chance Surge gets at least k permanents deep is the chance the top k cards are all permanents — a product of draw-without-replacement fractions. Because a run of k permanents is an equally likely pick of any k of your permanents, the payback chance counts, for every run length, how many of those picks reach your value target (a subset-sum count in quarter-mana steps). The value view of the dots counts every pick at every total, so it is exact too; only the sample casts are random.',
     assumptions: [
         'The Primal Surge you are casting is on the stack, so it is removed from the library when your list names it. With card-type counts only, one instant or sorcery is assumed to be it.',
         'Your library is the full decklist, shuffled — cards already drawn or played are not removed.',

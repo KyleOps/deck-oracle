@@ -4,7 +4,7 @@ import { assertClose } from '../node-test-helper.js';
 
 import {
     VORTEX_COST, findBigCreatures, discoverPool, analyzeVortex, pointAt,
-    chainPhrase, summarize, drawSamples, calculate
+    chainPhrase, summarize, drawSamples, calculate, vortexDots
 } from '../../js/calculators/vortex.js';
 import * as DeckConfig from '../../js/utils/deckConfig.js';
 
@@ -197,5 +197,21 @@ describe('calculate', () => {
         assert.strictEqual(first.analysis, second.analysis, 'no re-simulation when nothing changed');
         assert.strictEqual(first.analysis.creatures[0].name, 'Big Dino');
         assert.strictEqual(first.point.mv, 6);
+    });
+});
+
+describe('vortexDots (out of 100 triggers)', () => {
+    it('splits triggers into nothing, smaller than Vortex, and at least its cost', () => {
+        const manaDist = [10, 0, 30, 0, VORTEX_COST === 4 ? 40 : 0, 20];
+        const dots = vortexDots(manaDist);
+        assert.strictEqual(dots.length, 100);
+        assert.strictEqual(dots.filter(d => d.tone === 'bad').length, 10);
+        assert.strictEqual(dots.filter(d => d.tone === 'flat').length, 30);
+        assert.strictEqual(dots.filter(d => d.tone === 'good').length, 60);
+    });
+
+    it('is empty without a distribution', () => {
+        assert.deepStrictEqual(vortexDots([]), []);
+        assert.deepStrictEqual(vortexDots(undefined), []);
     });
 });

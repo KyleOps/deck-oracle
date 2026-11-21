@@ -21,7 +21,7 @@ export const template = `
         <section class="ov-card" aria-labelledby="ov-curve-title">
             <div class="ov-card-head">
                 <h3 class="ov-card-title" id="ov-curve-title">Mana curve</h3>
-                <span class="ov-card-meta" id="ov-curve-meta"></span>
+                <span class="ov-card-meta vbars-key" id="ov-curve-meta"></span>
             </div>
             <div id="ov-curve"></div>
         </section>
@@ -44,8 +44,8 @@ export const template = `
 
         <section class="ov-card" aria-labelledby="ov-roles-title">
             <div class="ov-card-head">
-                <h3 class="ov-card-title" id="ov-roles-title">What the cards do</h3>
-                <span class="ov-card-meta">from rules text</span>
+                <h3 class="ov-card-title" id="ov-roles-title">Deck profile</h3>
+                <span class="ov-card-meta">against typical decks</span>
             </div>
             <div id="ov-roles"></div>
         </section>
@@ -68,7 +68,9 @@ export const guide = {
         'The <strong>mana curve</strong> counts nonland cards by mana value, coloured by card type.',
         '<strong>Opening hands</strong> shows how many lands your seven-card hand usually has. Two to four is the usual keep range.',
         '<strong>Colours</strong> compares the coloured pips you need with the lands that make them, and checks your hardest-to-cast card of each colour.',
-        '<strong>What the cards do</strong> is detected from rules text. Odd wordings can be missed — use it as a sanity check, not an audit.'
+        'Click a bar of the <strong>mana curve</strong> (or use the arrow keys) to list the cards at that mana value; hover a name to see the card.',
+        'The <strong>deck profile</strong> puts six numbers against a shaded typical range: speed (average mana value), consistency (keepable opening hands), mana (your weakest colour on curve), ramp, card flow (draw and tutors) and interaction (removal, counterspells and wipes). The ranges are rules of thumb — hover one to see where it comes from. A ramp deck is meant to be slow; read them as context, not grades.',
+        'Role counts are detected from rules text. Odd wordings can be missed — use them as a sanity check, not an audit. “Every role, with its cards” lists what was found.'
     ],
     method: 'Every number here is exact. Land and colour odds use the hypergeometric formula over your real card counts; the land target comes from Frank Karsten’s regression over thousands of real decklists (Commander: 31.42 + 3.13 × average mana value − 0.28 × cheap ramp and draw).',
     assumptions: [

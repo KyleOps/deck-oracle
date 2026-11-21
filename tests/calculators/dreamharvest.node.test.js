@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import {
     simulateDreamHarvest, calculateDreamHarvestStats, resolveDreamHarvest, summarizeDreamHarvest, poolDistributions,
-    DREAM_HARVEST_COST, MV_THRESHOLD
+    DREAM_HARVEST_COST, MV_THRESHOLD, totalStolenDistribution, harvestDots
 } from '../../js/calculators/dreamharvest.js';
 
 describe('Dream Harvest Calculator', () => {
@@ -223,5 +223,29 @@ describe('Dream Harvest Calculator', () => {
             assert.match(line.html, /19\.3 mana/);
             assert.match(line.html, /more than twice/);
         });
+    });
+});
+
+describe('Dream Harvest total across opponents (out of 100 casts)', () => {
+    it('adds independent opponents by convolution', () => {
+        const total = totalStolenDistribution([[0, 0, 0, 0, 0, 0.5, 0.5], [0, 0, 0, 0, 0, 1]]);
+        assert.strictEqual(total.length, 12);
+        assert.ok(Math.abs(total[10] - 0.5) < 1e-12);
+        assert.ok(Math.abs(total[11] - 0.5) < 1e-12);
+        assert.ok(Math.abs(total.reduce((a, b) => a + b, 0) - 1) < 1e-12);
+    });
+
+    it('is certain nothing without opponents', () => {
+        assert.deepStrictEqual(totalStolenDistribution([]), [1]);
+    });
+
+    it('marks casts that steal at least its own cost', () => {
+        const dist = new Array(12).fill(0);
+        dist[5] = 0.25;
+        dist[DREAM_HARVEST_COST] = 0.75;
+        const dots = harvestDots(dist);
+        assert.strictEqual(dots.length, 100);
+        assert.strictEqual(dots.filter(d => d.tone === 'bad').length, 25);
+        assert.strictEqual(dots.filter(d => d.tone === 'good').length, 75);
     });
 });

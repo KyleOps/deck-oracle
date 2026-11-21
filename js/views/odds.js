@@ -49,8 +49,8 @@ export const template = `
             <div class="odds-pair">
                 <section class="panel" aria-labelledby="odds-table-title">
                     <div class="tx-h">
-                        <h2 class="odds-h" id="odds-table-title">Turn by turn</h2>
-                        <span class="tx-h-r">pick a row to change the turn</span>
+                        <h2 class="odds-h" id="odds-table-title">By turn and copies needed</h2>
+                        <span class="tx-h-r">exact odds</span>
                     </div>
                     <div class="odds-table-wrap" id="odds-table"></div>
                 </section>
@@ -714,16 +714,23 @@ export const styles = `
 #odds-tab .odds-rowbtn:hover { color: var(--tx-bright); }
 #odds-tab tr.is-sel .odds-rowbtn { color: var(--tx-bright); }
 
-#odds-tab .odds-cell-bar {
-    display: grid;
-    grid-template-columns: minmax(60px, 1fr) 4ch;
-    align-items: center;
-    gap: 10px;
-    min-width: 120px;
-}
-
-#odds-tab .odds-cell-bar .meter { height: 6px; }
-#odds-tab .odds-cell-bar strong { color: var(--tx-bright); font-weight: 600; }
+/* Heat map: turn × copies needed */
+#odds-tab .odds-heat-groups { margin: 12px 16px 0; max-width: calc(100% - 32px); overflow-x: auto; }
+#odds-tab .odds-heat-groups .seg-btn { gap: 7px; }
+#odds-tab .odds-heat-groups .og-badge { width: 18px; height: 18px; font-size: var(--t-micro); }
+#odds-tab .odds-heat-note { margin: 0; padding: 10px 16px 8px; font-size: var(--t-xs); line-height: 1.5; color: var(--tx-dim); }
+#odds-tab .odds-heat-note strong { color: var(--tx-text); font-weight: 600; }
+#odds-tab .odds-heat td { padding: 2px 3px; }
+#odds-tab .odds-heat td.dim { padding: 0 10px; }
+#odds-tab .odds-heat th.odds-heat-need { text-align: center; min-width: 58px; }
+#odds-tab .odds-heat td.odds-heat-all { padding: 0 16px 0 10px; }
+#odds-tab .odds-heat-all strong { font-weight: 600; }
+#odds-tab .odds-heat-all .is-good { color: var(--tx-good); }
+#odds-tab .odds-heat-all .is-warn { color: var(--tx-warn); }
+#odds-tab .odds-heat-all .is-bad { color: var(--tx-bad); }
+#odds-tab .odds-heat tbody tr.is-sel { background: var(--accent-soft); }
+#odds-tab .odds-heat tr > :last-child { padding-right: 12px; }
+#odds-tab .odds-heat .odds-narrow { display: none; }
 
 #odds-tab .odds-members { display: grid; }
 
@@ -783,8 +790,13 @@ export const styles = `
 @container shell (max-width: 560px) {
     #odds-tab .odds-table th,
     #odds-tab .odds-table td { padding: 0 7px; }
-    #odds-tab .odds-cell-bar { display: block; min-width: 0; text-align: right; }
-    #odds-tab .odds-cell-bar .meter { display: none; }
+    #odds-tab .odds-heat td { padding: 2px; }
+    #odds-tab .odds-heat td.dim { padding: 0 6px; }
+    #odds-tab .odds-heat th.odds-heat-need { min-width: 48px; }
+    #odds-tab .odds-heat .odds-heat-seen { display: none; }
+    #odds-tab .odds-heat .odds-wide { display: none; }
+    #odds-tab .odds-heat .odds-narrow { display: inline; }
+    #odds-tab .odds-heat td.odds-heat-all { padding: 0 8px 0 4px; }
     #odds-tab .odds-legend { justify-content: flex-start; }
     #odds-tab .tx-h:has(.odds-legend) { flex-wrap: wrap; }
     #odds-tab .odds-sug { min-height: 0; }
@@ -806,7 +818,8 @@ export const styles = `
 export const guide = {
     intro: 'Pick the cards you want — one card, a handful, or a whole slice of the deck like “your ramp” or “your lands” — and this page gives the exact chance of having them in hand by each turn. Add up to three groups to ask for several things at once, such as two lands <em>and</em> a ramp piece by turn 2.',
     howToRead: [
-        'The <strong>bottom line</strong> answers for the turn you picked. Drag the turn slider, click the chart, or pick a row in the table to change it.',
+        'The <strong>bottom line</strong> answers for the turn you picked. Drag the turn slider, click the chart, or pick a turn in the heat map to change it.',
+        '<strong>By turn and copies needed</strong> is a heat map of every question at once: each row is a turn, each column how many copies you need, and the stronger the green, the likelier. Pick a cell to make it the question the page answers. With several groups, switch which group it shows.',
         '<strong>Passes 50% / 90%</strong> is the first turn the chance reaches one in two / nine in ten. “Coin flip” and “reliable” are useful thresholds when deciding whether a card is worth its slot.',
         '<strong>Average copies seen</strong> counts every card from the group you will have seen by then, not just whether you found one.',
         'With several groups, the dashed lines show each group on its own and the solid line needs <em>all of them at once</em>. The gap between them is the cost of needing everything together.',

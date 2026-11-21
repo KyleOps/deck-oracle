@@ -39,7 +39,8 @@ export const guide = {
         '<strong>Mana stolen</strong> is the total mana value of the spells you can cast, added up across opponents. Each pile always reaches at least 5, so the per-opponent figure sits a little above 5 — the overshoot is the last card’s mana value.',
         '<strong>Spells stolen</strong> counts the nonland cards exiled. Lands are exiled too but count as 0 and can’t be cast.',
         '<strong>Usually</strong> is the middle half of outcomes: one cast in four lands below the range and one in four above it.',
-        'The bars show how often each outcome happens, on the same scale for every opponent. <strong>Sample casts</strong> show real shuffles, card by card.'
+        '<strong>Out of 100 casts</strong> stacks one dot per cast in a hundred by the mana stolen from everyone at once (opponents are independent, so their results add up). Solid dots steal at least the 7 mana Dream Harvest costs; rings steal less.',
+        'The bars under <strong>Spells from each opponent</strong> show how many spells each pile hands you, on the same scale for every opponent. <strong>Sample casts</strong> show real shuffles, card by card.'
     ],
     method: 'Simulation: each list is shuffled 20,000 times and Dream Harvest is resolved against it — only as many cards as the exile reaches are shuffled each time. The shuffles are seeded from the list itself, so the same deck always gives the same numbers.',
     assumptions: [

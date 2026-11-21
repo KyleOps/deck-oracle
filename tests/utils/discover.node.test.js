@@ -4,7 +4,7 @@ import assert from 'node:assert';
 import {
     isPower5Plus, isBigCreature, simulateDiscoverChain, sampleDiscover,
     percentileFromDist, mergeDists, mulberry32, hashSeed, seededShuffle,
-    withoutOne, sampleDiscoverFrom, discoverForCreature, DISCOVER_RUNS, foldTail
+    withoutOne, sampleDiscoverFrom, discoverForCreature, DISCOVER_RUNS, foldTail, tailRows
 } from '../../js/utils/discover.js';
 
 /** A card in the shape the simulation deck uses. */
@@ -577,5 +577,24 @@ describe('foldTail', () => {
     it('handles empty input', () => {
         assert.deepStrictEqual(foldTail([]), { counts: [], cut: 0, folded: false });
         assert.deepStrictEqual(foldTail(undefined).counts, []);
+    });
+});
+
+describe('tailRows', () => {
+    it('ends on an "N or more" row, never the sampled maximum', () => {
+        const dist = [];
+        dist[1] = 60; dist[2] = 30; dist[5] = 9; dist[30] = 1;
+        const rows = tailRows(dist, 100);
+        assert.deepStrictEqual(rows.map(r => [r.value, r.plus]), [[1, false], [2, false], [5, true]]);
+        const last = rows[rows.length - 1];
+        assert.ok(Math.abs(last.share - 0.1) < 1e-12, 'the folded row holds the tail');
+        assert.ok(Math.abs(last.atLeast - 0.1) < 1e-12);
+        assert.strictEqual(rows[0].atLeast, 1);
+        assert.ok(Math.abs(rows.reduce((s, r) => s + r.share, 0) - 1) < 1e-12, 'no observation is lost');
+    });
+
+    it('returns nothing without observations', () => {
+        assert.deepStrictEqual(tailRows([], 0), []);
+        assert.deepStrictEqual(tailRows([3, 2], 0), []);
     });
 });

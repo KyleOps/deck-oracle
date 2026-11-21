@@ -11,6 +11,7 @@
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator, isCalculatorActive } from '../utils/calculatorBase.js';
 import { analyzeCastability } from '../utils/castability.js';
+import { heatStrip } from '../utils/viz.js';
 import { COLOR_NAMES, renderManaCost } from '../utils/mana.js';
 import { renderBottomLine, renderHeroStats } from '../utils/components.js';
 import { debounce } from '../utils/simulation.js';
@@ -19,6 +20,8 @@ import { escapeHtml, cardRef, term } from '../data/glossary.js';
 const NAME = 'manabase';
 export const TARGET = 0.9;
 export const DEFAULT_ROWS = 12;
+/** Turns the "when does it become reliable" strips cover. */
+export const STRIP_TURNS = 8;
 
 let onPlay = true;
 let filter = 'all';
@@ -192,7 +195,7 @@ export function calculate() {
     const key = deckKey(config, format, play);
     if (cache.key !== key) {
         const deckSize = Number(config.actualCardCount) || null;
-        cache = { key, result: analyzeCastability(config.cardsByName, { deckSize, format, onPlay: play, target: TARGET }) };
+        cache = { key, result: analyzeCastability(config.cardsByName, { deckSize, format, onPlay: play, target: TARGET, byTurn: STRIP_TURNS }) };
     }
     return { config, format, onPlay: play, hasList, result: cache.result };
 }
@@ -280,6 +283,39 @@ export function applyShareParams(params) {
     debouncedUpdate?.();
 }
 
+/**
+ * Cells for a turn strip: one per turn, toned against the 90% target, with the
+ * card's own turn outlined. Pure — exported for tests.
+ * @param {Array<number|null>} chances - index 0 = turn 1; null = not castable yet
+ * @param {{current?:number|null, target?:number}} [opts]
+ */
+export function stripCells(chances = [], { current = null, target = TARGET } = {}) {
+    return chances.map((p, i) => ({
+        label: `Turn ${i + 1}`,
+        value: Number.isFinite(p) ? p : null,
+        tone: Number.isFinite(p) ? chanceTone(p, target) : 'flat',
+        current: current === i + 1,
+        note: 'not enough lands yet'
+    }));
+}
+
+/** The first turn a strip reaches the target, or null within the strip. */
+export function reliableFrom(chances = [], target = TARGET) {
+    const i = chances.findIndex(p => Number.isFinite(p) && p >= target - 1e-9);
+    return i === -1 ? null : i + 1;
+}
+
+const STRIP_KEY = `<span class="mb-strip-key" aria-hidden="true">
+        <span><i class="viz-strip-cell is-good"></i>90%+</span>
+        <span><i class="viz-strip-cell is-warn"></i>80–89%</span>
+        <span><i class="viz-strip-cell is-bad"></i>under 80%</span>
+        <span><i class="viz-strip-cell is-good is-current"></i>on curve</span>
+    </span>`;
+
+function stripAxis() {
+    return `<span class="mb-strip-axis" aria-hidden="true">${Array.from({ length: STRIP_TURNS }, (_, i) => `<span>${i + 1}</span>`).join('')}</span>`;
+}
+
 // ── Rendering ────────────────────────────────────────────────────────────────
 
 function renderControls(result, format, play) {
@@ -325,6 +361,19 @@ function renderColors(result) {
                 : c.sources >= want ? '' : ` About <strong>${want}</strong> sources would reach 90%.`;
             note = `<p class="mb-note">Hardest: ${cardRef(h.name)} — ${pips(c.color, h.pips)} on turn ${h.turn}, <strong>${pct(h.chance)}</strong>.${needs}</p>`;
         }
+        const turns = (c.byTurn ?? []).length ? `
+            <div class="mb-color-turns">
+                <div class="mb-turns-row mb-turns-head"><span>By turn</span>${stripAxis()}</div>
+                ${c.byTurn.map(row => {
+                    const from = reliableFrom(row.cells);
+                    return `
+                <div class="mb-turns-row">
+                    ${pips(c.color, row.pips)}
+                    ${heatStrip({ label: `${row.pips} ${COLOR_NAMES[c.color].toLowerCase()} by turn, with every land drop made`, cells: stripCells(row.cells) })}
+                    <span class="mb-turns-from">${from ? `90% from turn ${from}` : `under 90% by T${STRIP_TURNS}`}</span>
+                </div>`;
+                }).join('')}
+            </div>` : '';
         const facts = h
             ? `<dl class="mb-color-facts">
                     <div><dt>${term('pip', 'Pips')}</dt><dd>${c.pips} on ${c.cards} ${plural(c.cards, 'card')}</dd></div>
@@ -340,6 +389,7 @@ function renderColors(result) {
                 </div>
                 ${bar}
                 ${facts}
+                ${turns}
                 ${note}
             </article>`;
     }).join('');
@@ -390,8 +440,10 @@ function renderCards(result) {
                     <td class="num mb-col-turn">${c.turn}</td>
                     <td class="mb-col-chance">
                         <span class="mb-chance">
-                            <span class="meter"><span class="meter-fill tone-${tone}" style="width:${(c.chance * 100).toFixed(1)}%"></span></span>
-                            <span class="num">${pct(c.chance)}</span>
+                            ${c.byTurn
+                                ? heatStrip({ label: `${c.name}, right colours by turn`, cells: stripCells(c.byTurn, { current: c.turn, target: result.target }) })
+                                : `<span class="meter"><span class="meter-fill tone-${tone}" style="width:${(c.chance * 100).toFixed(1)}%"></span></span>`}
+                            <span class="num tone-${tone}">${pct(c.chance)}</span>
                         </span>
                     </td>
                     <td class="num mb-overall mb-col-overall">${pct(c.overall)}</td>
@@ -404,13 +456,14 @@ function renderCards(result) {
                 </div>`
             : '';
         set('mb-cards', `
+            <p class="mb-strip-note">When each card becomes reliable: ${STRIP_KEY}</p>
             <table class="mb-table">
                 <thead>
                     <tr>
                         <th scope="col">Card</th>
                         <th scope="col" class="mb-col-cost">Cost</th>
                         <th scope="col" class="num mb-col-turn"><span class="term" tabindex="0" data-tip="The turn it is checked on: its mana value, with X counted as 1.">Turn</span></th>
-                        <th scope="col" class="mb-col-chance"><span class="term" tabindex="0" data-tip="If you have drawn at least as many lands as the turn number, the chance they can pay every coloured symbol. Frank Karsten’s convention.">Right colours</span></th>
+                        <th scope="col" class="mb-col-chance"><span class="mb-chance mb-chance-head"><span class="term" tabindex="0" data-tip="One cell per turn, 1 to 8: if you have made every land drop by then, the chance your lands can pay every coloured symbol (Frank Karsten’s convention). The outlined cell is the card’s own turn — the number on the right.">Right colours by turn</span>${stripAxis()}</span></th>
                         <th scope="col" class="num mb-col-overall"><span class="term" tabindex="0" data-tip="The chance you have enough lands AND the right colours by that turn. Lower, because it also counts missed land drops.">Lands + colours</span></th>
                     </tr>
                 </thead>

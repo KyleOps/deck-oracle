@@ -13,7 +13,7 @@
  * Bump CACHE_VERSION whenever shipped assets change.
  */
 
-const CACHE_VERSION = 'v31';
+const CACHE_VERSION = 'v32';
 const CACHE_NAME = `deck-oracle-${CACHE_VERSION}`;
 const IMAGE_CACHE = 'deck-oracle-images-v1';
 const IMAGE_CACHE_LIMIT = 160;
@@ -74,12 +74,14 @@ const STATIC_ASSETS = [
     'js/utils/calculatorBase.js',
     'js/utils/calculatorRegistry.js',
     'js/utils/cardTags.js',
+    'js/utils/castAnimation.js',
     'js/utils/castability.js',
     'js/utils/chartHelpers.js',
     'js/utils/components.js',
     'js/utils/deckCompare.js',
     'js/utils/deckConfig.js',
     'js/utils/deckLibrary.js',
+    'js/utils/deckProfile.js',
     'js/utils/deckRadar.js',
     'js/utils/deckStats.js',
     'js/utils/decklistImport.js',
@@ -102,6 +104,7 @@ const STATIC_ASSETS = [
     'js/utils/simulation.js',
     'js/utils/tableUtils.js',
     'js/utils/ui.js',
+    'js/utils/viz.js',
     'js/views/abstract.js',
     'js/views/chimil.js',
     'js/views/compare.js',

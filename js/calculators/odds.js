@@ -16,6 +16,7 @@ import { debounce } from '../utils/simulation.js';
 import { cardsSeenByTurn } from '../utils/format.js';
 import { escapeHtml, cardRef } from '../data/glossary.js';
 import * as O from '../utils/drawOdds.js';
+import { heatLevel } from '../utils/viz.js';
 
 const NAME = 'odds';
 const DEFAULT_TURN = 3;
@@ -44,6 +45,8 @@ const state = {
 
 let chart = null;
 let debouncedUpdate = null;
+/** Which group the turn × copies heat map shows (multi-group decks). */
+let heatGroup = 0;
 let libCache = { key: null, lib: null };
 let last = null;
 let suggestions = [];
@@ -718,29 +721,69 @@ function renderChart(result) {
     });
 }
 
-function tableHtml(result) {
+/**
+ * The columns of the heat map: "need at least 1 … k" copies, up to four (or
+ * the need already chosen), never more than the group has.
+ * @param {{copies:number, need:number}} group
+ * @returns {number[]}
+ */
+export function heatNeeds(group) {
+    const copies = Math.max(0, Math.floor(group?.copies ?? 0));
+    const top = Math.min(copies, Math.max(4, group?.need ?? 1), O.MAX_NEED);
+    return Array.from({ length: Math.max(0, top) }, (_, i) => i + 1);
+}
+
+/**
+ * Turn × "need at least k" heat map for one group. Each cell is the exact
+ * chance (the same hypergeometric the chart uses) and a button that sets both
+ * the turn and the need; the selected cell is the page's current question.
+ */
+function heatmapHtml(result) {
     const multi = result.groups.length > 1;
+    heatGroup = Math.min(Math.max(0, heatGroup), result.groups.length - 1);
+    const g = result.groups[heatGroup];
+    const needs = heatNeeds(g);
+    const switcher = multi ? `
+        <div class="seg seg-sm odds-heat-groups" role="group" aria-label="Group shown in the heat map">
+            ${result.groups.map((x, i) => `<button type="button" class="seg-btn${i === heatGroup ? ' active' : ''}" data-heat-group="${i}" aria-pressed="${i === heatGroup}"><span class="og-badge ${GROUP_CLASS[x.index]}" aria-hidden="true">${x.id}</span>${escapeHtml(x.name)}</button>`).join('')}
+        </div>` : '';
     const head = `
         <tr>
             <th scope="col">Turn</th>
-            <th scope="col">Seen</th>
-            ${multi ? result.groups.map(g => `<th scope="col" class="${GROUP_CLASS[g.index]}"><span class="gcol">${g.id}</span></th>`).join('') : '<th scope="col">Avg. copies</th>'}
-            <th scope="col">${multi ? 'All together' : 'Chance'}</th>
+            <th scope="col" class="odds-heat-seen">Seen</th>
+            ${needs.map(k => `<th scope="col" class="odds-heat-need">${k}+</th>`).join('')}
+            ${multi ? '<th scope="col">All groups</th>' : ''}
         </tr>`;
     const rows = result.turns.map(t => {
         const sel = t.turn === state.turn;
-        const cells = multi
-            ? t.each.map(p => `<td>${pctHtml(p)}</td>`).join('')
-            : `<td class="dim">${t.avg[0].toFixed(1)}</td>`;
+        const cells = needs.map(k => {
+            const p = O.atLeastChance(result.N, g.copies, t.seen, k);
+            const on = sel && k === g.need;
+            const cls = `viz-heat-cell${p >= 0.5 ? ' is-hot' : ''}${p < 0.005 ? ' is-zero' : ''}`;
+            const label = `${O.turnLabel(t.turn)}, at least ${k} from ${g.name}: ${O.formatPct(p)}`;
+            return `<td><button type="button" class="${cls}" style="--heat:${heatLevel(p)}" data-heat-turn="${t.turn}" data-heat-need="${k}" aria-pressed="${on}" aria-label="${escapeHtml(label)}">${pctHtml(p)}</button></td>`;
+        }).join('');
         return `
             <tr class="${sel ? 'is-sel' : ''}">
-                <th scope="row"><button type="button" class="odds-rowbtn" data-turn="${t.turn}" aria-pressed="${sel}">${O.turnLabel(t.turn)}</button></th>
-                <td class="dim">${t.seen}</td>
+                <th scope="row"><button type="button" class="odds-rowbtn" data-turn="${t.turn}" aria-pressed="${sel}" aria-label="${O.turnLabel(t.turn)}">${t.turn === 0 ? '<span class="odds-wide">Opening hand</span><span class="odds-narrow">Hand</span>' : O.turnLabel(t.turn)}</button></th>
+                <td class="dim odds-heat-seen">${t.seen}</td>
                 ${cells}
-                <td><span class="odds-cell-bar"><span class="meter"><span class="meter-fill tone-${toneOf(t.all)}" style="width:${(t.all * 100).toFixed(1)}%"></span></span><strong>${pctHtml(t.all)}</strong></span></td>
+                ${multi ? `<td class="odds-heat-all"><strong class="is-${toneOf(t.all)}">${pctHtml(t.all)}</strong></td>` : ''}
             </tr>`;
     }).join('');
-    return `<table class="odds-table"><caption class="sr-only">Chance by turn</caption><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+    const note = multi
+        ? `Copies of <strong>${escapeHtml(g.name)}</strong> needed. “All groups” is every group at its own need, at once.`
+        : `Copies of <strong>${escapeHtml(g.name)}</strong> needed — ${plural(g.copies, 'copy', 'copies')} in your library.`;
+    return `
+        ${switcher}
+        <p class="odds-heat-note">${note} The stronger the green, the likelier. Pick a cell to ask that question.</p>
+        <div class="odds-table-wrap">
+            <table class="odds-table odds-heat">
+                <caption class="sr-only">Chance of having at least this many copies of ${escapeHtml(g.name)}, by turn</caption>
+                <thead>${head}</thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>`;
 }
 
 function membersPanelHtml(result, library) {
@@ -799,7 +842,7 @@ function renderResults(ctx) {
     setHtml('odds-caption', result.groups.length > 1
         ? 'Dashed lines: each group on its own. Solid line: every group at once — what the answer above uses. Click the chart to pick a turn.'
         : 'The chance of having what you need by your main phase on each turn. Click the chart to pick a turn.');
-    setHtml('odds-table', tableHtml(result));
+    setHtml('odds-table', heatmapHtml(result));
     setHtml('odds-members', membersPanelHtml(result, library));
     const membersMeta = document.getElementById('odds-members-meta');
     if (membersMeta) membersMeta.textContent = library.manual ? 'from your counts' : `${plural(result.union, 'copy', 'copies')} in play`;
@@ -824,6 +867,29 @@ function onClick(e) {
 
     const sug = target.closest('[data-sug]');
     if (sug) { applySuggestion(Number(sug.dataset.sug)); return; }
+
+    const heat = target.closest('[data-heat-need]');
+    if (heat) {
+        const turn = Number(heat.dataset.heatTurn);
+        const need = Number(heat.dataset.heatNeed);
+        const gi = last?.result?.groups?.[heatGroup]?.index ?? 0;
+        if (state.groups[gi]) {
+            state.groups[gi].need = need;
+            clampNeed(gi);
+        }
+        state.turn = Math.max(0, Math.min(O.MAX_TURN, turn));
+        refresh();
+        document.querySelector(`#odds-table [data-heat-turn="${turn}"][data-heat-need="${need}"]`)?.focus({ preventScroll: true });
+        return;
+    }
+
+    const pick = target.closest('[data-heat-group]');
+    if (pick) {
+        heatGroup = Number(pick.dataset.heatGroup) || 0;
+        if (last) renderResults(last);
+        document.querySelector(`#odds-table [data-heat-group="${heatGroup}"]`)?.focus({ preventScroll: true });
+        return;
+    }
 
     const row = target.closest('[data-turn]');
     if (row) {

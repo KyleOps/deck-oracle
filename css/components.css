@@ -884,8 +884,9 @@ input[type="range"].tx-slider::-moz-range-thumb {
 }
 
 /* Generic action buttons: outlined, not filled. Solid amber is reserved for the
-   single primary action in the sub-bar. */
-.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn) {
+   single primary action in the sub-bar. tx-* and viz-* components style their
+   own buttons. */
+.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn) {
     background: transparent;
     border: 1px solid var(--tx-rule-hi);
     color: var(--tx-text);
@@ -898,13 +899,13 @@ input[type="range"].tx-slider::-moz-range-thumb {
     transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):hover {
+.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):hover {
     background: var(--tx-panel-alt);
     color: var(--tx-bright);
     border-color: var(--tx-amber);
 }
 
-.calc-body button:not([class*="tx-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):disabled {
+.calc-body button:not([class*="tx-"]):not([class*="viz-"]):not(.preset-btn):not(.btn):not(.icon-btn):not(.seg-btn):disabled {
     opacity: 0.4;
     cursor: not-allowed;
     border-color: var(--tx-rule);
@@ -1418,79 +1419,6 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 .dist-bar.is-bad  { background: var(--tx-bad); }
 .dist-bar.is-warn { background: var(--tx-accent); }
-
-/* Surge's outcome ranges form one horizontal 100% band. The seam between
-   semantic colours is the payback boundary; each run belongs to one segment. */
-.surge-range-band {
-    display: flex;
-    height: 30px;
-    overflow: hidden;
-    background: var(--tx-bg);
-    border: 1px solid var(--tx-rule);
-}
-
-.surge-range-segment {
-    min-width: 0;
-    flex-basis: 0;
-    border-right: 1px solid var(--tx-panel);
-}
-
-.surge-range-segment.is-whiff,
-.surge-range-item.is-whiff .surge-range-swatch { background: var(--tx-bad); }
-.surge-range-segment.is-paid,
-.surge-range-item.is-paid .surge-range-swatch { background: var(--tx-good); }
-.surge-range-segment:nth-child(even) { filter: brightness(0.78); }
-
-.surge-range-axis,
-.surge-range-totals {
-    display: flex;
-    justify-content: space-between;
-    font-feature-settings: 'tnum' 1;
-}
-
-.surge-range-totals {
-    margin: 10px 0 12px;
-    font-size: var(--t-xs);
-    font-weight: 600;
-}
-
-.surge-range-totals .is-whiff { color: var(--tx-bad); }
-.surge-range-totals .is-paid { color: var(--tx-good); }
-
-.surge-range-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 24px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.surge-range-item {
-    display: grid;
-    grid-template-columns: 8px minmax(0, 1fr) auto 48px;
-    gap: 8px;
-    align-items: center;
-    min-width: 0;
-    padding: 5px 0;
-    border-top: 1px solid var(--tx-rule);
-    font-size: var(--t-xs);
-    font-feature-settings: 'tnum' 1;
-}
-
-.surge-range-swatch { width: 8px; height: 8px; }
-.surge-range-label { color: var(--tx-text); }
-.surge-range-count { color: var(--tx-dim); }
-.surge-range-item strong { color: var(--tx-bright); text-align: right; }
-
-@container shell (max-width: 700px) {
-    .surge-range-list { grid-template-columns: minmax(0, 1fr); }
-}
-
-@container shell (max-width: 420px) {
-    .surge-range-item { grid-template-columns: 8px minmax(0, 1fr) 48px; }
-    .surge-range-count { display: none; }
-}
 
 /* Shared sample-simulation controls (used by every calculator via
    generateSampleRevealsHTML). */
@@ -2278,3 +2206,345 @@ input[type="range"].tx-slider::-moz-range-thumb {
 
 /* Chart wrapper: breathing room inside the card */
 .calc-body .chart-container { padding: 10px 12px 6px; }
+
+/* ==================== VISUALISATIONS (js/utils/viz.js) ====================
+   Plain HTML charts: quantile dot plots, heat cells, bullet rows and
+   dumbbells. Colours are tokens only — a tone class says what a result
+   MEANS (good / warn / bad / flat), never decoration. Sizes come from the
+   container, so every chart has its final size on first paint. */
+
+.viz { margin: 0; min-width: 0; }
+
+/* Tone ink, shared by dots, legends and cells */
+.viz .is-good, .viz-legend .is-good { color: var(--tx-good); }
+.viz .is-warn, .viz-legend .is-warn { color: var(--tx-warn); }
+.viz .is-bad,  .viz-legend .is-bad  { color: var(--tx-bad); }
+.viz .is-flat, .viz-legend .is-flat { color: var(--tx-flat); }
+
+/* ---- Quantile dot plot ---- */
+.viz-dots { container-type: inline-size; padding: 6px 18px 14px; }
+.viz-dots-chart {
+    /* One dot per 1% of outcomes. As wide as the columns allow, never so
+       tall that a spiky distribution makes the panel huge. */
+    --dot: max(5px, min(16px, calc(100cqi / (var(--cols) * var(--per, 1))), calc(210px / var(--rows))));
+    position: relative;
+}
+.viz-dots-head { position: relative; height: 18px; }
+.viz-dots-plot {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+    height: calc(var(--rows) * var(--dot));
+    border-bottom: 1px solid var(--tx-rule-hi);
+}
+.viz-dots-col {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    min-width: 0;
+    border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+}
+/* A stack fills from the bottom-left, `--per` dots to a row. */
+.viz-dots-stack {
+    display: flex;
+    flex-wrap: wrap-reverse;
+    align-content: flex-start;
+    width: calc(var(--per, 1) * var(--dot));
+}
+.viz-dots-col[data-tip] { cursor: default; }
+.viz-dots-col[data-tip]:hover { background: var(--tx-row-hi); }
+.viz-dot {
+    position: relative;
+    display: block;
+    flex: none;
+    width: var(--dot);
+    height: var(--dot);
+}
+.viz-dot::before {
+    content: '';
+    position: absolute;
+    inset: 11%;
+    border-radius: 50%;
+    background: currentColor;
+}
+/* Misses are rings, so the split survives colour blindness and greyscale. */
+.viz-dot.is-bad::before {
+    background: transparent;
+    border: max(1.5px, calc(var(--dot) * 0.15)) solid currentColor;
+}
+.viz-dots-line {
+    position: absolute;
+    top: -18px;
+    bottom: -4px;
+    width: 0;
+    border-left: 1.5px dashed var(--tx-mid);
+    pointer-events: none;
+}
+.viz-dots-line-label {
+    position: absolute;
+    top: 1px;
+    padding-left: 7px;
+    font-size: var(--t-label);
+    line-height: 1.3;
+    color: var(--tx-mid);
+    white-space: nowrap;
+}
+.viz-dots-line-label.is-left { padding: 0 7px 0 0; transform: translateX(-100%); }
+.viz-dots-axis { position: relative; height: 18px; margin-top: 5px; }
+.viz-dots-tick {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: var(--t-label);
+    color: var(--tx-dim);
+    white-space: nowrap;
+}
+.viz-dots-tick.is-start { transform: none; }
+.viz-dots-tick.is-end { transform: translateX(-100%); }
+.viz-dots-xlabel { margin-top: 2px; text-align: center; font-size: var(--t-label); color: var(--tx-dim); }
+
+.viz-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--t-xs);
+    color: var(--tx-mid);
+}
+.viz-legend li { display: inline-flex; align-items: center; gap: 7px; }
+.viz-legend strong { font-family: var(--font-mono); color: var(--tx-bright); font-weight: 600; }
+.viz-legend .viz-dot { --dot: 13px; }
+
+/* ---- Exact numbers behind a chart ---- */
+.viz-table { margin-top: 10px; font-size: var(--t-xs); }
+.viz-table > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 2px 0;
+    color: var(--tx-mid);
+    cursor: pointer;
+    list-style: none;
+}
+.viz-table > summary::-webkit-details-marker { display: none; }
+.viz-table > summary::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform var(--transition-fast);
+}
+.viz-table[open] > summary::before { transform: rotate(45deg); }
+.viz-table > summary:hover { color: var(--tx-bright); }
+.viz-table-wrap { max-height: 280px; overflow: auto; margin-top: 6px; border: 1px solid var(--tx-rule); border-radius: var(--radius-sm); }
+.viz-table table { width: 100%; border-collapse: collapse; }
+.viz-table th, .viz-table td { padding: 5px 10px; text-align: left; border-bottom: 1px solid var(--tx-rule); font-weight: 400; color: var(--tx-text); }
+.viz-table thead th { position: sticky; top: 0; background: var(--tx-panel-alt); font-size: var(--t-label); font-weight: 600; color: var(--tx-dim); }
+.viz-table tbody tr:last-child > * { border-bottom: 0; }
+.viz-table .num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---- Heat strip (one cell per turn) ---- */
+.viz-strip {
+    display: inline-grid;
+    grid-template-columns: repeat(var(--n), 11px);
+    gap: 3px;
+    align-items: center;
+    vertical-align: middle;
+}
+.viz-strip-cell { display: block; height: 11px; border-radius: 3px; }
+.viz-strip-cell.is-good { background: var(--tx-good); }
+.viz-strip-cell.is-warn {
+    background: repeating-linear-gradient(135deg, var(--tx-warn) 0 2px, transparent 2px 4px);
+    box-shadow: inset 0 0 0 1.5px var(--tx-warn);
+}
+.viz-strip-cell.is-bad { box-shadow: inset 0 0 0 1.5px var(--tx-bad); }
+.viz-strip-cell.is-flat { background: var(--tx-flat); }
+.viz-strip-cell.is-none { height: 2px; margin: 0 2px; background: var(--tx-rule-hi); }
+.viz-strip-cell.is-current { outline: 1.5px solid var(--tx-bright); outline-offset: 1.5px; }
+
+/* ---- Heat map cells (a real table: every value is readable) ---- */
+.viz-heat-cell {
+    --heat: 0;
+    display: block;
+    width: 100%;
+    min-height: 30px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: var(--radius-xs);
+    background: color-mix(in srgb, var(--tx-good) calc(var(--heat) * 58%), transparent);
+    color: var(--tx-text);
+    font-family: var(--font-mono);
+    font-size: var(--t-xs);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    cursor: pointer;
+    transition: box-shadow var(--transition-fast);
+}
+.viz-heat-cell.is-hot { color: var(--tx-bright); font-weight: 600; }
+.viz-heat-cell.is-zero { color: var(--tx-dim); }
+.viz-heat-cell:hover { box-shadow: inset 0 0 0 1px var(--tx-mid); }
+.viz-heat-cell[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--tx-accent); color: var(--tx-bright); font-weight: 650; }
+
+/* ---- Bullet rows ---- */
+.viz-bullets { container-type: inline-size; }
+/* One column set for every row (subgrid), so the tracks line up. */
+.viz-bullets-grid { display: grid; grid-template-columns: minmax(84px, max-content) minmax(0, 1fr) max-content; column-gap: 14px; }
+.viz-bullet {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    gap: 3px 14px;
+    align-items: center;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--tx-rule);
+}
+.viz-bullet:last-child { border-bottom: 0; }
+.viz-bullet-label { font-size: var(--t-sm); color: var(--tx-text); }
+.viz-bullet-track {
+    position: relative;
+    height: 16px;
+    border-radius: var(--radius-xs);
+    background: var(--tx-panel-alt);
+    box-shadow: inset 0 0 0 1px var(--tx-rule);
+}
+.viz-bullet-band {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: color-mix(in srgb, var(--tx-flat) 30%, transparent);
+    border-inline: 1px solid var(--tx-dim);
+}
+.viz-bullet-bar {
+    position: absolute;
+    left: 0;
+    top: 6px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--tx-bright);
+}
+.viz-bullet-mark {
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    width: 3px;
+    margin-left: -1.5px;
+    border-radius: 1px;
+    background: var(--tx-bright);
+}
+.viz-bullet-bar.is-over { border-radius: 2px 0 0 2px; }
+.viz-bullet-value { display: grid; justify-items: end; line-height: 1.25; text-align: right; }
+.viz-bullet-value strong { font-family: var(--font-mono); font-size: var(--t-sm); font-weight: 600; color: var(--tx-bright); }
+.viz-bullet-status { font-size: var(--t-label); color: var(--tx-mid); }
+.viz-bullet-status.tone-good { color: var(--tx-good); }
+.viz-bullet-status.tone-warn { color: var(--tx-warn); }
+.viz-bullet-status.tone-bad  { color: var(--tx-bad); }
+.viz-bullet-sub { grid-column: 2 / -1; font-size: var(--t-label); line-height: 1.45; color: var(--tx-dim); }
+@container (max-width: 420px) {
+    .viz-bullets-grid { grid-template-columns: minmax(0, 1fr) auto; }
+    .viz-bullet-track { grid-column: 1 / -1; grid-row: 2; }
+    .viz-bullet-value { grid-row: 1; grid-column: 2; display: flex; gap: 8px; align-items: baseline; }
+    .viz-bullet-sub { grid-column: 1 / -1; }
+}
+
+/* ---- Dumbbell (A vs B on one scale) ---- */
+.viz-db { position: relative; display: block; height: 20px; min-width: 72px; margin: 0 9px; }
+.viz-db-line { position: absolute; top: 9px; height: 2px; border-radius: 1px; background: var(--tx-rule-hi); }
+.viz-db-end {
+    position: absolute;
+    top: 1px;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-left: -9px;
+    border: 1.5px solid var(--tx-mid);
+    border-radius: 50%;
+    background: var(--tx-panel);
+    color: var(--tx-mid);
+}
+.viz-db-end i { font-style: normal; font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; line-height: 1; }
+.viz-db-end.is-better { border-color: var(--tx-good); background: var(--tx-good); color: var(--tx-panel); }
+.viz-db-end.is-worse { border-color: var(--tx-dim); color: var(--tx-dim); }
+
+/* ---- "Cast it": one resolution played card by card (js/utils/castAnimation.js) ---- */
+.bs-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.bs-cast-stage { padding: 14px 16px 4px; border-bottom: 1px solid var(--tx-rule); container-type: inline-size; }
+.cast { display: grid; gap: 12px; }
+.cast-top { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 16px; align-items: center; }
+.cast-pile { position: relative; display: grid; justify-items: center; gap: 6px; }
+.cast-back {
+    width: 64px;
+    height: 89px;
+    border-radius: 6px;
+    border: 1px solid var(--tx-rule-hi);
+    background:
+        repeating-linear-gradient(135deg, color-mix(in srgb, var(--tx-flat) 22%, transparent) 0 6px, transparent 6px 12px),
+        var(--tx-panel-alt);
+    box-shadow: 3px 3px 0 -1px var(--tx-panel-alt), 3px 3px 0 0 var(--tx-rule-hi);
+}
+.cast-left { font-family: var(--font-mono); font-size: var(--t-label); color: var(--tx-dim); white-space: nowrap; }
+.cast-slot { width: 120px; height: 167px; perspective: 700px; }
+.cast-card {
+    position: relative;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 6px;
+    border: 1px solid var(--tx-rule-hi);
+    background: var(--tx-panel-alt);
+    color: var(--tx-text);
+}
+.cast-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cast-card-name { padding: 4px; font-size: var(--t-label); line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
+.cast-big { width: 120px; height: 167px; box-shadow: var(--shadow-md); }
+.cast-big .cast-card-name { font-size: var(--t-xs); }
+.cast-big.is-flip { animation: cast-flip 0.22s var(--ease-out) both; transform-origin: center; }
+.cast-big.is-stop { outline: 2px solid var(--tx-bad); outline-offset: 2px; }
+.cast-big.is-graveyard { filter: saturate(0.5); }
+.cast-read { display: grid; gap: 10px; min-width: 0; align-content: center; }
+.cast-status { margin: 0; min-height: 3em; font-size: var(--t-sm); line-height: 1.5; color: var(--tx-text); }
+.cast-status strong { color: var(--tx-bright); font-weight: 600; }
+.cast-totals { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 0; }
+.cast-totals dt { font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); }
+.cast-totals dd { margin: 2px 0 0; font-family: var(--font-mono); font-size: var(--t-lg); font-weight: 600; color: var(--tx-bright); }
+.cast-totals dd small { font-size: var(--t-xs); font-weight: 400; color: var(--tx-dim); }
+.cast-totals dd.tone-good { color: var(--tx-good); }
+.cast-zone { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; }
+.cast-zone-label { padding-top: 6px; font-size: var(--t-label); font-weight: 600; letter-spacing: var(--track-label); text-transform: uppercase; color: var(--tx-dim); }
+.cast-row { display: flex; flex-wrap: wrap; gap: 4px; min-height: 61px; padding: 0; }
+.cast-mini { width: 44px; height: 61px; border-radius: 3px; }
+.cast-mini .cast-card-name { font-size: 7.5px; padding: 2px; }
+.cast-mini.is-new { animation: cast-land 0.2s var(--ease-out) both; }
+.cast-mini.is-stop { outline: 2px solid var(--tx-bad); outline-offset: 1px; }
+.cast-mini.is-graveyard { opacity: 0.55; filter: grayscale(0.6); }
+.cast-more { align-self: center; padding: 0 6px; font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-mid); }
+.cast-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 10px; }
+.cast[data-state="done"] .cast-status { color: var(--tx-bright); }
+
+@keyframes cast-flip {
+    from { transform: rotateY(90deg) translateX(-24px); opacity: 0.4; }
+    to { transform: none; opacity: 1; }
+}
+@keyframes cast-land {
+    from { transform: translateY(-16px) scale(1.25); opacity: 0; }
+    to { transform: none; opacity: 1; }
+}
+
+@container (max-width: 520px) {
+    .cast-top { grid-template-columns: auto minmax(0, 1fr); }
+    .cast-pile { display: none; }
+    .cast-slot, .cast-big { width: 92px; height: 128px; }
+    .cast-zone { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+    .cast-zone-label { padding-top: 0; }
+    .cast-row { min-height: 51px; }
+    .cast-mini { width: 36px; height: 50px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cast-big.is-flip, .cast-mini.is-new { animation: none; }
+}

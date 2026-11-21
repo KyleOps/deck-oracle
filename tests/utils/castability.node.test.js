@@ -462,3 +462,41 @@ describe('castability - analyzeCastability', () => {
         assert.strictEqual(empty.bottleneck, null);
     });
 });
+
+describe('castability - turn strips (when a card becomes reliable)', () => {
+    const deck = {
+        Forest: { name: 'Forest', count: 9, type_line: 'Basic Land — Forest', color_identity: ['G'] },
+        Island: { name: 'Island', count: 7, type_line: 'Basic Land — Island', color_identity: ['U'] },
+        'Breeding Pool': { name: 'Breeding Pool', count: 4, type_line: 'Land — Forest Island', color_identity: ['G', 'U'] },
+        Counterspell: { name: 'Counterspell', count: 4, type_line: 'Instant', mana_cost: '{U}{U}', cmc: 2, color_identity: ['U'] },
+        'Growth Spiral': { name: 'Growth Spiral', count: 4, type_line: 'Instant', mana_cost: '{G}{U}', cmc: 2, color_identity: ['G', 'U'] },
+        Filler: { name: 'Filler', count: 32, type_line: 'Artifact', mana_cost: '{3}', cmc: 3 }
+    };
+    const opts = { deckSize: 60, format: FORMATS.constructed, onPlay: true };
+
+    it('is opt-in', () => {
+        const plain = analyzeCastability(deck, opts);
+        assert.strictEqual(plain.cards[0].byTurn, undefined);
+        assert.strictEqual(plain.colors[0].byTurn, undefined);
+    });
+
+    it('starts on the card’s own turn with its on-curve chance, then never drops', () => {
+        const result = analyzeCastability(deck, { ...opts, byTurn: 8 });
+        for (const card of result.cards) {
+            assert.strictEqual(card.byTurn.length, 8);
+            assert.strictEqual(card.byTurn[0], null, 'nothing costing 2 is castable on turn 1');
+            assert.strictEqual(card.byTurn[card.turn - 1], card.chance);
+            for (let t = card.turn; t < 8; t++) assert.ok(card.byTurn[t] >= card.byTurn[t - 1] - 1e-12);
+        }
+    });
+
+    it('gives each colour one strip per pip count it needs, matching the mono-colour formula', () => {
+        const result = analyzeCastability(deck, { ...opts, byTurn: 6 });
+        const blue = result.colors.find(c => c.color === 'U');
+        assert.deepStrictEqual(blue.byTurn.map(r => r.pips), [1, 2]);
+        assert.strictEqual(blue.byTurn[1].cells[0], null, 'two blue pips need two lands');
+        const seen = cardsSeenByTurn(4, { format: FORMATS.constructed, onPlay: true });
+        const expected = colorCastProbability({ deckSize: 60, lands: 20, sources: blue.sources, pips: 2, landsNeeded: 4, seen }).conditional;
+        assert.ok(Math.abs(blue.byTurn[1].cells[3] - expected) < 1e-12);
+    });
+});

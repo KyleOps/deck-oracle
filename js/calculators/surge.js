@@ -11,14 +11,19 @@
  * (a run of length k is a uniformly random k-subset of your permanents).
  */
 
-import { createCache, formatNumber, formatPercentage } from '../utils/simulation.js';
+import { createCache, formatNumber } from '../utils/simulation.js';
 import { createOrUpdateChart, TX_CHART } from '../utils/chartHelpers.js';
 import * as DeckConfig from '../utils/deckConfig.js';
 import { registerCalculator } from '../utils/calculatorBase.js';
 import { renderBottomLine, renderHeroStats } from '../utils/components.js';
-import { buildDeckFromCardData, shuffleDeck } from '../utils/sampleSimulator.js';
+import { buildDeckFromCardData } from '../utils/sampleSimulator.js';
+import { describeDots, dotPlot, pmfQuantiles, splitDots } from '../utils/viz.js';
+import { escapeHtml } from '../data/glossary.js';
+import { cardImageUrl, findCard } from '../data/images.js';
+import { closeCast, playCast, syncCast } from '../utils/castAnimation.js';
+import { shuffle } from '../utils/simulation.js';
 import {
-    avg, barsHTML, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList, expandCards, fade,
+    avg, cardListKey, cardTypesOf, chanceTone, createSampler, deckCardList, expandCards, fade,
     isPermanentTypeLine, noticeHTML, pct, plural, renderHowItCompares, sampleCardHTML, toneColor
 } from '../utils/bigSpells.js';
 
@@ -27,17 +32,17 @@ const CONFIG = Object.freeze({
     DEFAULT_LAND_VALUE: 1,
     DEFAULT_CARD_VALUE: 0.25,
     VALUE_STEP: 0.25,
-    SIM_RUNS: 500,
     SAMPLE_COUNT: 4,
     SAMPLE_ROWS: 10,
-    MILESTONES: [1, 3, 5, 10, 20],
     COST: 10
 });
 
 const subsetCache = createCache(16);
 const sampler = createSampler(CONFIG.SAMPLE_COUNT);
 let chart = null;
-let simulated = { key: null, runs: [] };
+const valueCache = createCache(16);
+/** Which quantity the "out of 100 casts" dots are stacked by. */
+let dotView = 'permanents';
 
 function clampNumber(value, fallback, min = 0, max = 100) {
     const parsed = Number(value);
@@ -201,6 +206,106 @@ export function surgeRunOdds(permanents, nonPermanents) {
     let median = 0;
     while (median < P && atLeast[median + 1] > 0.5) median++;
     return { atLeast, median, mean: P / (NP + 1) };
+}
+
+/**
+ * Exact chance the run is exactly k permanents long (k = 0..P): the first k
+ * cards are permanents and the next is an instant or sorcery (or, with no
+ * stops at all, the run is always the whole library).
+ * @param {number} permanents
+ * @param {number} nonPermanents
+ * @returns {number[]}
+ */
+export function surgeRunPmf(permanents, nonPermanents) {
+    const P = Math.max(0, Math.floor(permanents));
+    const NP = Math.max(0, Math.floor(nonPermanents));
+    const pmf = new Array(P + 1).fill(0);
+    if (NP === 0) {
+        pmf[P] = 1;
+        return pmf;
+    }
+    const N = P + NP;
+    let survives = 1;
+    for (let k = 0; k <= P; k++) {
+        pmf[k] = survives * NP / (N - k);
+        if (k < P) survives *= (P - k) / (N - k);
+    }
+    return pmf;
+}
+
+/**
+ * Exact distribution of one run's value. A run of k permanents is an equally
+ * likely pick of any k of them, so for every k this counts the k-subsets at
+ * each total value (an uncapped subset-sum in quarter-mana steps) and weights
+ * them by the chance the run is exactly k long.
+ *
+ * @param {Array<{cmc:number, isLand:boolean, count?:number}>} permanentCards
+ * @param {number} nonPermanents
+ * @param {{landValue?:number, cardValue?:number}} [settings]
+ * @returns {Array<{value:number, p:number}>} ascending by value
+ */
+export function surgeValuePmf(permanentCards, nonPermanents, settings = {}) {
+    const landValue = clampNumber(settings.landValue, CONFIG.DEFAULT_LAND_VALUE, 0, 20);
+    const cardValue = clampNumber(settings.cardValue, CONFIG.DEFAULT_CARD_VALUE, 0, 20);
+    const scale = 1 / CONFIG.VALUE_STEP;
+    const units = [];
+    for (const card of permanentCards ?? []) {
+        const count = Math.max(0, Math.floor(clampNumber(card?.count, 1, 0, 500)));
+        const value = clampNumber(card?.cmc, 0, 0, 100) + cardValue + (card?.isLand ? landValue : 0);
+        for (let i = 0; i < count; i++) units.push(Math.max(0, Math.round(value * scale)));
+    }
+    const P = units.length;
+    const runPmf = surgeRunPmf(P, nonPermanents);
+    const totalUnits = units.reduce((a, b) => a + b, 0);
+    const ways = Array.from({ length: P + 1 }, () => new Float64Array(totalUnits + 1));
+    ways[0][0] = 1;
+    let reach = 0;
+    units.forEach((u, i) => {
+        for (let size = i + 1; size >= 1; size--) {
+            const previous = ways[size - 1];
+            const current = ways[size];
+            for (let sum = reach; sum >= 0; sum--) {
+                if (previous[sum]) current[sum + u] += previous[sum];
+            }
+        }
+        reach += u;
+    });
+    const pmf = new Float64Array(totalUnits + 1);
+    for (let k = 0; k <= P; k++) {
+        if (!runPmf[k]) continue;
+        const weight = runPmf[k] / combination(P, k);
+        const row = ways[k];
+        for (let sum = 0; sum <= totalUnits; sum++) if (row[sum]) pmf[sum] += row[sum] * weight;
+    }
+    const out = [];
+    pmf.forEach((p, sum) => { if (p > 0) out.push({ value: sum / scale, p }); });
+    return out;
+}
+
+const DOT_LEGEND = Object.freeze([
+    { tone: 'good', label: 'paid for itself' },
+    { tone: 'bad', label: 'fell short' }
+]);
+
+/**
+ * The 100 "out of 100 casts" dots for either view.
+ *
+ * Permanents: dots stacked by run length (exact). Within a run length, the
+ * share that pays for itself is exact too (subset table), and the number of
+ * solid dots is fixed to match the value view, so the two views agree.
+ * Value: dots stacked by the value put into play (exact), split at the target.
+ *
+ * @param {{permanents:number, stops:number, table?:Object|null, valuePmf?:Array|null, threshold:number}} a
+ * @returns {{permanents:Array<{value:number,tone:string}>, value:Array<{value:number,tone:string}>|null}}
+ */
+export function surgeDots({ permanents, stops, table = null, valuePmf = null, threshold = CONFIG.DEFAULT_PAYBACK_THRESHOLD }) {
+    const runs = pmfQuantiles(surgeRunPmf(permanents, stops), 100);
+    const value = valuePmf ? pmfQuantiles(valuePmf, 100).map(v => ({ value: v, tone: v >= threshold - 1e-9 ? 'good' : 'bad' })) : null;
+    if (!table) return { permanents: runs.map(k => ({ value: k, tone: 'flat' })), value };
+
+    const paidShare = k => (table.shortBySize ? 1 - (table.shortBySize[k] ?? 1) : 1);
+    const goodTotal = value ? value.filter(d => d.tone === 'good').length : undefined;
+    return { permanents: splitDots(runs, paidShare, goodTotal), value };
 }
 
 // ── The library ──────────────────────────────────────────────────────────────
@@ -381,18 +486,98 @@ function renderAnswer(config, result) {
     el.innerHTML = renderBottomLine({ html, tone }) + notice + hero;
 }
 
-function renderRunOdds(config, result) {
-    const el = document.getElementById('surge-odds');
+function cachedValuePmf(config) {
+    const { landValue, cardValue } = config.settings;
+    const key = `${config.deckKey}|${config.nonPermanents}|${landValue}|${cardValue}`;
+    let pmf = valueCache.get(key);
+    if (!pmf) {
+        pmf = surgeValuePmf(config.permanentCards, config.nonPermanents, config.settings);
+        valueCache.set(key, pmf);
+    }
+    return pmf;
+}
+
+const valueText = v => formatNumber(v, v % 1 ? 2 : 0);
+
+/** "Out of 100 casts": exact run lengths (or values), split by payback. */
+function renderDots(config, result) {
+    const el = document.getElementById('surge-dots');
     if (!el) return;
-    const P = config.permanents;
-    const steps = CONFIG.MILESTONES.filter(k => k < P);
-    const rows = steps.map(k => ({
-        label: `${k}+ permanent${k === 1 ? '' : 's'}`,
-        value: result.atLeast[k] ?? 0,
-        tone: 'flat'
-    }));
-    if (P > 0) rows.push({ label: `Whole library (${P})`, value: result.atLeast[P] ?? 0, tone: 'good' });
-    el.innerHTML = barsHTML(rows);
+    const threshold = config.settings.threshold;
+    const hasValue = Boolean(result.table);
+    if (!hasValue) dotView = 'permanents';
+    const valuePmf = hasValue ? cachedValuePmf(config) : null;
+    const dots = surgeDots({ permanents: config.permanents, stops: config.nonPermanents, table: result.table, valuePmf, threshold });
+    const legend = hasValue ? DOT_LEGEND : [];
+    const byValue = dotView === 'value' && dots.value;
+
+    document.querySelectorAll('#surge-tab [data-surge-view]').forEach(btn => {
+        const on = btn.dataset.surgeView === dotView;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', String(on));
+    });
+    const toggle = document.getElementById('surge-dots-view');
+    if (toggle) toggle.hidden = !hasValue;
+
+    const shown = byValue ? dots.value : dots.permanents;
+    const format = byValue ? valueText : v => String(v);
+    const summary = describeDots(shown, { unit: 'cast', format, legend });
+    const label = `${byValue ? 'Value put into play' : 'Permanents put into play'}, out of 100 casts. ${summary}`;
+
+    let table;
+    if (byValue) {
+        const step = Math.max(CONFIG.VALUE_STEP, threshold);
+        const bands = [{ lo: 0, hi: threshold, label: `Under ${valueText(threshold)} (falls short)` }];
+        for (let lo = threshold; lo < threshold + step * 4; lo += step) {
+            bands.push({ lo, hi: lo + step, label: `${valueText(lo)} to under ${valueText(lo + step)}` });
+        }
+        bands.push({ lo: threshold + step * 4, hi: Infinity, label: `${valueText(threshold + step * 4)} or more` });
+        const chance = band => valuePmf.reduce((s, e) => s + (e.value >= band.lo - 1e-9 && e.value < band.hi - 1e-9 ? e.p : 0), 0);
+        table = {
+            summary: 'Exact chances',
+            caption: 'Exact chance of each value range',
+            head: ['Value put into play', 'Chance'],
+            rows: bands.filter(b => b.hi > b.lo).map(b => [escapeHtml(b.label), pct(chance(b))])
+        };
+    } else {
+        const runPmf = surgeRunPmf(config.permanents, config.nonPermanents);
+        const rows = [];
+        for (let k = 0; k <= config.permanents; k++) {
+            if (k > 0 && (result.atLeast[k] ?? 0) < 0.0005 && k !== config.permanents) continue;
+            const paid = result.table?.shortBySize ? 1 - (result.table.shortBySize[k] ?? 1) : null;
+            rows.push([
+                k === config.permanents && config.permanents > 0 ? `${k} (whole library)` : String(k),
+                pct(runPmf[k] ?? 0),
+                pct(result.atLeast[k] ?? 0),
+                ...(hasValue ? [result.table.shortBySize ? pct(paid) : '100%'] : [])
+            ]);
+        }
+        table = {
+            summary: 'Exact chances',
+            caption: 'Exact chance of each run length',
+            head: ['Permanents', 'Exactly', 'At least', ...(hasValue ? ['Pays for itself'] : [])],
+            rows
+        };
+    }
+
+    el.innerHTML = dotPlot({
+        dots: shown,
+        label,
+        unit: 'cast',
+        format,
+        xLabel: byValue ? 'Value put into play (mana value + credits)' : 'Permanents put onto the battlefield',
+        threshold: byValue ? threshold : null,
+        thresholdLabel: byValue ? `${valueText(threshold)}+ pays for itself` : '',
+        legend,
+        maxColumns: byValue ? 28 : 32,
+        table
+    });
+    const caption = document.getElementById('surge-dots-caption');
+    if (caption) {
+        caption.innerHTML = byValue
+            ? 'Each dot is one cast in a hundred, stacked by the value it puts into play. Solid dots reach your target; rings fall short. Exact, not simulated.'
+            : `Each dot is one cast in a hundred, stacked by how many permanents it puts onto the battlefield before an instant or sorcery stops it.${hasValue ? ' Solid dots paid for themselves; rings fell short.' : ''} Exact, not simulated.`;
+    }
 }
 
 function renderChart(config, result) {
@@ -467,6 +652,9 @@ function renderChart(config, result) {
 function renderSamples(config) {
     const el = document.getElementById('surge-samples');
     if (!el) return;
+    const castBtn = document.getElementById('surge-cast-btn');
+    if (castBtn) castBtn.hidden = !config.cards.length;
+    syncCast(document.getElementById('surge-cast'), config.cards.length ? castKey(config) : null);
     if (!config.cards.length) {
         el.innerHTML = noticeHTML('Sample casts need a decklist with card names — import one from the deck menu.', 'flat');
         return;
@@ -511,6 +699,57 @@ function renderSamples(config) {
     }).join('');
 }
 
+/**
+ * One Primal Surge resolution, card by card, for the "Cast it" animation:
+ * permanents go to the battlefield and it repeats; the first instant or
+ * sorcery stops it. Pure — the library is a shuffled list of card records.
+ *
+ * @param {Array<{name:string, type_line:string, cmc:number, types:string[]}>} library
+ * @param {{threshold:number, landValue:number, cardValue:number}} settings
+ */
+export function surgeCastPlan(library, settings) {
+    const threshold = settings?.threshold ?? CONFIG.DEFAULT_PAYBACK_THRESHOLD;
+    const steps = [];
+    let permanents = 0;
+    let manaValue = 0;
+    let lands = 0;
+    let stopper = null;
+    const totalsAt = () => {
+        const { effectiveValue, paidBack } = calculateSurgeRunValue({ manaValue, lands, permanents }, settings);
+        return {
+            value: effectiveValue,
+            paidBack,
+            totals: [
+                { label: 'Permanents', value: String(permanents) },
+                { label: 'Value', value: `${avg(effectiveValue)} <small>of ${valueText(threshold)}</small>`, tone: paidBack ? 'good' : undefined }
+            ]
+        };
+    };
+    for (const card of library ?? []) {
+        if (!isPermanentTypeLine(card.type_line)) {
+            stopper = card;
+            const kind = (card.types ?? []).includes('instant') ? 'an instant' : 'a sorcery';
+            steps.push({ name: card.name, fate: 'stop', note: `${kind}, not a permanent — Primal Surge stops here.`, totals: totalsAt().totals });
+            break;
+        }
+        permanents += 1;
+        manaValue += card.cmc || 0;
+        const isLandCard = (card.types ?? []).includes('land');
+        if (isLandCard) lands += 1;
+        const kind = isLandCard ? 'a land' : `a permanent (mana value ${card.cmc || 0})`;
+        steps.push({ name: card.name, fate: 'battlefield', note: `${kind} — onto the battlefield, and Surge exiles the next card.`, totals: totalsAt().totals });
+    }
+    const end = totalsAt();
+    const run = `${plural(permanents, 'permanent')} onto the battlefield, worth ${avg(end.value)}`;
+    const summary = stopper
+        ? `${run} — ${end.paidBack ? '<strong>pays for itself</strong>' : '<strong>falls short</strong>'} of ${valueText(threshold)}. ${escapeHtml(stopper.name)} stopped it.`
+        : `Every card was a permanent: ${run}. The whole library!`;
+    return { steps, permanents, value: end.value, paidBack: end.paidBack, stopped: Boolean(stopper), summary, startTotals: [
+        { label: 'Permanents', value: '0' },
+        { label: 'Value', value: `0 <small>of ${valueText(threshold)}</small>` }
+    ] };
+}
+
 /** The library with the cast Surge removed, one object per card. */
 function libraryCards(cards) {
     const library = expandCards(cards);
@@ -519,107 +758,23 @@ function libraryCards(cards) {
     return library;
 }
 
-/**
- * Group every sampled effective value into a small set of contiguous ranges.
- * The payback threshold is always a range boundary, so a range never mixes
- * whiffs with paid-back runs. Counts, rather than rounded percentages, drive
- * the chart and sum exactly to the number of samples.
- */
-export function buildSurgeValueRanges(values, threshold) {
-    const samples = (values ?? []).filter(Number.isFinite).map(value => Math.max(0, value));
-    if (samples.length === 0) return [];
-
-    const boundary = Math.max(0, Number.isFinite(threshold) ? threshold : CONFIG.DEFAULT_PAYBACK_THRESHOLD);
-    const sortedValues = [...samples].sort((a, b) => a - b);
-    const maxValue = sortedValues.at(-1);
-    // Keep the common outcomes legible even when a rare full-library run is
-    // much larger. The open-ended tail still counts every such result.
-    const coreMax = sortedValues[Math.floor((sortedValues.length - 1) * 0.95)];
-    const niceWidth = (span, targetBins) => {
-        if (span <= 0) return 1;
-        const rough = span / targetBins;
-        const magnitude = 10 ** Math.floor(Math.log10(rough));
-        return [1, 2, 5, 10].map(step => step * magnitude).find(width => width >= rough) ?? 10 * magnitude;
-    };
-
-    const ranges = [];
-    if (boundary > 0) {
-        const width = niceWidth(boundary, 4);
-        for (let i = 0; i < Math.ceil(boundary / width); i++) {
-            ranges.push({ start: i * width, end: Math.min(boundary, (i + 1) * width), count: 0, paidBack: false });
-        }
-    }
-
-    const paidWidth = niceWidth(Math.max(0, coreMax - boundary), 7);
-    const paidBins = coreMax >= boundary ? Math.floor((coreMax - boundary) / paidWidth) + 1 : 1;
-    for (let i = 0; i < paidBins; i++) {
-        ranges.push({ start: boundary + i * paidWidth, end: boundary + (i + 1) * paidWidth, count: 0, paidBack: true });
-    }
-    const tailStart = boundary + paidBins * paidWidth;
-    if (maxValue >= tailStart) {
-        ranges.push({ start: tailStart, end: Infinity, count: 0, paidBack: true });
-    }
-
-    for (const value of samples) {
-        const range = ranges.find(item => value >= item.start && value < item.end);
-        if (range) range.count++;
-    }
-    return ranges;
+function imageFor(name) {
+    const record = findCard(DeckConfig.getImportedCardData()?.cardsByName ?? {}, name);
+    return cardImageUrl(record ?? name, 'small');
 }
 
-function renderSurgeValueRanges(ranges, total) {
-    const label = range => Number.isFinite(range.end)
-        ? `${formatNumber(range.start, 2)}–<${formatNumber(range.end, 2)}`
-        : `${formatNumber(range.start, 2)}+`;
-    const whiffs = ranges.filter(range => !range.paidBack).reduce((sum, range) => sum + range.count, 0);
-    const paid = total - whiffs;
-    const segments = ranges.filter(range => range.count > 0).map(range =>
-        `<span class="surge-range-segment ${range.paidBack ? 'is-paid' : 'is-whiff'}" style="flex-grow:${range.count}" title="${label(range)} value: ${formatPercentage(range.count / total, 1)} (${range.count}/${total} runs)"></span>`
-    ).join('');
-    const legend = ranges.map(range => `
-        <li class="surge-range-item ${range.paidBack ? 'is-paid' : 'is-whiff'}">
-            <span class="surge-range-swatch" aria-hidden="true"></span>
-            <span class="surge-range-label">${label(range)} value</span>
-            <span class="surge-range-count">${range.count} runs</span>
-            <strong>${formatPercentage(range.count / total, 1)}</strong>
-        </li>`).join('');
+/** What a cast depends on: a different deck or setting closes an open cast. */
+const castKey = config => `${config.deckKey}|${JSON.stringify(config.settings)}`;
 
-    return `
-        <div class="surge-range-band" aria-hidden="true">${segments}</div>
-        <div class="surge-range-totals"><span class="is-whiff">Falls short ${pct(whiffs / total)}</span><span class="is-paid">Pays for itself ${pct(paid / total)}</span></div>
-        <ul class="surge-range-list" aria-label="All value ranges">${legend}</ul>`;
-}
-
-/** Value spread over simulated casts (cached shuffles; rescored on setting changes). */
-function renderValueSpread(config) {
-    const el = document.getElementById('surge-spread');
-    if (!el) return;
-    if (!config.cards.length) {
-        el.innerHTML = noticeHTML('Needs a decklist with mana values.', 'flat');
-        return;
-    }
-    if (simulated.key !== config.deckKey) {
-        const base = buildDeckExcludingSurge({ cardsByName: Object.fromEntries(config.cards.map(c => [c.name, c])) });
-        const runs = [];
-        for (let i = 0; i < CONFIG.SIM_RUNS; i++) {
-            const library = shuffleDeck(base.slice());
-            let permanents = 0;
-            let manaValue = 0;
-            let lands = 0;
-            for (const card of library) {
-                if (!card.types.some(t => t !== 'instant' && t !== 'sorcery')) break;
-                permanents++;
-                manaValue += card.cmc || 0;
-                if (card.types.includes('land')) lands++;
-            }
-            runs.push({ permanents, manaValue, lands });
-        }
-        simulated = { key: config.deckKey, runs };
-    }
-    const values = simulated.runs.map(run => calculateSurgeRunValue(run, config.settings).effectiveValue);
-    const ranges = buildSurgeValueRanges(values, config.settings.threshold);
-    el.innerHTML = `<p class="bs-caption">${CONFIG.SIM_RUNS} shuffles of your list, each resolved to the end. The exact payback chance above is the one to trust; this shows how big the wins and misses are.</p>
-        <div class="srg-spread">${renderSurgeValueRanges(ranges, values.length)}</div>`;
+/** "Cast it": a fresh shuffle resolved card by card. */
+function castIt() {
+    const config = getDeckConfig();
+    const stage = document.getElementById('surge-cast');
+    if (!stage || !config.cards.length) return;
+    const library = libraryCards(config.cards);
+    shuffle(library);
+    const plan = surgeCastPlan(library, config.settings);
+    playCast(stage, { ...plan, outLabel: 'Stopped by', librarySize: library.length, imageFor, key: castKey(config) }, castIt);
 }
 
 export function updateUI() {
@@ -627,15 +782,17 @@ export function updateUI() {
     if (!result) {
         const el = document.getElementById('surge-stats');
         if (el) el.innerHTML = renderBottomLine({ html: 'Add cards to your deck to see how far Primal Surge gets.', tone: 'flat' });
+        const dots = document.getElementById('surge-dots');
+        if (dots) dots.innerHTML = '';
+        closeCast(document.getElementById('surge-cast'));
         chart?.destroy?.();
         chart = null;
         return;
     }
     renderAnswer(config, result);
-    renderRunOdds(config, result);
+    renderDots(config, result);
     renderChart(config, result);
     renderSamples(config);
-    renderValueSpread(config);
     renderHowItCompares('big-spell-comparison-surge', { x: CONFIG.COST, source: 'surge', deckKey: config.deckKey });
 }
 
@@ -651,6 +808,17 @@ export function init() {
             document.getElementById('surge-reshuffle-btn')?.addEventListener('click', () => {
                 sampler.reshuffle();
                 renderSamples(getDeckConfig());
+            });
+            document.getElementById('surge-cast-btn')?.addEventListener('click', castIt);
+            document.getElementById('surge-cast')?.addEventListener('cast-closed', () => {
+                document.getElementById('surge-cast-btn')?.focus({ preventScroll: true });
+            });
+            document.getElementById('surge-dots-view')?.addEventListener('click', e => {
+                const view = e.target.closest('[data-surge-view]')?.dataset.surgeView;
+                if (!view || view === dotView) return;
+                dotView = view;
+                const { config, result } = calculate();
+                if (result) renderDots(config, result);
             });
         }
     });

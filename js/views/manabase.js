@@ -208,7 +208,48 @@ export const styles = `
     align-items: center;
     gap: 10px;
 }
+#manabase-tab .mb-chance:has(.viz-strip), #manabase-tab .mb-chance-head { grid-template-columns: auto 3.4em; justify-content: start; gap: 12px; }
+#manabase-tab .mb-chance-head { display: grid; align-items: end; }
+#manabase-tab .mb-chance-head .term { grid-column: 1 / -1; }
 #manabase-tab .mb-chance .num { color: var(--tx-bright); }
+#manabase-tab .mb-chance .num.tone-good { color: var(--tx-good); }
+#manabase-tab .mb-chance .num.tone-warn { color: var(--tx-warn); }
+#manabase-tab .mb-chance .num.tone-bad { color: var(--tx-bad); }
+
+/* Turn strips: when a card or colour becomes reliable */
+#manabase-tab .mb-strip-axis {
+    display: inline-grid;
+    grid-template-columns: repeat(8, 11px);
+    gap: 3px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1;
+    text-align: center;
+    text-transform: none;
+    color: var(--tx-dim);
+}
+#manabase-tab .mb-strip-note {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+    margin: 0 0 4px; font-size: var(--t-xs); color: var(--tx-mid);
+}
+#manabase-tab .mb-strip-key { display: inline-flex; flex-wrap: wrap; gap: 6px 14px; }
+#manabase-tab .mb-strip-key > span { display: inline-flex; align-items: center; gap: 6px; color: var(--tx-dim); }
+#manabase-tab .mb-strip-key .viz-strip-cell { width: 11px; }
+#manabase-tab .mb-color-turns { display: grid; gap: 5px; padding-top: 10px; border-top: 1px solid var(--tx-rule); }
+#manabase-tab .mb-turns-row {
+    display: grid;
+    grid-template-columns: 58px auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    font-size: var(--t-xs);
+}
+#manabase-tab .mb-turns-head { font-size: var(--t-label); color: var(--tx-dim); }
+#manabase-tab .mb-turns-head > span:first-child { grid-column: 1; }
+#manabase-tab .mb-turns-row .mana-cost { display: inline-flex; gap: 2px; }
+#manabase-tab .mb-turns-row .ms { width: 16px; height: 16px; min-width: 16px; min-height: 16px; font-size: 9px; }
+#manabase-tab .mb-turns-from { color: var(--tx-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #manabase-tab .mb-overall { color: var(--tx-mid); }
 #manabase-tab .mb-copies { margin-left: 6px; font-family: var(--font-mono); font-size: var(--t-xs); color: var(--tx-dim); }
 #manabase-tab .mb-cost-inline { display: none; }
@@ -366,6 +407,7 @@ export const guide = {
     intro: `Every spell with coloured mana symbols is checked against your actual lands: by the turn matching its mana value, how often can your lands pay its colours? Multicolour cards are checked as a whole — a ${mana('{G}{U}')} card needs a green source and a blue source at once, and a single Breeding Pool cannot be both.`,
     howToRead: [
         '<strong>Right colours</strong> is the headline chance: if you have drawn enough lands by that turn, how often they can pay every coloured symbol. Frank Karsten aims for 90% on the cards that matter.',
+        'The <strong>turn strips</strong> show <em>when</em> a card or colour becomes reliable, not just on curve: one cell per turn from 1 to 8, assuming you made every land drop. Solid is 90% or better, hatched 80–89%, a ring under 80%; the outlined cell is the card’s own turn. A dash means not enough lands yet. Hover a cell for its chance.',
         '<strong>Lands + colours</strong> also counts missed land drops, so it is always lower — for expensive cards it is mostly about land count, which more lands fix and better colours do not.',
         '<strong>Colours</strong> compares each colour’s sources with what its hardest card wants. The colour furthest short is the bottleneck.',
         '<strong>Sources for 90% on curve</strong> is a Karsten-style table worked out for your deck size and land count. Green cells are ones your sources already meet; outlined cells are where you actually have cards.',

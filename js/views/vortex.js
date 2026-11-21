@@ -34,6 +34,7 @@ export const template = `
     <section class="panel" id="vortex-selected-panel" aria-label="One trigger up close">
         <div class="tx-h" id="vortex-selected-head"><span>One trigger, up close</span></div>
         <div id="vortex-stats"></div>
+        <div id="vortex-dots" class="vx-dots"></div>
         <div class="chart-container vx-chart">
             <canvas id="vortex-chart" role="img" aria-label="Free mana per trigger by the mana value of the creature cast"></canvas>
         </div>
@@ -56,10 +57,6 @@ export const template = `
                 <div class="vx-table-wrap" id="vortex-comparisonTable"></div>
             </div>
         </details>
-        <details class="tx-collapse">
-            <summary class="tx-collapse-head" id="vortex-dist-summary">How one trigger spreads out</summary>
-            <div class="tx-collapse-body" id="vortex-dist"></div>
-        </details>
     </section>
 </div>
 `;
@@ -67,6 +64,13 @@ export const template = `
 export const styles = `
 /* Four supporting numbers in one row; the bottom line above is the answer. */
 #vortex-tab .tx-hero { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+#vortex-tab .vx-dots { border-top: 1px solid var(--tx-rule); }
+#vortex-tab .vx-dots-head {
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 16px;
+    padding: 12px 18px 0; font-size: var(--t-sm); font-weight: 600; color: var(--tx-bright);
+}
+#vortex-tab .vx-dots-sub { font-family: var(--font-mono); font-size: var(--t-label); font-weight: 400; color: var(--tx-dim); }
+#vortex-tab .vx-dots:empty { display: none; }
 #vortex-tab .tx-hero .tx-stat:first-child .tx-stat-value { font-size: var(--t-xxl); }
 
 /* Fixed marker column, so a row with a marker keeps the same bar length. */
@@ -267,6 +271,7 @@ export const guide = {
         'The <strong>bottom line</strong> averages every big creature in the deck, weighted by how many copies you run.',
         '<strong>Your big creatures</strong> lists each one with what a single cast of it discovers. <strong>Average</strong> is the mean free mana, <strong>Typical</strong> is the median trigger, <strong>Good turn</strong> is the trigger only 1 in 20 beats, and <strong>Chains</strong> is how often the free spell triggers Vortex again.',
         'The <strong>slider</strong> picks a mana value to look at closely — including ones you have no creature at, so you can see what adding one would do.',
+        '<strong>Out of 100 triggers</strong> shows every outcome of one trigger at the chosen mana value: each dot is one trigger in a hundred, stacked by the free mana it cast. Solid dots cast at least Vortex’s own 4 mana, rings found nothing.',
         'In the chart, the solid line is the average, the dashed line is a good turn and the dotted line is a typical trigger.',
         '<strong>Sample triggers</strong> are single real shuffles: what was passed over (lands are counted, spells named), what was cast, and whether it chained.'
     ],
