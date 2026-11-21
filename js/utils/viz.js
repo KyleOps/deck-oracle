@@ -550,13 +550,22 @@ const ENTITIES = Object.freeze({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "
 
 /**
  * Plain text from a small HTML label, for an aria-label: tags dropped and
- * escapeHtml's entities decoded (so "Kodama&#39;s" reads "Kodama's"). Any
- * angle bracket left over is removed, so the result can never form a tag;
+ * escapeHtml's entities decoded (so "Kodama&#39;s" reads "Kodama's").
+ *
+ * Tags are dropped by a character scan, not a regex replace: one regex pass
+ * turns "<<script>script>" into "<script>". The scan never emits an angle
+ * bracket and decoded ones are removed, so the result can't form a tag;
  * callers still attribute-escape it.
  */
 function stripTags(html) {
-    return String(html ?? '')
-        .replace(/<[^>]*>/g, '')
+    let text = '';
+    let inTag = false;
+    for (const ch of String(html ?? '')) {
+        if (ch === '<') inTag = true;
+        else if (ch === '>') inTag = false;
+        else if (!inTag) text += ch;
+    }
+    return text
         .replace(/&(amp|lt|gt|quot|#39);/g, (_, name) => ENTITIES[name])
         .replace(/[<>]/g, '')
         .replace(/\s+/g, ' ')
