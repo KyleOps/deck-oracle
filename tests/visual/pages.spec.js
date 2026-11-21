@@ -9,7 +9,8 @@ import { isolateNetwork } from '../e2e/helpers/network.js';
  * from node_modules, card art is a fixed transparent pixel (and masked), and
  * the regions that exist to be random (sample hands and casts, simulated
  * charts) are masked as well. A page whose capture differs between two runs
- * on the same machine needs another mask here: the "Update visual
+ * on the same machine by more than the glyph noise allowed in
+ * playwright.visual.config.js needs another mask here: the "Update visual
  * baselines" workflow checks exactly that before uploading.
  */
 

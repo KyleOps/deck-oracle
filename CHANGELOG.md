@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Screenshot baselines are live.** Linux baselines for the overview, Draw Odds, Mana Base, Opening Hands, Wild Pair and Primal Surge (dark and light, desktop and phone, 24 images) are committed in `tests/visual/__screenshots__/linux/`, so CI now compares every pull request against them.
+
+### Changed
+- **Screenshot comparisons allow 300 px of glyph noise on every platform** (`playwright.visual.config.js`), replacing a 50 px budget on Linux that was never tested there. Chromium draws a few letters slightly differently from run to run. Across 192 Linux captures every page flipped between fixed states of 19–187 px, so the old budget would have failed most CI runs. A single raster thread and waiting for idle didn't help. 300 px still fails a misplaced bar (1,306 px) or any layout or colour change.
+- **Development dependencies:** Playwright 1.65.1 (newer Chromium) and ESLint 10.15, which clears the remaining `npm audit` advisory.
+
 ## [3.1.0] - 2026-11-21
 
 A new Mana Development page, answer-first visuals across eight pages, and CI gates that keep it fast and correct.

@@ -77,7 +77,8 @@ renders differently on each OS):
 3. Look at the images, then commit them with your pull request.
 
 CI compares every change against them once that folder exists (until then the step is
-skipped). Locally, `npm run test:visual:update` then `npm run test:visual` compare against
+skipped). Chromium draws a few letters slightly differently from run to run, so a page
+may differ by up to 300 pixels before a comparison fails. Locally, `npm run test:visual:update` then `npm run test:visual` compare against
 baselines for your own OS, which git ignores.
 
 Pull requests must pass CI before merging. Dependabot opens grouped update PRs weekly for

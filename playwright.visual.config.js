@@ -24,10 +24,14 @@ export default defineConfig({
         toHaveScreenshot: {
             // An absolute pixel count, not a ratio: on a 3,000 px tall page a
             // 0.2% ratio let a misplaced sticky top bar (1,306 px) through.
-            // Windows re-rasterises a few glyphs differently from run to run
-            // (up to ~175 px per page measured), so local non-Linux runs get
-            // more room; CI on Linux stays strict.
-            maxDiffPixels: process.platform === 'linux' ? 50 : 300,
+            // Chromium rasterises a few glyphs slightly differently from run
+            // to run, even with the flags below, one worker and a page left
+            // idle: each page flips between a few fixed states. Measured over
+            // 192 Linux captures (CI runner, Chromium for Playwright 1.65) and
+            // 168 on Windows, the largest was 187 px. A single raster thread
+            // made no difference on Linux. 300 px absorbs that noise and
+            // still fails any layout, spacing or colour change.
+            maxDiffPixels: 300,
             animations: 'disabled',
             caret: 'hide',
             scale: 'css'
