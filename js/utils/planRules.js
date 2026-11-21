@@ -988,6 +988,7 @@ defineCardRule('Through the Forest Gate', rule({
 }));
 defineCardRule('U.S.S. Voyager, Lone Wanderer', revealUntilLands(2, { tapped: true }));
 defineCardRule('Omenpath Journey', exiledLandEachEndStep(5));
+// Even X = 1 on turn 3 (a 2-in-5 shot at an untapped land) raises the fast line by about a point: the plan casts it.
 defineCardRule("Kamahl's Druidic Vow", lookAtTopX({ permanents: 'legendary', min: 1 }));
 defineCardRule('Genesis Wave', rule(lookAtTopX({ permanents: 'all', min: 1 }), { ramp: null, rampValue: 0 }));
 defineCardRule('Karametra, God of Harvests', rule(devotionCreature(G | W, 7), creatureCastFetch(['forest', 'plains'], { tapped: true }), { ramp: rampSpec({ kind: 'trigger' }) }));

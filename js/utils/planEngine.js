@@ -1058,13 +1058,15 @@ class Game {
         const colors = this.availColors;
         // The plan's card for this turn, castable now: what's left after it is what more mana would add to.
         const plan = this.planCardNow();
+        // Cards held for a later turn's spend or package step won't be cast this turn either way.
+        const held = c => this.hand.includes(c) && this.held(c, true);
         if (plan) {
             const left = cap - this.costOf(plan, plan.xMin);
-            const more = c => c !== plan && !c.land && !c.placeholder && c.playMv > left && c.playMv <= left + n && this.canCastNow(c);
+            const more = c => c !== plan && !c.land && !c.placeholder && c.playMv > left && c.playMv <= left + n && this.canCastNow(c) && !held(c);
             return this.hand.some(more) || this.command.some(more);
         }
         const test = c => {
-            if (c.land || c.placeholder || c.playMv > cap + n) return false;
+            if (c.land || c.placeholder || c.playMv > cap + n || held(c)) return false;
             // Affordable already (enough mana, every colour there): more mana changes nothing.
             if (c.playMv <= cap && !c.convoke) {
                 let ok = true;
@@ -1132,7 +1134,7 @@ class Game {
             this.life -= card.fetch.life;
             this.grave.push(card);
             // A fetchland put onto the battlefield tapped cracks next turn: its land is no help this turn either.
-            const found = this.searchLand(card.fetch.kind, card.fetch.bits, true, card.fetch.tapped || tapped, `${drop ?? ''}${card.name} → `);
+            const found = this.searchLand(card.fetch.kind, card.fetch.bits, true, card.fetch.tapped || tapped, drop === null ? null : `${drop}${card.name} → `);
             if (found) return;
             this.grave.pop();
             this.life += card.fetch.life;
@@ -1621,7 +1623,8 @@ class Game {
             if (s.copied && !copied) continue;
             if (!s.info && met >= 0) continue;
             this.markStep(s.index);
-            this.stepValue[s.index] = stackMv;
+            // What the spell cost is worth showing only when the step is about it (copied, or paid n+).
+            if (s.copied || s.paid) this.stepValue[s.index] = stackMv;
             if (!s.info) met = s.index;
         }
         return met;
@@ -1687,10 +1690,10 @@ class Game {
         return v;
     }
 
-    /** Is this card held for a package or spend step that hasn't happened? */
-    held(card) {
+    /** Is this card held for a package or spend step that hasn't happened (`later`: due after this turn)? */
+    held(card, later = false) {
         for (const s of this.run.steps) {
-            if (s.info || this.stepTurn[s.index]) continue;
+            if (s.info || this.stepTurn[s.index] || (later && s.turn <= this.turn)) continue;
             if (s.kind === PACKAGE && s.options.some(o => o.match(card))) return true;
             if (s.kind === SPEND && stepMatches(s, card)) return true;
         }
@@ -2060,7 +2063,8 @@ class Game {
         if (s.kind === RAMP) {
             if (this.missedDrops > 0) return REASON.LAND;
             if (this.rampCast > 0) return REASON.SHORT;
-            const inHand = this.hand.filter(c => !c.land && c.isRamp && !this.held(c));
+            // Ramp you could have cast on curve: a card costing more than a turn's normal mana isn't the miss.
+            const inHand = this.hand.filter(c => !c.land && c.isRamp && !this.held(c) && c.playMv <= s.turn + 1);
             if (!inHand.length) return REASON.NO_CARD;
             return this.colourShort(inHand, this.peak) ?? REASON.MANA;
         }

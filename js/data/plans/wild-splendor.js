@@ -25,9 +25,13 @@ export const plan = {
     ]
 };
 
-/** What the plan does, what carries it and what holds it back — every number from 5,000 simulated games. */
+/** What the plan does, what carries it and what holds it back — every number from the simulator (5,000 games at the page’s defaults; swaps 20,000). */
 export const notes = [
-    'Notes to come.'
+    'A chain of three: a mana 2-drop on turn 2 (84% of games), Selvala on turn 3 (69% — 82% of the games that made the 2-drop), then 8+ mana spent on spells with mana value 4+ on turn 4 (32% — 46% of the games that had Selvala out). All on time: 32%; each at most a turn late: 72%. Turn 4 is the weak link, and mana is the bottleneck, not payoffs: the usual miss is too little mana to spend 8 (21% of games), and median turn-4 mana is 7 (half of games 5–8; 43% make 8+).',
+    'Which 2-drop you start with decides turn 4. Fanatic of Rhonas wins 68% of the games it starts (median turn-4 mana 10), Badgermole Cub 60% (9). The eight-mana group — Jadzia 44%, Raucous Audience 42%, Whisperer 41%, Bloom Tender 37%, Ilysian Caryatid and Priest of Titania 35% — lands right on the line. Tangled Florahedron, Bramble Familiar and Trailtracker Scout top out at 7 (6–11%), The Mind Stone at 6 (4%): with them, turn 4 needs two 4-drops cast before Selvala taps.',
+    'Your rule is 8+, but 15 of the 29 big payoffs cost exactly 7, and a lone 7-drop doesn’t count: 9% of games have 8+ mana but nothing in hand that adds up to 8 — three times in four, a lone 7-drop. Counted at 7+, the plan lands on time in 57% of games (9+: 15%). The literal “two 4-drops or one 7–9-drop” happens in 48%.',
+    'Swaps, measured over 20,000 games each (base 32.5% on time): Restoration Seminar is almost never castable on turn 4 (it needs a nonland permanent in your graveyard) — a Forest instead: 34.4%. The Mind Stone for a Forest: 34.6%. Evendo, Emeria and Adagia (always tapped) as basic Plains: 35.1%. Urza’s Cave, Talon Gates and Lazotep Quarry as Forests: 33.3% — they can’t pay a 2-drop’s {G} or Selvala’s {G}{W}, and only 2 basic Forests back them up.',
+    'Cards that look like ramp but come too late: Karametra, Silverback Elder, Kodama, Lumra, Growing Rites, Zendikar Resurgent, Through the Forest Gate and Reshape the Earth only add mana after they resolve — on turn 4 they are the payoff. The Great Henge is the exception: 5 mana with Selvala out, {G}{G} at once, so Henge plus a 7-drop spends 12. The keep rule digs for a 2-drop: 36% of games go to six cards; keeping any 2–4-land hand instead drops the plan to 26%.'
 ];
 
 export const snapshot = {
