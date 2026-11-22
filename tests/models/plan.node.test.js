@@ -632,7 +632,8 @@ describe('presets', () => {
         assert.ok(names.includes('Forest') && names[0] !== 'Forest', 'the list has Forests');
         swapped.Forest = { ...swapped.Forest, count: swapped.Forest.count + 1 };
         const vow = names.find(n => n.includes("Kamahl's"));
-        swapped[vow.replace("'", '’')] = { ...swapped[vow], name: vow.replace("'", '’') };
+        const curly = vow.replaceAll("'", '’');
+        swapped[curly] = { ...swapped[vow], name: curly };
         delete swapped[vow];
         assert.deepEqual(GP.presetDeckDiff(doctor.snapshot, { ...own, cardsByName: swapped }), { missing: 1, extra: 2 });
 
