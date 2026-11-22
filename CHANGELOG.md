@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-11-22
+
+### Fixed
+- **Game Plan: the preset notes now say which list they were measured on.** With the Doctor Whostoric plan applied, the bundled example deck (an older version of that list, 18 cards different) answered 76% on time while the notes beside it said 71%. Both numbers were right, but nothing said why they differed.
+  - "About this plan" now opens with the list the notes were measured on and the day ("as it was on Moxfield on 21 November 2026").
+  - When the deck in use is a different list, it says the answer above is that deck's own and how many cards apart the two lists are, with a **Load that list** button that loads the preset's deck.
+  - Preset modules gain `measuredOn` (YYYY-MM-DD). The model gains `presetDeckDiff()` (copies missing and extra by card name, commanders left out), `presetSource()` (the sentence) and `longDate()`, all in `js/utils/models/plan.js`.
+
 ## [3.3.0] - 2026-11-21
 
 A Game Plan page that checks whether a deck does what it's built to do, on time, with two fully analysed presets, and a ramp rule that no longer overstates board-dependent mana.

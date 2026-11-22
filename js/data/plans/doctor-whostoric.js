@@ -14,6 +14,8 @@
 export const id = 'doctor-whostoric';
 export const title = 'Doctor Whostoric — The Sixth Doctor + Susan';
 export const deckUrl = 'https://moxfield.com/decks/BdgPCOK4IUyNd2287K2mvg';
+/** The day the list was taken from the deck site and every number in the notes measured. */
+export const measuredOn = '2026-11-21';
 export const commanders = ["The Sixth Doctor","Susan Foreman"];
 
 export const plan = {

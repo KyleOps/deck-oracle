@@ -14,6 +14,8 @@
 export const id = 'wild-splendor';
 export const title = 'Wild Splendor — Selvala';
 export const deckUrl = 'https://moxfield.com/decks/oWiA7YWonEyzPMyVCiHkIw';
+/** The day the list was taken from the deck site and every number in the notes measured. */
+export const measuredOn = '2026-11-21';
 export const commanders = ["Selvala, Eager Trailblazer"];
 
 export const plan = {

@@ -600,4 +600,65 @@ describe('presets', () => {
         assert.equal(GP.readPreset({ id: 'x', title: 'X', plan: WILD_SPLENDOR }), null, 'and a deck');
         assert.equal(GP.readPreset(null), null);
     });
+
+    it('says what day each preset was measured, and reads only real calendar dates', async () => {
+        for (const entry of PLAN_PRESETS) {
+            const preset = GP.readPreset(await entry.load());
+            assert.match(GP.longDate(preset.measuredOn), /^\d{1,2} [A-Z][a-z]+ 20\d\d$/, `${entry.id} says when it was measured`);
+        }
+        assert.equal(GP.longDate('2026-11-21'), '21 November 2026');
+        assert.equal(GP.longDate('2027-01-05'), '5 January 2027');
+        assert.equal(GP.longDate('2024-02-29'), '29 February 2024', 'a leap day');
+        for (const junk of ['2026-02-30', '2026-13-01', '2026-00-10', '21/11/2026', '', null, 20261121]) assert.equal(GP.longDate(junk), '', String(junk));
+        const mod = await PLAN_PRESETS[0].load();
+        assert.equal(GP.readPreset({ ...mod, measuredOn: 'last week' }).measuredOn, null);
+    });
+
+    it('measures how far a deck is from a preset’s list, by name, commanders left out', async () => {
+        const doctor = GP.readPreset(await presetEntry('doctor-whostoric').load());
+        const own = { ...doctor.snapshot, cardsByName: { ...doctor.snapshot.cardsByName } };
+        assert.deepEqual(GP.presetDeckDiff(doctor.snapshot, own), { missing: 0, extra: 0 }, 'its own list');
+
+        // The commanders listed among the cards (some imports do) are still not the library.
+        const sixth = doctor.snapshot.commanders[0].card;
+        const listed = { ...own, cardsByName: { ...own.cardsByName, [sixth.name]: { ...sixth, count: 1 } } };
+        assert.deepEqual(GP.presetDeckDiff(doctor.snapshot, listed), { missing: 0, extra: 0 });
+
+        // One swap, one more copy of a basic, a name typed with a curly apostrophe.
+        const names = Object.keys(own.cardsByName);
+        const swapped = { ...own.cardsByName };
+        delete swapped[names[0]];
+        swapped['Llanowar Elves'] = { name: 'Llanowar Elves', count: 1, cmc: 1, type_line: 'Creature — Elf Druid' };
+        assert.ok(names.includes('Forest') && names[0] !== 'Forest', 'the list has Forests');
+        swapped.Forest = { ...swapped.Forest, count: swapped.Forest.count + 1 };
+        const vow = names.find(n => n.includes("Kamahl's"));
+        swapped[vow.replace("'", '’')] = { ...swapped[vow], name: vow.replace("'", '’') };
+        delete swapped[vow];
+        assert.deepEqual(GP.presetDeckDiff(doctor.snapshot, { ...own, cardsByName: swapped }), { missing: 1, extra: 2 });
+
+        // The bundled example deck is an older version of the same deck.
+        const old = GP.presetDeckDiff(doctor.snapshot, DEFAULT_DECK_DATA, { format: 'commander' });
+        assert.ok(old.missing > 0 && old.missing === old.extra, `a swap of ${old.missing}`);
+    });
+
+    it('says which list the notes were measured on, and how far this deck is from it', () => {
+        const preset = { deckUrl: 'https://moxfield.com/decks/BdgPCOK4IUyNd2287K2mvg', measuredOn: '2026-11-21' };
+        assert.deepEqual(GP.presetSource(preset, { missing: 0, extra: 0 }), {
+            text: 'Measured on this list, as it was on Moxfield on 21 November 2026.',
+            differs: false
+        });
+        const lead = 'These numbers were measured on the list that comes with this plan, as it was on Moxfield on 21 November 2026.';
+        assert.deepEqual(GP.presetSource(preset, { missing: 16, extra: 16 }), {
+            text: `${lead} The answer above is for this deck, which differs from that list by 16 cards.`,
+            differs: true
+        });
+        assert.match(GP.presetSource(preset, { missing: 1, extra: 1 }).text, /by 1 card\.$/);
+        assert.match(GP.presetSource(preset, { missing: 0, extra: 2 }).text, /which has 2 cards that list doesn’t\.$/);
+        assert.match(GP.presetSource(preset, { missing: 1, extra: 0 }).text, /which lacks 1 of that list’s cards\.$/);
+        assert.match(GP.presetSource(preset, { missing: 3, extra: 1 }).text, /which has 1 card that list doesn’t and lacks 3 of that list’s cards\.$/);
+        assert.deepEqual(GP.presetSource(preset, null), { text: `${lead} The answer above is for this deck’s card counts.`, differs: true });
+        assert.equal(GP.presetSource({ deckUrl: 'https://archidekt.com/decks/123/x' }, { missing: 0, extra: 0 }).text, 'Measured on this list, as it was on Archidekt.');
+        assert.equal(GP.presetSource({ deckUrl: 'https://example.com/d', measuredOn: '2026-11-21' }, { missing: 0, extra: 0 }).text, 'Measured on this list, as it was on 21 November 2026.');
+        assert.equal(GP.presetSource(null, { missing: 0, extra: 0 }).text, 'Measured on this list.');
+    });
 });
