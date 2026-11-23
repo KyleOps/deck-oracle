@@ -146,7 +146,8 @@ export function readInputs() {
         deckName: config.deckName || lib.commanders.map(c => c.name).join(' + '),
         onPlay: effectiveOnPlay(onPlay, format),
         keep: GP.normalizeKeep(keep),
-        preset: GP.matchPreset(PLAN_PRESETS, config)
+        preset: GP.matchPreset(PLAN_PRESETS, config),
+        cardList
     };
 }
 
@@ -569,7 +570,14 @@ function renderPreset(inputs) {
     let html = '';
     if (using) {
         html += `<p>Plan: <strong>${escapeHtml(using.title)}</strong> — what it does and why is under “About this plan”.</p>`;
-        if (!presets.has(using.id)) loadPreset(using.id).then(() => isCalculatorActive(NAME) && (renderPreset(readInputs()), renderAbout()));
+        if (!presets.has(using.id)) {
+            loadPreset(using.id).then(() => {
+                if (!isCalculatorActive(NAME)) return;
+                const next = readInputs();
+                renderPreset(next);
+                renderAbout(next);
+            });
+        }
     } else if (match) {
         html += `<p>This deck looks like <strong>${escapeHtml(match.title)}</strong>, which has a tuned plan.</p>
             <div class="gp-preset-row"><button type="button" class="btn btn-primary btn-sm" data-act="use-preset" data-preset="${escapeHtml(match.id)}">Use its plan</button></div>`;
@@ -748,16 +756,29 @@ function renderMana(result) {
     }
 }
 
-/** A preset's notes, while its plan is the one in use. */
-function renderAbout() {
+/**
+ * A preset's notes, while its plan is the one in use, and the list they were
+ * measured on: when this deck is another list, the answer above is its own,
+ * so say how far apart they are and offer the preset's list.
+ */
+function renderAbout(inputs) {
     const panel = $('gp-about-panel');
     const el = $('gp-about');
     if (!panel || !el) return;
     const p = source.kind === 'preset' ? presets.get(source.id) : null;
     panel.hidden = !p?.notes?.length;
-    el.innerHTML = p ? notesHTML(p.notes) : '';
     const meta = $('gp-about-meta');
     if (meta) meta.textContent = p ? p.title : '';
+    if (!p) {
+        el.innerHTML = '';
+        return;
+    }
+    const diff = inputs?.cardList ? GP.presetDeckDiff(p.snapshot, inputs.config, { format: inputs.format }) : null;
+    const from = GP.presetSource(p, diff);
+    const load = from.differs
+        ? `<button type="button" class="btn btn-sm" data-act="try-preset" data-preset="${escapeHtml(p.id)}">Load that list</button>`
+        : '';
+    el.innerHTML = `<div class="gp-about-source${from.differs ? ' is-other' : ''}"><p>${escapeHtml(from.text)}</p>${load}</div>${notesHTML(p.notes)}`;
 }
 
 /** 100 games as dots for one measured distribution. */
@@ -880,7 +901,7 @@ function render(result, inputs) {
     renderSummary(result, inputs);
     afterPaint(() => {
         if (token !== renderToken || !isCalculatorActive(NAME)) return;
-        renderAbout();
+        renderAbout(inputs);
         renderFunnel(result);
         renderReasons(result);
         renderMana(result);
@@ -987,6 +1008,7 @@ export function init() {
         const button = t.closest?.('[data-act]');
         if (!button) return;
         if (button.dataset.act === 'use-preset') return usePreset(button.dataset.preset);
+        if (button.dataset.act === 'try-preset') return tryPreset(button.dataset.preset);
         onEditorAction(button.dataset.act, button.closest('.gp-step'), button);
     });
     root.addEventListener('change', onChange);

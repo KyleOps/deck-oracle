@@ -16,11 +16,11 @@ import {
     normalizePlan, encodePlan, decodePlan, planKey, describeRequirement, stepSubject, groupNoun, article,
     MAX_TURN, MAX_MV
 } from '../planSchema.js';
-import { nameKey } from '../library.js';
+import { nameKey, libraryOf } from '../library.js';
 import { renderManaCost } from '../mana.js';
 import { quantile } from '../stats.js';
 import { cardRef, escapeHtml } from '../../data/glossary.js';
-import { pct } from '../text.js';
+import { pct, inflect } from '../text.js';
 
 export {
     buildPlanLibrary, buildPlanCountsLibrary, createPlanRun, runPlanBatch, finishPlanRun, simulatePlan,
@@ -322,7 +322,7 @@ export function matchPreset(presets, deck) {
  * A preset module checked for the fields the page relies on: an id, a
  * title, a valid plan and a deck snapshot with cards.
  * @param {Object} mod - the preset module's exports
- * @returns {{id:string, title:string, deckUrl:string|null, commanders:string[], plan:Object, notes:string, snapshot:Object}|null}
+ * @returns {{id:string, title:string, deckUrl:string|null, measuredOn:string|null, commanders:string[], plan:Object, notes:string[], snapshot:Object}|null}
  */
 export function readPreset(mod) {
     if (!mod || typeof mod.id !== 'string' || typeof mod.title !== 'string') return null;
@@ -333,11 +333,93 @@ export function readPreset(mod) {
         id: mod.id,
         title: mod.title,
         deckUrl: typeof mod.deckUrl === 'string' ? mod.deckUrl : null,
+        measuredOn: longDate(mod.measuredOn) ? mod.measuredOn : null,
         commanders: Array.isArray(mod.commanders) ? mod.commanders.filter(n => typeof n === 'string') : [],
         plan,
         notes,
         snapshot: mod.snapshot
     };
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/**
+ * A calendar date in words: '2026-11-21' → '21 November 2026'. Read as a
+ * date, not a time, so no time zone moves it. '' when it isn't one.
+ * @param {*} iso - YYYY-MM-DD
+ * @returns {string}
+ */
+export function longDate(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(typeof iso === 'string' ? iso : '');
+    if (!m) return '';
+    const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const real = new Date(Date.UTC(year, month - 1, day));
+    if (real.getUTCMonth() !== month - 1 || real.getUTCDate() !== day) return '';
+    return `${day} ${MONTHS[month - 1]} ${year}`;
+}
+
+const DECK_SITES = Object.freeze({ 'moxfield.com': 'Moxfield', 'archidekt.com': 'Archidekt' });
+
+/** The deck site a link is on, by name ('Moxfield'), or ''. */
+function deckSite(url) {
+    const host = /^https?:\/\/(?:www\.)?([^/?#:]+)/i.exec(String(url ?? '').trim())?.[1]?.toLowerCase() ?? '';
+    return DECK_SITES[host] ?? '';
+}
+
+/**
+ * How a deck's library differs from a preset's own list, by card name, the
+ * command zones left out: copies of the preset's cards the deck lacks
+ * (`missing`) and copies the deck has that the preset's list doesn't
+ * (`extra`). A swap counts once each way.
+ * @param {Object} snapshot - the preset's deck (readPreset().snapshot)
+ * @param {Object} deck - a DeckConfig snapshot with `cardsByName`
+ * @param {{format?:Object|string}} [opts] - the deck's format; default: its own preference
+ * @returns {{missing:number, extra:number}}
+ */
+export function presetDeckDiff(snapshot, deck, { format } = {}) {
+    const left = new Map();
+    for (const c of libraryOf(snapshot).cards) {
+        const k = nameKey(c.name);
+        left.set(k, (left.get(k) ?? 0) + c.count);
+    }
+    let extra = 0;
+    for (const c of libraryOf(deck, { format }).cards) {
+        const k = nameKey(c.name);
+        const shared = Math.min(left.get(k) ?? 0, c.count);
+        if (shared) left.set(k, left.get(k) - shared);
+        extra += c.count - shared;
+    }
+    let missing = 0;
+    for (const n of left.values()) missing += n;
+    return { missing, extra };
+}
+
+/**
+ * Which list a preset's notes were measured on, beside the deck in use:
+ * "Measured on this list, as it was on Moxfield on 21 November 2026." — or,
+ * for any other list, that the answer above is this deck's and how far it is
+ * from the preset's (`differs`: offer to load the preset's list).
+ * @param {{deckUrl?:string|null, measuredOn?:string|null}} preset
+ * @param {{missing:number, extra:number}|null} diff - presetDeckDiff(); null when the deck is card counts only
+ * @returns {{text:string, differs:boolean}}
+ */
+export function presetSource(preset, diff) {
+    const site = deckSite(preset?.deckUrl);
+    const date = longDate(preset?.measuredOn);
+    const when = [site && `on ${site}`, date && `on ${date}`].filter(Boolean).join(' ');
+    const asItWas = when ? `, as it was ${when}` : '';
+    const missing = Math.max(0, diff?.missing ?? 0);
+    const extra = Math.max(0, diff?.extra ?? 0);
+    if (diff && !missing && !extra) return { text: `Measured on this list${asItWas}.`, differs: false };
+    const lead = `These numbers were measured on the list that comes with this plan${asItWas}.`;
+    if (!diff) return { text: `${lead} The answer above is for this deck’s card counts.`, differs: true };
+    const how = missing === extra
+        ? `differs from that list by ${missing} ${inflect(missing, 'card')}`
+        : [
+            extra && `has ${extra} ${inflect(extra, 'card')} that list doesn’t`,
+            missing && `lacks ${missing} of that list’s cards`
+        ].filter(Boolean).join(' and ');
+    return { text: `${lead} The answer above is for this deck, which ${how}.`, differs: true };
 }
 
 // ── Measures beside the plan ─────────────────────────────────────────────────

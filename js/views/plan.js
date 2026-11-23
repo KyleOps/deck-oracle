@@ -192,7 +192,12 @@ export const styles = `
 /* ── About this plan (a preset's notes) ──────────────────────────── */
 #plan-tab .gp-about { display: grid; gap: 10px; padding: var(--pad-y) var(--pad-x); max-width: 72ch; }
 #plan-tab .gp-about p { margin: 0; font-size: var(--t-sm); line-height: 1.6; color: var(--tx-text); }
-#plan-tab .gp-about p:first-child { color: var(--tx-bright); }
+#plan-tab .gp-about > p:first-of-type { color: var(--tx-bright); }
+/* Which list the notes were measured on: a quiet line above them; on another list, set apart with the offer to load it. */
+#plan-tab .gp-about-source { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+#plan-tab .gp-about-source p { flex: 1 1 32ch; font-size: var(--t-xs); line-height: 1.5; color: var(--tx-mid); }
+#plan-tab .gp-about-source.is-other { padding: 8px 10px; border: 1px solid var(--tx-rule-hi); border-radius: var(--radius-sm); background: var(--tx-panel-alt); }
+#plan-tab .gp-about-source.is-other p { color: var(--tx-text); }
 
 /* ── What the steps measured ─────────────────────────────────────── */
 #plan-tab .gp-measure { display: grid; gap: 8px; padding: var(--pad-y) var(--pad-x); border-bottom: 1px solid var(--tx-rule); }

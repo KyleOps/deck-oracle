@@ -150,6 +150,7 @@ test('a preset loads its deck and plan, and a matching deck is offered its plan'
     // The notes, the measured distributions and the literal "two 4-drops or one 7–9-drop", measured beside the plan.
     await expect(tab.locator('#gp-about-panel')).toBeVisible();
     await expect(tab.locator('#gp-about p')).not.toHaveCount(0);
+    await expect(tab.locator('.gp-about-source')).toHaveText('Measured on this list, as it was on Moxfield on 21 November 2026.');
     await expect(tab.locator('#gp-measures')).toContainText('measure only');
     await expect(tab.locator('#gp-measures .viz-dot')).not.toHaveCount(0);
     await expect(tab.locator('#gp-rules')).toContainText('Selvala, Eager Trailblazer');
@@ -162,5 +163,27 @@ test('a preset loads its deck and plan, and a matching deck is offered its plan'
     await expect(tab.locator('#gp-preset')).toContainText('This deck looks like');
     await tab.locator('#gp-preset [data-act="use-preset"]').click();
     await expect(tab.locator('#gp-plan-meta')).toHaveText('a tuned plan');
+    expect(errors).toEqual([]);
+});
+
+test('a preset’s notes say which list they were measured on, and offer it when this deck differs', async ({ page }) => {
+    const errors = capturePageErrors(page);
+    await page.goto('/?tab=plan');
+    const tab = page.locator('#plan-tab');
+    await expect(tab.locator('.bottom-line')).toContainText('on time in');
+
+    // The example deck is an older Doctor Whostoric list: its answer is its own, and the notes say so.
+    await tab.locator('#gp-preset [data-act="use-preset"]').click();
+    const from = tab.locator('.gp-about-source');
+    await expect(from).toContainText('measured on the list that comes with this plan, as it was on Moxfield on 21 November 2026');
+    await expect(from).toContainText(/The answer above is for this deck, which differs from that list by \d+ cards\./);
+    await expect(tab.locator('#gp-about-meta')).toHaveText('Doctor Whostoric — The Sixth Doctor + Susan');
+
+    await from.getByRole('button', { name: 'Load that list' }).click();
+    await expect(page.locator('#deck-switcher-name')).toHaveText('Doctor Whostoric');
+    await expect(tab.locator('#gp-plan-meta')).toHaveText('a tuned plan');
+    await expect(from).toHaveText('Measured on this list, as it was on Moxfield on 21 November 2026.');
+    await expect(from.getByRole('button')).toHaveCount(0);
+    await expect(tab.locator('.bottom-line')).toContainText('Doctor Whostoric pulls off its plan on time in 71%');
     expect(errors).toEqual([]);
 });

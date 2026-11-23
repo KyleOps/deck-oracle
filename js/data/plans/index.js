@@ -11,6 +11,9 @@
  *   id          the catalog id
  *   title       its name in the picker
  *   deckUrl     the deck's Moxfield/Archidekt link (share links carry it), or null
+ *   measuredOn  the day (YYYY-MM-DD) the list was taken and the notes measured;
+ *               the page says so beside the notes, and how far the deck in use
+ *               is from that list
  *   commanders  the command zone, by name ([] outside Commander)
  *   plan        the plan (js/utils/planSchema.js)
  *   notes       the analysis shown with the plan: a paragraph per string

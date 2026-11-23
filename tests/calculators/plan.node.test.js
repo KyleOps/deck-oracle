@@ -44,6 +44,9 @@ describe('Game Plan page', () => {
         assert.equal(inputs.onPlay, true, 'multiplayer: everyone draws, so the maths is on the play');
         assert.deepEqual(inputs.keep, GP.DEFAULT_KEEP);
         assert.match(inputs.deckName, /Doctor Whostoric/);
+        assert.equal(inputs.cardList, true, 'a card list, so a preset’s notes can say how far it is from theirs');
+        const far = GP.presetDeckDiff(Splendor.snapshot, inputs.config, { format: inputs.format });
+        assert.ok(far.missing > 60 && far.extra > 60, 'little in common with Wild Splendor: Forests and some ramp');
         assert.equal(Page.readInputs().lib, inputs.lib, 'the library is built once per deck');
     });
 
